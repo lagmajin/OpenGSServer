@@ -7,7 +7,7 @@ using Newtonsoft.Json.Linq;
 
 namespace OpenGSServer
 {
-    class UserAccount
+    public class UserAccount
     {
         private string userID;
         private string name;

@@ -13,7 +13,17 @@ namespace OpenGSServer
         static GuildDatabaseManager instance = new GuildDatabaseManager();
 
 
+        public void Connect()
+        {
 
+        }
+
+
+        public void Disconnect()
+        {
+
+        }
+        
 
     }
 
