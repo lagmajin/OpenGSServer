@@ -13,12 +13,12 @@ namespace OpenGSServer
     }
     public class Lobby
     {
-        
-        private readonly ChatManager chatManager=new ChatManager();
+
+        private readonly ChatManager chatManager = new ChatManager();
 
         internal ChatManager ChatManager => chatManager;
 
-        public  int userCount()
+        public int UserCount()
         {
             return 0;
         }

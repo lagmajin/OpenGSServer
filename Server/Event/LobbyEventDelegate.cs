@@ -9,16 +9,20 @@ namespace OpenGSServer
 {
     public static class LobbyEventDelegate
     {
-        public static void CreateNewRoom(in ClientSession session,in IDictionary<string, JToken> dic)
+        public static void CreateNewRoom(in ClientSession session, in IDictionary<string, JToken> dic)
         {
             string? playerName;
             string? playerID;
             string? gameMode;
 
+            var teamBalance = true;
+
             int maxCapacity = 0;
 
             var result = eCreateNewRoomResult.Fail;
             var reason = eCreateNewRoomReason.NoReason;
+
+            var gameRoomManager = GameRoomManager.GetInstance();
 
 
             //var createNewRoomResult = new CreateNewRoomResult();
@@ -28,7 +32,7 @@ namespace OpenGSServer
                 playerID = dic["PlayerID"].ToString();
                 if (string.IsNullOrEmpty(playerID))
                 {
-                    
+
 
 
                 }
@@ -57,15 +61,41 @@ namespace OpenGSServer
 
             }
 
-            
 
-            if(dic.ContainsKey("MaxCapacity"))
+
+            if (dic.ContainsKey(("TeamBalance")))
+            {
+                if (bool.TryParse(dic["TeamBalance"].ToString(), out teamBalance))
+                {
+
+                }
+                else
+                {
+                    teamBalance = true;
+                }
+
+
+
+            }
+            else
+            {
+                teamBalance = true;
+            }
+
+
+
+            if (dic.ContainsKey("MaxCapacity"))
             {
                 //maxCapacity=dic["MaxCapacity"].ToString();
 
                 if (Int32.TryParse(dic["MaxCapacity"].ToString(), out maxCapacity))
                 {
 
+
+                }
+                else
+                {
+                    maxCapacity = 10;
                 }
 
 
@@ -79,7 +109,7 @@ namespace OpenGSServer
             if (dic.ContainsKey("GameMode"))
             {
 
-                gameMode=dic["GameMode"].ToString();
+                gameMode = dic["GameMode"].ToString();
             }
             else
             {
@@ -89,18 +119,23 @@ namespace OpenGSServer
 
 
 
-            var matchRoomManager = GameRoomManager.GetInstance();
+            //var matchRoomManager = GameRoomManager.GetInstance();
+
+
 
 
 
             if (string.IsNullOrEmpty(gameMode))
             {
                 var errorMessage = "Invalid game mode";
+
+
+                goto ErrorResult;
             }
 
             if (gameMode == "dm" || gameMode == "deathmatch")
             {
-                var  winConditionKill = 10;
+                var winConditionKill = 10;
 
 
                 if (dic.ContainsKey("WinConditionKill"))
@@ -109,15 +144,23 @@ namespace OpenGSServer
                     {
 
                     }
+                    else
+                    {
+                        winConditionKill = 10;
+                    }
 
 
                 }
                 else
                 {
 
+                    winConditionKill = 10;
+
                 }
 
-                matchRoomManager.CreateNewDMRoom("", "", 10, true);
+
+
+                gameRoomManager.CreateNewDMRoom("", "", 10, true);
 
 
 
@@ -128,12 +171,17 @@ namespace OpenGSServer
             if (gameMode == "tdm" || gameMode == "teamdeathMatch")
             {
 
-                var winConditionKill=0;
+                var winConditionKill = 0;
 
                 if (dic.ContainsKey("WinConditionKill"))
                 {
                     if (Int32.TryParse(dic["WinConditionKill"].ToString(), out winConditionKill))
                     {
+
+                    }
+                    else
+                    {
+                        winConditionKill = 10;
 
                     }
 
@@ -145,16 +193,20 @@ namespace OpenGSServer
 
                 }
 
-                matchRoomManager.CreateNewTDMRoom("","",10,true);
+
+
+
+
+                gameRoomManager.CreateNewTDMRoom("", "", 10, true);
 
             }
 
             if (gameMode == "suv" || gameMode == "survival")
             {
-                
 
 
-                
+
+
 
 
 
@@ -179,9 +231,9 @@ namespace OpenGSServer
             }
 
 
-            ErrorResult:
+        ErrorResult:
             {
-                
+
 
                 //var createResult = new CreateNewRoomResult(result,reason);
 
@@ -198,7 +250,7 @@ namespace OpenGSServer
         }
 
 
-        public static void CreateNewMissionRoom(in ClientSession sesion,in IDictionary<string,JToken> dic)
+        public static void CreateNewMissionRoom(in ClientSession sesion, in IDictionary<string, JToken> dic)
         {
             string? playerName;
             string? playerID;
@@ -211,10 +263,10 @@ namespace OpenGSServer
         }
         public static void EnterRoom(in ClientSession session, in IDictionary<string, JToken> dic)
         {
-            string ?playerName;
-            string ?playerID;
+            string? playerName;
+            string? playerID;
 
-           if(dic.ContainsKey("PlayerName"))
+            if (dic.ContainsKey("PlayerName"))
             {
 
             }
@@ -228,7 +280,7 @@ namespace OpenGSServer
 
         }
 
-        public static void ExitRoom(in ClientSession session,in IDictionary<string,JToken> dic)
+        public static void ExitRoom(in ClientSession session, in IDictionary<string, JToken> dic)
         {
             string playerName;
             string playerID;
@@ -270,14 +322,14 @@ namespace OpenGSServer
 
             foreach (var item in rooms)
             {
-               
+
 
 
                 var json = new JObject();
 
                 json["RoomNumber"] = item.RoomNumber;
                 json["RoomID"] = item.Id;
-                json["GameMode"]="";
+                json["GameMode"] = "";
                 json["MacCapacity"] = 10;
 
                 roomArray.Add(json);
@@ -294,10 +346,10 @@ namespace OpenGSServer
 
         public static void MatchStart(in ClientSession session, in IDictionary<string, JToken> dic)
         {
-            string? roomID=null;
-            string? playerID=null;
+            string? roomID = null;
+            string? playerID = null;
 
-            if(dic.ContainsKey("RoomID"))
+            if (dic.ContainsKey("RoomID"))
             {
 
 
@@ -307,7 +359,7 @@ namespace OpenGSServer
                 roomID = null;
             }
 
-            if(dic.ContainsKey("PlayerID"))
+            if (dic.ContainsKey("PlayerID"))
             {
 
             }

@@ -4,28 +4,23 @@ using System.Text;
 
 namespace OpenGSServer
 {
-    public abstract class AbstractBullet:AbstractGameObject
+    public abstract class AbstractBullet : AbstractGameObject
     {
-        int damage = 0;
 
-        private int angle = 0;
-        private int speed = 0;
-        private int power = 0;
-        private int stoppingPower = 0;
 
-        public int Damage { get => damage; set => damage = value; }
-        public int Angle { get => angle; set => angle = value; }
-        public int Speed { get => speed; set => speed = value; }
-        public int Power { get => power; set => power = value; }
-        public int StoppingPower { get => stoppingPower; set => stoppingPower = value; }
+        public int Damage { get; private set; } = 0;
+        public int Angle { get; private set; } = 0;
+        public int Speed { get; private set; } = 0;
+        public int Power { get; private set; } = 0;
+        public int StoppingPower { get; set; } = 0;
     }
 
-    public class Bullet :AbstractBullet
+    public class Bullet : AbstractBullet
     {
 
 
 
-        Bullet(int angle, int speed=1)
+        public Bullet(int angle, int speed = 1)
         {
 
         }

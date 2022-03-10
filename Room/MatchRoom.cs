@@ -14,29 +14,29 @@ namespace OpenGSServer
     {
 
     }
-    public class MatchRoom:AbstractGameRoom,IMatchRoom,IDisposable
+    public class MatchRoom : AbstractGameRoom, IMatchRoom, IDisposable
     {
 
 
-        AbstractMatchRule rule;
+        AbstractMatchRule? rule;
 
-        
-        
 
- 
-        private GameScene scene = new GameScene();
+
+
+
+        private GameScene scene = new();
 
         bool playing = false;
         bool finished = false;
 
 
-        public string Name {get;set;}
+        public string Name { get; set; }
 
- 
+
 
         public bool MatchEnd { get; }
 
-        public int playerCount{get;}
+        public int playerCount { get; }
 
         public int Capacity { get; }
 
@@ -57,9 +57,9 @@ namespace OpenGSServer
             //ConsoleWrite.WriteMessage("Match Room Name:" + "" + "Capacity:" + "Room ID:" + id.ToString() + "GameMode:", ConsoleColor.Yellow);
         }
         */
-        public MatchRoom(int roomNumber, in string roomName, in string roomOwnerId, in AbstractMatchRule rule):base(roomNumber,roomOwnerId)
+        public MatchRoom(int roomNumber, in string roomName, in string roomOwnerId, in AbstractMatchRule rule) : base(roomNumber, roomOwnerId)
         {
-            
+
 
 
             //ConsoleWrite.WriteMessage("Match Room Name:" + "" + "Capacity:" + "Room ID:" + id.ToString() + "GameMode:", ConsoleColor.Yellow);
@@ -73,7 +73,7 @@ namespace OpenGSServer
 
         public bool ChangeOwner()
         {
-            if(Players.Count<=1)
+            if (Players.Count <= 1)
             {
                 return false;
             }
@@ -85,7 +85,7 @@ namespace OpenGSServer
 
         public bool ChangeOwnerRandom()
         {
-            if(Players.Count<1)
+            if (Players.Count < 1)
             {
                 return false;
             }
@@ -97,7 +97,7 @@ namespace OpenGSServer
             return false;
         }
 
-        #nullable enable
+#nullable enable
         public string? RoomOwnerName()
         {
             if (Players.Count == 0)
@@ -113,7 +113,7 @@ namespace OpenGSServer
 
 
 
-            return  "";
+            return "";
         }
 
         public PlayerInfo? RoomOwnerInfo()
@@ -131,7 +131,7 @@ namespace OpenGSServer
 
         public List<PlayerInfo>? RoomMemberList()
         {
-            
+
 
 
             return Players;
@@ -190,7 +190,7 @@ namespace OpenGSServer
             //timer.Start();
             //sw.Start();
 
-            if(Setting.TimeLimit)
+            if (Setting.TimeLimit)
             {
                 //setting.MatchTime;
 
@@ -203,24 +203,24 @@ namespace OpenGSServer
         public void Finish()
         {
 
-            
+
 
             playing = false;
 
         }
 
-        
+
 
 
 
         public JObject ToJson()
         {
-           var json= new JObject();
+            var json = new JObject();
 
             json["RoomName"] = "";
             json["RoomID"] = Id.ToString();
             json["MaxCapacity"] = 2;
-            json["PlayerCount"] =playerCount;
+            json["PlayerCount"] = playerCount;
 
 
             return json;
@@ -229,7 +229,7 @@ namespace OpenGSServer
 
         public void Dispose()
         {
-           
+
 
 
         }

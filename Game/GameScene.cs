@@ -7,11 +7,11 @@ using Newtonsoft.Json.Linq;
 
 namespace OpenGSServer
 {
- 
+
 
     public class GameScene
     {
-        List<AbstractGameObject> objects=new List<AbstractGameObject>();
+        List<AbstractGameObject> objects = new();
 
         void AddBullet(Bullet bullet)
         {
@@ -40,7 +40,7 @@ namespace OpenGSServer
         {
             var json = new JObject();
 
-            foreach(var item in objects)
+            foreach (var item in objects)
             {
                 var temp = new JObject();
 
@@ -55,7 +55,7 @@ namespace OpenGSServer
 
             return json;
         }
-      
+
     }
 
 
