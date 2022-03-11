@@ -12,7 +12,7 @@ namespace OpenGSServer
 
 
 
-    public class UserAccount
+    public class PlayerAccount
     {
         private string userID;
         private string name;
@@ -40,7 +40,7 @@ namespace OpenGSServer
         public int Matchs { get => matchs; set => matchs = value; }
         public DateTime Time { get => time; set => time = value; }
 
-        public UserAccount(in string id, in string name, in string pass)
+        public PlayerAccount(in string id, in string name, in string pass)
         {
             Id = id;
             Name = name;

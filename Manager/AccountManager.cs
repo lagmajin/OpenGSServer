@@ -14,12 +14,12 @@ namespace OpenGSServer
 
     public class AccountManager
     {
-        private List<UserAccount> accountList = new List<UserAccount>();
+        private List<PlayerAccount> accountList = new List<PlayerAccount>();
 
-        private Dictionary<string, UserAccount> logonUser = new Dictionary<string, UserAccount>();
+        private Dictionary<string, PlayerAccount> logonUser = new Dictionary<string, PlayerAccount>();
 
 
-        private ConcurrentDictionary<string, UserAccount> logonUser2 = new ConcurrentDictionary<string, UserAccount>();
+        private ConcurrentDictionary<string, PlayerAccount> logonUser2 = new ConcurrentDictionary<string, PlayerAccount>();
 
         private static AccountManager _singleInstance = new AccountManager();
 
@@ -75,7 +75,7 @@ namespace OpenGSServer
 
         public void AddNewLogonUser(in string accountID, in string id, in string displayName)
         {
-            var account = new UserAccount(accountID, id, displayName);
+            var account = new PlayerAccount(accountID, id, displayName);
 
 
             accountList.Add(account);
@@ -90,7 +90,7 @@ namespace OpenGSServer
                 lock (logonUser)
                 {
 
-                    logonUser.Add(db.AccountID, new UserAccount(db.AccountID, db.DisplayName, db.Password));
+                    logonUser.Add(db.AccountID, new PlayerAccount(db.AccountID, db.DisplayName, db.Password));
                 }
             }
 
@@ -134,7 +134,7 @@ namespace OpenGSServer
 
             if (!Directory.Exists(userDir))
             {
-                var userAccount = new UserAccount(id, name, pass);
+                var userAccount = new PlayerAccount(id, name, pass);
 
                 var json = userAccount.ToJson();
 
@@ -250,7 +250,7 @@ namespace OpenGSServer
                         //result["MessageType"] = "LoginSuccess";
                         //result["guid"] = guid;
 
-                        var account = new UserAccount(id, name, pass);
+                        var account = new PlayerAccount(id, name, pass);
 
                         Console.WriteLine("New user logged in...");
                         Console.WriteLine("UserID:" + id);
@@ -393,7 +393,7 @@ namespace OpenGSServer
                         result["MessageType"] = "LoginSuccess";
                         //result["guid"] = guid;
 
-                        var account = new UserAccount(id, name, pass);
+                        var account = new PlayerAccount(id, name, pass);
 
                         Console.WriteLine("New user logged in...");
                         Console.WriteLine("UserID:" + id);
