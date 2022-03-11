@@ -3,13 +3,20 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using OpenGSCore;
 
 namespace OpenGSServer
 {
-    public class  MissionRoom:AbstractGameRoom
+    public interface IMissionRoom
     {
 
-        public MissionRoom(int roomNumber,in string roomOwnerID):base(roomNumber,roomOwnerID)
+    }
+
+    public class MissionRoom : AbstractGameRoom
+    {
+        public List<string> Players { get; set; }
+
+        public MissionRoom(int roomNumber, in string roomOwnerID) : base(roomNumber, roomOwnerID)
         {
 
         }

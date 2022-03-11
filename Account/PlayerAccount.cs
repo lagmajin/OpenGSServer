@@ -14,16 +14,13 @@ namespace OpenGSServer
 
     public class PlayerAccount
     {
-        private string userID;
         private string name;
         private string pass;
         private string globalID = Guid.NewGuid().ToString("N");
 
-        private int matchs = 0;
 
         private int exp = 0;
         private int character = 0;
-        DateTime time;
 
 
         public int Wins { get; set; }
@@ -36,9 +33,9 @@ namespace OpenGSServer
         public string Gid { get => globalID; set => globalID = value; }
         public int Exp { get => exp; set => exp = value; }
         public int Character { get => character; set => character = value; }
-        public string Id { get => userID; set => userID = value; }
-        public int Matchs { get => matchs; set => matchs = value; }
-        public DateTime Time { get => time; set => time = value; }
+        public string Id { get; set; }
+        public int Matches { get; set; }
+        public DateTime Time { get; set; }
 
         public PlayerAccount(in string id, in string name, in string pass)
         {
@@ -60,7 +57,7 @@ namespace OpenGSServer
             json["guid"] = globalID;
             json["lv"] = Lv;
             json["exp"] = Exp;
-            json["matchs"] = matchs;
+            json["matches"] = Matches;
             json["wins"] = Wins;
             json["kill"] = Kill;
             json["death"] = Death;

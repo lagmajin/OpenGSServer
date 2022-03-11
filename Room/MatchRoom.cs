@@ -21,7 +21,7 @@ namespace OpenGSServer
         AbstractMatchRule? rule;
 
 
-
+        private MatchSettings Setting { get; set; }
 
 
         private GameScene scene = new();
@@ -40,7 +40,7 @@ namespace OpenGSServer
 
         public int Capacity { get; }
 
-        private MatchSettings Setting { get; set; }
+
         public bool Playing { get => playing; }
         public bool Finished { get => finished; }
 
