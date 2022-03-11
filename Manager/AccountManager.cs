@@ -11,12 +11,12 @@ using Newtonsoft.Json.Linq;
 
 namespace OpenGSServer
 {
-    
+
     public class AccountManager
     {
         private List<UserAccount> accountList = new List<UserAccount>();
 
-        private Dictionary<string,UserAccount> logonUser = new Dictionary<string, UserAccount>();
+        private Dictionary<string, UserAccount> logonUser = new Dictionary<string, UserAccount>();
 
 
         private ConcurrentDictionary<string, UserAccount> logonUser2 = new ConcurrentDictionary<string, UserAccount>();
@@ -73,9 +73,9 @@ namespace OpenGSServer
             return accountDir;
         }
 
-        public void AddNewLogonUser(in string accountID,in string  id,in string displayName)
+        public void AddNewLogonUser(in string accountID, in string id, in string displayName)
         {
-            var account = new UserAccount(accountID,id,displayName);
+            var account = new UserAccount(accountID, id, displayName);
 
 
             accountList.Add(account);
@@ -94,7 +94,7 @@ namespace OpenGSServer
                 }
             }
 
-           
+
 
 
         }
@@ -102,7 +102,7 @@ namespace OpenGSServer
 
         public void RemoveLogonUser(in DBPlayer db)
         {
-       
+
 
 
             lock (logonUser)
@@ -136,7 +136,7 @@ namespace OpenGSServer
             {
                 var userAccount = new UserAccount(id, name, pass);
 
-                var json = userAccount.toJson();
+                var json = userAccount.ToJson();
 
                 Directory.CreateDirectory(userDir);
 
@@ -170,9 +170,9 @@ namespace OpenGSServer
 
         }
 
-        public  bool ExistID(in string id)
+        public bool ExistID(in string id)
         {
-            if(logonUser.ContainsKey(id))
+            if (logonUser.ContainsKey(id))
             {
 
             }
@@ -196,7 +196,7 @@ namespace OpenGSServer
             return false;
         }
 
-        public LoginResult Old(in string id,in string pass)
+        public LoginResult Old(in string id, in string pass)
         {
             ConsoleWrite.WriteMessage("id:" + id + "pass:" + pass);
 
@@ -204,7 +204,7 @@ namespace OpenGSServer
 
             var userDir = accountDir + "\\" + id;
             var userJsonPath = userDir + "\\" + id + ".json";
-            
+
             string reason;
             bool succeded = false;
 
@@ -291,26 +291,26 @@ namespace OpenGSServer
             return result;
         }
 
-        public LoginResult Login(in string id,in string pass)
+        public LoginResult Login(in string id, in string pass)
         {
             var databaseManager = AccountDatabaseManager.GetInstance();
 
 
-            var account=databaseManager.GetDBPlayerInfo(id);
+            var account = databaseManager.GetDBPlayerInfo(id);
 
 
             var type = eLoginResultType.Unknown;
 
 
-            if (account==null)
+            if (account == null)
             {
                 type = eLoginResultType.AccountNotFound;
-                
-                
+
+
                 goto RESULT;
             }
-           
-            if(account.Password!=pass)
+
+            if (account.Password != pass)
             {
                 type = eLoginResultType.InvalidIDorPassword;
 
@@ -322,7 +322,7 @@ namespace OpenGSServer
                 type = eLoginResultType.LoginSucceeded;
 
                 AddNewLogonUser(account);
-                
+
 
                 goto RESULT;
 
@@ -330,11 +330,11 @@ namespace OpenGSServer
 
 
 
-            
-            
-            RESULT:
 
-          
+
+        RESULT:
+
+
             bool succeded = false;
             var result = new LoginResult(type);
 
@@ -379,7 +379,7 @@ namespace OpenGSServer
 
                     Console.WriteLine(guid);
 
-                    if(logonUser.ContainsKey(id))
+                    if (logonUser.ContainsKey(id))
                     {
                         result["MessageType"] = "LoginFailed";
                         result["Reason"] = "Already log on same user";
@@ -412,9 +412,11 @@ namespace OpenGSServer
                         result["Reason"] = "Incorrect username or password";
 
                     }
-    
 
-                }else{
+
+                }
+                else
+                {
                     result["MessageType"] = "LoginFailed";
                     result["Reason"] = "User file not exits ";
                 }
@@ -437,9 +439,9 @@ namespace OpenGSServer
             return result;
         }
 
-        public JObject Logout(string id,string pass)
+        public JObject Logout(string id, string pass)
         {
-            if(logonUser.ContainsKey(id))
+            if (logonUser.ContainsKey(id))
             {
 
             }

@@ -7,6 +7,11 @@ using Newtonsoft.Json.Linq;
 
 namespace OpenGSServer
 {
+
+
+
+
+
     public class UserAccount
     {
         private string userID;
@@ -15,22 +20,17 @@ namespace OpenGSServer
         private string globalID = Guid.NewGuid().ToString("N");
 
         private int matchs = 0;
-        private int wins=0;
-        private int kill=0;
-        private int death=0;
-        private int flagReturn=0;
 
-        private int lv = 1;
         private int exp = 0;
         private int character = 0;
         DateTime time;
 
 
-        public int Wins { get => wins; set => wins = value; }
-        public int Kill { get => kill; set => kill = value; }
-        public int Death { get => death; set => death = value; }
-        public int FlagReturn { get => flagReturn; set => flagReturn = value; }
-        public int Lv { get => lv; set => lv = value; }
+        public int Wins { get; set; }
+        public int Kill { get; set; }
+        public int Death { get; set; }
+        public int FlagReturn { get; set; }
+        public int Lv { get; set; } = 1;
         public string Name { get => name; set => name = value; }
         public string Pass { get => pass; set => pass = value; }
         public string Gid { get => globalID; set => globalID = value; }
@@ -40,16 +40,16 @@ namespace OpenGSServer
         public int Matchs { get => matchs; set => matchs = value; }
         public DateTime Time { get => time; set => time = value; }
 
-        public UserAccount(in string id,in string name,in string pass)
+        public UserAccount(in string id, in string name, in string pass)
         {
             Id = id;
             Name = name;
             Pass = pass;
 
-            
+
         }
 
-        public JObject toJson()
+        public JObject ToJson()
         {
             var json = new JObject();
 
@@ -57,11 +57,11 @@ namespace OpenGSServer
             json["name"] = Name;
             json["pass"] = Pass;
             json["character"] = character;
-            json["guid"] =globalID;
-            json["lv"] =Lv;
+            json["guid"] = globalID;
+            json["lv"] = Lv;
             json["exp"] = Exp;
             json["matchs"] = matchs;
-            json["wins"] =Wins;
+            json["wins"] = Wins;
             json["kill"] = Kill;
             json["death"] = Death;
 
