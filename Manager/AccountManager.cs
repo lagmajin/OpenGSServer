@@ -18,7 +18,9 @@ namespace OpenGSServer
 
         private Dictionary<string, PlayerAccount> logonUser = new Dictionary<string, PlayerAccount>();
 
-
+        private Dictionary<string,PlayerData> playerData=new();
+        
+        
         private ConcurrentDictionary<string, PlayerAccount> logonUser2 = new ConcurrentDictionary<string, PlayerAccount>();
 
         private static AccountManager _singleInstance = new AccountManager();
