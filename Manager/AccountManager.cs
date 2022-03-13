@@ -16,7 +16,7 @@ namespace OpenGSServer
     {
         private List<PlayerAccount> accountList = new List<PlayerAccount>();
 
-        private Dictionary<string, PlayerAccount> logonUser = new Dictionary<string, PlayerAccount>();
+        private Dictionary<string, PlayerAccount> logonUser = new ();
 
         private Dictionary<string,PlayerData> playerData=new();
         
