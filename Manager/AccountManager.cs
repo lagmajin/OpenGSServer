@@ -6,7 +6,7 @@ using System.IO;
 using System.Text;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-
+using OpenGSCore;
 
 
 namespace OpenGSServer
@@ -16,21 +16,25 @@ namespace OpenGSServer
     {
         private List<PlayerAccount> accountList = new List<PlayerAccount>();
 
-        private Dictionary<string, PlayerAccount> logonUser = new ();
+        private Dictionary<string, PlayerAccount> logonUser = new();
 
-        private Dictionary<string,PlayerData> playerData=new();
-        
-        
-        private ConcurrentDictionary<string, PlayerAccount> logonUser2 = new ConcurrentDictionary<string, PlayerAccount>();
+        //private Dictionary<string,PlayerData> playerData=new();
 
-        private static AccountManager _singleInstance = new AccountManager();
+
+        private Dictionary<string, PlayerInformation> playerInformation = new();
+        private Dictionary<string, FriendList> friendList = new();
+
+
+        //private ConcurrentDictionary<string, PlayerAccount> logonUser2 = new ConcurrentDictionary<string, PlayerAccount>();
+
+        private static AccountManager _singleInstance = new();
 
         public static AccountManager GetInstance()
         {
             return _singleInstance;
         }
 
-        AccountManager()
+        private AccountManager()
         {
 
         }
@@ -81,6 +85,12 @@ namespace OpenGSServer
 
 
             accountList.Add(account);
+
+
+            var playerInformation = new PlayerInformation();
+
+
+
         }
 
         public void AddNewLogonUser(in DBPlayer db)
@@ -94,6 +104,15 @@ namespace OpenGSServer
 
                     logonUser.Add(db.AccountID, new PlayerAccount(db.AccountID, db.DisplayName, db.Password));
                 }
+
+                lock (playerInformation)
+                {
+
+
+                    playerInformation.Add(db.AccountID, new PlayerInformation());
+
+                }
+
             }
 
 
@@ -101,6 +120,50 @@ namespace OpenGSServer
 
         }
 
+        public PlayerInformation PlayerInformation(in string id)
+        {
+            var information = new PlayerInformation();
+
+            lock (logonUser)
+            {
+                if (!logonUser.ContainsKey(id)) return null;
+                lock (playerInformation)
+                {
+
+                    if (playerInformation.ContainsKey(id))
+                    {
+
+                        return playerInformation[id];
+
+                    }
+                    else
+                    {
+
+
+
+
+                    }
+
+
+                }
+
+            }
+
+
+
+            return null;
+        }
+
+
+        public FriendList FriendList(in string id)
+        {
+
+
+
+
+
+            return null;
+        }
 
         public void RemoveLogonUser(in DBPlayer db)
         {

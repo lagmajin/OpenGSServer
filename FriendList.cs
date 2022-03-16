@@ -4,7 +4,14 @@ using System.Text;
 
 namespace OpenGSServer
 {
-    class FriendList
+    public class FriendList
     {
+
+
+        public FriendList()
+        {
+
+        }
+
     }
 }
