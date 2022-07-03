@@ -256,6 +256,12 @@ namespace OpenGSServer
                 if (messageType == "LogoutRequest")
                 {
                     var json = new JObject();
+
+                    var id = o["id"].ToString();
+
+
+
+
                 }
 
                 if (messageType == "CreateNewRoomRequest")
@@ -310,6 +316,10 @@ namespace OpenGSServer
                 if (messageType == "OutRoomRequest")
                 {
                     var serverManager = ServerManager.GetInstance();
+
+                    //serverManager.GetGeneralServer().
+
+                    var generalServer=serverManager.GetGeneralServer();
                 }
 
                 if (messageType == "UpdateRoomRequest")

@@ -16,7 +16,7 @@ namespace OpenGSServer
         //Stopwatch sw = new Stopwatch();
 
 
-        private int roomNumber_;
+        private int roomNumber_=0;
 
         private List<PlayerInfo> players = new List<PlayerInfo>();
 

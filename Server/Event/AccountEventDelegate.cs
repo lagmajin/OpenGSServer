@@ -143,7 +143,9 @@ namespace OpenGSServer
             string pass;
 
 
+            id = dic["id"].ToString();
 
+            pass = dic["pass"].ToString();
 
 
 

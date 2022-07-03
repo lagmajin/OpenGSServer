@@ -13,6 +13,9 @@ namespace OpenGSServer
     public interface IMatchRoom
     {
 
+        string Name { get; set; }
+
+
     }
     public class MatchRoom : AbstractGameRoom, IMatchRoom, IDisposable
     {

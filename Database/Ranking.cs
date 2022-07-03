@@ -10,14 +10,17 @@ namespace OpenGSServer
     {
 
     }
-    public class AbstractDBRankingData:IAbstractDBRankingData
+    public class AbstractDBRankingData : IAbstractDBRankingData
     {
 
     }
 
     public class DBTDMKillRankingData
     {
-        public int rank { get; }
+        public int Kill { get; set; }
+
+
+        public int Rank { get; }
 
         public DBTDMKillRankingData()
         {
@@ -28,7 +31,8 @@ namespace OpenGSServer
 
     public class DBTSuvKillRankingData
     {
-        public int rank { get; }
+        public int Kill { get; set; }
+        public int Rank { get; }
 
         public DBTSuvKillRankingData()
         {
@@ -38,6 +42,8 @@ namespace OpenGSServer
     }
     public class DBCTFReturnRankingData
     {
-        public int rank { get; }
+        public int Kill { get; set; }
+
+        public int Rank { get; }
     }
 }

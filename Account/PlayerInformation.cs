@@ -25,13 +25,14 @@ namespace OpenGSServer
 
     }
 
-    public interface IPlayerInformation { }
+    //public interface IPlayerInformation { }
 
     public class PlayerInformation
     {
 
         public string? RoomId { get; private set; } = null;
         private ePlayerPlayingStatus _status = ePlayerPlayingStatus.Unknown;
+        public ePlayerLocation PlayerLocation { get; set; } = ePlayerLocation.Unknown;
 
         public PlayerInformation(ePlayerPlayingStatus status)
         {
@@ -40,7 +41,7 @@ namespace OpenGSServer
 
         public void SetRoomId(in string? id)
         {
-
+            RoomId = id;
         }
 
 

@@ -87,7 +87,7 @@ namespace OpenGSServer
             accountList.Add(account);
 
 
-            var playerInformation = new PlayerInformation();
+            //var playerInformation = new PlayerInformation();
 
 
 
@@ -107,9 +107,9 @@ namespace OpenGSServer
 
                 lock (playerInformation)
                 {
+                    var info = new PlayerInformation(ePlayerPlayingStatus.Unknown);
 
-
-                    playerInformation.Add(db.AccountID, new PlayerInformation());
+                    playerInformation.Add(db.AccountID, info);
 
                 }
 
@@ -122,7 +122,7 @@ namespace OpenGSServer
 
         public PlayerInformation PlayerInformation(in string id)
         {
-            var information = new PlayerInformation();
+            //var information = new PlayerInformation();
 
             lock (logonUser)
             {
