@@ -16,6 +16,8 @@ namespace OpenGSServer
     {
         private string name;
         private string pass;
+        private string dbUnitueID;
+
         private string globalID = Guid.NewGuid().ToString("N");
 
 

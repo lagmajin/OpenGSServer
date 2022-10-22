@@ -11,6 +11,13 @@ using OpenGSCore;
 
 namespace OpenGSServer
 {
+    enum EDealWithDuplicateLogin
+    {
+        KICK_FIRST_USER,
+        KICK_SECOND_USER,
+        KICK_BOTH_USER
+
+    }
 
     public class AccountManager
     {
@@ -384,6 +391,9 @@ namespace OpenGSServer
             }
             else
             {
+
+
+
                 type = eLoginResultType.LoginSucceeded;
 
                 AddNewLogonUser(account);

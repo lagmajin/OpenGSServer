@@ -10,25 +10,25 @@ namespace OpenGSServer
     {
         private LiteDatabase db;
 
- 
 
-        static AccountDatabaseManager instance=new AccountDatabaseManager();
+
+        static AccountDatabaseManager instance = new AccountDatabaseManager();
 
         public static string tableName = "TaskGroup";
 
         public static string filename = "account.db";
 
+        public static string connectionString = $"Filename={filename};connection=shared";
 
 
-        static public AccountDatabaseManager GetInstance()
+        public static AccountDatabaseManager GetInstance()
         {
             return instance;
         }
         public void Connect()
         {
-            db = new LiteDatabase(filename);
 
-            
+            db = new LiteDatabase(connectionString);
 
 
             //var col = db.GetCollection<DBUser>("customers");
@@ -41,7 +41,11 @@ namespace OpenGSServer
 
         public void Disconnect()
         {
-            
+            if (db != null)
+            {
+                db.Dispose();
+            }
+
 
         }
         public void AddNewPlayerData(in PlayerInfo info)
@@ -58,10 +62,10 @@ namespace OpenGSServer
 
         public DBPlayer? GetDBPlayerInfo(in string id)
         {
-            var col=db?.GetCollection<DBPlayer>("players");
+            var col = db?.GetCollection<DBPlayer>("players");
 
 
-            var data=col.FindOne(Query.EQ("AccountID", id));
+            var data = col.FindOne(Query.EQ("AccountID", id));
 
 
 
@@ -87,7 +91,7 @@ namespace OpenGSServer
 
                 //col.EnsureIndex(player => player.AccountID, unique: true);
 
-                if(col.FindOne(Query.EQ("AccountID",player.AccountID))==null)
+                if (col.FindOne(Query.EQ("AccountID", player.AccountID)) == null)
                 {
                     col.Insert(player);
                 }
@@ -96,17 +100,17 @@ namespace OpenGSServer
                     ConsoleWrite.WriteMessage("Already have data in db");
                 }
 
-                
+
 
             }
             //col.FindOne()
 
-            
+
 
         }
         public void UpdatePlayerData(in DBPlayer player)
         {
-            if(db==null)
+            if (db == null)
             {
                 Connect();
             }
@@ -124,7 +128,7 @@ namespace OpenGSServer
 
                 var rec = col.FindOne(Query.EQ("AccountID", player.AccountID));
 
-                if (rec!=null)
+                if (rec != null)
                 {
                     rec.DisplayName = player.DisplayName;
                     rec.Password = player.Password;
@@ -166,11 +170,11 @@ namespace OpenGSServer
                 //var rec = col.FindOne(Query.EQ("AccountID", player.AccountID));
 
 
-
+                //Disconnect();
 
             }
         }
-        public void RemoveAccount(in string accountID,in string password)
+        public void RemoveAccount(in string accountID, in string password)
         {
             if (db == null)
             {
@@ -186,7 +190,7 @@ namespace OpenGSServer
                 //var rec = col.FindOne(Query.EQ("AccountID", player.AccountID));
 
 
-
+                //Disconnect();
 
             }
         }
@@ -211,7 +215,11 @@ namespace OpenGSServer
 
                 col.DeleteAll();
 
+                //Disconnect();
             }
+
+
+
         }
 
 

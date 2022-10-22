@@ -12,13 +12,13 @@ namespace OpenGSServer
 {
     class Program
     {
-        private static  bool flag = false;
+        private static bool flag = false;
 
         public bool Flag { get => flag; set => flag = value; }
 
         static void CurrentDomain_ProcessExit(object sender, EventArgs e)
         {
-            var generalServerV2 = LobbyServerV2.GetInstance();
+            var generalServerV2 = LobbyServerManagerV2.GetInstance();
 
             generalServerV2.Stop();
             Console.WriteLine("exit");
@@ -26,8 +26,8 @@ namespace OpenGSServer
         static void Main(string[] args)
         {
 
-                // Get a collection (or create, if doesn't exist)
-  
+            // Get a collection (or create, if doesn't exist)
+
 
 
             AppDomain.CurrentDomain.ProcessExit += new EventHandler(CurrentDomain_ProcessExit);
@@ -42,9 +42,9 @@ namespace OpenGSServer
 
 
 
-            if(args.Length>0)
+            if (args.Length > 0)
             {
-                while(args.Length>=0)
+                while (args.Length >= 0)
                 {
 
                 }
@@ -69,39 +69,27 @@ namespace OpenGSServer
             {
                 try
                 {
-                    ConsoleWrite.WriteMessage("Initializing.....", ConsoleColor.Green);
+                    ConsoleWrite.WriteMessage("OpenGS game server initializing.....", ConsoleColor.Green);
 
 
-                    //var serverManager = ServerManager.GetInstance();
+                    var dbplayerTest = new DBPlayer("test", "test", "test");
 
-
-                    //var generalServer = serverManager.GetGeneralServer();
-
-                    //generalServer.Listen();
-
-                    var dbplayerTest = new DBPlayer("test","test","test");
-
-                    var dbplayerTest2 = new DBPlayer("test2","test2", "test2");
+                    var dbplayerTest2 = new DBPlayer("test2", "test2", "test2");
 
                     dbplayerTest.Friends = new string[] { "8000-0000", "9000-0000" };
 
-                    var accountDatabaseManager=AccountDatabaseManager.GetInstance();
+                    var accountDatabaseManager = AccountDatabaseManager.GetInstance();
 
                     accountDatabaseManager.Connect();
 
-                    
+
 
                     accountDatabaseManager.AddNewPlayerData(dbplayerTest);
                     accountDatabaseManager.AddNewPlayerData(dbplayerTest2);
 
-                   // dbplayerTest2.DisplayName= "test3";
-                    //dbplayerTest2.Password = "jji";
 
-                    //accountDatabaseManager.UpdatePlayerData(dbplayerTest2);
 
-                    //accountDatabaseManager.RemoveAll();
-
-                    var generalServerV2 = LobbyServerV2.GetInstance();
+                    var generalServerV2 = LobbyServerManagerV2.GetInstance();
 
                     generalServerV2.Listen(50000);
 
@@ -112,7 +100,7 @@ namespace OpenGSServer
                     matchServerV2.Listen(50010);
 
 
-                    
+
 
                     //matchServer.Listen();
 
@@ -149,7 +137,7 @@ namespace OpenGSServer
             }
 
 
-    }
+        }
         static void timerCB(object obj)
         {
             var msec = DateTime.Now.Millisecond;

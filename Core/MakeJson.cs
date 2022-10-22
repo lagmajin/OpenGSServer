@@ -10,25 +10,34 @@ namespace OpenGSServer
     {
         //static 
 
-        static public JObject MatchServerInfo()
+        public static JObject MatchServerInfo()
         {
             JObject result=new JObject();
 
-            result["MessageType"] = "";
+            result["MessageType"] = "MatchServerInfo";
+
 
             return result;
         }
 
-        static public JObject MakeChatUpdateCommand()
+        public static JObject MakeChatUpdateCommand()
+        { 
+            var result = new JObject();
+
+            result["MessageType"] = "";
+
+            return result;
+
+        }
+
+
+        public static JObject Make()
         {
-            JObject result = new JObject();
-
-            result["MessageType"] = "";
+            var result = new JObject();
 
             return result;
 
         }
-
 
     }
 }

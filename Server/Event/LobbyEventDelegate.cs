@@ -261,7 +261,7 @@ namespace OpenGSServer
 
 
         }
-        public static void EnterRoom(in ClientSession session, in IDictionary<string, JToken> dic)
+        public static void EnterRoomRequest(in ClientSession session, in IDictionary<string, JToken> dic)
         {
             string? playerName;
             string? playerID;
@@ -313,6 +313,7 @@ namespace OpenGSServer
             var result = new JObject();
 
             result["MessageType"] = "UpdateRoomResult";
+            //result["LobbyUserCount"] = "";
             result["RoomCount"] = rooms.Count;
 
 

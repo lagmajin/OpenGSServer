@@ -30,7 +30,7 @@ namespace OpenGSServer
             return _singleInstance;
         }
 
-        public  MatchServer GetMatchServer()
+        public MatchServer GetMatchServer()
         {
 
             return matchServer_;
@@ -48,9 +48,9 @@ namespace OpenGSServer
             return null;
         }
 
-        void AddRegisterAdminAcount(String id,String pass)
+        void AddRegisterAdminAccount(string id, string pass)
         {
-            var aa = new ServerAdminAccount(id,pass);
+            var aa = new ServerAdminAccount(id, pass);
 
             adminAccounts.Add(aa);
 

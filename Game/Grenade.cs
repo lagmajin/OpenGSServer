@@ -23,11 +23,11 @@ namespace OpenGSServer
         }
     }
 
-    public class ClusterGranade : AbstractGrenade
+    public class ClusterGrenade : AbstractGrenade
     {
         int child = 3;
 
-        public ClusterGranade()
+        public ClusterGrenade()
         {
 
 

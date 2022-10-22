@@ -47,6 +47,8 @@ namespace OpenGSServer
         {
             var col= db.GetCollection<DBMatchDeathMatchDatabaseData>("DBDeathMatch");
 
+            
+
 
             //col.Insert(data);
 

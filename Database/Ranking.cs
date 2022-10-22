@@ -17,13 +17,17 @@ namespace OpenGSServer
 
     public class DBTDMKillRankingData
     {
-        public int Kill { get; set; }
+        public string DisplayName { get; set; } = "";
+
+        public int Kill { get; set; } = 0;
 
 
-        public int Rank { get; }
+        public int Rank { get; } = 0;
 
-        public DBTDMKillRankingData()
+        public DBTDMKillRankingData(int kill=0)
         {
+            Kill = kill;
+
 
         }
 

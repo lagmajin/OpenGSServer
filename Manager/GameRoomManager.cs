@@ -27,7 +27,7 @@ namespace OpenGSServer
             return _singleInstance;
         }
 
-        void IncreaseRoomCounter()
+        private void IncreaseRoomCounter()
         {
             Interlocked.Increment(ref roomNumberCount);
         }
@@ -159,6 +159,12 @@ namespace OpenGSServer
 
         public void CreateNewTSuvRoom(in string roomName)
         {
+
+            var matchSetting = new TSuvMatchRule();
+
+
+            //var matchRoom = new MatchRoom(0, "", "",);
+
 
         }
 

@@ -4,9 +4,12 @@ using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
+using Microsoft.VisualBasic;
+using Buffer = NetCoreServer.Buffer;
 
 namespace OpenGSServer
 {
@@ -19,20 +22,88 @@ namespace OpenGSServer
 
         readonly char unitSeperatorChar = (char)Convert.ToInt32("0x1f", 16);
 
+        private string ip = "";
+
+        private string _utf_format = "";
 
 
         public ClientSession(TcpServer server) : base(server) { }
 
+        private void setIPAddress()
+        {
+            var endpoint = (IPEndPoint)Socket.RemoteEndPoint;
+
+            var v = IPAddress.Parse(endpoint.Address.ToString());
+
+            ip = v.ToString();
+        }
+        public string ClientIpAddress()
+        {
+            return ip;
+        }
+
+        public string ID()
+        {
+            return id;
+        }
+
+        public bool SendPing()
+        {
+            string utcFormat = "hh:mm:ss:FFFF";
+
+            var utcDate = DateTime.UtcNow;
+
+            var json = new JObject();
+
+
+            json["ServerTimeStampFormat"] = utcFormat;
+            json["ServerTimeStampUTC"] = utcDate.ToString(utcFormat);
+
+
+            return true;
+        }
+
+        public bool SendJsonAsyncWithTimeStamp(JObject obj)
+        {
+            string utcFormat = "hh:mm:ss:ffff";
+
+            var utcDate = DateTime.UtcNow;
+
+
+            //obj["ServerTimeStampFormat"] = utcFormat;
+            //obj["ServerTimeStampUTC"] = utcDate.ToString(utcFormat);
+
+            var str = obj.ToString();
+
+            ConsoleWrite.WriteMessage(str, ConsoleColor.Green);
+
+
+            //Send(str);
+
+
+            return SendAsync(str);
+        }
+
+
+
+
         protected override void OnConnected()
         {
-            Console.WriteLine($"Chat TCP session with Id {Id} connected!");
+            //this.Socket.RemoteEndPoint.
+            if (ip == "")
+            {
+                setIPAddress();
+            }
 
-            // Send invite message
-            //string message = "Hello from TCP chat! Please send a message or '!' to disconnect the client!" ;
 
-            //var e=Encoding.UTF8.GetBytes(message);
+            ConsoleWrite.WriteMessage("IP Address:" + ip, ConsoleColor.Green);
+            ConsoleWrite.WriteMessage($"TCP session with Id {Id} connected!", ConsoleColor.DarkMagenta);
 
-            //Send(e);
+            //Console.WriteLine(endpoint.ToString());
+
+            Socket.ReceiveTimeout = 1000;
+            Socket.SendTimeout = 1000;
+
 
 
 
@@ -40,20 +111,26 @@ namespace OpenGSServer
 
         protected override void OnDisconnected()
         {
-            Console.WriteLine($"Chat TCP session with Id {Id} disconnected!");
+            //Console.WriteLine($"TCP session with Id {Id} disconnected!");
+            ConsoleWrite.WriteMessage($"TCP session with Id {Id} disconnected!", ConsoleColor.Red);
 
-            //AccountManager.GetInstance().Logout()
+            Disconnect();
+
         }
 
         protected override void OnReceived(byte[] buffer, long offset, long size)
         {
+            if (string.IsNullOrEmpty(ip))
+            {
+                setIPAddress();
+            }
 
 
             string message = Encoding.UTF8.GetString(buffer, (int)offset, (int)size);
 
-            ConsoleWrite.WriteMessage(message);
+            ConsoleWrite.WriteMessage(message, ConsoleColor.Cyan);
 
-            ConsoleWrite.WriteMessage(message.Length.ToString());
+            ConsoleWrite.WriteMessage(message.Length.ToString(), ConsoleColor.Cyan);
 
 
             //var matches=new Regex(@"\{(.+?)\}").Matches(message);
@@ -75,50 +152,20 @@ namespace OpenGSServer
             }
             catch (JsonReaderException e)
             {
-                ConsoleWrite.WriteMessage("Json parse error!!");
+                ConsoleWrite.WriteMessage("Json parse error!!", ConsoleColor.Red);
 
                 return;
             }
 
 
-            Parse(json);
-
-
-            //Send("aa");
-
-
-            /*
-            for(int i=0;i<matches.Count;i++)
-            {
-                ConsoleWrite.WriteMessage(matches[i].ToString());
-
-                var json = JObject.Parse(matches[i].ToString());
-
-                if(!(json==null))
-                {
-                    Parse(json);
-                }
-
-
-            }
-
-            */
+            ParseMessageFromClient(json);
 
 
 
-            //var json = System.Text.Json.JsonDocument.Parse(message);
-
-            //ConsoleWrite.WriteMessage(json.ToString());
-
-            // var id = json["id"].ToString();
-            // var pass = json["pass"].ToString();
-
-
-
-            // If the buffer starts with '!' the disconnect the current session
             if (message == "!")
                 Disconnect();
         }
+
 
 
 
@@ -127,7 +174,7 @@ namespace OpenGSServer
             Console.WriteLine($"Chat TCP session caught an error with code {error}");
         }
 
-        private void Parse(in JObject json)
+        private void ParseMessageFromClient(in JObject json)
         {
             string messageType;
 
@@ -143,31 +190,42 @@ namespace OpenGSServer
                 return;
             }
 
+            if (dic.ContainsKey("ClientTimeStampUTC"))
+            {
+                var str = dic["ClientTimeStampUTC"].ToString();
+
+                var time = DateTime.ParseExact(str, "hh:mm:ss:ffff", null);
+
+
+                ConsoleWrite.WriteMessage("ParseTime" + time.ToString("ffff"));
+            }
+
 
             if ("LoginRequest" == messageType)
             {
 
                 AccountEventDelegate.Login(this, dic);
+                AccountEventDelegate.SendUserInfo(this, dic);
             }
 
-            if("LogoutRequest"==messageType)
+            if ("LogoutRequest" == messageType)
             {
                 AccountEventDelegate.Logout(this, dic);
             }
 
-            if("AddFriendRequest"==messageType)
+            if ("AddFriendRequest" == messageType)
             {
                 //AccountEventDelegate.AddFriendRequest()
 
             }
 
-            if("PlayerInfoRequest"==messageType)
+            if ("PlayerInfoRequest" == messageType)
             {
 
             }
-            
 
-            if ("MatchServerInfomationRequest" == messageType)
+
+            if ("MatchServerInformationRequest" == messageType)
             {
                 var infoJson = new JObject();
 
@@ -175,7 +233,7 @@ namespace OpenGSServer
 
 
 
-                infoJson["MessageType"] = "MatchServerInfomationNotification";
+                infoJson["MessageType"] = "MatchServerInformationNotification";
 
                 infoJson["Port"] = matchServer.Port();
 
@@ -188,6 +246,8 @@ namespace OpenGSServer
                 SendAsync(str);
 
             }
+
+
 
             if ("UpdateRoomRequest" == messageType)
             {
@@ -208,7 +268,7 @@ namespace OpenGSServer
             if ("EnterRoomRequest" == messageType)
             {
 
-                LobbyEventDelegate.EnterRoom(this, dic);
+                LobbyEventDelegate.EnterRoomRequest(this, dic);
             }
 
 
@@ -279,7 +339,7 @@ namespace OpenGSServer
 
         protected override void OnSent(long sent, long pending)
         {
-            ConsoleWrite.WriteMessage("adfdfetrererere");
+            ConsoleWrite.WriteMessage("OnSent");
         }
     }
 

@@ -12,7 +12,7 @@ namespace OpenGSServer
 {
     public static class AccountEventDelegate
     {
-        public static void Login(in ClientSession session,in IDictionary<string,JToken> dic)
+        public static void Login(in ClientSession session, in IDictionary<string, JToken> dic)
         {
             string id;
             string pass;
@@ -45,17 +45,49 @@ namespace OpenGSServer
 
 
             ConsoleWrite.WriteMessage(result.ToString());
-            var str = result.ToJson().ToString(Formatting.None);
 
-            ConsoleWrite.WriteMessage(str);
+            var json = result.ToJson();
 
-            Thread.Sleep(5);
+            json["YourIPAddress"] = session.ClientIpAddress();
 
-            session.SendAsync(str);
+            session.SendJsonAsyncWithTimeStamp(json);
+
+
+            //var str = json.ToString(Formatting.None);
+
+            //ConsoleWrite.WriteMessage(str);
+
+            //Thread.Sleep(5);
+
+            //bool v = session.SendAsync(str);
+
+
 
         }
 
-        public static void Logout(ClientSession session,in IDictionary<string, JToken> dic)
+        public static void Logout(ClientSession session, in IDictionary<string, JToken> dic)
+        {
+            string id;
+            string pass;
+
+
+            if (dic.TryGetValue("id", out var token))
+            {
+                id = token.ToString();
+
+            }
+
+
+
+            if (dic.TryGetValue("pass", out var passToken))
+            {
+                pass = passToken.ToString();
+            }
+
+
+        }
+
+        public static void SendUserInfo(ClientSession session, in IDictionary<string, JToken> dic)
         {
             string id;
             string pass;
@@ -63,10 +95,11 @@ namespace OpenGSServer
             if (dic.ContainsKey("id"))
             {
                 id = dic["id"].ToString();
+
             }
             else
             {
-                return;
+
             }
 
             if (dic.ContainsKey("pass"))
@@ -75,13 +108,21 @@ namespace OpenGSServer
             }
             else
             {
-                return;
+
             }
 
+            var json = new JObject();
+
+            json["YourIPAddress"] = session.ClientIpAddress();
+
+            session.SendAsync(json.ToString());
+
+            //session.Socket.endp
 
 
 
         }
+
 
         public static void CreateNewAccount(in ClientSession session, IDictionary<string, JToken> dic)
         {
@@ -94,17 +135,17 @@ namespace OpenGSServer
             var result = new CreateNewAccountResult();
 
 
-            if(dic.ContainsKey("AccountID"))
+            if (dic.ContainsKey("AccountID"))
             {
                 accountID = dic["Account"].ToString();
             }
 
-            if(dic.ContainsKey("Password"))
+            if (dic.ContainsKey("Password"))
             {
-                pass=dic["Password"].ToString();
+                pass = dic["Password"].ToString();
             }
 
-            if(dic.ContainsKey("displayName"))
+            if (dic.ContainsKey("displayName"))
             {
                 displayName = dic["DisplayName"].ToString();
             }
@@ -136,7 +177,7 @@ namespace OpenGSServer
 
         }
 
-        public static void FriendsDataRequest(IDictionary<string,JToken> dic)
+        public static void FriendsDataRequest(IDictionary<string, JToken> dic)
         {
             string id;
 
@@ -152,7 +193,5 @@ namespace OpenGSServer
 
 
         }
-
-
     }
 }
