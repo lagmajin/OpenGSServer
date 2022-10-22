@@ -20,7 +20,11 @@ namespace OpenGSServer
     public enum ePlayerLocation
     {
         Unknown,
-
+        Lobby,
+        Shop,
+        WaitRoom,
+        MissionRoom,
+        Offline
 
 
     }
@@ -42,6 +46,11 @@ namespace OpenGSServer
         public void SetRoomId(in string? id)
         {
             RoomId = id;
+        }
+
+        public void SetLocationLobby()
+        {
+
         }
 
 
