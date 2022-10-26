@@ -9,7 +9,7 @@ namespace OpenGSServer
 {
     public static class LobbyEventDelegate
     {
-        public static void CreateNewRoom(in ClientSession session, in IDictionary<string, JToken> dic)
+        public static void CreateNewWaitRoom(in ClientSession session, in IDictionary<string, JToken> dic)
         {
             string? playerName;
             string? playerID;
@@ -62,33 +62,26 @@ namespace OpenGSServer
             }
 
 
-
-            if (dic.ContainsKey(("TeamBalance")))
+            if (dic.TryGetValue("TeamBalance", out var teamBalanceToken))
             {
-                if (bool.TryParse(dic["TeamBalance"].ToString(), out teamBalance))
+                if (bool.TryParse(teamBalanceToken.ToString(), out teamBalance))
                 {
 
                 }
                 else
                 {
-                    teamBalance = true;
+
                 }
 
-
-
-            }
-            else
-            {
-                teamBalance = true;
             }
 
 
 
-            if (dic.ContainsKey("MaxCapacity"))
+            if (dic.TryGetValue("RoomCapacity", out var roomCapacityToken))
             {
-                //maxCapacity=dic["MaxCapacity"].ToString();
 
-                if (Int32.TryParse(dic["MaxCapacity"].ToString(), out maxCapacity))
+
+                if (Int32.TryParse(roomCapacityToken.ToString(), out maxCapacity))
                 {
 
 
@@ -98,23 +91,20 @@ namespace OpenGSServer
                     maxCapacity = 10;
                 }
 
-
-            }
-            else
-            {
-
             }
 
 
-            if (dic.ContainsKey("GameMode"))
+            if (dic.TryGetValue("GameMode", out var gamemodeToken))
             {
+                gameMode = gamemodeToken.ToString();
 
-                gameMode = dic["GameMode"].ToString();
+
             }
             else
             {
                 gameMode = null;
             }
+
 
 
 
@@ -261,20 +251,30 @@ namespace OpenGSServer
 
 
         }
+
+        public static void QuickStartRequest(in ClientSession session, in IDictionary<string, JToken> dic)
+        {
+            var matchRoomManager = GameRoomManager.GetInstance();
+
+
+
+
+
+        }
         public static void EnterRoomRequest(in ClientSession session, in IDictionary<string, JToken> dic)
         {
             string? playerName;
-            string? playerID;
+            //string? playerID;
 
-            if (dic.ContainsKey("PlayerName"))
-            {
+            string playerAccountID = "";
 
-            }
-            else
-            {
 
-            }
 
+
+
+            var roomManager = GameRoomManager.GetInstance();
+
+            //roomManager.
 
 
 
@@ -344,6 +344,7 @@ namespace OpenGSServer
 
             session.SendAsync(result.ToString());
         }
+
 
         public static void MatchStart(in ClientSession session, in IDictionary<string, JToken> dic)
         {

@@ -4,7 +4,7 @@ using System.Text;
 
 namespace OpenGSServer
 {
-    class WaitRoomManager
+    public class WaitRoomManager
     {
         private static WaitRoomManager _singleInstance = new WaitRoomManager();
 
@@ -12,11 +12,24 @@ namespace OpenGSServer
         {
             return _singleInstance;
         }
-        public bool createNewRoom(String name,int capasity=8)
+        public bool CreateNewRoom(in string name, int capasity = 8)
         {
+
+
+
 
             return false;
         }
-      
+
+        public void FindWaitRooms()
+        {
+
+        }
+
+        public void FindWaitRoomsByGameMode()
+        {
+
+        }
+
     }
 }

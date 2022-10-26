@@ -19,14 +19,16 @@ namespace OpenGSServer
 
         readonly string reason = "";
 
+        private readonly string id_ = "";
 
         eLoginResultType type_ = eLoginResultType.Unknown;
 
-        public LoginResult(eLoginResultType type=eLoginResultType.Unknown)
+        public LoginResult(in string id, eLoginResultType type = eLoginResultType.Unknown)
         {
             this.type_ = type;
+            this.id_ = id;
 
-            if(eLoginResultType.LoginSucceeded==type)
+            if (eLoginResultType.LoginSucceeded == type)
             {
                 succeeded = true;
             }
@@ -34,6 +36,8 @@ namespace OpenGSServer
             //if(eLoginResultType.)
 
         }
+
+
 
         public LoginResult(bool succeeded, eLoginResultType type = eLoginResultType.Unknown)
         {
@@ -83,6 +87,11 @@ namespace OpenGSServer
             if (succeeded)
             {
                 result["MessageType"] = "LoginSuccess";
+                result["AccountID"] = id_;
+
+
+
+
             }
             else
             {

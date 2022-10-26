@@ -35,6 +35,7 @@
   <ItemGroup>
     <Folder Include="Match\" />
     <Folder Include="Platform\Linus" />
+    <Folder Include="Server\TCP\" />
     <Folder Include="WebAPI\" />
   </ItemGroup>
 

@@ -410,8 +410,12 @@ namespace OpenGSServer
         RESULT:
 
 
-            bool succeded = false;
-            var result = new LoginResult(type);
+            var result = new LoginResult(id, type);
+
+
+
+            //bool succeded = false;
+
 
             return result;
 

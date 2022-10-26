@@ -27,6 +27,8 @@ namespace OpenGSServer
         private string _utf_format = "";
 
 
+
+
         public ClientSession(TcpServer server) : base(server) { }
 
         private void setIPAddress()
@@ -44,6 +46,9 @@ namespace OpenGSServer
 
         public string ID()
         {
+            var result = Guid.NewGuid().ToString("N");
+
+
             return id;
         }
 
@@ -59,6 +64,8 @@ namespace OpenGSServer
             json["ServerTimeStampFormat"] = utcFormat;
             json["ServerTimeStampUTC"] = utcDate.ToString(utcFormat);
 
+
+            SendAsync(json.ToString());
 
             return true;
         }
@@ -101,8 +108,8 @@ namespace OpenGSServer
 
             //Console.WriteLine(endpoint.ToString());
 
-            Socket.ReceiveTimeout = 1000;
-            Socket.SendTimeout = 1000;
+            Socket.ReceiveTimeout = 6000;
+            //Socket.SendTimeout = 1000;
 
 
 
@@ -256,12 +263,20 @@ namespace OpenGSServer
 
             }
 
-            if ("CreateNewRoomRequest" == messageType)
+            if ("CreateNewWaitRoomRequest" == messageType)
             {
 
+                LobbyEventDelegate.CreateNewWaitRoom(this, dic);
 
 
 
+            }
+
+            if ("QuickStartRequest" == messageType)
+            {
+                ConsoleWrite.WriteMessage("QuickStart", ConsoleColor.Yellow);
+
+                LobbyEventDelegate.QuickStartRequest(this, dic);
 
             }
 
@@ -281,6 +296,8 @@ namespace OpenGSServer
 
                 }
 
+                WaitRoomEventDelegate.ExitRoomRequest(this);
+
             }
 
             if ("MatchStartRequest" == messageType)
@@ -295,14 +312,17 @@ namespace OpenGSServer
 
             if ("AddNewLobbyChat" == messageType)
             {
-                var playerID = json["id"].ToString();
+                //var playerID = json["id"].ToString();
 
-                var message = json["Message"].ToString();
+                //var message = json["Message"].ToString();
 
+                /*
                 if (string.IsNullOrEmpty(playerID))
                 {
 
                 }
+
+                */
 
             }
 

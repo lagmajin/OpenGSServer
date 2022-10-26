@@ -16,11 +16,13 @@ using System.Timers;
 
 namespace OpenGSServer
 {
-  
-    public class MatchTCPServer : TcpServer
-    {
 
-        public MatchTCPServer(IPAddress address, int port) : base(address, port)
+    public class MatchTcpServer : TcpServer
+    {
+        private int serverFrameCount;
+
+
+        public MatchTcpServer(IPAddress address, int port) : base(address, port)
         {
             Console.WriteLine("Match Server initialized..." + "Port:" + port);
         }
@@ -44,12 +46,15 @@ namespace OpenGSServer
 
 
         }
+
+
+
     }
     public class MatchServerV2 : IDisposable
     {
-        private static MatchServerV2 _singleInstance=new MatchServerV2();
+        private static MatchServerV2 _singleInstance = new MatchServerV2();
 
-        private MatchTCPServer server;
+        private MatchTcpServer server;
 
         //private readonly int tickrate=100;
 
@@ -79,7 +84,7 @@ namespace OpenGSServer
         {
             var matchRoomManager = GameRoomManager.GetInstance();
 
-            var allRoom=matchRoomManager.AllRooms();
+            var allRoom = matchRoomManager.AllRooms();
 
             /*
       
@@ -106,7 +111,7 @@ namespace OpenGSServer
             Parallel.ForEach(allRoom, options, calc =>
             {
                 // 計算実行
-                
+
             });
 
         }
@@ -120,7 +125,7 @@ namespace OpenGSServer
         {
             if (server == null)
             {
-                server = new MatchTCPServer(IPAddress.Any, port);
+                server = new MatchTcpServer(IPAddress.Any, port);
 
                 //server.Endpoint.Port;
 

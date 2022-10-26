@@ -6,7 +6,7 @@ using OpenGSCore;
 
 namespace OpenGSServer
 {
-   
+
 
 
     public class GameRoomManager
@@ -15,11 +15,11 @@ namespace OpenGSServer
 
         private Dictionary<string, MatchRoom> testRooms = new Dictionary<string, MatchRoom>();
 
-        private Dictionary<string,MatchRoom> matchRooms=new Dictionary<string,MatchRoom>();
+        private Dictionary<string, MatchRoom> matchRooms = new Dictionary<string, MatchRoom>();
 
         private int roomNumberCount = 0;
 
-        
+
         private static GameRoomManager _singleInstance = new GameRoomManager();
 
         public static GameRoomManager GetInstance()
@@ -35,9 +35,9 @@ namespace OpenGSServer
         public List<MatchRoom> TestRoom()
         {
 
-          // var room=  new MatchRoom(0,"aaa",new AbstractMatchSetting(eGameMode.TDM,10,true,false));
+            // var room=  new MatchRoom(0,"aaa",new AbstractMatchSetting(eGameMode.TDM,10,true,false));
 
-           var rooms = new List<MatchRoom>();
+            var rooms = new List<MatchRoom>();
 
 
             //rooms.Add(room);
@@ -66,11 +66,13 @@ namespace OpenGSServer
         {
             var rooms = new List<AbstractGameRoom>(matchRooms.Values);
 
-            
-            
+
+
 
             return rooms;
         }
+
+
 
 
         /*
@@ -109,13 +111,13 @@ namespace OpenGSServer
 
         }
         */
-        public CreateNewRoomResult CreateNewDMRoom(in string roomName,in string ownerID,int capacity=10,bool teamBalance=true)
+        public CreateNewRoomResult CreateNewDMRoom(in string roomName, in string ownerID, int capacity = 10, bool teamBalance = true)
         {
             var matchSetting = new DMMatchSetting(10);
 
             var matchRule = new DeathMatchRule();
 
-            
+
 
             var matchRoom = new MatchRoom(roomNumberCount, roomName, ownerID, matchRule);
 
@@ -124,19 +126,19 @@ namespace OpenGSServer
             IncreaseRoomCounter();
 
 
-            var createNewRoomResult = new CreateNewRoomResult(eCreateNewRoomResult.Succeessful,eCreateNewRoomReason.NoReason);
+            var createNewRoomResult = new CreateNewRoomResult(eCreateNewRoomResult.Succeessful, eCreateNewRoomReason.NoReason);
 
             return createNewRoomResult;
         }
 
-        public void CreateNewTDMRoom(in string roomName,in string ownerID,int capacity=10,bool teamBalance=true)
+        public void CreateNewTDMRoom(in string roomName, in string ownerID, int capacity = 10, bool teamBalance = true)
         {
             var tdmMatchSetting = new TDMMatchSetting();
 
             var matchRule = new TDMMatchRule();
             IncreaseRoomCounter();
 
-            var matchRoom = new MatchRoom(0,roomName,ownerID,matchRule);
+            var matchRoom = new MatchRoom(0, roomName, ownerID, matchRule);
 
             matchRooms.Add(matchRoom.Id, matchRoom);
 
@@ -146,10 +148,10 @@ namespace OpenGSServer
         }
 
 
-        public void CreateNewSuvRoom(in string roomName, in string OwnerID,int capacity = 10)
+        public void CreateNewSuvRoom(in string roomName, in string OwnerID, int capacity = 10)
         {
             //var suvMatchRule = new SuvMatchRule();
-            var matchSetting = new SuvMatchSetting(capacity,true);
+            var matchSetting = new SuvMatchSetting(capacity, true);
 
             //var matchRoom = new MatchRoom(OwnerID, matchSetting);
 
@@ -172,9 +174,9 @@ namespace OpenGSServer
         {
 
         }
-        
-       
-        public void CreateNewMissionRoom(in string roomName,in string ownerID,int capacity=3)
+
+
+        public void CreateNewMissionRoom(in string roomName, in string ownerID, int capacity = 3)
         {
             //var missionRoom = new MissionRoom();
 
@@ -190,11 +192,11 @@ namespace OpenGSServer
 
             String message = "";
 
-            if(matchRooms.ContainsKey(id.ToString()))
+            if (matchRooms.ContainsKey(id.ToString()))
             {
-                var room=matchRooms[id.ToString()];
+                var room = matchRooms[id.ToString()];
 
-                
+
 
                 succeeded = true;
 
@@ -206,7 +208,7 @@ namespace OpenGSServer
                 succeeded = false;
             }
 
-            var result = new MatchEnterResult(succeeded,message);
+            var result = new MatchEnterResult(succeeded, message);
 
 
             return result;
@@ -220,7 +222,7 @@ namespace OpenGSServer
 
         public MatchRoom? SearchRoomByMemberID(string id)
         {
-            if(string.IsNullOrEmpty(id))
+            if (string.IsNullOrEmpty(id))
             {
                 return null;
             }
@@ -228,7 +230,7 @@ namespace OpenGSServer
 
             foreach (var item in matchRooms)
             {
-                
+
 
             }
 
@@ -241,11 +243,11 @@ namespace OpenGSServer
         {
             string message = "";
 
-            if(matchRooms.ContainsKey(id))
+            if (matchRooms.ContainsKey(id))
             {
-                lock(matchRooms)
+                lock (matchRooms)
                 {
-                    var room=matchRooms[id];
+                    var room = matchRooms[id];
 
                     room.Start();
 
@@ -266,7 +268,7 @@ namespace OpenGSServer
 
         public void UpdateAllRoom()
         {
-            
+
 
         }
 
@@ -282,9 +284,9 @@ namespace OpenGSServer
 
         }
 
-        public void RemoveAllRooms(bool forceShutdownNowPlayingRooms=false)
+        public void RemoveAllRooms(bool forceShutdownNowPlayingRooms = false)
         {
-            if(forceShutdownNowPlayingRooms)
+            if (forceShutdownNowPlayingRooms)
             {
 
             }
@@ -297,7 +299,7 @@ namespace OpenGSServer
 
         }
 
-        
+
 
     }
 }

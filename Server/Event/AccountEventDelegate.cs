@@ -44,11 +44,15 @@ namespace OpenGSServer
             var result = AccountManager.GetInstance().Login(id, pass);
 
 
+
             ConsoleWrite.WriteMessage(result.ToString());
 
             var json = result.ToJson();
 
             json["YourIPAddress"] = session.ClientIpAddress();
+
+
+
 
             session.SendJsonAsyncWithTimeStamp(json);
 
@@ -71,9 +75,9 @@ namespace OpenGSServer
             string pass;
 
 
-            if (dic.TryGetValue("id", out var token))
+            if (dic.TryGetValue("id", out var idToken))
             {
-                id = token.ToString();
+                id = idToken.ToString();
 
             }
 
@@ -92,23 +96,18 @@ namespace OpenGSServer
             string id;
             string pass;
 
-            if (dic.ContainsKey("id"))
-            {
-                id = dic["id"].ToString();
 
-            }
-            else
+            if (dic.TryGetValue("id", out var idToken))
             {
+                id = idToken.ToString();
 
             }
 
-            if (dic.ContainsKey("pass"))
-            {
-                pass = dic["pass"].ToString();
-            }
-            else
-            {
 
+
+            if (dic.TryGetValue("pass", out var passToken))
+            {
+                pass = passToken.ToString();
             }
 
             var json = new JObject();

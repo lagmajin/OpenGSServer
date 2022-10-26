@@ -24,8 +24,17 @@ namespace OpenGSServer
         {
             var pingResult = new PingResult(0);
 
-            if (dic.TryGetValue("ClientTimeUTC", out var time))
+            if (dic.TryGetValue("ClientTimeStampUTC", out var time))
             {
+                if (dic.TryGetValue("", out var formatToken))
+                {
+
+                }
+
+
+
+                //time.ToString();
+
 
 
             }
