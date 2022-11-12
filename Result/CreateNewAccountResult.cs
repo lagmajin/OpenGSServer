@@ -15,13 +15,14 @@ namespace OpenGSServer
     public enum eCreateAccountResult
     {
         Succeeful,
-        AlreadySameName,
+        ExistAlreadySameAccount,
+        InvalidPassword,
         Unknown,
     }
 
-    public class CreateNewAccountResult:AbstractResult
+    public class CreateNewAccountResult : AbstractResult
     {
-        readonly bool successed=false;
+        readonly bool successed = false;
 
         eCreateAccountResult messageType = eCreateAccountResult.Unknown;
 
@@ -38,7 +39,7 @@ namespace OpenGSServer
             {
                 case eCreateAccountResult.Succeeful:
                     return "CreateNewAccountSucceeful";
-                case eCreateAccountResult.AlreadySameName:
+                case eCreateAccountResult.ExistAlreadySameAccount:
                     return "";
                 case eCreateAccountResult.Unknown:
                     return "Unknown";
@@ -55,9 +56,9 @@ namespace OpenGSServer
 )
             {
                 case eCreateAccountResult.Succeeful:
-                    return "CreateNewAccountSucceeful";
-                case eCreateAccountResult.AlreadySameName:
-                    return "";
+                    return "CreateNewAccountSuccessful";
+                case eCreateAccountResult.ExistAlreadySameAccount:
+                    return "ExistAlreadySameAccount";
                 case eCreateAccountResult.Unknown:
                     return "Unknown";
                 default:
@@ -74,14 +75,14 @@ namespace OpenGSServer
             result["MessageType"] = MessageType();
             result["Message"] = Message();
 
-            
+
             return result;
         }
 
     }
 
-   
 
-  
-   
+
+
+
 }

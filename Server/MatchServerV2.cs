@@ -1,15 +1,10 @@
 ﻿using NetCoreServer;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
-using System.Text;
-using System.Text.RegularExpressions;
-using System.Threading;
+
 using System.Threading.Tasks;
 
 using System.Timers;
@@ -24,7 +19,7 @@ namespace OpenGSServer
 
         public MatchTcpServer(IPAddress address, int port) : base(address, port)
         {
-            Console.WriteLine("Match Server initialized..." + "Port:" + port);
+            ConsoleWrite.WriteMessage("Match Server initialized..." + "Port:" + port, ConsoleColor.Green);
         }
 
         protected override TcpSession CreateSession()
@@ -82,7 +77,7 @@ namespace OpenGSServer
         }
         private void ServerCallback(object obj)
         {
-            var matchRoomManager = GameRoomManager.GetInstance();
+            var matchRoomManager = MatchRoomManager.GetInstance();
 
             var allRoom = matchRoomManager.AllRooms();
 
@@ -102,7 +97,7 @@ namespace OpenGSServer
 
         private void MCoreServerCallback(object obj)
         {
-            var matchRoomManager = GameRoomManager.GetInstance();
+            var matchRoomManager = MatchRoomManager.GetInstance();
 
             var allRoom = matchRoomManager.AllRooms();
 

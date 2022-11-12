@@ -7,7 +7,7 @@ using Newtonsoft.Json.Linq;
 
 namespace OpenGSServer.Result
 {
-    internal class ChatResult:AbstractResult
+    internal class ChatResult : AbstractResult
     {
 
         public JObject ToJson()
@@ -20,4 +20,19 @@ namespace OpenGSServer.Result
 
 
     }
+
+    internal class ChatLogResult : AbstractResult
+    {
+
+        public JObject ToJson()
+        {
+            var result = new JObject();
+
+
+            return result;
+        }
+
+
+    }
+
 }

@@ -9,20 +9,17 @@ namespace OpenGSServer
 
 
 
-    public class GameRoomManager
+    public class MatchRoomManager
     {
-        //private List<MatchRoom> matchRoomList=new List<MatchRoom>();
-
-        private Dictionary<string, MatchRoom> testRooms = new Dictionary<string, MatchRoom>();
 
         private Dictionary<string, MatchRoom> matchRooms = new Dictionary<string, MatchRoom>();
 
         private int roomNumberCount = 0;
 
 
-        private static GameRoomManager _singleInstance = new GameRoomManager();
+        private static MatchRoomManager _singleInstance = new MatchRoomManager();
 
-        public static GameRoomManager GetInstance()
+        public static MatchRoomManager GetInstance()
         {
             return _singleInstance;
         }
@@ -32,33 +29,16 @@ namespace OpenGSServer
             Interlocked.Increment(ref roomNumberCount);
         }
 
-        public List<MatchRoom> TestRoom()
+        public MatchRoomManager()
         {
 
-            // var room=  new MatchRoom(0,"aaa",new AbstractMatchSetting(eGameMode.TDM,10,true,false));
-
-            var rooms = new List<MatchRoom>();
-
-
-            //rooms.Add(room);
-
-
-            return rooms;
         }
 
-        public List<MatchRoom> AllTestRoom()
+        public void CreateMatchRoomByWaitRoom(WaitRoom waitRoom)
         {
-            var rooms = new List<MatchRoom>();
+            waitRoom.MatchRoomLink = null;
 
-
-            //rooms.Add(room);
-
-
-            return rooms;
-
-        }
-        public GameRoomManager()
-        {
+            IncreaseRoomCounter();
 
         }
 
@@ -72,48 +52,9 @@ namespace OpenGSServer
             return rooms;
         }
 
-
-
-
-        /*
-        public void CreateNewRoom(string roomName,GameMode mode,int playerCount=8)
-        {
-            if(!(playerCount%2==0))
-            {
-                playerCount++;
-
-            }
-
-            if(playerCount<12)
-            {
-                playerCount = 12;
-
-            }
-
-            if(string.IsNullOrEmpty(roomName))
-            {
-
-                roomName = "One Shot,One Kill";
-
-            }
-
-
-            var id = Guid.NewGuid().ToString("N");
-
-            var setting=new MatchSettings();
-
-            var matchRoom = new MatchRoom(count,roomName,id,setting);
-
-            matchRooms.Add(id.ToString(), matchRoom);
-
-            ConsoleWrite.WriteMessage("New match room generated...", ConsoleColor.Blue);
-
-
-        }
-        */
         public CreateNewRoomResult CreateNewDMRoom(in string roomName, in string ownerID, int capacity = 10, bool teamBalance = true)
         {
-            var matchSetting = new DMMatchSetting(10);
+            var matchSetting = new DeathMatchSetting(10);
 
             var matchRule = new DeathMatchRule();
 

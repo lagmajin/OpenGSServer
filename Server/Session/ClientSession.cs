@@ -80,7 +80,7 @@ namespace OpenGSServer
             //obj["ServerTimeStampFormat"] = utcFormat;
             //obj["ServerTimeStampUTC"] = utcDate.ToString(utcFormat);
 
-            var str = obj.ToString();
+            var str = obj.ToString() + "\n";
 
             ConsoleWrite.WriteMessage(str, ConsoleColor.Green);
 

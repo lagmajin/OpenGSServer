@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -24,12 +25,10 @@ namespace OpenGSServer
         {
             var pingResult = new PingResult(0);
 
-            if (dic.TryGetValue("ClientTimeStampUTC", out var time))
+            if (dic.TryGetValue("ClientTimeStampUTC", out var timeStampToken))
             {
-                if (dic.TryGetValue("", out var formatToken))
-                {
 
-                }
+
 
 
 

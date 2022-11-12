@@ -34,9 +34,9 @@ namespace OpenGSServer
         //private static MatchServer _singleInstance = new MatchServer();
 
 
-        private GameRoomManager matchManager = new GameRoomManager();
+        private MatchRoomManager matchManager = new MatchRoomManager();
 
-        internal GameRoomManager MatchManager { get => matchManager;}
+        internal MatchRoomManager MatchManager { get => matchManager; }
 
         /*public static MatchServer GetInstance()
         {
@@ -63,7 +63,7 @@ namespace OpenGSServer
 
             ConsoleWrite.WriteMessage("MatchServer Started...", ConsoleWrite.eMessageType.Success);
 
-            
+
             IPAddress localAddr = IPAddress.Parse(ip);
             server = new TcpListener(localAddr, port);
             server.Server.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.ReuseAddress, true);
@@ -115,7 +115,7 @@ namespace OpenGSServer
             json["MessageType"] = "ServerClosed";
 
 
-            
+
 
 
         }
@@ -136,10 +136,10 @@ namespace OpenGSServer
                 try
                 {
 
- 
-                        
-                        var data = reader.ReadLine();
-                    
+
+
+                    var data = reader.ReadLine();
+
                     if (!(data == null))
                     {
                         var obj = JObject.Parse(data);
@@ -150,55 +150,55 @@ namespace OpenGSServer
 
                         Console.WriteLine(messageType);
 
-                        if("BurstPlayer"== messageType)
+                        if ("BurstPlayer" == messageType)
                         {
 
                         }
 
-                        if ("UseInstantItem"==messageType)
+                        if ("UseInstantItem" == messageType)
                         {
-                            var type=obj["ItemType"].ToString();
+                            var type = obj["ItemType"].ToString();
 
 
                         }
 
-                        if("Move"==messageType)
-                        {
-
-
-                        }
-
-
-
-                        if("ThrowGranade"==messageType)
-                        { 
-
-
-
-                        }
-
-                        if("TakeFieldItem"==messageType)
+                        if ("Move" == messageType)
                         {
 
+
                         }
 
-                        if("Jump"==messageType)
+
+
+                        if ("ThrowGranade" == messageType)
+                        {
+
+
+
+                        }
+
+                        if ("TakeFieldItem" == messageType)
+                        {
+
+                        }
+
+                        if ("Jump" == messageType)
                         {
                             var type = obj["PlayerID"].ToString();
 
-                            
-                           
+
+
                         }
 
                         if (messageType == "Shot")
                         {
                             var type = obj["GunType"].ToString();
-                            var bulletCount=obj["BulletCount"].ToString();
+                            var bulletCount = obj["BulletCount"].ToString();
 
 
                         }
 
-                        if (messageType=="SitDown")
+                        if (messageType == "SitDown")
                         {
 
 
@@ -213,7 +213,7 @@ namespace OpenGSServer
                 {
 
                 }
-                catch(ArgumentException e)
+                catch (ArgumentException e)
                 {
 
                 }
@@ -222,13 +222,13 @@ namespace OpenGSServer
                     reader.Dispose();
                 }
                 //Thread.Sleep(1);
-               
+
             }
 
 
         }
 
-        void sendData(string ip,JObject json)
+        void sendData(string ip, JObject json)
         {
 
 
@@ -265,10 +265,10 @@ namespace OpenGSServer
             }
             Console.WriteLine("New client connected to  MatchServer.");
 
-           var task = Task.Run(() =>
-            {
-                RecvDataSingleClient(client);
-            });
+            var task = Task.Run(() =>
+             {
+                 RecvDataSingleClient(client);
+             });
 
         }
 

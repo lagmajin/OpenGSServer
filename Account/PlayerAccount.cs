@@ -1,6 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Text;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -14,7 +12,6 @@ namespace OpenGSServer
 
     public class PlayerAccount
     {
-        private string name;
         private string pass;
         private string dbUnitueID;
 
@@ -30,7 +27,8 @@ namespace OpenGSServer
         public int Death { get; set; }
         public int FlagReturn { get; set; }
         public int Lv { get; set; } = 1;
-        public string Name { get => name; set => name = value; }
+        public string Name { get; set; }
+
         public string Pass { get => pass; set => pass = value; }
         public string Gid { get => globalID; set => globalID = value; }
         public int Exp { get => exp; set => exp = value; }

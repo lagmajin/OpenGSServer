@@ -2,16 +2,55 @@
 using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
 
+using OpenGSCore;
 
 namespace OpenGSServer
 {
     public static class AccountEventDelegate
     {
+        public static int saltLength = 8;
+
+        public static void CreateNewAccount(in ClientSession session, IDictionary<string, JToken> dic)
+        {
+            string accountID;
+
+            string pass;
+
+            string displayName;
+
+            var result = new CreateNewAccountResult();
+
+
+            if (dic.ContainsKey("AccountID"))
+            {
+                accountID = dic["Account"].ToString();
+            }
+
+            if (dic.ContainsKey("Password"))
+            {
+                pass = dic["Password"].ToString();
+            }
+
+            if (dic.ContainsKey("displayName"))
+            {
+                displayName = dic["DisplayName"].ToString();
+            }
+
+
+            var salt = OpenGSCore.Hash.CreateSalt(8);
+
+            //var hashedPassword = OpenGSCore.Hash.CreateHashWithSalt(pass, salt);
+
+            //var dbPlayer=new DBPlayer()
+
+
+
+
+
+
+        }
+
         public static void Login(in ClientSession session, in IDictionary<string, JToken> dic)
         {
             string id;
@@ -35,12 +74,6 @@ namespace OpenGSServer
                 return;
             }
 
-
-
-            //var result = AccountManager.GetInstance().Login(id, pass);
-
-            //var result = AccountManager.GetInstance().Login2(id, pass);
-
             var result = AccountManager.GetInstance().Login(id, pass);
 
 
@@ -57,13 +90,7 @@ namespace OpenGSServer
             session.SendJsonAsyncWithTimeStamp(json);
 
 
-            //var str = json.ToString(Formatting.None);
 
-            //ConsoleWrite.WriteMessage(str);
-
-            //Thread.Sleep(5);
-
-            //bool v = session.SendAsync(str);
 
 
 
@@ -114,7 +141,7 @@ namespace OpenGSServer
 
             json["YourIPAddress"] = session.ClientIpAddress();
 
-            session.SendAsync(json.ToString());
+            session.SendAsync(json.ToString() + "\n");
 
             //session.Socket.endp
 
@@ -123,43 +150,6 @@ namespace OpenGSServer
         }
 
 
-        public static void CreateNewAccount(in ClientSession session, IDictionary<string, JToken> dic)
-        {
-            string accountID;
-
-            string pass;
-
-            string displayName;
-
-            var result = new CreateNewAccountResult();
-
-
-            if (dic.ContainsKey("AccountID"))
-            {
-                accountID = dic["Account"].ToString();
-            }
-
-            if (dic.ContainsKey("Password"))
-            {
-                pass = dic["Password"].ToString();
-            }
-
-            if (dic.ContainsKey("displayName"))
-            {
-                displayName = dic["DisplayName"].ToString();
-            }
-
-
-
-
-
-
-
-
-
-
-
-        }
 
         public static void RemoveAccount(ClientSession session, IDictionary<string, JToken> dic)
         {

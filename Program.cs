@@ -1,20 +1,21 @@
 ﻿using LiteDB;
 using System;
-using System.IO;
 using System.Linq;
 using System.Threading;
 
 using System.CommandLine.Parser;
-
+using System.Diagnostics;
+using System.Threading.Tasks;
+using Newtonsoft.Json.Linq;
 
 
 namespace OpenGSServer
 {
     class Program
     {
-        private static bool flag = false;
+        private static bool IsEnd { get; set; } = false;
+        private static bool MonitorTaskFlag { get; set; } = false;
 
-        public bool Flag { get => flag; set => flag = value; }
 
         static void CurrentDomain_ProcessExit(object sender, EventArgs e)
         {
@@ -23,11 +24,47 @@ namespace OpenGSServer
             generalServerV2.Stop();
             Console.WriteLine("exit");
         }
+        static async void MonitorTask(CancellationToken cancelToken = default)
+        {
+            ConsoleWrite.WriteMessage("MonitorTaskRun");
+
+            while (!MonitorTaskFlag)
+            {
+
+                //ConsoleWrite.WriteMessage("MonitorTaskRun");
+
+                await Task.Delay(1500);
+            }
+
+
+            ConsoleWrite.WriteMessage("MonitorTaskEnd");
+
+
+        }
         static void Main(string[] args)
         {
 
             // Get a collection (or create, if doesn't exist)
+            var room = new JObject();
 
+            room["RoomNum"] = "001";
+            room["RoomName"] = "LIVE!LIVE!LIVE!";
+
+            var room2 = new JObject();
+
+            room2["RoomNum"] = "002";
+            room2["RoomName"] = "LIVE!LIVE!LIVE!";
+
+            var jArray = new JArray();
+            jArray.Add(room);
+            jArray.Add(room2);
+
+            var json = new JObject();
+
+            json["Rooms"] = jArray;
+
+
+            Console.Write(json.ToString());
 
 
             AppDomain.CurrentDomain.ProcessExit += new EventHandler(CurrentDomain_ProcessExit);
@@ -72,11 +109,13 @@ namespace OpenGSServer
                     ConsoleWrite.WriteMessage("OpenGS game server initializing.....", ConsoleColor.Green);
 
 
-                    var dbplayerTest = new DBPlayer("test", "test", "test");
+                    var salt = OpenGSCore.Hash.CreateSalt(8);
 
-                    var dbplayerTest2 = new DBPlayer("test2", "test2", "test2");
+                    var hasedPassword = OpenGSCore.Hash.CreateHashWithSalt("test", salt);
 
-                    dbplayerTest.Friends = new string[] { "8000-0000", "9000-0000" };
+                    var dbplayerTest = new DBPlayer("test", hasedPassword, salt, "test");
+
+
 
                     var accountDatabaseManager = AccountDatabaseManager.GetInstance();
 
@@ -85,7 +124,13 @@ namespace OpenGSServer
 
 
                     accountDatabaseManager.AddNewPlayerData(dbplayerTest);
-                    accountDatabaseManager.AddNewPlayerData(dbplayerTest2);
+                    //accountDatabaseManager.AddNewPlayerData(dbplayerTest2);
+
+                    var guildDatabase = GuildDatabaseManager.GetInstance();
+
+                    guildDatabase.Connect();
+
+                    guildDatabase.CreateNewGuild("TestPlayers");
 
 
 
@@ -100,27 +145,283 @@ namespace OpenGSServer
                     matchServerV2.Listen(50010);
 
 
+                    var cts = new CancellationTokenSource();
 
 
-                    //matchServer.Listen();
+                    var monitorTask = Task.Run(() => MonitorTask(cts.Token), cts.Token).ConfigureAwait(false);
 
 
-                    //var acManager = AccountManager.GetInstance();
-
-                    //acManager.CreateNewAccountOld("test1", "aa", "test1");
-                    //acManager.CreateNewAccount("test3", "", "test3");
-
-                    //acManager.login("test1", "test1");
-
-                    //matchServer.MatchManager.createNewRoom("", eGameMode.DM, 10);
 
 
-                    while (!flag)
+                    while (!IsEnd)
                     {
-                        Thread.Sleep(5000);
+                        var input = Console.ReadLine();
+
+                        ConsoleWrite.WriteMessage("Command:" + input);
+
+                        if (input == null)
+                        {
+                            continue;
+
+                        }
+
+                        var words = input.Split(" ").ToArray();
+
+                        var command = words[0].ToLower();
+
+                        var param = words.Skip(1).ToList();
+
+
+
+                        if (words.Length > 0)
+                        {
+                            //var firstWord = words[0].ToLower();
+
+                            if (command == "serverinfo")
+                            {
+                                var info = WaitRoomManager.GetInstance().Info2();
+
+
+                                ConsoleWrite.WriteMessage(info.ToString());
+                            }
+
+
+                            if (command == "playerinfo")
+                            {
+                                if (param.Count < 1)
+                                {
+
+                                    var name = param[0];
+
+                                    var instance = AccountDatabaseManager.GetInstance();
+
+
+
+
+
+
+                                }
+
+
+                            }
+
+                            if (command == "guildinfo")
+                            {
+
+                                if (param.Count < 1)
+                                {
+                                    var name = param[1];
+
+
+
+
+                                }
+
+                            }
+
+                            if (command == "addnewplayer")
+                            {
+                                if (param.Count < 1)
+                                {
+                                    var id = param[1];
+
+                                    var accountManager = AccountManager.GetInstance();
+
+                                    //accountManager.CreateNewAccount()
+
+
+
+                                }
+
+
+                            }
+
+
+                            if (command == "addnewguild")
+                            {
+                                if (param.Count < 1)
+                                {
+
+                                }
+
+
+                            }
+
+                            if (command == "addnewroom")
+                            {
+
+                                if (param.Count > 0)
+                                {
+                                    ConsoleWrite.WriteMessage("Add new waitroom");
+                                    var roomName = param[0];
+
+
+                                    var roomManager = WaitRoomManager.GetInstance();
+
+                                    roomManager.CreateNewWaitRoom("");
+
+
+
+                                }
+                                else
+                                {
+
+
+                                }
+
+
+
+                            }
+
+
+
+                            if (command == "exit" || command == "shutdown")
+                            {
+                                for (var i = 0; i < 3; i++)
+                                {
+                                    ConsoleWrite.WriteMessage("Exit application in 3 seconds...", ConsoleColor.Red);
+                                    Thread.Sleep(1000);
+                                }
+
+                                //Thread.Sleep(3000);
+
+                                Environment.Exit(0);
+                            }
+
+                            if (command == "run" | command == "-r")
+                            {
+
+                            }
+
+                            if (command == "stop" | command == "-s")
+                            {
+                                if (param.Count < 0)
+                                {
+                                    continue;
+                                }
+
+                                ConsoleWrite.WriteMessage("Stop server");
+
+
+                                generalServerV2.Stop();
+
+
+
+                            }
+
+                            if (command == "new" | command == "-n")
+                            {
+                                if (param.Count < 0)
+                                {
+
+                                    continue;
+                                }
+
+                                if (param[0] == "player")
+                                {
+                                    if (param.Count < 1)
+                                    {
+
+                                        ConsoleWrite.WriteMessage("Create new player", ConsoleColor.Red);
+
+
+
+                                    }
+                                    else
+                                    {
+                                        ConsoleWrite.WriteMessage("");
+
+
+
+                                    }
+
+
+
+                                }
+
+                                if (param[0] == "guild")
+                                {
+
+                                }
+
+
+                                ConsoleWrite.WriteMessage("");
+
+
+
+
+                            }
+
+                            if (command == "remove" | command == "delete")
+                            {
+                                if (param.Count < 0)
+                                {
+                                    continue;
+                                }
+
+                                if (param[0] == "player")
+                                {
+
+
+
+
+                                }
+
+                                if (param[0] == "guild")
+                                {
+                                    ConsoleWrite.WriteMessage("[Warning] Delete guild [y,n]", ConsoleColor.Red);
+
+
+
+                                    var q = Console.ReadLine();
+
+
+
+                                    GuildDatabaseManager.GetInstance().RemoveGuild();
+
+                                }
+
+
+
+                            }
+
+
+
+                            if (command == "info" | command == "-i")
+                            {
+                                ConsoleWrite.WriteMessage("Server Info");
+
+
+                            }
+
+                            if (command == "help" | command == "-h")
+                            {
+                                ConsoleWrite.WriteMessage("help -h");
+                                ConsoleWrite.WriteMessage("new -n");
+                                ConsoleWrite.WriteMessage("remove -r");
+                                ConsoleWrite.WriteMessage("info -i");
+
+
+                                ConsoleWrite.WriteMessage("run -r");
+
+                            }
+
+                            if (command == "clear")
+                            {
+                                Console.Clear();
+
+                            }
+
+
+
+
+
+                        }
+
                     }
 
-
+                    MonitorTaskFlag = true;
+                    //monitorTask.Wait();
                 }
                 finally
                 {
@@ -135,6 +436,12 @@ namespace OpenGSServer
                 mutex.Close();
 
             }
+
+
+
+
+
+
 
 
         }

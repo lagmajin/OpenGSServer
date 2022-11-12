@@ -17,7 +17,7 @@ namespace OpenGSServer
 
         private LiteDatabase db;
 
-        private string matchDatabaseFilename = "match.db";
+        private string matchDatabaseFilename = "Database/match.db";
         private MatchDatabaseManager()
         {
 
@@ -30,7 +30,7 @@ namespace OpenGSServer
 
         public void Connect()
         {
-            if(db==null)
+            if (db == null)
             {
                 db = new LiteDatabase(matchDatabaseFilename);
             }
@@ -45,9 +45,9 @@ namespace OpenGSServer
 
         public void AddDMMatchDatabase(in DBMatchDeathMatchDatabaseData data)
         {
-            var col= db.GetCollection<DBMatchDeathMatchDatabaseData>("DBDeathMatch");
+            var col = db.GetCollection<DBMatchDeathMatchDatabaseData>("DBDeathMatch");
 
-            
+
 
 
             //col.Insert(data);
@@ -56,7 +56,7 @@ namespace OpenGSServer
 
         public void AddSuvMatchDatabase(in DSuvMatchDataData data)
         {
-            var col=db.GetCollection<DSuvMatchDataData>("DBSurvivalMatch");
+            var col = db.GetCollection<DSuvMatchDataData>("DBSurvivalMatch");
 
         }
 

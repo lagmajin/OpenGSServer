@@ -9,12 +9,19 @@ namespace OpenGSServer
 {
     internal class ChangeRoomSettingResult
     {
+        public ChangeRoomSettingResult()
+        {
+
+        }
+
+
         public JsonObject ToJson()
         {
             var result = new JsonObject();
 
             result["MessageType"] = "RoomSettingChanged";
-
+            result["GameMode"] = "";
+            result[""] = "";
 
 
             return result;

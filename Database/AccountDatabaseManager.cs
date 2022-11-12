@@ -16,7 +16,7 @@ namespace OpenGSServer
 
         public static string tableName = "TaskGroup";
 
-        public static string filename = "account.db";
+        public static string filename = "Database/account.db";
 
         public static string connectionString = $"Filename={filename};connection=shared";
 
@@ -41,10 +41,7 @@ namespace OpenGSServer
 
         public void Disconnect()
         {
-            if (db != null)
-            {
-                db.Dispose();
-            }
+            db?.Dispose();
 
 
         }
@@ -56,27 +53,44 @@ namespace OpenGSServer
 
         public bool Exist(in string accountID)
         {
-            return false;
+            var col = db.GetCollection<DBPlayer>("players");
+
+
+            if (col.FindOne(Query.EQ("AccountID", accountID)) == null)
+            {
+                return false;
+            }
+            else
+            {
+                return true;
+            }
+
 
         }
 
-        public DBPlayer? GetDBPlayerInfo(in string id)
+        public DBPlayer? GetDBPlayerInfoOld(in string id)
+        {
+            var col = db?.GetCollection<DBPlayer>("players");
+
+            DBPlayer? data = null;
+
+            if (col != null)
+            {
+                data = col.FindOne(Query.EQ("AccountID", id));
+
+            }
+
+            return data;
+        }
+
+        public void GetPlayerInfo(in string account)
         {
             var col = db?.GetCollection<DBPlayer>("players");
 
 
-            var data = col.FindOne(Query.EQ("AccountID", id));
-
-
-
-
-            //col?.EnsureIndex(player => player.DBUniqueKey, unique: true);
-
-
-
-
-            return data;
         }
+
+
 
         public void AddNewPlayerData(in DBPlayer player)
         {
@@ -89,9 +103,12 @@ namespace OpenGSServer
             {
                 var col = db.GetCollection<DBPlayer>("players");
 
-                //col.EnsureIndex(player => player.AccountID, unique: true);
+                //var salt = OpenGSCore.Hash.CreateSalt(8);
 
-                if (col.FindOne(Query.EQ("AccountID", player.AccountID)) == null)
+
+
+
+                if (col.FindOne(Query.EQ("AccountID", player.AccountId)) == null)
                 {
                     col.Insert(player);
                 }
@@ -119,14 +136,10 @@ namespace OpenGSServer
             {
                 var col = db.GetCollection<DBPlayer>("players");
 
-                //col.EnsureIndex(player => player.DBUniqueKey, unique: true);
 
+                col.EnsureIndex(player => player.AccountId, true);
 
-                //col.Find(Query.EQ("ID", player.ID));
-
-                col.EnsureIndex(player => player.AccountID, true);
-
-                var rec = col.FindOne(Query.EQ("AccountID", player.AccountID));
+                var rec = col.FindOne(Query.EQ("AccountID", player.AccountId));
 
                 if (rec != null)
                 {
@@ -150,7 +163,7 @@ namespace OpenGSServer
 
 
         }
-        public void ChangePassward(in string id, in string currentPass, in string newPass)
+        public void ChangePassword(in string id, in string currentPass, in string newPass)
         {
             if (db == null)
             {
@@ -160,17 +173,11 @@ namespace OpenGSServer
             {
                 var col = db.GetCollection<DBPlayer>("players");
 
-                //col.EnsureIndex(player => player.DBUniqueKey, unique: true);
 
 
-                //col.Find(Query.EQ("ID", player.ID));
+                col.EnsureIndex(player => player.Id, true);
 
-                col.EnsureIndex(player => player.AccountID, true);
-
-                //var rec = col.FindOne(Query.EQ("AccountID", player.AccountID));
-
-
-                //Disconnect();
+                var newSalt = OpenGSCore.Hash.CreateSalt(8);
 
             }
         }
@@ -185,7 +192,7 @@ namespace OpenGSServer
             {
                 var col = db.GetCollection<DBPlayer>("players");
 
-                col.EnsureIndex(player => player.AccountID, true);
+                col.EnsureIndex(player => player.Id, true);
 
                 //var rec = col.FindOne(Query.EQ("AccountID", player.AccountID));
 
@@ -207,7 +214,7 @@ namespace OpenGSServer
             {
                 var col = db.GetCollection<DBPlayer>("players");
 
-                col.EnsureIndex(player => player.AccountID, true);
+                col.EnsureIndex(player => player.Id, true);
 
                 //var rec = col.FindOne(Query.EQ("AccountID", player.AccountID));
 

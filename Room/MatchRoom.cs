@@ -1,11 +1,10 @@
 ﻿using System;
-
-using System.Timers;
 using OpenGSCore;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using System.Diagnostics;
 using System.Collections.Generic;
+using System.Text.RegularExpressions;
+
 
 namespace OpenGSServer
 {
@@ -29,37 +28,24 @@ namespace OpenGSServer
 
         private GameScene scene = new();
 
-        bool playing = false;
-        bool finished = false;
-
-
+        //[CanBeNull]
+        public WaitRoom? WaitRoomLink { get; private set; } = null;
         public string Name { get; set; }
 
 
 
         public bool MatchEnd { get; }
 
-        public int playerCount { get; }
+        public int PlayerCount { get; }
 
         public int Capacity { get; }
 
 
-        public bool Playing { get => playing; }
-        public bool Finished { get => finished; }
-
-        /*
-        public MatchRoom(int roomNumber,in string roomName,in string roomOwnerId,in AbstractMatchSetting setting)
-        {
-     
-
-            //RoomNumber = roomNumber;
-
-            //ownerID_ = roomOwnerId;
+        public bool Playing { get; private set; } = false;
+        public bool Finished { get; } = false;
 
 
-            //ConsoleWrite.WriteMessage("Match Room Name:" + "" + "Capacity:" + "Room ID:" + id.ToString() + "GameMode:", ConsoleColor.Yellow);
-        }
-        */
+
         public MatchRoom(int roomNumber, in string roomName, in string roomOwnerId, in AbstractMatchRule rule) : base(roomNumber, roomOwnerId)
         {
 
@@ -166,7 +152,7 @@ namespace OpenGSServer
         public void AddNewPlayer(PlayerInfo info)
         {
 
-            if (playing)
+            if (Playing)
             {
 
             }
@@ -200,7 +186,7 @@ namespace OpenGSServer
             }
 
 
-            playing = true;
+            Playing = true;
         }
 
         public void Finish()
@@ -208,7 +194,7 @@ namespace OpenGSServer
 
 
 
-            playing = false;
+            Playing = false;
 
         }
 
@@ -223,7 +209,7 @@ namespace OpenGSServer
             json["RoomName"] = "";
             json["RoomID"] = Id.ToString();
             json["MaxCapacity"] = 2;
-            json["PlayerCount"] = playerCount;
+            json["PlayerCount"] = PlayerCount;
 
 
             return json;

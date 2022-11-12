@@ -1,8 +1,8 @@
 ﻿using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
-
-
+using System.Runtime.InteropServices;
+using OpenGSCore;
 
 
 namespace OpenGSServer
@@ -22,7 +22,7 @@ namespace OpenGSServer
             var result = eCreateNewRoomResult.Fail;
             var reason = eCreateNewRoomReason.NoReason;
 
-            var gameRoomManager = GameRoomManager.GetInstance();
+            var gameRoomManager = MatchRoomManager.GetInstance();
 
 
             //var createNewRoomResult = new CreateNewRoomResult();
@@ -128,25 +128,20 @@ namespace OpenGSServer
                 var winConditionKill = 10;
 
 
-                if (dic.ContainsKey("WinConditionKill"))
-                {
-                    if (Int32.TryParse(dic["WinConditionKill"].ToString(), out var con))
-                    {
 
-                    }
-                    else
-                    {
-                        winConditionKill = 10;
-                    }
+                if (dic.TryGetValue("WinConditionKill", out var conditionKillToken))
+                {
+
+                    winConditionKill = 10;
 
 
                 }
                 else
                 {
-
                     winConditionKill = 10;
-
                 }
+
+                var deathMatchSetting = new DeathMatchSetting(winConditionKill, true);
 
 
 
@@ -158,7 +153,7 @@ namespace OpenGSServer
 
             }
 
-            if (gameMode == "tdm" || gameMode == "teamdeathMatch")
+            if (gameMode == "tdm" || gameMode == "teamdeathmatch")
             {
 
                 var winConditionKill = 0;
@@ -187,7 +182,7 @@ namespace OpenGSServer
 
 
 
-                gameRoomManager.CreateNewTDMRoom("", "", 10, true);
+                //gameRoomManager.CreateNewTDMRoom("", "", 10, true);
 
             }
 
@@ -254,7 +249,7 @@ namespace OpenGSServer
 
         public static void QuickStartRequest(in ClientSession session, in IDictionary<string, JToken> dic)
         {
-            var matchRoomManager = GameRoomManager.GetInstance();
+            var matchRoomManager = MatchRoomManager.GetInstance();
 
 
 
@@ -272,7 +267,7 @@ namespace OpenGSServer
 
 
 
-            var roomManager = GameRoomManager.GetInstance();
+            var roomManager = MatchRoomManager.GetInstance();
 
             //roomManager.
 
@@ -306,7 +301,7 @@ namespace OpenGSServer
 
 
 
-            var matchRoomManager = GameRoomManager.GetInstance();
+            var matchRoomManager = MatchRoomManager.GetInstance();
 
             var rooms = matchRoomManager.AllRooms();
 
