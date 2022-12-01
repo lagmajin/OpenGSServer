@@ -17,11 +17,11 @@ namespace OpenGSServer
         private int roomNumberCount = 0;
 
 
-        private static MatchRoomManager _singleInstance = new MatchRoomManager();
+        public static MatchRoomManager Instance { get; } = new();
 
         public static MatchRoomManager GetInstance()
         {
-            return _singleInstance;
+            return Instance;
         }
 
         private void IncreaseRoomCounter()
@@ -38,6 +38,9 @@ namespace OpenGSServer
         {
             waitRoom.MatchRoomLink = null;
 
+            //var newMatchRoom = new MatchRoom(roomNumberCount,"Live!Live!Live!","",);
+
+
             IncreaseRoomCounter();
 
         }
@@ -52,7 +55,7 @@ namespace OpenGSServer
             return rooms;
         }
 
-        public CreateNewRoomResult CreateNewDMRoom(in string roomName, in string ownerID, int capacity = 10, bool teamBalance = true)
+        public CreateNewRoomResult CreateNewDeathMatchRoom(in string roomName, in string ownerID, int capacity = 10, bool teamBalance = true)
         {
             var matchSetting = new DeathMatchSetting(10);
 
@@ -72,7 +75,7 @@ namespace OpenGSServer
             return createNewRoomResult;
         }
 
-        public void CreateNewTDMRoom(in string roomName, in string ownerID, int capacity = 10, bool teamBalance = true)
+        public void CreateNewTeamDeathMatchRoom(in string roomName, in string ownerID, int capacity = 10, bool teamBalance = true)
         {
             var tdmMatchSetting = new TDMMatchSetting();
 
@@ -125,7 +128,12 @@ namespace OpenGSServer
 
         }
 
-        public MatchEnterResult EnterRoom(in Guid id)
+        public EnterMatchRoomResult EnterRoom()
+        {
+            return null;
+        }
+
+        public EnterMatchRoomResult EnterRoom(in Guid id)
         {
             id.ToString();
 
@@ -149,7 +157,7 @@ namespace OpenGSServer
                 succeeded = false;
             }
 
-            var result = new MatchEnterResult(succeeded, message);
+            var result = new EnterMatchRoomResult(succeeded, message);
 
 
             return result;

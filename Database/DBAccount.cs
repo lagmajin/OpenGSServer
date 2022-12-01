@@ -6,7 +6,7 @@ using OpenGSCore;
 
 namespace OpenGSServer
 {
-    public class DBPlayer
+    public class DBAccount
     {
 
 
@@ -23,13 +23,13 @@ namespace OpenGSServer
 
 
 
-        public DBPlayer()
+        public DBAccount()
         {
             Id = Guid.NewGuid().ToString("N");
 
         }
 
-        public DBPlayer(in DBPlayer player)
+        public DBAccount(in DBAccount player)
         {
             this.Id = player.Id;
             this.AccountId = player.AccountId;
@@ -38,7 +38,7 @@ namespace OpenGSServer
         }
 
 
-        public DBPlayer(in string accountID, in string hashedPassword, in string salt, in string displayName)
+        public DBAccount(in string accountID, in string hashedPassword, in string salt, in string displayName)
         {
             Id = Guid.NewGuid().ToString("N");
             AccountId = accountID;
@@ -48,7 +48,7 @@ namespace OpenGSServer
         }
 
 
-        static DBPlayer CreateFromPlayerInfo(PlayerInfo info)
+        static DBAccount CreateFromPlayerInfo(PlayerInfo info)
         {
             //var result = new DBPlayer();
 
@@ -58,17 +58,17 @@ namespace OpenGSServer
         }
     }
 
-    public class DBPLayerFriendList
+    public class DBAccountFriendList
     {
         public string Id { get; set; }
         public string[] FriendList { get; set; }
 
-        public DBPLayerFriendList()
+        public DBAccountFriendList()
         {
 
         }
 
-        public DBPLayerFriendList(in DBPLayerFriendList list)
+        public DBAccountFriendList(in DBAccountFriendList list)
         {
 
         }
@@ -76,26 +76,35 @@ namespace OpenGSServer
 
     }
 
-    public class DBPlayerDetail
+    public class DBAccountScore
     {
-        public int TotalKill { get; set; }
-        public int DeathMatchKill { get; set; }
+        [BsonId] public string accountID { get; set; }
+        public int TotalKill { get; set; } = 0;
+        public int DeathMatchKill { get; set; } = 0;
 
-        public int TeamDeathMatchKill { get; set; }
+        public int TeamDeathMatchKill { get; set; } = 0;
 
-        public int TeamSurvivalKill { get; set; }
-
-
+        public int TeamSurvivalKill { get; set; } = 0;
 
 
-        public int CTFFlagReturn { get; set; }
 
-        public int Flag { get; set; }
 
-        public DBPlayerDetail()
+        public int CtfFlagReturn { get; set; } = 0;
+
+        //public int Flag { get; set; }
+
+        public DBAccountScore()
         {
 
         }
+
+        public DBAccountScore(in DBAccountScore account)
+        {
+            accountID = account.accountID;
+
+
+        }
+
     }
 
 

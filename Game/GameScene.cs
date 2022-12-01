@@ -11,7 +11,7 @@ namespace OpenGSServer
 
     public class GameScene
     {
-        List<AbstractGameObject> objects = new();
+        private List<AbstractGameObject> objects = new();
 
         void AddBullet(Bullet bullet)
         {
@@ -28,10 +28,26 @@ namespace OpenGSServer
             objects.Add(item);
         }
 
+        void AddGrenade()
+        {
+
+        }
+
         void AddFlag()
         {
 
 
+        }
+
+        public void UpdateFrame()
+        {
+            foreach (var obj in objects)
+            {
+
+                obj.update();
+
+
+            }
         }
 
 

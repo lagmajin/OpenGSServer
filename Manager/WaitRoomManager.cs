@@ -15,6 +15,10 @@ namespace OpenGSServer
 
         private List<string> defaultRoomNames { get; set; } = new List<string>() { "One Shot One Kill", "" };
 
+        private readonly object _lockObj = new object();
+
+        private JObject RoomInfoCache { get; set; } = new();
+
         private string CreateRoomID()
         {
             var id = Guid.NewGuid().ToString("N");
@@ -41,8 +45,11 @@ namespace OpenGSServer
 
             var room = new WaitRoom(roomName);
 
-            rooms.Add(room.RoomId, room);
+            lock (_lockObj)
+            {
 
+                rooms.Add(room.RoomId, room);
+            }
 
             return room;
 
@@ -82,10 +89,39 @@ namespace OpenGSServer
             result["WaitRoomCount"] = rooms.Count;
             result["RoomCapacity"] = rooms.Count.ToString() + "/" + RoomLimit.ToString();
 
+            var array = new JArray();
+
             foreach (var room in rooms)
             {
-                
+                var roomJson = new JObject();
+
+                var value = room.Value;
+
+                roomJson["RoomNumber"] = 0;
+                roomJson["RoomID"] = value.RoomId.ToString();
+                roomJson["RoomName"] = "";
+                roomJson["Capacity"] = "";
+                roomJson["NowPlaying"] = value.NowPlaying.ToString();
+                roomJson["CanEnter"] = value.CanEnter.ToString();
+
+                var gameModeJson = new JObject();
+
+                gameModeJson["GameMode"] = "";
+                gameModeJson["Rule"] = "";
+                gameModeJson["aaa"] = "";
+
+
+                roomJson["GameMode"] = gameModeJson;
+
+
+                array.Add(roomJson);
+
             }
+
+            result["WaitRooms"] = array;
+
+            RoomInfoCache = result;
+
 
             return result;
         }

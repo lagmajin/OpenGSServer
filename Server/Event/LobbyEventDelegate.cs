@@ -22,7 +22,7 @@ namespace OpenGSServer
             var result = eCreateNewRoomResult.Fail;
             var reason = eCreateNewRoomReason.NoReason;
 
-            var gameRoomManager = MatchRoomManager.GetInstance();
+            var gameRoomManager = MatchRoomManager.Instance;
 
 
             //var createNewRoomResult = new CreateNewRoomResult();
@@ -145,7 +145,7 @@ namespace OpenGSServer
 
 
 
-                gameRoomManager.CreateNewDMRoom("", "", 10, true);
+                gameRoomManager.CreateNewDeathMatchRoom("", "", 10, true);
 
 
 
@@ -267,7 +267,7 @@ namespace OpenGSServer
 
 
 
-            var roomManager = MatchRoomManager.GetInstance();
+            var roomManager = MatchRoomManager.Instance;
 
             //roomManager.
 

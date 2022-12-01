@@ -16,6 +16,10 @@ namespace OpenGSServer
 
         public bool CanEnterWhenPlaying { get; set; } = false;
 
+        public int PlayerCount { get; private set; } = 0;
+        public int MaxCapacity { get; } = 8;
+
+
 
         public string RoomId { get; set; } = CreateRoomId();
 
@@ -37,13 +41,25 @@ namespace OpenGSServer
 
         }
 
+        public void AddPlayer(PlayerAccount account)
+        {
+
+        }
+
+        public void RemovePlayer()
+        {
+
+        }
+
         public void GameStart()
         {
+            NowPlaying = true;
 
         }
 
         public void GameIsOver()
         {
+            NowPlaying = false;
             MatchRoomLink = null;
 
 

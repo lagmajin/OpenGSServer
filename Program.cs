@@ -113,7 +113,7 @@ namespace OpenGSServer
 
                     var hasedPassword = OpenGSCore.Hash.CreateHashWithSalt("test", salt);
 
-                    var dbplayerTest = new DBPlayer("test", hasedPassword, salt, "test");
+                    var dbplayerTest = new DBAccount("test", hasedPassword, salt, "test");
 
 
 

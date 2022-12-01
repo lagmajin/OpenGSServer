@@ -12,7 +12,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenGSCore", "..\OepnGSCore
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenGSMBaas", "..\OpenGSMBaas\OpenGSMBaas.csproj", "{9D6924B5-4FED-4D6E-BE5F-64440A6504DC}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenGSWeb", "..\OpenGSWeb\OpenGSWeb.csproj", "{59719A2E-D1C9-4A55-B2EA-5471178E051B}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenGSWeb", "..\OpenGSWeb\OpenGSWeb.csproj", "{59719A2E-D1C9-4A55-B2EA-5471178E051B}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

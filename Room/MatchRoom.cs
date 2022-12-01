@@ -12,7 +12,7 @@ namespace OpenGSServer
     public interface IMatchRoom
     {
 
-        string Name { get; set; }
+        string RoomName { get; set; }
 
 
     }
@@ -25,20 +25,22 @@ namespace OpenGSServer
 
         private MatchSettings Setting { get; set; }
 
+        private AbstractMatchSituation situation { get; set; } = null;
+
 
         private GameScene scene = new();
 
         //[CanBeNull]
         public WaitRoom? WaitRoomLink { get; private set; } = null;
-        public string Name { get; set; }
+        public string RoomName { get; set; }
 
 
 
-        public bool MatchEnd { get; }
+        public bool MatchEnd { get; } = false;
 
-        public int PlayerCount { get; }
+        public int PlayerCount { get; } = 0;
 
-        public int Capacity { get; }
+        public int Capacity { get; } = 20;
 
 
         public bool Playing { get; private set; } = false;
@@ -142,12 +144,6 @@ namespace OpenGSServer
 
         public GameScene Scene { get => scene; set => scene = value; }
 
-        /*
-        public long ElapsedTime()
-        {
-            return sw.ElapsedMilliseconds;
-        }
-        */
 
         public void AddNewPlayer(PlayerInfo info)
         {
@@ -167,6 +163,7 @@ namespace OpenGSServer
 
         public override void GameUpdate()
         {
+
 
 
 

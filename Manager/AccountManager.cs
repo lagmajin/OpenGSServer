@@ -49,7 +49,7 @@ namespace OpenGSServer
         }
 
 
-        public void AddNewLogonUser(in DBPlayer db)
+        public void AddNewLogonUser(in DBAccount db)
         {
             //accountList.Add(new UserAccount(db.AccountID, db.DisplayName, db.Password));
 
@@ -131,7 +131,7 @@ namespace OpenGSServer
             return null;
         }
 
-        public void RemoveLogonUser(in DBPlayer db)
+        public void RemoveLogonUser(in DBAccount db)
         {
 
 

@@ -55,7 +55,7 @@ namespace OpenGSServer
     }
 
 
-    public class MatchEnterResult
+    public class EnterMatchRoomResult
     {
         readonly bool enterSuccess = false;
 
@@ -66,7 +66,7 @@ namespace OpenGSServer
         eEnterMatchRoomResultReason reason = eEnterMatchRoomResultReason.Unknown;
 
 
-        public MatchEnterResult(bool success, String message)
+        public EnterMatchRoomResult(bool success, String message)
         {
             enterSuccess = success;
 

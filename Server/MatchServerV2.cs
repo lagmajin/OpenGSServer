@@ -77,7 +77,7 @@ namespace OpenGSServer
         }
         private void ServerCallback(object obj)
         {
-            var matchRoomManager = MatchRoomManager.GetInstance();
+            var matchRoomManager = MatchRoomManager.Instance;
 
             var allRoom = matchRoomManager.AllRooms();
 
@@ -97,7 +97,7 @@ namespace OpenGSServer
 
         private void MCoreServerCallback(object obj)
         {
-            var matchRoomManager = MatchRoomManager.GetInstance();
+            var matchRoomManager = MatchRoomManager.Instance;
 
             var allRoom = matchRoomManager.AllRooms();
 

@@ -16,7 +16,9 @@ namespace OpenGSServer
 
         public static string tableName = "TaskGroup";
 
-        public static string filename = "Database/account.db";
+        public static string accountTableName = "Account";
+
+        public static string filename = "Database/Account.db";
 
         public static string connectionString = $"Filename={filename};connection=shared";
 
@@ -53,7 +55,7 @@ namespace OpenGSServer
 
         public bool Exist(in string accountID)
         {
-            var col = db.GetCollection<DBPlayer>("players");
+            var col = db.GetCollection<DBAccount>(accountTableName);
 
 
             if (col.FindOne(Query.EQ("AccountID", accountID)) == null)
@@ -68,11 +70,11 @@ namespace OpenGSServer
 
         }
 
-        public DBPlayer? GetDBPlayerInfoOld(in string id)
+        public DBAccount? GetDBPlayerInfoOld(in string id)
         {
-            var col = db?.GetCollection<DBPlayer>("players");
+            var col = db?.GetCollection<DBAccount>(accountTableName);
 
-            DBPlayer? data = null;
+            DBAccount? data = null;
 
             if (col != null)
             {
@@ -85,14 +87,14 @@ namespace OpenGSServer
 
         public void GetPlayerInfo(in string account)
         {
-            var col = db?.GetCollection<DBPlayer>("players");
+            var col = db?.GetCollection<DBAccount>(accountTableName);
 
 
         }
 
 
 
-        public void AddNewPlayerData(in DBPlayer player)
+        public void AddNewPlayerData(in DBAccount player)
         {
             if (db == null)
             {
@@ -101,7 +103,13 @@ namespace OpenGSServer
 
             if (db != null)
             {
-                var col = db.GetCollection<DBPlayer>("players");
+                var col = db.GetCollection<DBAccount>(accountTableName);
+
+                var col2 = db.GetCollection<DBAccountScore>("AccountScore");
+
+
+
+
 
                 //var salt = OpenGSCore.Hash.CreateSalt(8);
 
@@ -117,6 +125,19 @@ namespace OpenGSServer
                     ConsoleWrite.WriteMessage("Already have data in db");
                 }
 
+                if (col2.FindOne(Query.EQ("AccountID", player.AccountId)) == null)
+                {
+                    var dbAccountDetail = new DBAccountScore();
+                    dbAccountDetail.accountID = player.AccountId;
+
+                    col2.Insert(dbAccountDetail);
+                }
+                else
+                {
+
+                }
+
+
 
 
             }
@@ -125,7 +146,7 @@ namespace OpenGSServer
 
 
         }
-        public void UpdatePlayerData(in DBPlayer player)
+        public void UpdatePlayerData(in DBAccount player)
         {
             if (db == null)
             {
@@ -134,7 +155,7 @@ namespace OpenGSServer
 
             if (db != null)
             {
-                var col = db.GetCollection<DBPlayer>("players");
+                var col = db.GetCollection<DBAccount>("players");
 
 
                 col.EnsureIndex(player => player.AccountId, true);
@@ -171,11 +192,14 @@ namespace OpenGSServer
             }
             if (db != null)
             {
-                var col = db.GetCollection<DBPlayer>("players");
+                var col = db.GetCollection<DBAccount>("players");
+
 
 
 
                 col.EnsureIndex(player => player.Id, true);
+
+
 
                 var newSalt = OpenGSCore.Hash.CreateSalt(8);
 
@@ -190,7 +214,7 @@ namespace OpenGSServer
 
             if (db != null)
             {
-                var col = db.GetCollection<DBPlayer>("players");
+                var col = db.GetCollection<DBAccount>("players");
 
                 col.EnsureIndex(player => player.Id, true);
 
@@ -212,7 +236,7 @@ namespace OpenGSServer
 
             if (db != null)
             {
-                var col = db.GetCollection<DBPlayer>("players");
+                var col = db.GetCollection<DBAccount>("players");
 
                 col.EnsureIndex(player => player.Id, true);
 
