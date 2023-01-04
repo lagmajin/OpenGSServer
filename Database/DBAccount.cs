@@ -1,5 +1,6 @@
 ﻿
 using System;
+using System.Collections.Generic;
 using LiteDB;
 using NUlid;
 using OpenGSCore;
@@ -21,6 +22,7 @@ namespace OpenGSServer
 
         public string CreatedTimeUtc { get; set; }
 
+        public string TimeEncode { get; set; }
 
 
         public DBAccount()
@@ -40,11 +42,19 @@ namespace OpenGSServer
 
         public DBAccount(in string accountID, in string hashedPassword, in string salt, in string displayName)
         {
+
+
+           TimeEncode="yyyy MMMM dd";
+
+            CreatedTimeUtc = DateTime.UtcNow.ToString(TimeEncode);
+
             Id = Guid.NewGuid().ToString("N");
             AccountId = accountID;
             HashedPassword = hashedPassword;
             DisplayName = displayName;
             Salt = salt;
+
+
         }
 
 
@@ -60,12 +70,19 @@ namespace OpenGSServer
 
     public class DBAccountFriendList
     {
-        public string Id { get; set; }
-        public string[] FriendList { get; set; }
+        //[BsonId] public string Id { get; set; }
+
+        public string AccountID { get; set; }
+        //public string[] FriendList { get; set; }
+
+        public List<string> FriendList2 { get; set; } = new();
 
         public DBAccountFriendList()
         {
+            //var sp=FriendList.AsSpan();
 
+            FriendList2.Add("Test2");
+            FriendList2.Add("Test3");
         }
 
         public DBAccountFriendList(in DBAccountFriendList list)
@@ -78,7 +95,7 @@ namespace OpenGSServer
 
     public class DBAccountScore
     {
-        [BsonId] public string accountID { get; set; }
+        public string accountID { get; set; }
         public int TotalKill { get; set; } = 0;
         public int DeathMatchKill { get; set; } = 0;
 

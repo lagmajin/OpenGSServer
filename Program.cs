@@ -47,13 +47,15 @@ namespace OpenGSServer
             // Get a collection (or create, if doesn't exist)
             var room = new JObject();
 
-            room["RoomNum"] = "001";
+            room["RoomNumber"] = "001";
             room["RoomName"] = "LIVE!LIVE!LIVE!";
+            room["GameMode"] = "tdm";
 
             var room2 = new JObject();
 
-            room2["RoomNum"] = "002";
+            room2["RoomNumber"] = "002";
             room2["RoomName"] = "LIVE!LIVE!LIVE!";
+
 
             var jArray = new JArray();
             jArray.Add(room);
@@ -109,12 +111,6 @@ namespace OpenGSServer
                     ConsoleWrite.WriteMessage("OpenGS game server initializing.....", ConsoleColor.Green);
 
 
-                    var salt = OpenGSCore.Hash.CreateSalt(8);
-
-                    var hasedPassword = OpenGSCore.Hash.CreateHashWithSalt("test", salt);
-
-                    var dbplayerTest = new DBAccount("test", hasedPassword, salt, "test");
-
 
 
                     var accountDatabaseManager = AccountDatabaseManager.GetInstance();
@@ -123,14 +119,14 @@ namespace OpenGSServer
 
 
 
-                    accountDatabaseManager.AddNewPlayerData(dbplayerTest);
+                    //accountDatabaseManager.AddNewPlayerData(dbplayerTest);
                     //accountDatabaseManager.AddNewPlayerData(dbplayerTest2);
 
-                    var guildDatabase = GuildDatabaseManager.GetInstance();
+                   // var guildDatabase = GuildDatabaseManager.GetInstance();
 
-                    guildDatabase.Connect();
+                    //guildDatabase.Connect();
 
-                    guildDatabase.CreateNewGuild("TestPlayers");
+                    //guildDatabase.CreateNewGuild("TestPlayers");
 
 
 
@@ -219,13 +215,22 @@ namespace OpenGSServer
 
                             }
 
-                            if (command == "addnewplayer")
+                            if (command == "addnewuser")
                             {
-                                if (param.Count < 1)
+                                if (param.Count > 2)
                                 {
-                                    var id = param[1];
+                                    var id = param[0];
+
+                                    var pass = param[1];
+
+                                    var displayName = param[2];
+
+                                    
+                                    ConsoleWrite.WriteMessage("AddNewUser");
 
                                     var accountManager = AccountManager.GetInstance();
+
+                                    accountManager.CreateNewAccount(id, pass,displayName);
 
                                     //accountManager.CreateNewAccount()
 

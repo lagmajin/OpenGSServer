@@ -157,9 +157,19 @@ namespace OpenGSServer
 
             var salt = OpenGSCore.Hash.CreateSalt(DefaultSaltCount);
 
+            var hashedPass = OpenGSCore.Hash.CreateHashWithSalt(pass, salt);
+
+            var dbAccount = new DBAccount
+            {
+                AccountId = accountID,
+                DisplayName = displayName,
+                HashedPassword = hashedPass,
+                Salt=salt,
+                CreatedTimeUtc = createdTimeUTC
+            };
 
 
-
+            databaseManager.AddNewPlayerData(dbAccount);
 
 
 
@@ -255,7 +265,7 @@ namespace OpenGSServer
 
 
 
-        RESULT:
+            RESULT:
 
 
             var result = new LoginResult(id, type);

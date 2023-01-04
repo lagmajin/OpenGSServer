@@ -149,13 +149,32 @@ namespace OpenGSServer
 
         }
 
-
+        
 
         public static void RemoveAccount(ClientSession session, IDictionary<string, JToken> dic)
         {
 
         }
 
+        public static void PlayerInfoRequest(ClientSession session,IDictionary<string,JToken> dic)
+        {
+            var instance=AccountDatabaseManager.GetInstance();
+
+            
+
+
+            if (dic.TryGetValue("id", out var idToken))
+            {
+                instance.GetPlayerInfo(idToken.ToString());
+
+            }
+
+
+            //instance.GetPlayerInfo();
+
+            //instance.GetPlayerInfo();
+
+        }
         public static void AddFriendRequest(IDictionary<string, JToken> dic)
         {
 
@@ -172,12 +191,16 @@ namespace OpenGSServer
 
             string pass;
 
+            if (dic.TryGetValue("id", out var idToken))
+            {
+                //instance.GetPlayerInfo(idToken.ToString());
 
-            id = dic["id"].ToString();
+            }
+            //id = dic["id"].ToString();
 
-            pass = dic["pass"].ToString();
+            //pass = dic["pass"].ToString();
 
-
+            
 
 
 

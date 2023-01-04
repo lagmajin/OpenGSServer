@@ -12,7 +12,7 @@ namespace OpenGSServer
 
         public static JObject MatchServerInfo()
         {
-            JObject result=new JObject();
+            var result=new JObject();
 
             result["MessageType"] = "MatchServerInfo";
 
@@ -29,6 +29,8 @@ namespace OpenGSServer
             return result;
 
         }
+
+
 
 
         public static JObject Make()

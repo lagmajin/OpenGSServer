@@ -6,7 +6,7 @@ namespace OpenGSServer
 {
     public class ChatManager
     {
-        private List<Chat> log;
+        private List<Chat> log=new();
 
         public List<Chat> Log { get => log;}
 

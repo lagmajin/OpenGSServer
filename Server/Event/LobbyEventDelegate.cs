@@ -216,7 +216,7 @@ namespace OpenGSServer
             }
 
 
-        ErrorResult:
+            ErrorResult:
             {
 
 
@@ -265,9 +265,12 @@ namespace OpenGSServer
 
 
 
+            var roomId = dic["RoomID"];
 
 
             var roomManager = MatchRoomManager.Instance;
+
+            //roomManager.EnterRoom()
 
             //roomManager.
 

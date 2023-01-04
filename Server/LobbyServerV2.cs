@@ -17,7 +17,7 @@ namespace OpenGSServer
     {
         private LobbyServerManagerV2 _manager = null;
 
-
+        private Lobby lobby=new();
 
 
         public LobbyTcpServer(IPAddress address, int port, LobbyServerManagerV2 manager) : base(address, port)
@@ -28,6 +28,8 @@ namespace OpenGSServer
 
             ConsoleWrite.WriteMessage("LobbyServer initialized..." + "Port:" + port, ConsoleColor.Green);
 
+            
+  
         }
 
         private string CreateUniqueID()
@@ -37,6 +39,15 @@ namespace OpenGSServer
 
 
             return str;
+        }
+
+        protected virtual Socket CreateSocket()
+        {
+            var socket = base.CreateSocket();
+
+            socket.SetSocketOption( SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true );;
+
+            return socket;
         }
 
         protected override TcpSession CreateSession()

@@ -18,6 +18,8 @@ namespace OpenGSServer
 
         public static string accountTableName = "Account";
 
+        public static string accountScoreTableName = "AccountScore";
+
         public static string filename = "Database/Account.db";
 
         public static string connectionString = $"Filename={filename};connection=shared";
@@ -78,7 +80,8 @@ namespace OpenGSServer
 
             if (col != null)
             {
-                data = col.FindOne(Query.EQ("AccountID", id));
+                data = col.FindOne(Query.EQ("AccountId", id));
+
 
             }
 
@@ -89,7 +92,23 @@ namespace OpenGSServer
         {
             var col = db?.GetCollection<DBAccount>(accountTableName);
 
+            DBAccount? acount = null;
 
+            if (col != null)
+            {
+
+
+            }
+
+
+
+        }
+
+        public int UserCount()
+        {
+            var acCol=db.GetCollection<DBAccount>();
+
+            return acCol.Count();
         }
 
 
@@ -105,37 +124,51 @@ namespace OpenGSServer
             {
                 var col = db.GetCollection<DBAccount>(accountTableName);
 
-                var col2 = db.GetCollection<DBAccountScore>("AccountScore");
+                var collection = db.GetCollection<DBAccountScore>(accountScoreTableName);
 
-
-
-
-
-                //var salt = OpenGSCore.Hash.CreateSalt(8);
+                var friendCol = db.GetCollection<DBAccountFriendList>("Friend");
+                
 
 
 
 
                 if (col.FindOne(Query.EQ("AccountID", player.AccountId)) == null)
                 {
+                 
                     col.Insert(player);
+
+                    if (collection.FindOne(Query.EQ("AccountID", player.AccountId)) == null)
+                    {
+                        var dbAccountDetail = new DBAccountScore
+                        {
+                            accountID = player.AccountId
+                        };
+
+                        collection.Insert(dbAccountDetail);
+                    }
+                    else
+                    {
+
+                    }
+
+                    if (friendCol.FindOne(Query.EQ("AccountID", player.AccountId))==null)
+                    {
+                        var dbAccountFriend = new DBAccountFriendList()
+                        {
+                            AccountID = player.AccountId
+
+                        };
+
+                        friendCol.Insert(dbAccountFriend);
+                    }
+
                 }
                 else
                 {
                     ConsoleWrite.WriteMessage("Already have data in db");
                 }
 
-                if (col2.FindOne(Query.EQ("AccountID", player.AccountId)) == null)
-                {
-                    var dbAccountDetail = new DBAccountScore();
-                    dbAccountDetail.accountID = player.AccountId;
 
-                    col2.Insert(dbAccountDetail);
-                }
-                else
-                {
-
-                }
 
 
 
@@ -146,7 +179,7 @@ namespace OpenGSServer
 
 
         }
-        public void UpdatePlayerData(in DBAccount player)
+        public void UpdateAccountData(in DBAccount player)
         {
             if (db == null)
             {
@@ -182,6 +215,16 @@ namespace OpenGSServer
             }
             //co
 
+
+        }
+
+        public void UpdateAccountScore(in DBAccountScore score)
+        {
+
+        }
+
+        public void UpdateFriendList()
+        {
 
         }
         public void ChangePassword(in string id, in string currentPass, in string newPass)
