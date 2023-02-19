@@ -86,7 +86,7 @@ namespace OpenGSServer
 
             if (succeeded)
             {
-                result["MessageType"] = "LoginSuccess";
+                result["MessageType"] = "LoginSuccessful";
                 result["AccountID"] = id_;
 
 
@@ -95,7 +95,7 @@ namespace OpenGSServer
             }
             else
             {
-                result["MessageType"] = "LoginFail";
+                result["MessageType"] = "LoginFailure";
             }
 
 

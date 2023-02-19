@@ -1,20 +1,18 @@
-﻿using NetCoreServer;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
-using Microsoft.VisualBasic;
-using Buffer = NetCoreServer.Buffer;
+using NetCoreServer;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace OpenGSServer
 {
-    public class ClientSession : TcpSession
-    {
+    public class ManagementServerSession : TcpSession
+    {       
+        
         private string id = "";
 
 
@@ -25,20 +23,8 @@ namespace OpenGSServer
         private string ip = "";
 
         private string _utf_format = "";
+        public ManagementServerSession(TcpServer server) : base(server) { }
 
-
-
-
-        public ClientSession(TcpServer server) : base(server) { }
-
-        private void setIPAddress()
-        {
-            var endpoint = (IPEndPoint)Socket.RemoteEndPoint;
-
-            var v = IPAddress.Parse(endpoint.Address.ToString());
-
-            ip = v.ToString();
-        }
         public string ClientIpAddress()
         {
             return ip;
@@ -91,15 +77,12 @@ namespace OpenGSServer
             return SendAsync(str);
         }
 
-
-
-
         protected override void OnConnected()
         {
             //this.Socket.RemoteEndPoint.
             if (ip == "")
             {
-                setIPAddress();
+                //setIPAddress();
             }
 
 
@@ -113,7 +96,7 @@ namespace OpenGSServer
 
             var jobject = new JObject();
 
-            jobject["MessageType"] = "ConnectServerSuccessful";
+            jobject["MessageType"] = "ConnectManagementServerSucceeded";
 
             SendJsonAsyncWithTimeStamp(jobject);
 
@@ -132,7 +115,7 @@ namespace OpenGSServer
         {
             if (string.IsNullOrEmpty(ip))
             {
-                setIPAddress();
+                //setIPAddress();
             }
 
 
@@ -176,13 +159,11 @@ namespace OpenGSServer
                 Disconnect();
         }
 
-
-
-
         protected override void OnError(SocketError error)
         {
             Console.WriteLine($"Chat TCP session caught an error with code {error}");
         }
+
 
         private void ParseMessageFromClient(in JObject json)
         {
@@ -211,148 +192,22 @@ namespace OpenGSServer
             }
 
 
-            if ("LoginRequest" == messageType)
+            if ("AdminLoginRequest" == messageType)
             {
 
-                AccountEventDelegate.Login(this, dic);
-                AccountEventDelegate.SendUserInfo(this, dic);
-            }
-
-            if ("LogoutRequest" == messageType)
-            {
-                AccountEventDelegate.Logout(this, dic);
-            }
-
-            if ("AddFriendRequest" == messageType)
-            {
-                //AccountEventDelegate.AddFriendRequest()
-
-            }
-
-            if ("PlayerInfoRequest" == messageType)
-            {
-
-            }
+                var adminID = dic["AdminID"].ToString();
+                var adminPass = dic["AdminPassword"].ToString();
 
 
-            if ("MatchServerInformationRequest" == messageType)
-            {
-                var infoJson = new JObject();
-
-                var matchServer = MatchServerV2.GetInstance();
-
-
-
-                infoJson["MessageType"] = "MatchServerInformationNotification";
-
-                infoJson["Port"] = matchServer.Port();
-
-                infoJson["SubPort"] = 2000;
-
-                var str = infoJson.ToString(Formatting.None);
-
-                ConsoleWrite.WriteMessage(str);
-
-                SendAsync(str);
-
-            }
-
-
-
-            if ("UpdateRoomRequest" == messageType)
-            {
-
-                LobbyEventDelegate.UpdateRoom(this, dic);
-
-            }
-
-            if ("CreateNewWaitRoomRequest" == messageType)
-            {
-
-                LobbyEventDelegate.CreateNewWaitRoom(this, dic);
-
+                
 
 
             }
 
-            if ("QuickStartRequest" == messageType)
-            {
-                ConsoleWrite.WriteMessage("QuickStart", ConsoleColor.Yellow);
-
-                LobbyEventDelegate.QuickStartRequest(this, dic);
-
-            }
-
-            if ("EnterRoomRequest" == messageType)
+            if ("AdminLogoutRequest" == messageType)
             {
 
-                LobbyEventDelegate.EnterRoomRequest(this, dic);
-            }
 
-
-            if ("ExitRoomRequest" == messageType)
-            {
-                var playerID = json["PlayerID"].ToString();
-                var roomID = json["RoomID"].ToString();
-                if (string.IsNullOrEmpty(playerID))
-                {
-
-                }
-
-                WaitRoomEventDelegate.ExitRoomRequest(this);
-
-            }
-
-            if ("MatchStartRequest" == messageType)
-            {
-                var playerID = json["PlayerID"].ToString();
-                var roomID = json["RoomID"].ToString();
-
-
-
-
-            }
-
-            if ("AddNewLobbyChat" == messageType)
-            {
-                //var playerID = json["id"].ToString();
-
-                //var message = json["Message"].ToString();
-
-                /*
-                if (string.IsNullOrEmpty(playerID))
-                {
-
-                }
-
-                */
-
-            }
-
-            if ("AddNewRoomChatRequest" == messageType)
-            {
-                string idString;
-                string roomIdString;
-
-                if (json.TryGetValue("id", out var id))
-                {
-
-
-                }
-                else
-                {
-
-                    return;
-                }
-
-                if (json.TryGetValue("roomid", out var roomID))
-                {
-
-                }
-
-                //var id = json["id"].ToString();
-                //var roomId = json["roomid"].ToString();
-                //var chat = json["message"].ToString();
 
 
 
@@ -367,3 +222,4 @@ namespace OpenGSServer
     }
 
 }
+

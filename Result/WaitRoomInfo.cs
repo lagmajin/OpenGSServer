@@ -6,15 +6,8 @@ using System.Threading.Tasks;
 
 namespace OpenGSServer
 {
-    
-
-    public class MissionRUDPServer
+    public class WaitRoomInfo:AbstractResult
     {
-        public void Listen()
-        {
-
-        }
-
 
     }
 }

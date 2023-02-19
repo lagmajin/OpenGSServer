@@ -207,7 +207,7 @@ namespace OpenGSServer
 
 
                     }
-                    await Task.Delay(1);
+                    await Task.Delay(1).ConfigureAwait(false);
                 }
                 catch (IOException e)
                 {

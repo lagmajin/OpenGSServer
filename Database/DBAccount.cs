@@ -7,6 +7,7 @@ using OpenGSCore;
 
 namespace OpenGSServer
 {
+    
     public class DBAccount
     {
 
@@ -18,12 +19,16 @@ namespace OpenGSServer
         public string HashedPassword { get; set; }
 
         public string Salt { get; set; }
+
         public string DisplayName { get; set; }
 
         public string CreatedTimeUtc { get; set; }
 
         public string TimeEncode { get; set; }
 
+        public string FirstAccessIPAddress { get; set; }
+
+        public string LastAccessIPAddress { get; set; }
 
         public DBAccount()
         {

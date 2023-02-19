@@ -3,10 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Text;
 using System.Threading;
-
-
-
-
+using System.Threading.Tasks;
 
 
 namespace OpenGSServer
@@ -50,9 +47,13 @@ namespace OpenGSServer
         {
             _loop = false;
         }
-        private void OnTimer(object state)
+        private async void OnTimer(object state)
         {
             Thread.Sleep(_dueTime);
+            
+            //await Task.Delay(_dueTime);
+
+            //Thread.Yield();
             _sw.Restart();
             while (_loop)
             {
@@ -62,6 +63,9 @@ namespace OpenGSServer
                 if (rest > 200)
                 {
                     Thread.Sleep(rest - 10);
+                    
+                    //await Task.Delay(rest - 10);
+                    //Thread.Yield();
                 }
                 // 200msecの間、ちょうどになるまでループで待つ
                 while (true)

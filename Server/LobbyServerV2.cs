@@ -17,7 +17,7 @@ namespace OpenGSServer
     {
         private LobbyServerManagerV2 _manager = null;
 
-        private Lobby lobby=new();
+        //private Lobby lobby=new();
 
 
         public LobbyTcpServer(IPAddress address, int port, LobbyServerManagerV2 manager) : base(address, port)
@@ -41,14 +41,16 @@ namespace OpenGSServer
             return str;
         }
 
-        protected virtual Socket CreateSocket()
+        
+        protected override Socket CreateSocket()
         {
             var socket = base.CreateSocket();
 
-            socket.SetSocketOption( SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true );;
+            //socket.SetSocketOption( SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true );;
 
             return socket;
         }
+        
 
         protected override TcpSession CreateSession()
         {
@@ -90,16 +92,13 @@ namespace OpenGSServer
 
     public class LobbyServerManagerV2 : IDisposable
     {
-        private static LobbyServerManagerV2 _singleInstance = new LobbyServerManagerV2();
+        public static LobbyServerManagerV2 Instance { get; } = new();
         private LobbyTcpServer? server;
 
 
         System.Timers.Timer hourTimer = new System.Timers.Timer(600000);
 
-        public static LobbyServerManagerV2 GetInstance()
-        {
-            return _singleInstance;
-        }
+
 
         public void Listen(int port)
         {

@@ -13,7 +13,10 @@ namespace OpenGSServer
 
         [BsonId] public string id { get; set; }
 
+        public string GuildShortName { get; set; }
         public string GuildName { get; set; }
+
+        public string CreationTime { get; set; }
 
         public DBGuild(in string guildName)
         {

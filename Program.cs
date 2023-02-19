@@ -1,4 +1,4 @@
-﻿using LiteDB;
+﻿ using LiteDB;
 using System;
 using System.Linq;
 using System.Threading;
@@ -7,9 +7,10 @@ using System.CommandLine.Parser;
 using System.Diagnostics;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
+ using OpenGSServer.Server;
 
 
-namespace OpenGSServer
+ namespace OpenGSServer
 {
     class Program
     {
@@ -19,7 +20,7 @@ namespace OpenGSServer
 
         static void CurrentDomain_ProcessExit(object sender, EventArgs e)
         {
-            var generalServerV2 = LobbyServerManagerV2.GetInstance();
+            var generalServerV2 = LobbyServerManagerV2.Instance;
 
             generalServerV2.Stop();
             Console.WriteLine("exit");
@@ -30,10 +31,15 @@ namespace OpenGSServer
 
             while (!MonitorTaskFlag)
             {
+                if (cancelToken.IsCancellationRequested)
+                {
+                    return;
+                }
 
-                //ConsoleWrite.WriteMessage("MonitorTaskRun");
 
-                await Task.Delay(1500);
+                Task.Yield();
+
+
             }
 
 
@@ -45,11 +51,23 @@ namespace OpenGSServer
         {
 
             // Get a collection (or create, if doesn't exist)
+
+            var roomOption = new JObject();
+            roomOption["RestrictWeapon"] = "";
+            roomOption["FieldItemSwitch"] = false;
+            roomOption["CanUseInstantItem"] = false;
+
             var room = new JObject();
 
             room["RoomNumber"] = "001";
             room["RoomName"] = "LIVE!LIVE!LIVE!";
+            room["RoomID"] = "ferett34fyh";
             room["GameMode"] = "tdm";
+            
+            //room["RoomID"] = "";
+            room["Capacity"] = 8;
+            room["PlayerCount"] = 0;
+            room["RoomOption"] = roomOption;
 
             var room2 = new JObject();
 
@@ -106,6 +124,9 @@ namespace OpenGSServer
 
             if (hasHandle)
             {
+                
+                var cts = new CancellationTokenSource();
+
                 try
                 {
                     ConsoleWrite.WriteMessage("OpenGS game server initializing.....", ConsoleColor.Green);
@@ -119,32 +140,36 @@ namespace OpenGSServer
 
 
 
-                    //accountDatabaseManager.AddNewPlayerData(dbplayerTest);
-                    //accountDatabaseManager.AddNewPlayerData(dbplayerTest2);
-
-                   // var guildDatabase = GuildDatabaseManager.GetInstance();
-
-                    //guildDatabase.Connect();
-
-                    //guildDatabase.CreateNewGuild("TestPlayers");
 
 
-
-                    var generalServerV2 = LobbyServerManagerV2.GetInstance();
+                    var generalServerV2 = LobbyServerManagerV2.Instance;
 
                     generalServerV2.Listen(50000);
 
-                    //var matchServer = serverManager.GetMatchServer() ;
 
-                    var matchServerV2 = MatchServerV2.GetInstance();
+                    //var matchServerV2 = MatchServerV2.GetInstance();
 
-                    matchServerV2.Listen(50010);
+                    //matchServerV2.Listen(50010);
+
+                    var matchRUdpServer = MatchRUdpServerManager.Instance;
+
+                    matchRUdpServer.Listen(63000);
+
+                    //
+                    var managementServer = ManagementServer.Instance;
+                    
+                    managementServer.Listen(50020);
+
+                    int workMin;  
+                    int ioMin;  
+                    ThreadPool.GetMinThreads(out workMin, out ioMin);  
+
+                    Console.WriteLine("MinThreads work={0}, i/o={1}", workMin, ioMin);
 
 
-                    var cts = new CancellationTokenSource();
+                    ThreadPool.SetMinThreads(26, ioMin);  
 
-
-                    var monitorTask = Task.Run(() => MonitorTask(cts.Token), cts.Token).ConfigureAwait(false);
+                    //var monitorTask = Task.Run(() => MonitorTask(cts.Token), cts.Token).ConfigureAwait(false);
 
 
 
@@ -257,7 +282,7 @@ namespace OpenGSServer
 
                                 if (param.Count > 0)
                                 {
-                                    ConsoleWrite.WriteMessage("Add new waitroom");
+                                    ConsoleWrite.WriteMessage("Add new wait room");
                                     var roomName = param[0];
 
 
@@ -425,13 +450,21 @@ namespace OpenGSServer
 
                     }
 
+                    generalServerV2.Stop();
+                    matchRUdpServer.Stop();
+                    managementServer.Stop();
+
                     MonitorTaskFlag = true;
                     //monitorTask.Wait();
+
+                    
                 }
                 finally
                 {
                     ConsoleWrite.WriteMessage("", ConsoleColor.Red);
 
+                    cts.Dispose();
+                    
                 }
 
             }
@@ -442,7 +475,7 @@ namespace OpenGSServer
 
             }
 
-
+            
 
 
 

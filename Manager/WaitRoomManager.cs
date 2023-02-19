@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 using Newtonsoft.Json.Linq;
+using OpenGSCore;
 
 namespace OpenGSServer
 {
@@ -10,6 +11,8 @@ namespace OpenGSServer
         private static WaitRoomManager _singleInstance = new WaitRoomManager();
 
         private SortedDictionary<string, WaitRoom> rooms = new();
+
+        private WaitRoomDatabase allRoom=new ();
 
         private int RoomLimit { get; set; } = 20;
 
@@ -67,6 +70,10 @@ namespace OpenGSServer
 
         }
 
+        public void CreateRoomCache()
+        {
+
+        }
 
         public string Info()
         {

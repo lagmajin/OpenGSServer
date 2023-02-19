@@ -19,20 +19,28 @@ namespace OpenGSServer
 
     }
 
+    public class PlayerAccountData
+    {
+        public PlayerAccount PlayerAccount { get; set; } 
+        public PlayerServerInformation PlayerServerInformation { get; set; } = new();
+
+        public PlayerAccountData(PlayerAccount account,PlayerServerInformation information)
+        {
+
+        }
+
+    }
+
     public class AccountManager
     {
-        private List<PlayerAccount> accountList = new List<PlayerAccount>();
 
         private Dictionary<string, PlayerAccount> logonUser = new();
 
-        //private Dictionary<string,PlayerData> playerData=new();
+        private Dictionary<string, PlayerServerInformation> playerInformation = new();
 
+        private List<PlayerAccountData> logonUserData=new();
 
-        private Dictionary<string, PlayerInformation> playerInformation = new();
-        private Dictionary<string, FriendList> _friendList = new();
-
-
-        //private ConcurrentDictionary<string, PlayerAccount> logonUser2 = new ConcurrentDictionary<string, PlayerAccount>();
+      
 
         private static AccountManager _singleInstance = new();
 
@@ -53,42 +61,61 @@ namespace OpenGSServer
         {
             //accountList.Add(new UserAccount(db.AccountID, db.DisplayName, db.Password));
 
-
-
-            if (logonUser.ContainsKey(db.AccountId))
+            lock (logonUser)
             {
-                lock (logonUser)
+
+                if (!logonUser.ContainsKey(db.AccountId))
                 {
+
 
                     logonUser.Add(db.AccountId, new PlayerAccount(db.AccountId, db.DisplayName, db.Password));
-                }
 
-                lock (playerInformation)
+
+                    lock (playerInformation)
+                    {
+                        var info = new PlayerServerInformation(EPlayerPlayingStatus.Unknown, EPlayerLocation.Lobby);
+
+                        playerInformation.Add(db.AccountId, info);
+
+                    }
+
+                }
+                else
                 {
-                    var info = new PlayerInformation(ePlayerPlayingStatus.Unknown);
 
-                    playerInformation.Add(db.AccountId, info);
 
                 }
 
             }
-            else
+
+
+
+        }
+
+        public void AddNewLogonUser(in PlayerAccountData data)
+        {
+
+        }
+
+
+        public void RemoveLogonUser(in DBAccount db)
+        {
+
+
+
+            lock (logonUser)
             {
-
-
+                logonUser.Remove(db.AccountId);
             }
-
 
 
 
         }
 
 
-
-
-        public PlayerInformation PlayerInformation(in string id)
+        public PlayerServerInformation PlayerInformation(in string id)
         {
-            //var information = new PlayerInformation();
+            //var information = new PlayerServerInformation();
 
             lock (logonUser)
             {
@@ -131,20 +158,7 @@ namespace OpenGSServer
             return null;
         }
 
-        public void RemoveLogonUser(in DBAccount db)
-        {
-
-
-
-            lock (logonUser)
-            {
-                logonUser.Remove(db.AccountId);
-            }
-
-
-
-        }
-
+ 
 
         public CreateNewAccountResult CreateNewAccount(in string accountID, in string pass, in string displayName)
         {
@@ -221,17 +235,6 @@ namespace OpenGSServer
 
             //var pass2 = account.Salt + "pass";
 
-            var pass2 = OpenGSCore.Hash.CreateHashWithSalt(pass, account.Salt);
-
-            ConsoleWrite.WriteMessage(pass2);
-
-            if (account.Salt == null)
-            {
-
-            }
-
-
-
             if (account == null)
             {
                 type = eLoginResultType.AccountNotFound;
@@ -240,7 +243,20 @@ namespace OpenGSServer
                 goto RESULT;
             }
 
-            if (account.HashedPassword != pass2)
+            var withSalt = OpenGSCore.Hash.CreateHashWithSalt(pass, account.Salt);
+
+            ConsoleWrite.WriteMessage(withSalt);
+
+            if (account.Salt == null)
+            {
+
+            }
+
+
+
+
+
+            if (account.HashedPassword != withSalt)
             {
                 type = eLoginResultType.InvalidIDorPassword;
 

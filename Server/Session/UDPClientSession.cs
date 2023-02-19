@@ -1,14 +1,32 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿
+using LiteNetLib;
+using LiteNetLib.Utils;
+using Newtonsoft.Json.Linq;
 
 namespace OpenGSServer
 {
-    public class UDPClientSession
+    public class MatchRUdpSession
     {
+        private NetPeer peer_;
+        public string IP { get; set; }
 
+        public MatchRUdpSession(NetPeer peer)
+        {
+            peer_ = peer;
+            IP = peer.EndPoint.Address.ToString();
 
+            ConsoleWrite.WriteMessage(IP);
+        }
+
+        public void SendJson(JObject json)
+        {
+            var str=json.ToString();
+
+            var writer = new NetDataWriter();
+            
+            writer.Put(str);
+            peer_.Send(writer,DeliveryMethod.ReliableOrdered);
+
+        }
     }
 }

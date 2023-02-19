@@ -6,15 +6,7 @@ using System.Threading.Tasks;
 
 namespace OpenGSServer
 {
-    
-
-    public class MissionRUDPServer
+    public class DBAccountDetail
     {
-        public void Listen()
-        {
-
-        }
-
-
     }
 }

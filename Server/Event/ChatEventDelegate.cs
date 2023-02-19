@@ -7,48 +7,81 @@ namespace OpenGSServer
     internal class ChatEventDelegate
     {
 
-        public static void OneOnOneChat(in ClientSession session, in IDictionary<string, JToken> dic)
+        public static void ProcessOneOnOneChat(in ClientSession session, in IDictionary<string, JToken> dic)
         {
 
-            if (dic.TryGetValue("", out var chatMessageToken))
+            if (!dic.ContainsKey("AccountID"))
             {
-                var chatMessage = chatMessageToken.ToString();
 
 
+                return;
+            }
 
+            if (dic.ContainsKey("TargetAccountID"))
+            {
+                return;
+            }
+
+            if (dic.ContainsKey("Message"))
+            {
+
+                return;
             }
 
         }
 
-        public static void LobbyChatRequest(in ClientSession session, in IDictionary<string, JToken> dic)
+        public static void ProcessLobbyChatRequest(in ClientSession session, in IDictionary<string, JToken> dic)
         {
-            if (dic.TryGetValue("ChatMessage", out var chatMessageToken))
+            if (!dic.ContainsKey("AccountID"))
             {
-                var chatMessage = chatMessageToken.ToString();
 
 
+                return;
+            }
 
+            if (dic.ContainsKey("Message"))
+            {
+
+                return;
+            }
+
+            //LobbyServerManagerV2
+
+        }
+
+        public static void ProcessWaitRoomChatRequest(in ClientSession session, in IDictionary<string, JToken> dic)
+        {
+            if (!dic.ContainsKey("AccountID"))
+            {
+
+
+                return;
+            }
+
+            if (dic.ContainsKey("Message"))
+            {
+
+                return;
             }
 
 
 
-            if (dic.TryGetValue("LocalTimeStamp", out var timeStampToken))
+        }
+
+        public static void ProcessMatchRoomChatRequest(in ClientSession session, in IDictionary<string, JToken> dic)
+        {
+            if (!dic.ContainsKey("AccountID"))
             {
-                var timeStamp = "";
 
 
-
+                return;
             }
-        }
 
-        public static void WaitRoomChatRequest(in ClientSession session, in IDictionary<string, JToken> dic)
-        {
+            if (dic.ContainsKey("Message"))
+            {
 
-
-        }
-
-        public static void MatchRoomChatRequest(in ClientSession session, in IDictionary<string, JToken> dic)
-        {
+                return;
+            }
 
         }
 

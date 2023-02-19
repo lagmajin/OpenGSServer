@@ -14,11 +14,22 @@ namespace OpenGSServer
         {
             var timezone = TimeZoneInfo.Local;
 
+            var lobbyServerInfoJson = new JObject();
+            lobbyServerInfoJson["Port"] = "";
+
+
+            var matchServerInfoJson = new JObject();
+            matchServerInfoJson["Port"] = "";
+            matchServerInfoJson["Mode"] = "RUDP";
+
             var json = new JObject();
 
+            json["MessageType"] = "ServerInfo";
+            json["LobbyServerInfo"] = lobbyServerInfoJson;
+            json["MatchServerInfo"] = matchServerInfoJson;
 
 
-
+            session.SendJsonAsyncWithTimeStamp(json);
         }
 
         public static void PingRequest(ClientSession session, Dictionary<string, JToken> dic)

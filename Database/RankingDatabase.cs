@@ -6,8 +6,18 @@ using OpenGSCore;
 namespace OpenGSServer
 {
 
+    struct DeathMatchKillRanking
+    {
+        public string AccountID { get; set; }
+        public string DisplayName { get; set; }
+        public DeathMatchKillRanking(in string AccountID,in string DisplayName,int Kill)
+        {
+            this.AccountID = AccountID;
 
+            this.DisplayName = DisplayName;
+        }
 
+    }
 
     public class RankingDatabase:IDisposable
     {
@@ -15,7 +25,7 @@ namespace OpenGSServer
 
         public static string rankingDBfileName = "ranking.db";
 
-
+        private string connectionString = "";
         public void ConnectRankingDB()
         {
             rankingDB = new LiteDatabase(rankingDBfileName);
@@ -23,7 +33,7 @@ namespace OpenGSServer
            
         }
 
-        public void AddDMKillRanking(in string AccountID,in string DisplayName)
+        public void AddDMKillRanking(in string AccountID,in string DisplayName,int kill)
         {
             if(rankingDB==null)
             {
@@ -35,7 +45,9 @@ namespace OpenGSServer
 
         }
 
-        public void AddTDMKillRanking(in string AccountID, in string DisplayName)
+        
+
+        public void AddTDMKillRanking(in string AccountID, in string DisplayName,int kill)
         {
             if (rankingDB == null)
             {

@@ -6,15 +6,7 @@ using System.Threading.Tasks;
 
 namespace OpenGSServer
 {
-    
-
-    public class MissionRUDPServer
+    public class MatchRoomDelegate
     {
-        public void Listen()
-        {
-
-        }
-
-
     }
 }

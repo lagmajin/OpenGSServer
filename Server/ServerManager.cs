@@ -4,7 +4,12 @@ using System.Text;
 
 namespace OpenGSServer
 {
-    class ServerManager
+    interface IServerManager
+    {
+
+    }
+
+    sealed class ServerManager
     {
 
         private static ServerManager _singleInstance = new ServerManager();

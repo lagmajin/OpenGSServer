@@ -159,7 +159,7 @@ namespace OpenGSServer
 
                 }
                 //Thread.Sleep(1);
-                await Task.Delay(1).ConfigureAwait(false);
+                await Task.Delay(8).ConfigureAwait(false);
             }
             
 
