@@ -26,6 +26,11 @@ namespace OpenGSServer
 
         }
 
+        public DBGuild(in string guildName, in string guildShortName)
+        {
+
+        }
+
         public DBGuild(in DBGuild guild)
         {
 

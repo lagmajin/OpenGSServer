@@ -41,7 +41,9 @@ namespace OpenGSServer
             this.Id = player.Id;
             this.AccountId = player.AccountId;
             this.Password = player.Password;
+            this.Salt = player.Salt;
 
+            FirstAccessIPAddress = player.FirstAccessIPAddress;
         }
 
 

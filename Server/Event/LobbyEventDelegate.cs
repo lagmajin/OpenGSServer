@@ -46,20 +46,23 @@ namespace OpenGSServer
 
             }
 
-            if (dic.ContainsKey("PlayerName"))
+
+
+
+
+
+            if (dic.TryGetValue("TeamBalance", out var playerNameToken))
             {
-                playerName = dic["PlayerName"].ToString();
 
-                if (string.IsNullOrEmpty(playerName))
-                {
 
-                    return;
-                }
             }
             else
             {
+                
 
+                return;
             }
+
 
 
             if (dic.TryGetValue("TeamBalance", out var teamBalanceToken))
@@ -73,6 +76,12 @@ namespace OpenGSServer
 
                 }
 
+            }
+            else
+            {
+                ConsoleWrite.WriteMessage("Test");
+
+                return;
             }
 
 
@@ -92,6 +101,10 @@ namespace OpenGSServer
                 }
 
             }
+            else
+            {
+                return;
+            }
 
 
             if (dic.TryGetValue("GameMode", out var gamemodeToken))
@@ -103,6 +116,8 @@ namespace OpenGSServer
             else
             {
                 gameMode = null;
+
+                return;
             }
 
 

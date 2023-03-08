@@ -300,13 +300,18 @@ namespace OpenGSServer
 
         public JObject Logout(string id, string pass)
         {
-            if (logonUser.ContainsKey(id))
+            lock (logonUser)
             {
+                if (logonUser.ContainsKey(id))
+                {
+                    
 
-            }
-            else
-            {
 
+                }
+                else
+                {
+
+                }
             }
 
 

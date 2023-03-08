@@ -28,7 +28,7 @@ namespace OpenGSServer
         private AbstractMatchSituation situation { get; set; } = null;
 
 
-        private GameScene scene = new();
+        public GameScene GameScene { get; set; } = new();
 
         //[CanBeNull]
         public WaitRoom? WaitRoomLink { get; private set; } = null;
@@ -142,7 +142,7 @@ namespace OpenGSServer
             return false;
         }
 
-        public GameScene Scene { get => scene; set => scene = value; }
+
 
 
         public void AddNewPlayer(PlayerInfo info)
