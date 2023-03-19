@@ -16,7 +16,7 @@ namespace OpenGSServer
         public int MatchTime { get; set; } = 30000;
         public bool RandomTeam { get; set; } = true;
 
-
+       
 
 
 

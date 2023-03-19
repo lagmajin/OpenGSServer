@@ -1,17 +1,76 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
+using Newtonsoft.Json.Linq;
+using OpenGSCore;
 
 namespace OpenGSServer
 {
     public class ServerSettings
     {
-        int maxRooms = 32;
-        int maxUser = 200;
+        private int MaxRoom { get; set; } = 32;
+        private int MaxUser { get; set; } = 200;
 
-        private int tickRate = 60;
-        
-        bool canRegisterAccounts = true;
+
+        private int TickRate { get; set; } = 60;
+
+
+        private bool CanRegisterAccounts { get; set; } = true;
+
+
+
+        public List<EGameMode> AllowGameMode { get; set; }=new();
+
+
+        public JObject ToJson()
+        {
+            var result = new JObject();
+            result["MaxRoom"] = 100;
+            result["MaxUser"] = MaxUser;
+            result["TickRate"] = TickRate;
+            result["AllowRegisterAccount"] = true;
+
+            return result;
+        }
+
+        public void SetFromJson(JObject json)
+        {
+            if (json.TryGetValue("MaxRoom", out var maxRoomToken))
+            {
+                var maxRoom=maxRoomToken.ToString();
+
+                if (Int32.TryParse("MaxRoom", out var rooms))
+                {
+                    //maxRooms = rooms;
+                }
+
+            }
+
+            if (json.TryGetValue("MaxUser", out var maxUserToken))
+            {
+                var maxUser = maxUserToken.ToString();
+
+                if(Int128.TryParse(maxUser,out var t))
+                {
+
+                }
+
+            }
+
+
+            if(json.TryGetValue("TickRate",out var tickrateToken))
+            {
+                var tickrate = tickrateToken.ToString();
+
+                if(Int128.TryParse(tickrate,out var t))
+                {
+
+                }
+
+            }
+
+
+        }
 
         public override bool Equals(object obj)
         {
@@ -20,24 +79,24 @@ namespace OpenGSServer
 
         public override int GetHashCode()
         {
-            return HashCode.Combine(maxRooms, maxUser, canRegisterAccounts);
+            return HashCode.Combine(MaxRoom, MaxUser, CanRegisterAccounts);
         }
 
         public static bool operator ==(ServerSettings a, ServerSettings b)
         {
-            if(a.maxRooms!=b.maxRooms)
+            if(a.MaxRoom!=b.MaxRoom)
             {
 
                 return false;
             }
 
-            if(a.maxUser!=b.maxUser)
+            if(a.MaxUser!=b.MaxUser)
             {
 
                 return false;
             }
 
-            if(a.canRegisterAccounts!=b.canRegisterAccounts)
+            if(a.CanRegisterAccounts!=b.CanRegisterAccounts)
             {
                 return false;
 

@@ -52,10 +52,16 @@ using Newtonsoft.Json.Linq;
 
             // Get a collection (or create, if doesn't exist)
 
-            var roomOption = new JObject();
-            roomOption["RestrictWeapon"] = "";
-            roomOption["FieldItemSwitch"] = false;
-            roomOption["CanUseInstantItem"] = false;
+            var roomOptions = new JObject();
+            roomOptions["RestrictWeapon"] = "";
+            roomOptions["FieldItemSwitch"] = false;
+            roomOptions["CanUseInstantItem"] = false;
+            //roomOptions["CanReSpawn"] = false;
+            var matchOptions = new JObject();
+            matchOptions["BoosterRate"] = 1.0f;
+            matchOptions[""] = "";
+
+
 
             var room = new JObject();
 
@@ -67,7 +73,10 @@ using Newtonsoft.Json.Linq;
             //room["RoomID"] = "";
             room["Capacity"] = 8;
             room["PlayerCount"] = 0;
-            room["RoomOption"] = roomOption;
+            room["RoomOptions"] = roomOptions;
+            
+            room["MatchOption"] = matchOptions;
+
 
             var room2 = new JObject();
 
@@ -97,6 +106,12 @@ using Newtonsoft.Json.Linq;
             //bool japanese = true;
 
 
+            ServerManager.GetInstance().LoadSetting();
+
+            //ServerManager.GetInstance().SaveSetting();
+
+
+            var insta=EncryptManager.Instance;
 
 
             if (args.Length > 0)
@@ -476,7 +491,7 @@ using Newtonsoft.Json.Linq;
             }
 
             
-
+            ServerManager.GetInstance().SaveSetting();
 
 
 

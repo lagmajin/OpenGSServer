@@ -9,7 +9,7 @@ namespace OpenGSServer
 {
     public class MatchRoomDelegate
     {
-        public static void RecieveShotFromPlayer(MatchRUdpSession session,in IDictionary<string, JToken> dic)
+        public static void ShotFromPlayer(MatchRUdpSession session,in IDictionary<string, JToken> dic)
         {
             string bulletType;
 

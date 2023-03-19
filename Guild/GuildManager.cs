@@ -49,6 +49,16 @@ namespace OpenGSServer
 
         }
 
+        public void AddGuildMember()
+        {
+
+        }
+
+        public void AddGuildMembers()
+        {
+
+        }
+
 
 
     }

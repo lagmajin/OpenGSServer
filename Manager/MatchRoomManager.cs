@@ -248,6 +248,12 @@ namespace OpenGSServer
 
         }
 
+        public List<MatchRoom> CanEnterRooms()
+        {
+
+            return null;
+        }
+
 
 
     }

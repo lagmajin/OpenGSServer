@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Text;
+using static System.Net.Mime.MediaTypeNames;
 
 namespace OpenGSServer
 {
@@ -63,6 +65,54 @@ namespace OpenGSServer
 
         void RemoveAdminAccount(String id, String pass)
         {
+
+
+        }
+
+        public void LoadSetting()
+        {
+
+            
+            string path = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+
+            string openGSServerDirectory=System.IO.Path.Combine(path, "OpenGSServer");
+
+
+            string absolutePath = System.IO.Path.Combine(openGSServerDirectory, "OpenGSServerSetting.json");
+
+        }
+
+        public void SaveSetting()
+        {
+            var json=settings.ToJson();
+
+            var st = json.ToString();
+
+            string path = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+
+            string openGSServerDirectory=System.IO.Path.Combine(path, "OpenGSServer");
+
+            
+            Directory.CreateDirectory(openGSServerDirectory);
+
+
+            string absolutePath = System.IO.Path.Combine(openGSServerDirectory, "OpenGSServerSetting.json");
+
+            try
+            {
+                //ファイルをオープンする
+                using (StreamWriter sw = new StreamWriter(absolutePath, false, Encoding.UTF8))
+                {
+                    sw.Write(st);
+
+                    sw.Close();
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.ToString());
+
+            }
 
 
         }

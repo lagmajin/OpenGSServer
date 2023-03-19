@@ -196,11 +196,21 @@ namespace OpenGSServer
                 //instance.GetPlayerInfo(idToken.ToString());
 
             }
-            //id = dic["id"].ToString();
 
-            //pass = dic["pass"].ToString();
+
+            var accountManager = AccountManager.GetInstance();
 
             
+
+
+
+            var json = new JObject();
+
+            json["Friend"] = "";
+
+
+
+
 
 
 

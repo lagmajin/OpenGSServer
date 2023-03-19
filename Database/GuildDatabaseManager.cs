@@ -18,6 +18,8 @@ namespace OpenGSServer
         public static string filename = "Database/guild.db";
         public static string connectionString = $"Filename={filename};connection=shared";
 
+        public readonly string dbGuildTableName = "guild";
+        public readonly string dbGuildMemberName = "guild_member";
 
         public static GuildDatabaseManager GetInstance()
         {
