@@ -8,9 +8,9 @@ using System.Diagnostics;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
  using OpenGSServer.Server;
+using OpenGSServer.Core;
 
-
- namespace OpenGSServer
+namespace OpenGSServer
 {
     class Program
     {
@@ -47,6 +47,8 @@ using Newtonsoft.Json.Linq;
 
 
         }
+
+        //#main
         static void Main(string[] args)
         {
 
@@ -93,7 +95,7 @@ using Newtonsoft.Json.Linq;
             json["Rooms"] = jArray;
 
 
-            Console.Write(json.ToString());
+            ConsoleWrite.WriteMessage(json.ToString());
 
 
             AppDomain.CurrentDomain.ProcessExit += new EventHandler(CurrentDomain_ProcessExit);
@@ -144,9 +146,18 @@ using Newtonsoft.Json.Linq;
 
                 try
                 {
+                    
+
+                    var memoryMB = Process.GetCurrentProcess().MaxWorkingSet / 1024;
+
                     ConsoleWrite.WriteMessage("OpenGS game server initializing.....", ConsoleColor.Green);
+                    //ConsoleWrite.WriteMessage("CPU"+System.Environment.,ConsoleColor.DarkYellow);
+                    ConsoleWrite.WriteMessage($"Cpu Archtecture:{Cpu.ArchtectureName()}", ConsoleColor.DarkYellow);
+                    ConsoleWrite.WriteMessage("Core Count:"+System.Environment.ProcessorCount,ConsoleColor.DarkYellow);
+                    ConsoleWrite.WriteMessage("Memory:" +memoryMB +"(MB)", ConsoleColor.DarkYellow);
 
-
+                    ConsoleWrite.WriteMessage("OS:"+System.Runtime.InteropServices.RuntimeInformation.OSDescription,ConsoleColor.DarkYellow);
+                    ConsoleWrite.WriteMessage(".Net core version:"+System.Environment.Version,ConsoleColor.DarkYellow);
 
 
                     var accountDatabaseManager = AccountDatabaseManager.GetInstance();
@@ -215,7 +226,7 @@ using Newtonsoft.Json.Linq;
 
                             if (command == "serverinfo")
                             {
-                                var info = WaitRoomManager.GetInstance().Info2();
+                                var info = WaitRoomManager.GetInstance().RoomManagerInfo();
 
 
                                 ConsoleWrite.WriteMessage(info.ToString());
@@ -292,7 +303,7 @@ using Newtonsoft.Json.Linq;
 
                             }
 
-                            if (command == "addnewroom")
+                            if (command == "addnewroom" || command== "addnewwaitroom")
                             {
 
                                 if (param.Count > 0)
@@ -303,8 +314,11 @@ using Newtonsoft.Json.Linq;
 
                                     var roomManager = WaitRoomManager.GetInstance();
 
-                                    roomManager.CreateNewWaitRoom("");
+                                    var waitRoom= roomManager.CreateNewWaitRoom(roomName,8);
 
+                                    
+
+                                    ConsoleWrite.WriteMessage("new wait room created");
 
 
                                 }
@@ -313,6 +327,21 @@ using Newtonsoft.Json.Linq;
 
 
                                 }
+
+
+
+                            }
+
+                            if (command == "startmatch")
+                            {
+                     
+
+                                    ConsoleWrite.WriteMessage("StartMatchCommand");
+
+
+                                    MatchRoomManager.GetInstance().StartMatchTest();
+
+
 
 
 

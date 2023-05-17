@@ -6,27 +6,31 @@ using OpenGSCore;
 
 namespace OpenGSServer
 {
+
+
     public class WaitRoomManager
     {
         private static WaitRoomManager _singleInstance = new WaitRoomManager();
 
-        private SortedDictionary<string, WaitRoom> rooms = new();
+        private SortedDictionary<string, WaitRoom> _rooms = new();
 
-        private WaitRoomDatabase allRoom=new ();
+        private WaitRoomDatabase _allRoom=new ();
 
         private int RoomLimit { get; set; } = 20;
 
-        private List<string> defaultRoomNames { get; set; } = new List<string>() { "One Shot One Kill", "" };
+        private List<string> DefaultRoomNames { get; set; } = new List<string>() { "One Shot One Kill", "" };
 
         private readonly object _lockObj = new object();
 
         private JObject RoomInfoCache { get; set; } = new();
 
-        private string CreateRoomID()
+        public readonly List<string> defaultRoomName = new();
+
+        private string CreateRoomId()
         {
             var id = Guid.NewGuid().ToString("N");
 
-
+           
             return id;
         }
         public static WaitRoomManager GetInstance()
@@ -34,16 +38,71 @@ namespace OpenGSServer
             return _singleInstance;
         }
 
+        public CreateNewWaitRoomResult CreateWaitRoom(string roomName,int capacity=8)
+        {
+            CreateNewWaitRoomResult result;
+
+            //roomNameが空ならRandomRoomNameでうめる
+            if (roomName == "")
+            {
+                roomName = Template.RandomRoomName();
+            }
+
+            if (RoomLimit > _rooms.Count)
+            {
+                var id = CreateRoomId();
+                var room = new WaitRoom(roomName);
+                lock (_lockObj)
+                {
+                    _rooms.Add(room.RoomId, room);
+                }
+                result = new CreateNewWaitRoomResult("Successful", room);
+            }
+            else
+            {
+                result = new CreateNewWaitRoomResult("Fail", null);
+            }
+
+
+
+            
+            return result;
+        }
+
+        public CreateNewWaitRoomResult CreateNewWaitRoom(in string roomName)
+        {
+            CreateNewWaitRoomResult result;
+
+            if (RoomLimit > _rooms.Count)
+            {
+                var id = CreateRoomId();
+                var room = new WaitRoom(roomName);
+                lock (_lockObj)
+                {
+                    _rooms.Add(room.RoomId, room);
+                }
+                result = new CreateNewWaitRoomResult("Successful", room);
+            }
+            else
+            {
+                result = new CreateNewWaitRoomResult("Fail", null);
+            }
+
+
+
+            return result;
+        }
+
         public WaitRoom? CreateNewWaitRoom(in string roomName, int capacity = 8)
         {
-            if (RoomLimit > rooms.Count)
+            if (RoomLimit > _rooms.Count)
             {
 
 
             }
 
 
-            var id = CreateRoomID();
+            var id = CreateRoomId();
 
 
             var room = new WaitRoom(roomName);
@@ -51,12 +110,14 @@ namespace OpenGSServer
             lock (_lockObj)
             {
 
-                rooms.Add(room.RoomId, room);
+                _rooms.Add(room.RoomId, room);
             }
 
             return room;
 
         }
+
+        
 
 
 
@@ -82,7 +143,7 @@ namespace OpenGSServer
 
 
 
-            var count = rooms.Count;
+            var count = _rooms.Count;
 
             string result = $"WaitRoomCount:{count}/{RoomLimit}";
 
@@ -90,15 +151,15 @@ namespace OpenGSServer
             return result;
         }
 
-        public JObject Info2()
+        public JObject RoomManagerInfo()
         {
             var result = new JObject();
-            result["WaitRoomCount"] = rooms.Count;
-            result["RoomCapacity"] = rooms.Count.ToString() + "/" + RoomLimit.ToString();
+            result["WaitRoomCount"] = _rooms.Count;
+            result["RoomCapacity"] = _rooms.Count.ToString() + "/" + RoomLimit.ToString();
 
             var array = new JArray();
 
-            foreach (var room in rooms)
+            foreach (var room in _rooms)
             {
                 var roomJson = new JObject();
 

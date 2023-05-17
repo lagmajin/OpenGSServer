@@ -19,6 +19,7 @@ namespace OpenGSServer
         public static string accountTableName = "Account";
 
         public static string accountScoreTableName = "AccountScore";
+        public static string friendTableName = "Friend";
 
         public static string filename = "Database/Account.db";
 
@@ -80,9 +81,19 @@ namespace OpenGSServer
 
             if (col != null)
             {
-                data = col.FindOne(Query.EQ("AccountId", id));
+                try
+                {
 
 
+
+                    data = col.FindOne(Query.EQ("AccountId", id));
+
+
+                }
+                catch (Exception ex)
+                {
+
+                }
             }
 
             return data;
@@ -97,6 +108,10 @@ namespace OpenGSServer
             if (col != null)
             {
 
+
+            }
+            else
+            {
 
             }
 
@@ -124,9 +139,9 @@ namespace OpenGSServer
             {
                 var col = db.GetCollection<DBAccount>(accountTableName);
 
-                var collection = db.GetCollection<DBAccountScore>(accountScoreTableName);
+                var scoreCol = db.GetCollection<DBAccountScore>(accountScoreTableName);
 
-                var friendCol = db.GetCollection<DBAccountFriendList>("Friend");
+                //var friendCol = db.GetCollection<DBAccountFriendList>("Friend");
                 
 
 
@@ -137,30 +152,20 @@ namespace OpenGSServer
                  
                     col.Insert(player);
 
-                    if (collection.FindOne(Query.EQ("AccountID", player.AccountId)) == null)
+                    if (scoreCol.FindOne(Query.EQ("AccountID", player.AccountId)) == null)
                     {
                         var dbAccountDetail = new DBAccountScore
                         {
                             accountID = player.AccountId
                         };
 
-                        collection.Insert(dbAccountDetail);
+                        scoreCol.Insert(dbAccountDetail);
                     }
                     else
                     {
 
                     }
 
-                    if (friendCol.FindOne(Query.EQ("AccountID", player.AccountId))==null)
-                    {
-                        var dbAccountFriend = new DBAccountFriendList()
-                        {
-                            AccountID = player.AccountId
-
-                        };
-
-                        friendCol.Insert(dbAccountFriend);
-                    }
 
                 }
                 else
@@ -176,6 +181,30 @@ namespace OpenGSServer
             }
             //col.FindOne()
 
+
+
+        }
+
+        public void AddNewFriend(in string account,in string friendid)
+        {
+            var dbFriend = new DBFriend();
+
+            dbFriend.PlayerID = account;
+            dbFriend.FriendAccountId = friendid;
+
+            var col = db?.GetCollection<DBFriend>(friendTableName);
+
+            if (col != null)
+            {
+                
+
+
+                col.Insert(dbFriend);
+
+
+
+
+            }
 
 
         }
@@ -208,7 +237,7 @@ namespace OpenGSServer
                 }
                 else
                 {
-                    ConsoleWrite.WriteMessage("Not found");
+                    ConsoleWrite.WriteMessage("Account not found..");
                 }
 
 
@@ -218,8 +247,29 @@ namespace OpenGSServer
 
         }
 
-        public void UpdateAccountScore(in DBAccountScore score)
+        public void UpdateAccountScore(in string accountID,in DBAccountScore score)
         {
+            var scoreCol = db.GetCollection<DBAccountScore>(accountScoreTableName);
+
+
+            if (scoreCol != null)
+            {
+
+                var record = scoreCol.FindOne("AccountID", accountID);
+
+                record = score;
+
+
+                scoreCol.Update(record);
+
+
+
+            }
+            else
+            {
+
+
+            }
 
         }
 
@@ -227,6 +277,12 @@ namespace OpenGSServer
         {
 
         }
+
+        public void RemoveAllFriendFromAccount(in string id)
+        {
+
+        }
+
         public void ChangePassword(in string id, in string currentPass, in string newPass)
         {
             if (db == null)

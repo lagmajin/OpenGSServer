@@ -1,24 +1,20 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+
 using Newtonsoft.Json.Linq;
 
-using System.Text.Json;
 
 namespace OpenGSServer
 {
     public enum eCreateNewRoomResult
     {
-        Succeessful,
+        Successful,
         Fail,
     }
 
-    public enum eCreateNewRoomReason
+    public enum ECreateNewRoomReason
     {
         NoReason,
-        InvalidPlayerID,
+        InvalidPlayerId,
         AlreadyOtherRoom,
         OverflowServerMaxCapacity
 
@@ -28,11 +24,16 @@ namespace OpenGSServer
     {
         public eCreateNewRoomResult Result { get; } = eCreateNewRoomResult.Fail;
 
-        public eCreateNewRoomReason Reason { get; } = eCreateNewRoomReason.NoReason;
+        public ECreateNewRoomReason Reason { get; } = ECreateNewRoomReason.NoReason;
 
-        public CreateNewRoomResult(eCreateNewRoomResult result,eCreateNewRoomReason reason)
+        public CreateNewRoomResult(eCreateNewRoomResult result,ECreateNewRoomReason reason)
         {
 
+        }
+
+        public CreateNewRoomResult()
+        {
+            //throw new NotImplementedException();
         }
 
         public  string Message()

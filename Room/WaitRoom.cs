@@ -25,7 +25,7 @@ namespace OpenGSServer
 
         public Dictionary<string, PlayerAccount> players = new();
 
-        public MatchSettings settings = new();
+        public MatchSettings Settings { get; } = new();
 
         private static string CreateRoomId()
         {
@@ -40,6 +40,22 @@ namespace OpenGSServer
 
 
         }
+
+        public WaitRoom(in string roomName, in int maxCapacity)
+        {
+
+        }
+
+        public WaitRoom(in string roomName, in int maxCapacity, in MatchSettings settings)
+        {
+            //RoomName = roomName;
+            MaxCapacity = maxCapacity;
+
+            Settings= settings;
+
+
+        }
+
 
         public void AddPlayer(PlayerAccount account)
         {
@@ -62,6 +78,13 @@ namespace OpenGSServer
             NowPlaying = false;
             MatchRoomLink = null;
 
+
+        }
+
+
+
+        public void ChangeMatchSetting(MatchSettings settings)
+        {
 
         }
 

@@ -213,12 +213,12 @@ namespace OpenGSServer
             Console.WriteLine(messageType);
 
             if (messageType == "ServerInfoRequest")
-                {
-                    var json = new JObject();
+            {
+                var json = new JObject();
 
-                    json["ServerInfo"] = "";
+                json["ServerInfo"] = "";
 
-                    var str = json.ToString(Formatting.None);
+                var str = json.ToString(Formatting.None);
 
                 /*
                     ns.ReadTimeout = 10000;
@@ -229,17 +229,17 @@ namespace OpenGSServer
 
                     ns.Write(sendBytes, 0, sendBytes.Length);
                 */
-                }
+            }
 
-                if (messageType == "LoginRequest")
-                {
-                    var id = o["id"].ToString();
-                    var pass = o["pass"].ToString();
+            if (messageType == "LoginRequest")
+            {
+                var id = o["id"].ToString();
+                var pass = o["pass"].ToString();
 
-                    var json = AccountManager.GetInstance().Login(id, pass);
-                    ConsoleWrite.WriteMessage("aa");
-                    ConsoleWrite.WriteMessage(json.ToString());
-                    //var str = json.ToString(Formatting.None);
+                var json = AccountManager.GetInstance().Login(id, pass);
+                ConsoleWrite.WriteMessage("aa");
+                ConsoleWrite.WriteMessage(json.ToString());
+                //var str = json.ToString(Formatting.None);
 
                 /*
                     ns.ReadTimeout = 10000;
@@ -251,129 +251,129 @@ namespace OpenGSServer
                     ns.Write(sendBytes, 0, sendBytes.Length);
                     ns.Flush();
                 */
-                }
-
-                if (messageType == "LogoutRequest")
-                {
-                    var json = new JObject();
-
-                    var id = o["id"].ToString();
-
-
-
-
-                }
-
-                if (messageType == "CreateNewRoomRequest")
-                {
-                    var roomName = o["RoomName"].ToString();
-                    var roomCapacity = o["Capacity"].ToString();
-                    var gameMode = o["GameMode"].ToString();
-
-                    var name = new GameMode(gameMode);
-
-                    var serverManager = ServerManager.GetInstance();
-
-
-
-                    var matchManager = serverManager.GetMatchServer().MatchManager;
-
-                    //matchManager.CreateNewRoom(roomName, name, 8);
-
-                    //matchManager.CreateNewRoom(roomName,)
-
-
-
-
-                    //matchServer.MatchManager.createNewRoom();
-
-
-
-
-                }
-
-                if (messageType == "EnterRoomRequest")
-                {
-                    //var roomID = o["TargetRoomID"].ToString();
-
-                    //var serverManager = ServerManager.GetInstance();
-
-                    //var matchServer = serverManager.GetMatchServer();
-
-
-
-
-
-                }
-
-                if (messageType == "DeleteRoomRequest")
-                {
-
-
-
-                }
-
-                if (messageType == "OutRoomRequest")
-                {
-                    var serverManager = ServerManager.GetInstance();
-
-                    //serverManager.GetGeneralServer().
-
-                    var generalServer=serverManager.GetGeneralServer();
-                }
-
-                if (messageType == "UpdateRoomRequest")
-                {
-                    ConsoleWrite.WriteMessage("aaa");
-                    var serverManager = ServerManager.GetInstance();
-
-
-
-                    serverManager.GetMatchServer();
-
-
-                    var json = new JObject();
-
-                    json["MessageType"] = "UpdateRooms";
-                    json["TDM"][0] = 0;
-
-
-
-                }
-
-                if (messageType == "AddLobbyChat")
-                {
-                    var userName = o["Name"];
-                    var say = o["Say"];
-
-
-                }
-
-                if (messageType == "AddRoomChat")
-                {
-                    var say = o["Say"];
-                    var id = o["RoomID"];
-                }
-
-                if (messageType == "MatchServerRequest")
-                {
-                    var matchServer = ServerManager.GetInstance().GetMatchServer();
-
-
-
-
-                }
-
-                if (messageType == "ServerTimeRequest")
-                {
-                    o["TimeType"] = "";
-
-                    var generalServer = ServerManager.GetInstance().GetGeneralServer();
-
-
-
-                }
             }
+
+            if (messageType == "LogoutRequest")
+            {
+                var json = new JObject();
+
+                var id = o["id"].ToString();
+
+
+
+
+            }
+
+            if (messageType == "CreateNewRoomRequest")
+            {
+                var roomName = o["RoomName"].ToString();
+                var roomCapacity = o["Capacity"].ToString();
+                var gameMode = o["GameMode"].ToString();
+
+                var name = new GameMode(gameMode);
+
+                var serverManager = ServerManager.GetInstance();
+
+
+
+                var matchManager = serverManager.GetMatchServer().MatchManager;
+
+                //matchManager.CreateNewRoom(roomName, name, 8);
+
+                //matchManager.CreateNewRoom(roomName,)
+
+
+
+
+                //matchServer.MatchManager.createNewRoom();
+
+
+
+
+            }
+
+            if (messageType == "EnterRoomRequest")
+            {
+                //var roomID = o["TargetRoomID"].ToString();
+
+                //var serverManager = ServerManager.GetInstance();
+
+                //var matchServer = serverManager.GetMatchServer();
+
+
+
+
+
+            }
+
+            if (messageType == "DeleteRoomRequest")
+            {
+
+
+
+            }
+
+            if (messageType == "OutRoomRequest")
+            {
+                var serverManager = ServerManager.GetInstance();
+
+                //serverManager.GetGeneralServer().
+
+                var generalServer=serverManager.GetGeneralServer();
+            }
+
+            if (messageType == "UpdateRoomRequest")
+            {
+                //ConsoleWrite.WriteMessage("aaa");
+                var serverManager = ServerManager.GetInstance();
+
+
+
+                serverManager.GetMatchServer();
+
+
+                var json = new JObject();
+
+                json["MessageType"] = "UpdateRooms";
+                json["TDM"][0] = 0;
+
+
+
+            }
+
+            if (messageType == "AddLobbyChat")
+            {
+                var userName = o["Name"];
+                var say = o["Say"];
+
+
+            }
+
+            if (messageType == "AddRoomChat")
+            {
+                var say = o["Say"];
+                var id = o["RoomID"];
+            }
+
+            if (messageType == "MatchServerRequest")
+            {
+                var matchServer = ServerManager.GetInstance().GetMatchServer();
+
+
+
+
+            }
+
+            if (messageType == "ServerTimeRequest")
+            {
+                o["TimeType"] = "";
+
+                var generalServer = ServerManager.GetInstance().GetGeneralServer();
+
+
+
+            }
+        }
 
     }
 }
