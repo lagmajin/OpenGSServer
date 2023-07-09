@@ -13,6 +13,26 @@ namespace OpenGSServer
     {
         public static void ChangePlayerSettting(in ClientSession session, IDictionary<string, JToken> dic)
         {
+            string? playerId = "";
+            string playerCharacter = "";
+
+            playerCharacter=dic.GetValueOrDefaultString("PlayerCharacter", "misty");
+
+            if(dic.TryGetValue("EquipInstantItems",out var instantItemToken))
+            {
+                if(instantItemToken.Type == JTokenType.Array)
+                {
+
+                }
+
+                //var list=instantItemToken.ToArray<string>();
+
+              //  var equipInstantItemlist = new List<string>();
+
+            }
+            
+            
+
 
         }
 
@@ -81,7 +101,7 @@ namespace OpenGSServer
 
         }
 
-        public static void SendUpdateRoom(in ClientSession session,IDictionary<string, JToken> dic)
+        public static void SendUpdateWaitRoom(in ClientSession session,IDictionary<string, JToken> dic)
         {
             string  roomId;
 
@@ -90,7 +110,13 @@ namespace OpenGSServer
 
             //var room = roomManager.FindWaitRoom(roomId);
 
-            var serverManager=ServerManager.GetInstance();
+            var json = new JObject();
+
+
+
+            //var serverManager=ServerManager.Instance;
+
+
 
         }
 
