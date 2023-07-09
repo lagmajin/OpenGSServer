@@ -4,28 +4,34 @@
 
 using System;
 using System.Collections.Generic;
-
+using Newtonsoft.Json.Linq;
+using OpenGSCore;
 namespace OpenGSServer
 {
+
+    
     public class WaitRoom
     {
         public MatchRoom? MatchRoomLink { get; set; } = null;
 
+        public string RoomName { get; set; } = "";
         public bool NowPlaying { get; private set; } = false;
         public bool CanEnter { get; set; } = true;
 
-        public bool CanEnterWhenPlaying { get; set; } = false;
+        public bool AllowEnterWhenPlaying { get; set; } = false;
 
         public int PlayerCount { get; private set; } = 0;
-        public int MaxCapacity { get; } = 8;
+        public int Capacity { get; } = 8;
 
 
 
         public string RoomId { get; set; } = CreateRoomId();
 
-        public Dictionary<string, PlayerAccount> players = new();
+        public List<PlayerAccount> players = new();
 
-        public MatchSettings Settings { get; } = new();
+        public AbstractMatchSetting Setting { get; }
+
+        private object _lock = new object();
 
         private static string CreateRoomId()
         {
@@ -34,24 +40,19 @@ namespace OpenGSServer
             return result;
         }
 
-        public WaitRoom(in string roomName)
+        public WaitRoom(in string roomName,int capacity=8)
         {
-
-
+            RoomName = roomName;
+            Capacity = capacity;
 
         }
 
-        public WaitRoom(in string roomName, in int maxCapacity)
-        {
-
-        }
-
-        public WaitRoom(in string roomName, in int maxCapacity, in MatchSettings settings)
+        public WaitRoom(in string roomName, in int maxCapacity, in AbstractMatchSetting settings)
         {
             //RoomName = roomName;
-            MaxCapacity = maxCapacity;
+            Capacity = maxCapacity;
 
-            Settings= settings;
+           // Settings= settings;
 
 
         }
@@ -59,6 +60,9 @@ namespace OpenGSServer
 
         public void AddPlayer(PlayerAccount account)
         {
+            PlayerCount++;
+
+           
 
         }
 
@@ -81,11 +85,14 @@ namespace OpenGSServer
 
         }
 
+        
 
-
-        public void ChangeMatchSetting(MatchSettings settings)
+        public void ChangeMatchSetting(AbstractMatchSetting settings)
         {
+            lock (_lock)
+            {
 
+            }
         }
 
 
@@ -97,6 +104,32 @@ namespace OpenGSServer
             return result;
         }
 
+        public JObject ToJson()
+        {
+            var array = new JArray();
+            foreach (var player in players)
+            {
+                var temp = new JObject();
+                temp["PlayerName"] = "";
+                temp["PlayerId"] = "";
+                temp["PlayerCharacter"] = "";
+
+                array.Add(temp);
+            }
+
+            var result = new JObject();
+            result["RoomName"] = RoomName;
+
+            result["RoomId"] = RoomId;
+            result["RoomNumber"] = "";
+            result["WaitingPlayerCount"] = PlayerCount;
+            result["Capacity"] = Capacity;
+            result["NowPlaying"] = NowPlaying;
+
+
+
+            return result;
+        }
 
     }
 }

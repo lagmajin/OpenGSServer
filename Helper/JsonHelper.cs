@@ -8,6 +8,21 @@ namespace OpenGSServer
 {
     public static class JsonHelper
     {
+        public static string? GetStringOrNull(this IDictionary<string,JToken> dic,in string name)
+        {
+            string? result;
+
+            if(dic.TryGetValue(name,out var jToken))
+            {
+
+                return jToken.ToString();
+            }
+          
+
+
+            return null;
+        }
+
         public static string GetValueString(this IDictionary<string,JToken?> t)
         {
             string result = "";
@@ -53,5 +68,34 @@ namespace OpenGSServer
         }
 
 
+        public static float GetValueDefaultFloat(this IDictionary<string, JToken?> dic, string name, float defalut)
+        {
+            //int result = 0;
+
+            if (dic.TryGetValue(name, out var token))
+            {
+                var temp = token.ToString();
+
+                if (float.TryParse(temp, out var val))
+                {
+                    return val;
+                }
+                else
+                {
+                    return defalut;
+                }
+
+            }
+            else
+            {
+                return defalut;
+            }
+
+        }
+
+
     }
+
 }
+
+

@@ -3,6 +3,8 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Runtime.InteropServices;
+
+using System.Diagnostics;
 using OpenGSCore;
 
 
@@ -23,12 +25,12 @@ namespace OpenGSServer
 
             int maxCapacity = 0;
 
-            var result = eCreateNewRoomResult.Fail;
-            var reason = ECreateNewRoomReason.NoReason;
+            //var result = eCreateNewRoomResult.Fail;
+           // var reason = ECreateNewRoomReason.NoReason;
 
             var gameRoomManager = MatchRoomManager.Instance;
 
-            var waitRoomManager = WaitRoomManager.GetInstance();
+            var waitRoomManager = WaitRoomManager.Instance();
 
           
 
@@ -62,8 +64,8 @@ namespace OpenGSServer
 
             var roomCapacity = dic.GetValueDefaultInt("RoomCapacity", 8);
 
-            
 
+            var boosterPower = dic.GetValueDefaultFloat("BoosterPower", 1.0f);
 
 
             var gameMode=dic.GetValueOrDefaultString("GameMode", "dm");
@@ -74,10 +76,33 @@ namespace OpenGSServer
 
             if (gameMode == "dm" || gameMode == "deathmatch")
             {
-                
+                var result=waitRoomManager.CreateNewWaitRoom("");
+
+                var room=result.Room;
+
+                var setting = new DeathMatchSetting();
+
+                room.ChangeMatchSetting(setting);
+
+               
+
+                //ConsoleWrite.WriteMessage("");
+                var roomInfoJson = room.ToJson();
+                //roomInfoJson["RoomName"] = room.RoomName;
+                //roomInfoJson["RoomId"] = room.RoomId;
+                //roomInfoJson["RoomNumber"] = "";
+               // roomInfoJson["WaitingPlayerCount"] = room.PlayerCount;
+                //roomInfoJson["Capacity"] = room.Capacity;
+
+                roomInfoJson["GameMode"] = "";
+                roomInfoJson["Map"]="";
 
 
+                var json = new JObject();
+                json["MessageType"] = "CreateNewWaitRoomSuccess";
+                json["RoomInfo"]=roomInfoJson;
 
+                session.SendAsyncJsonWithTimeStamp(json);
 
                 
 
@@ -88,19 +113,19 @@ namespace OpenGSServer
 
                 var winConditionKill = dic.GetValueDefaultInt("WinConditionKill", 20);
 
-    
+                var setting = new TDMMatchSetting();
 
 
 
 
 
-                
+
 
             }
 
             if (gameMode == "suv" || gameMode == "survival")
             {
-
+               // var setting = new TDMMatchSetting();
                 //if(dic.TryGetValue("MatchTime"))
 
 
@@ -110,7 +135,7 @@ namespace OpenGSServer
 
             }
 
-            if (gameMode == "tsuv")
+            if (gameMode == "tsuv"||gameMode=="TeamSurvival")
             {
 
 
@@ -128,8 +153,8 @@ namespace OpenGSServer
             }
 
 
-            
 
+            return;
 
             ErrorResult:
             {
@@ -140,7 +165,7 @@ namespace OpenGSServer
 
 
 
-
+                return;
             }
 
 
@@ -153,8 +178,9 @@ namespace OpenGSServer
             string? playerName;
             string? playerID;
 
+            var capacity = dic.GetValueDefaultInt("Capacity", 4);
 
-
+            var missionRoomManager = MissionWaitRoomManager.Instance;
 
 
 
@@ -162,7 +188,7 @@ namespace OpenGSServer
 
         public static void QuickStartRequest(in ClientSession session, in IDictionary<string, JToken> dic)
         {
-            var matchRoomManager = MatchRoomManager.GetInstance();
+            //var matchRoomManager = MatchRoomManager.GetInstance();
 
 
 
@@ -178,10 +204,16 @@ namespace OpenGSServer
 
 
 
-            var roomId = dic["RoomID"];
+
+            var roomId = dic["RoomID"].ToString();
 
 
-            var roomManager = MatchRoomManager.Instance;
+            var roomManager = WaitRoomManager.Instance();
+
+            var room=roomManager.FindWaitRoom(roomId);
+
+            
+
 
             //roomManager.EnterRoom()
 

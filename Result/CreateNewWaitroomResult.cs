@@ -8,9 +8,9 @@ namespace OpenGSServer
 {
     public class CreateNewWaitRoomResult
     {
-        private string message = "";
+        public string Message { get; set; }
 
-        private WaitRoom? room = null;
+        public WaitRoom? Room { get; set; }
 
         
         public CreateNewWaitRoomResult()
@@ -20,8 +20,8 @@ namespace OpenGSServer
 
         public CreateNewWaitRoomResult(string message, WaitRoom? room)
         {
-            this.message = message;
-            this.room = room;
+            Message = message;
+            Room = room;
         }
     }
 }

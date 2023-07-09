@@ -8,7 +8,7 @@ namespace OpenGSServer
 {
 
 
-    public class MatchSettings
+    public class MatchSettings2
     {
         private eGameMode gameMode = eGameMode.Unknown;
 
@@ -36,22 +36,6 @@ namespace OpenGSServer
             return result;
         }
 
-
-        public static bool operator ==(MatchSettings a, MatchSettings b)
-        {
-            if (a.RandomTeam != b.RandomTeam)
-            {
-                return false;
-            }
-
-            return !(a.TimeLimit != b.TimeLimit);
-        }
-
-        public static bool operator !=(MatchSettings a, MatchSettings b)
-        {
-
-            return !(a == b);
-        }
 
         public override bool Equals(object obj)
         {

@@ -52,51 +52,6 @@ namespace OpenGSServer
         static void Main(string[] args)
         {
 
-            // Get a collection (or create, if doesn't exist)
-
-            var roomOptions = new JObject();
-            roomOptions["RestrictWeapon"] = "";
-            roomOptions["FieldItemSwitch"] = false;
-            roomOptions["CanUseInstantItem"] = false;
-            //roomOptions["CanReSpawn"] = false;
-            var matchOptions = new JObject();
-            matchOptions["BoosterRate"] = 1.0f;
-            matchOptions[""] = "";
-
-
-
-            var room = new JObject();
-
-            room["RoomNumber"] = "001";
-            room["RoomName"] = "LIVE!LIVE!LIVE!";
-            room["RoomID"] = "ferett34fyh";
-            room["GameMode"] = "tdm";
-            
-            //room["RoomID"] = "";
-            room["Capacity"] = 8;
-            room["PlayerCount"] = 0;
-            room["RoomOptions"] = roomOptions;
-            
-            room["MatchOption"] = matchOptions;
-
-
-            var room2 = new JObject();
-
-            room2["RoomNumber"] = "002";
-            room2["RoomName"] = "LIVE!LIVE!LIVE!";
-
-
-            var jArray = new JArray();
-            jArray.Add(room);
-            jArray.Add(room2);
-
-            var json = new JObject();
-
-            json["Rooms"] = jArray;
-
-
-            ConsoleWrite.WriteMessage(json.ToString());
-
 
             AppDomain.CurrentDomain.ProcessExit += new EventHandler(CurrentDomain_ProcessExit);
             string mutexName = "Global\\OpenGSServer";
@@ -108,7 +63,7 @@ namespace OpenGSServer
             //bool japanese = true;
 
 
-            ServerManager.GetInstance().LoadSetting();
+            ServerManager.Instance.LoadSetting();
 
             //ServerManager.GetInstance().SaveSetting();
 
@@ -150,7 +105,7 @@ namespace OpenGSServer
 
                     var memoryMB = Process.GetCurrentProcess().MaxWorkingSet / 1024;
 
-                    ConsoleWrite.WriteMessage("OpenGS game server initializing.....", ConsoleColor.Green);
+                    
                     //ConsoleWrite.WriteMessage("CPU"+System.Environment.,ConsoleColor.DarkYellow);
                     ConsoleWrite.WriteMessage($"Cpu Archtecture:{Cpu.ArchtectureName()}", ConsoleColor.DarkYellow);
                     ConsoleWrite.WriteMessage("Core Count:"+System.Environment.ProcessorCount,ConsoleColor.DarkYellow);
@@ -158,8 +113,8 @@ namespace OpenGSServer
 
                     ConsoleWrite.WriteMessage("OS:"+System.Runtime.InteropServices.RuntimeInformation.OSDescription,ConsoleColor.DarkYellow);
                     ConsoleWrite.WriteMessage(".Net core version:"+System.Environment.Version,ConsoleColor.DarkYellow);
-
-
+                    ConsoleWrite.WriteMessage("OpenGS Server Version:" + System.Environment.Version, ConsoleColor.DarkYellow);
+                    ConsoleWrite.WriteMessage("OpenGS game server initializing.....", ConsoleColor.Green);
                     var accountDatabaseManager = AccountDatabaseManager.GetInstance();
 
                     accountDatabaseManager.Connect();
@@ -191,7 +146,7 @@ namespace OpenGSServer
                     ThreadPool.GetMinThreads(out workMin, out ioMin);  
 
                     Console.WriteLine("MinThreads work={0}, i/o={1}", workMin, ioMin);
-
+                    ConsoleWrite.WriteMessage("System all green...",ConsoleColor.Green);
 
                     ThreadPool.SetMinThreads(26, ioMin);  
 
@@ -226,7 +181,7 @@ namespace OpenGSServer
 
                             if (command == "serverinfo")
                             {
-                                var info = WaitRoomManager.GetInstance().RoomManagerInfo();
+                                var info = WaitRoomManager.Instance().RoomManagerInfo();
 
 
                                 ConsoleWrite.WriteMessage(info.ToString());
@@ -312,7 +267,7 @@ namespace OpenGSServer
                                     var roomName = param[0];
 
 
-                                    var roomManager = WaitRoomManager.GetInstance();
+                                    var roomManager = WaitRoomManager.Instance();
 
                                     var waitRoom= roomManager.CreateNewWaitRoom(roomName,8);
 
@@ -520,7 +475,7 @@ namespace OpenGSServer
             }
 
             
-            ServerManager.GetInstance().SaveSetting();
+            ServerManager.Instance.SaveSetting();
 
 
 
