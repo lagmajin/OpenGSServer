@@ -8,9 +8,9 @@ using System.Diagnostics;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
  using OpenGSServer.Server;
-using OpenGSServer.Core;
 
-namespace OpenGSServer
+
+ namespace OpenGSServer
 {
     class Program
     {
@@ -47,8 +47,6 @@ namespace OpenGSServer
 
 
         }
-
-        //#main
         static void Main(string[] args)
         {
 
@@ -95,7 +93,7 @@ namespace OpenGSServer
             json["Rooms"] = jArray;
 
 
-            ConsoleWrite.WriteMessage(json.ToString());
+            Console.Write(json.ToString());
 
 
             AppDomain.CurrentDomain.ProcessExit += new EventHandler(CurrentDomain_ProcessExit);
@@ -146,18 +144,9 @@ namespace OpenGSServer
 
                 try
                 {
-                    
-
-                    var memoryMB = Process.GetCurrentProcess().MaxWorkingSet / 1024;
-
                     ConsoleWrite.WriteMessage("OpenGS game server initializing.....", ConsoleColor.Green);
-                    //ConsoleWrite.WriteMessage("CPU"+System.Environment.,ConsoleColor.DarkYellow);
-                    ConsoleWrite.WriteMessage($"Cpu Archtecture:{Cpu.ArchtectureName()}", ConsoleColor.DarkYellow);
-                    ConsoleWrite.WriteMessage("Core Count:"+System.Environment.ProcessorCount,ConsoleColor.DarkYellow);
-                    ConsoleWrite.WriteMessage("Memory:" +memoryMB +"(MB)", ConsoleColor.DarkYellow);
 
-                    ConsoleWrite.WriteMessage("OS:"+System.Runtime.InteropServices.RuntimeInformation.OSDescription,ConsoleColor.DarkYellow);
-                    ConsoleWrite.WriteMessage(".Net core version:"+System.Environment.Version,ConsoleColor.DarkYellow);
+
 
 
                     var accountDatabaseManager = AccountDatabaseManager.GetInstance();
@@ -226,7 +215,7 @@ namespace OpenGSServer
 
                             if (command == "serverinfo")
                             {
-                                var info = WaitRoomManager.GetInstance().RoomManagerInfo();
+                                var info = WaitRoomManager.GetInstance().Info2();
 
 
                                 ConsoleWrite.WriteMessage(info.ToString());
@@ -303,7 +292,7 @@ namespace OpenGSServer
 
                             }
 
-                            if (command == "addnewroom" || command== "addnewwaitroom")
+                            if (command == "addnewroom")
                             {
 
                                 if (param.Count > 0)
@@ -314,11 +303,8 @@ namespace OpenGSServer
 
                                     var roomManager = WaitRoomManager.GetInstance();
 
-                                    var waitRoom= roomManager.CreateNewWaitRoom(roomName,8);
+                                    roomManager.CreateNewWaitRoom("");
 
-                                    
-
-                                    ConsoleWrite.WriteMessage("new wait room created");
 
 
                                 }
@@ -327,21 +313,6 @@ namespace OpenGSServer
 
 
                                 }
-
-
-
-                            }
-
-                            if (command == "startmatch")
-                            {
-                     
-
-                                    ConsoleWrite.WriteMessage("StartMatchCommand");
-
-
-                                    MatchRoomManager.GetInstance().StartMatchTest();
-
-
 
 
 

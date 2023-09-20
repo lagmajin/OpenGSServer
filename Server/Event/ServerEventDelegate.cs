@@ -1,6 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
-
+using System.Globalization;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 
 namespace OpenGSServer
@@ -26,7 +29,7 @@ namespace OpenGSServer
             json["MatchServerInfo"] = matchServerInfoJson;
 
 
-            session.SendAsyncJsonWithTimeStamp(json);
+            session.SendJsonAsyncWithTimeStamp(json);
         }
 
         public static void PingRequest(ClientSession session, Dictionary<string, JToken> dic)
