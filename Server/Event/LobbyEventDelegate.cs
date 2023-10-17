@@ -183,9 +183,9 @@ namespace OpenGSServer
                     {
                         winConditionKill = 10;
 
+                        var setting = new TDMMatchSetting();
+
                     }
-
-
                 }
                 else
                 {
