@@ -1,7 +1,6 @@
 ﻿using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Runtime.InteropServices;
 
 using System.Diagnostics;
@@ -12,14 +11,11 @@ namespace OpenGSServer
 {
     public static class LobbyEventDelegate
     {
-        //#CreateNewWaitRoom
         public static void CreateNewWaitRoom(in ClientSession session, in IDictionary<string, JToken> dic)
         {
             string? playerName;
             string? playerID;
-            //string? gameMode;
-
-            
+            string? gameMode;
 
             var teamBalance = true;
 
@@ -53,26 +49,97 @@ namespace OpenGSServer
 
             }
 
-            var id=dic.GetValueOrDefaultString("PlayerID");
-
-            ConsoleWrite.WriteMessage("aaa:"+id);
 
 
-            //var t2=dic.GetOrDefault()
 
-            var test = dic.GetValueOrDefaultString("TeamBalance", "true");
 
-            var roomCapacity = dic.GetValueDefaultInt("RoomCapacity", 8);
+
+            if (dic.TryGetValue("TeamBalance", out var playerNameToken))
+            {
+
+
+            }
+            else
+            {
+                
+
+                return;
+            }
+
+
+
+            if (dic.TryGetValue("TeamBalance", out var teamBalanceToken))
+            {
+                if (bool.TryParse(teamBalanceToken.ToString(), out teamBalance))
+                {
+
+                }
+                else
+                {
+
+                }
+
+            }
+            else
+            {
+                ConsoleWrite.WriteMessage("Test");
+
+                return;
+            }
+
+
+
+            if (dic.TryGetValue("RoomCapacity", out var roomCapacityToken))
+            {
+
+
+                if (Int32.TryParse(roomCapacityToken.ToString(), out maxCapacity))
+                {
+
+
+                }
+                else
+                {
+                    maxCapacity = 10;
+                }
+
+            }
+            else
+            {
+                return;
+            }
+
+
+            if (dic.TryGetValue("GameMode", out var gamemodeToken))
+            {
+                gameMode = gamemodeToken.ToString();
+
+
+            }
+            else
+            {
+                gameMode = null;
+
+                return;
+            }
+
 
 
             var boosterPower = dic.GetValueDefaultFloat("BoosterPower", 1.0f);
 
-
-            var gameMode=dic.GetValueOrDefaultString("GameMode", "dm");
-
+            //var matchRoomManager = GameRoomManager.GetInstance();
 
 
 
+
+
+            if (string.IsNullOrEmpty(gameMode))
+            {
+                var errorMessage = "Invalid game mode";
+
+
+                goto ErrorResult;
+            }
 
             if (gameMode == "dm" || gameMode == "deathmatch")
             {
@@ -104,18 +171,36 @@ namespace OpenGSServer
 
                 session.SendAsyncJsonWithTimeStamp(json);
 
-                
+
+
+
 
             }
 
             if (gameMode == "tdm" || gameMode == "teamdeathmatch")
             {
 
-                var winConditionKill = dic.GetValueDefaultInt("WinConditionKill", 20);
+                var winConditionKill = 0;
+
+                if (dic.ContainsKey("WinConditionKill"))
+                {
+                    if (Int32.TryParse(dic["WinConditionKill"].ToString(), out winConditionKill))
+                    {
+
+                    }
+                    else
+                    {
+                        winConditionKill = 10;
 
                 var setting = new TDMMatchSetting();
 
 
+                }
+                else
+                {
+                    winConditionKill = 10;
+
+                }
 
 
 
@@ -143,7 +228,7 @@ namespace OpenGSServer
 
             if (gameMode == "ctf" || gameMode == "capturetheflag")
             {
-               
+                //var winConditionFlag = json["WinConditionKill"].ToString();
 
 
 
@@ -160,8 +245,10 @@ namespace OpenGSServer
             {
 
 
+                //var createResult = new CreateNewRoomResult(result,reason);
 
 
+                //session.SendAsync(createResult.ToJson().ToString());
 
 
 
@@ -235,7 +322,6 @@ namespace OpenGSServer
             string playerID;
         }
 
-        //#UpdateRoom
         public static void UpdateRoom(in ClientSession session, in IDictionary<string, JToken> dic)
         {
             string playerName;

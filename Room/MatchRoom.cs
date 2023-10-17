@@ -3,53 +3,21 @@ using OpenGSCore;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Text.RegularExpressions;
-
 
 
 namespace OpenGSServer
 {
-    public enum EMatchRoomEventType
-    {
-        Unknown,
-        MatchStarted,
-        MathEnded,
-
-    }
-
 
     public interface IMatchRoom
     {
 
         string RoomName { get; set; }
-        //IObservable<int >
+
 
     }
-
-
-    public class MatchRoom : AbstractGameRoom, IMatchRoom,IObservable<MatchResult>, IDisposable
+    public class MatchRoom : AbstractGameRoom, IMatchRoom, IDisposable
     {
-
-        class Unsubscriber : IDisposable
-        {
-            private List<IObserver<MatchResult>> m_observers;
-            
-            private IObserver<MatchResult> m_observer;
-
-            public Unsubscriber(List<IObserver<MatchResult>> observers, IObserver<MatchResult> observer)
-            {
-                m_observers = observers;
-                m_observer = observer;
-            }
-            public void Dispose()
-            {
-                m_observers.Remove(m_observer);
-            }
-        }
-
-
-        public List<IObserver<MatchResult>> matchSubscriber = new();
 
 
         AbstractMatchRule? rule;
@@ -79,7 +47,7 @@ namespace OpenGSServer
         public bool Finished { get; } = false;
 
 
-        private Stopwatch sw = new();
+
         public MatchRoom(int roomNumber, in string roomName, in string roomOwnerId, in AbstractMatchRule rule) : base(roomNumber, roomOwnerId)
         {
 
@@ -196,13 +164,6 @@ namespace OpenGSServer
         public override void GameUpdate()
         {
 
-            if (!Finished)
-            {
-                GameScene.UpdateFrame();
-            }
-
-            
-
 
 
 
@@ -210,7 +171,7 @@ namespace OpenGSServer
 
         }
 
-        public void GameStart()
+        public void Start()
         {
             sw.Start();
 
@@ -270,10 +231,7 @@ namespace OpenGSServer
 
         }
 
-         void OnMatchFinished()
-        {
 
-        }
 
 
 
@@ -296,14 +254,6 @@ namespace OpenGSServer
 
 
 
-        }
-
-        public IDisposable Subscribe(IObserver<MatchResult> observer)
-        {
-   
-            matchSubscriber.Add(observer);
-
-            return new Unsubscriber(matchSubscriber, observer);
         }
     }
 }

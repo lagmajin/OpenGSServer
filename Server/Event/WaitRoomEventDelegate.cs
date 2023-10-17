@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -117,7 +116,6 @@ namespace OpenGSServer
             //var serverManager=ServerManager.Instance;
 
 
-
         }
 
 
@@ -127,11 +125,6 @@ namespace OpenGSServer
         }
 
         public static void ExitRoomRequest(in ClientSession session)
-        {
-
-        }
-
-        public static void GameStartRequest(in ClientSession session,IDictionary<string,JToken> dic)
         {
 
         }

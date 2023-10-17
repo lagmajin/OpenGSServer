@@ -6,19 +6,17 @@ using OpenGSCore;
 
 namespace OpenGSServer
 {
-
-
     public class WaitRoomManager
     {
         private static WaitRoomManager _singleInstance = new WaitRoomManager();
 
-        private SortedDictionary<string, WaitRoom> _rooms = new();
+        private SortedDictionary<string, WaitRoom> rooms = new();
 
-        private WaitRoomDatabase _allRoom=new ();
+        private WaitRoomDatabase allRoom=new ();
 
         private int RoomLimit { get; set; } = 20;
 
-        private List<string> DefaultRoomNames { get; set; } = new List<string>() { "One Shot One Kill", "" };
+        private List<string> defaultRoomNames { get; set; } = new List<string>() { "One Shot One Kill", "" };
 
         private readonly object _lockObj = new object();
 
@@ -32,7 +30,7 @@ namespace OpenGSServer
         {
             var id = Guid.NewGuid().ToString("N");
 
-           
+
             return id;
         }
         public static WaitRoomManager Instance()
@@ -112,7 +110,7 @@ namespace OpenGSServer
             }
 
 
-            var id = CreateRoomId();
+            var id = CreateRoomID();
 
 
             var room = new WaitRoom(roomName);
@@ -120,14 +118,14 @@ namespace OpenGSServer
             lock (_lockObj)
             {
 
-                _rooms.Add(room.RoomId, room);
+                rooms.Add(room.RoomId, room);
             }
 
             return room;
 
         }
 
-        
+
 
 
 
@@ -163,7 +161,7 @@ namespace OpenGSServer
 
 
 
-            var count = _rooms.Count;
+            var count = rooms.Count;
 
             string result = $"WaitRoomCount:{count}/{RoomLimit}";
 
@@ -171,15 +169,15 @@ namespace OpenGSServer
             return result;
         }
 
-        public JObject RoomManagerInfo()
+        public JObject Info2()
         {
             var result = new JObject();
-            result["WaitRoomCount"] = _rooms.Count;
-            result["RoomCapacity"] = _rooms.Count.ToString() + "/" + RoomLimit.ToString();
+            result["WaitRoomCount"] = rooms.Count;
+            result["RoomCapacity"] = rooms.Count.ToString() + "/" + RoomLimit.ToString();
 
             var array = new JArray();
 
-            foreach (var room in _rooms)
+            foreach (var room in rooms)
             {
                 var roomJson = new JObject();
 
