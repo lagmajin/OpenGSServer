@@ -23,7 +23,7 @@ namespace OpenGSServer
         AbstractMatchRule? rule;
 
 
-        private MatchSettings Setting { get; set; }
+        private AbstractMatchSetting Setting { get; set; }
 
         private AbstractMatchSituation situation { get; set; } = null;
 
@@ -173,17 +173,31 @@ namespace OpenGSServer
 
         public void Start()
         {
-            //timer.Start();
-            //sw.Start();
+            sw.Start();
 
+            
             if (Setting.TimeLimit)
             {
                 //setting.MatchTime;
 
             }
 
+            
 
             Playing = true;
+
+            foreach (var sub in matchSubscriber)
+            {
+                MatchResult result = new();
+                result.type = EMatchRoomEventType.MatchStarted;
+
+
+                sub.OnNext(result);
+
+            }
+
+            OnMatchStarted();
+
         }
 
         public void Finish()
@@ -192,6 +206,28 @@ namespace OpenGSServer
 
 
             Playing = false;
+
+            foreach (var s in matchSubscriber)
+            {
+                MatchResult result = new();
+
+                result.type = EMatchRoomEventType.MathEnded;
+                result.room = this;
+
+                s.OnNext(result);
+
+
+
+            }
+
+            OnMatchFinished();
+
+        }
+
+         void OnMatchStarted()
+        {
+
+
 
         }
 
@@ -203,9 +239,9 @@ namespace OpenGSServer
         {
             var json = new JObject();
 
-            json["RoomName"] = "";
+            json["RoomName"] = RoomName;
             json["RoomID"] = Id.ToString();
-            json["MaxCapacity"] = 2;
+            json["MaxCapacity"] = 8;
             json["PlayerCount"] = PlayerCount;
 
 

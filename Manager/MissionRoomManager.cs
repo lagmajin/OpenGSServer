@@ -6,9 +6,15 @@ using System.Threading.Tasks;
 
 namespace OpenGSServer
 {
-    public class MissionRoomManager
+    public class MissionWaitRoomManager
     {
-        
+        public static MissionWaitRoomManager Instance { get; private set; } = new();
+
+        public void CreateNewMissionWaitRoom(string mission)
+        {
+
+        }
+
 
     }
 }

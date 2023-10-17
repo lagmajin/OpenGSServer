@@ -87,8 +87,18 @@ namespace OpenGSServer
 
 
 
-            session.SendJsonAsyncWithTimeStamp(json);
+            session.SendAsyncJsonWithTimeStamp(json);
 
+
+            var encryptManager=EncryptManager.Instance;
+
+            var keyJson = new JObject();
+
+            keyJson["MessageType"] = "EncryptKey";
+            keyJson["RSAPublicKey"]=encryptManager.GetRSAPublicKey();
+
+
+            session.SendAsyncJsonWithTimeStamp(keyJson);
 
 
 
@@ -98,8 +108,8 @@ namespace OpenGSServer
 
         public static void Logout(ClientSession session, in IDictionary<string, JToken> dic)
         {
-            string id;
-            string pass;
+            string id="";
+            string pass="";
 
 
             if (dic.TryGetValue("id", out var idToken))
@@ -114,6 +124,13 @@ namespace OpenGSServer
             {
                 pass = passToken.ToString();
             }
+
+            
+
+            var result=AccountManager.GetInstance().Logout(id, pass);
+
+
+            session.SendAsyncJsonWithTimeStamp(result);
 
 
         }

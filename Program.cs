@@ -50,18 +50,6 @@ using Newtonsoft.Json.Linq;
         static void Main(string[] args)
         {
 
-            // Get a collection (or create, if doesn't exist)
-
-            var roomOptions = new JObject();
-            roomOptions["RestrictWeapon"] = "";
-            roomOptions["FieldItemSwitch"] = false;
-            roomOptions["CanUseInstantItem"] = false;
-            //roomOptions["CanReSpawn"] = false;
-            var matchOptions = new JObject();
-            matchOptions["BoosterRate"] = 1.0f;
-            matchOptions[""] = "";
-
-
 
             var room = new JObject();
 
@@ -106,7 +94,7 @@ using Newtonsoft.Json.Linq;
             //bool japanese = true;
 
 
-            ServerManager.GetInstance().LoadSetting();
+            ServerManager.Instance.LoadSetting();
 
             //ServerManager.GetInstance().SaveSetting();
 
@@ -144,11 +132,20 @@ using Newtonsoft.Json.Linq;
 
                 try
                 {
+                    
+
+                    var memoryMB = Process.GetCurrentProcess().MaxWorkingSet / 1024;
+
+                    
+                    //ConsoleWrite.WriteMessage("CPU"+System.Environment.,ConsoleColor.DarkYellow);
+                    ConsoleWrite.WriteMessage($"Cpu Archtecture:{Cpu.ArchtectureName()}", ConsoleColor.DarkYellow);
+                    ConsoleWrite.WriteMessage("Core Count:"+System.Environment.ProcessorCount,ConsoleColor.DarkYellow);
+                    ConsoleWrite.WriteMessage("Memory:" +memoryMB +"(MB)", ConsoleColor.DarkYellow);
+
+                    ConsoleWrite.WriteMessage("OS:"+System.Runtime.InteropServices.RuntimeInformation.OSDescription,ConsoleColor.DarkYellow);
+                    ConsoleWrite.WriteMessage(".Net core version:"+System.Environment.Version,ConsoleColor.DarkYellow);
+                    ConsoleWrite.WriteMessage("OpenGS Server Version:" + System.Environment.Version, ConsoleColor.DarkYellow);
                     ConsoleWrite.WriteMessage("OpenGS game server initializing.....", ConsoleColor.Green);
-
-
-
-
                     var accountDatabaseManager = AccountDatabaseManager.GetInstance();
 
                     accountDatabaseManager.Connect();
@@ -180,7 +177,7 @@ using Newtonsoft.Json.Linq;
                     ThreadPool.GetMinThreads(out workMin, out ioMin);  
 
                     Console.WriteLine("MinThreads work={0}, i/o={1}", workMin, ioMin);
-
+                    ConsoleWrite.WriteMessage("System all green...",ConsoleColor.Green);
 
                     ThreadPool.SetMinThreads(26, ioMin);  
 
@@ -215,7 +212,7 @@ using Newtonsoft.Json.Linq;
 
                             if (command == "serverinfo")
                             {
-                                var info = WaitRoomManager.GetInstance().Info2();
+                                var info = WaitRoomManager.Instance().RoomManagerInfo();
 
 
                                 ConsoleWrite.WriteMessage(info.ToString());
@@ -301,7 +298,7 @@ using Newtonsoft.Json.Linq;
                                     var roomName = param[0];
 
 
-                                    var roomManager = WaitRoomManager.GetInstance();
+                                    var roomManager = WaitRoomManager.Instance();
 
                                     roomManager.CreateNewWaitRoom("");
 
@@ -491,7 +488,7 @@ using Newtonsoft.Json.Linq;
             }
 
             
-            ServerManager.GetInstance().SaveSetting();
+            ServerManager.Instance.SaveSetting();
 
 
 

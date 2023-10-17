@@ -1,5 +1,5 @@
 ﻿using System.Collections.Generic;
-
+using System.ComponentModel;
 using Newtonsoft.Json.Linq;
 
 namespace OpenGSServer
@@ -9,6 +9,8 @@ namespace OpenGSServer
 
         public static void ProcessOneOnOneChat(in ClientSession session, in IDictionary<string, JToken> dic)
         {
+            
+
 
             if (!dic.ContainsKey("AccountID"))
             {
@@ -44,6 +46,10 @@ namespace OpenGSServer
 
                 return;
             }
+
+            var lobbyManager = LobbyServerManagerV2.Instance;
+
+            
 
             //LobbyServerManagerV2
 

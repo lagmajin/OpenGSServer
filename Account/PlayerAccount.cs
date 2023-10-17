@@ -13,7 +13,7 @@ namespace OpenGSServer
     public class PlayerAccount
     {
         //private string pass;
-        private string dbUnitueID;
+        private string dbUniqueId;
 
         private string globalID = Guid.NewGuid().ToString("N");
 

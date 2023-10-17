@@ -272,7 +272,7 @@ namespace OpenGSServer
 
                     var name = new GameMode(gameMode);
 
-                    var serverManager = ServerManager.GetInstance();
+                var serverManager = ServerManager.Instance;
 
 
 
@@ -313,19 +313,19 @@ namespace OpenGSServer
 
                 }
 
-                if (messageType == "OutRoomRequest")
-                {
-                    var serverManager = ServerManager.GetInstance();
+            if (messageType == "OutRoomRequest")
+            {
+                var serverManager = ServerManager.Instance;
 
                     //serverManager.GetGeneralServer().
 
                     var generalServer=serverManager.GetGeneralServer();
                 }
 
-                if (messageType == "UpdateRoomRequest")
-                {
-                    ConsoleWrite.WriteMessage("aaa");
-                    var serverManager = ServerManager.GetInstance();
+            if (messageType == "UpdateRoomRequest")
+            {
+                //ConsoleWrite.WriteMessage("aaa");
+                var serverManager = ServerManager.Instance;
 
 
 
@@ -355,9 +355,9 @@ namespace OpenGSServer
                     var id = o["RoomID"];
                 }
 
-                if (messageType == "MatchServerRequest")
-                {
-                    var matchServer = ServerManager.GetInstance().GetMatchServer();
+            if (messageType == "MatchServerRequest")
+            {
+                var matchServer = ServerManager.Instance;
 
 
 
@@ -368,7 +368,7 @@ namespace OpenGSServer
                 {
                     o["TimeType"] = "";
 
-                    var generalServer = ServerManager.GetInstance().GetGeneralServer();
+                var generalServer = ServerManager.Instance;
 
 
 

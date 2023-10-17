@@ -70,7 +70,7 @@ namespace OpenGSServer
             return true;
         }
 
-        public bool SendJsonAsyncWithTimeStamp(JObject obj)
+        public bool SendAsyncJsonWithTimeStamp(JObject obj)
         {
             string utcFormat = "hh:mm:ss:ffff";
 
@@ -114,8 +114,11 @@ namespace OpenGSServer
             var jobject = new JObject();
 
             jobject["MessageType"] = "ConnectServerSuccessful";
+            jobject["RSAPublicKey"] = EncryptManager.Instance.GetRSAPublicKey();
 
-            SendJsonAsyncWithTimeStamp(jobject);
+
+
+            SendAsyncJsonWithTimeStamp(jobject);
 
         }
 
@@ -268,6 +271,7 @@ namespace OpenGSServer
 
             if ("CreateNewWaitRoomRequest" == messageType)
             {
+                ConsoleWrite.WriteMessage("Create");
 
                 LobbyEventDelegate.CreateNewWaitRoom(this, dic);
 

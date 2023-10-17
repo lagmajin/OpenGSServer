@@ -14,7 +14,7 @@ namespace OpenGSServer
     sealed class ServerManager
     {
 
-        private static ServerManager _singleInstance = new ServerManager();
+        public static ServerManager Instance { get; private set; } = new();
 
         ServerSettings settings = new ServerSettings();
 
@@ -32,10 +32,7 @@ namespace OpenGSServer
 
 
 
-        public static ServerManager GetInstance()
-        {
-            return _singleInstance;
-        }
+
 
         public MatchServer GetMatchServer()
         {

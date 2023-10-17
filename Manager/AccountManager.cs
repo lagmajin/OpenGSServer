@@ -148,17 +148,6 @@ namespace OpenGSServer
         }
 
 
-        public FriendList FriendList(in string id)
-        {
-
-
-
-
-
-            return null;
-        }
-
- 
 
         public CreateNewAccountResult CreateNewAccount(in string accountID, in string pass, in string displayName)
         {

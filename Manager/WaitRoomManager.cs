@@ -22,21 +22,88 @@ namespace OpenGSServer
 
         private JObject RoomInfoCache { get; set; } = new();
 
-        private string CreateRoomID()
+        //public readonly List<string> defaultRoomName = new();
+
+        private List<WaitRoom> waitRooms = new();
+
+        private string CreateRoomId()
         {
             var id = Guid.NewGuid().ToString("N");
 
 
             return id;
         }
-        public static WaitRoomManager GetInstance()
+        public static WaitRoomManager Instance()
         {
             return _singleInstance;
         }
 
-        public WaitRoom? CreateNewWaitRoom(in string roomName, int capacity = 8)
+        public CreateNewWaitRoomResult CreateWaitRoom(string roomName,int capacity=8)
         {
-            if (RoomLimit > rooms.Count)
+            CreateNewWaitRoomResult result;
+
+            //roomNameが空ならRandomRoomNameでうめる
+            if (roomName == "")
+            {
+                roomName = Template.RandomRoomName();
+            }
+
+            if (RoomLimit > _rooms.Count)
+            {
+                var id = CreateRoomId();
+                var room = new WaitRoom(roomName);
+                lock (_lockObj)
+                {
+                    _rooms.Add(room.RoomId, room);
+                }
+                result = new CreateNewWaitRoomResult("Successful", room);
+            }
+            else
+            {
+                result = new CreateNewWaitRoomResult("Fail", null);
+            }
+
+
+
+            
+            return result;
+        }
+
+        public CreateNewWaitRoomResult CreateNewWaitRoom(in string roomName)
+        {
+            CreateNewWaitRoomResult result;
+
+            if (RoomLimit > _rooms.Count)
+            {
+                var id = CreateRoomId();
+                var room = new WaitRoom(roomName);
+                lock (_lockObj)
+                {
+                    _rooms.Add(room.RoomId, room);
+                }
+                result = new CreateNewWaitRoomResult("Successful", room);
+            }
+            else
+            {
+                result = new CreateNewWaitRoomResult("Server RoomLimit Over", null);
+                
+                
+            }
+
+
+
+            return result;
+        }
+
+        public WaitRoom? CreateNewWaitRoom(string roomName, int capacity = 8)
+        {
+            if (roomName=="")
+            {
+                roomName = Template.RandomRoomName();
+            }
+
+
+            if (RoomLimit > _rooms.Count)
             {
 
 
@@ -60,9 +127,21 @@ namespace OpenGSServer
 
 
 
-        public void FindWaitRooms()
-        {
 
+
+        public WaitRoom? FindWaitRoom(in string roomId)
+        {
+            foreach(var room in waitRooms)
+            {
+                if(room.RoomId == roomId)
+                {
+                    return room;
+                }
+
+            }
+
+
+            return null;
         }
 
         public void FindWaitRoomsByGameMode()

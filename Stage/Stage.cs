@@ -4,7 +4,7 @@ using System.Text;
 
 namespace OpenGSServer
 {
-    class Stage
+    public class Stage
     {
     }
 
