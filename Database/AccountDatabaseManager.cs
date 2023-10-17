@@ -12,7 +12,7 @@ namespace OpenGSServer
 
 
 
-        static AccountDatabaseManager instance = new AccountDatabaseManager();
+        public static AccountDatabaseManager Instance { get; set; } = new ();
 
         public static string tableName = "TaskGroup";
 
@@ -28,7 +28,7 @@ namespace OpenGSServer
 
         public static AccountDatabaseManager GetInstance()
         {
-            return instance;
+            return Instance;
         }
         public void Connect()
         {
