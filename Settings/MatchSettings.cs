@@ -24,13 +24,12 @@ namespace OpenGSServer
 
         public JObject ToJson()
         {
-            var result = new JObject
-            {
-                ["GameMode"] = gameMode.ToString(),
-                ["TimeLimit"] = TimeLimit.ToString(),
-                ["MatchTime"] = MatchTime.ToString(),
-                ["RandomTeam"] = RandomTeam.ToString()
-            };
+            var result = new JObject();
+            result["GameMode"] = gameMode.ToString();
+            result["TimeLimit"] = TimeLimit.ToString();
+            result["MatchTime"] = MatchTime.ToString();
+            result["RandomTeam"] = RandomTeam.ToString();
+
 
 
             return result;
@@ -44,7 +43,13 @@ namespace OpenGSServer
                 return false;
             }
 
-            return !(a.TimeLimit != b.TimeLimit);
+            if (a.TimeLimit != b.TimeLimit)
+            {
+                return false;
+            }
+
+
+            return true;
         }
 
         public static bool operator !=(MatchSettings a, MatchSettings b)

@@ -6,345 +6,255 @@ using OpenGSCore;
 
 namespace OpenGSServer
 {
-    
 
-    public struct MatchResult
-    {
-        public EMatchRoomEventType type;
-        public MatchRoom room;
-    }
 
-    public class MatchRoomManager:IObserver<MatchResult>
+
+    public class MatchRoomManager
     {
 
-    private Dictionary<string, MatchRoom> matchRooms = new Dictionary<string, MatchRoom>();
+        private Dictionary<string, MatchRoom> matchRooms = new Dictionary<string, MatchRoom>();
 
-    private int roomNumberCount = 0;
-
-
-    public static MatchRoomManager Instance { get; } = new();
-
-    public static MatchRoomManager GetInstance()
-    {
-        return Instance;
-    }
-
-    private void IncreaseRoomCounter()
-    {
-        Interlocked.Increment(ref roomNumberCount);
-    }
-
-    public MatchRoomManager()
-    {
-
-    }
-
-    public void CreateMatchRoomByWaitRoom(WaitRoom waitRoom)
-    {
-        waitRoom.MatchRoomLink = null;
-
-        //var newMatchRoom = new MatchRoom(roomNumberCount,"Live!Live!Live!","",);
+        private int roomNumberCount = 0;
 
 
-        IncreaseRoomCounter();
+        public static MatchRoomManager Instance { get; } = new();
 
-    }
-
-    public List<AbstractGameRoom> AllRooms()
-    {
-        var rooms = new List<AbstractGameRoom>(matchRooms.Values);
-
-
-
-
-        return rooms;
-    }
-
-    public CreateNewRoomResult CreateNewDeathMatchRoom(in string roomName, in string ownerID, int capacity = 10,
-        bool teamBalance = true)
-    {
-        var matchSetting = new DeathMatchSetting(10);
-
-        var matchRule = new DeathMatchRule();
-
-
-
-        var matchRoom = new MatchRoom(roomNumberCount, roomName, ownerID, matchRule);
-
-        matchRooms.Add(matchRoom.Id, matchRoom);
-
-        IncreaseRoomCounter();
-
-
-        var createNewRoomResult =
-            new CreateNewRoomResult(eCreateNewRoomResult.Successful, ECreateNewRoomReason.NoReason);
-
-        return createNewRoomResult;
-    }
-
-    public void CreateNewTeamDeathMatchRoom(in string roomName, in string ownerID, int capacity = 10,
-        bool teamBalance = true)
-    {
-        var tdmMatchSetting = new TDMMatchSetting();
-
-        var matchRule = new TDMMatchRule();
-        IncreaseRoomCounter();
-
-        var matchRoom = new MatchRoom(0, roomName, ownerID, matchRule);
-
-        //matchRoom.Subscribe(this);
-
-
-
-        matchRooms.Add(matchRoom.Id, matchRoom);
-
-        //var tdmMatchRule = new TDMMatchRule();
-
-        //var matchSetting = new TDMMatchSetting(capacity,);
-    }
-
-
-    public void CreateNewSuvRoom(in string roomName, in string OwnerID, int capacity = 10)
-    {
-        //var suvMatchRule = new SuvMatchRule();
-        var matchSetting = new SuvMatchSetting(capacity, true);
-
-        //var matchRoom = new MatchRoom(OwnerID, matchSetting);
-
-
-
-    }
-
-    public void CreateNewTSuvRoom(in string roomName)
-    {
-
-        var matchSetting = new TSuvMatchRule();
-
-
-        //var matchRoom = new MatchRoom(0, "", "",);
-
-
-    }
-
-    public void CreateNewCTFMatchRoom(string roomName, int capacity = 10)
-    {
-
-    }
-
-
-    public void CreateNewMissionRoom(in string roomName, in string ownerID, int capacity = 3)
-    {
-        //var missionRoom = new MissionRoom();
-
-
-
-    }
-
-    public EnterMatchRoomResult EnterRoom()
-    {
-        return null;
-    }
-
-    public EnterMatchRoomResult EnterRoom(in Guid id)
-    {
-        id.ToString();
-
-        bool succeeded = false;
-
-        String message = "";
-
-        if (matchRooms.ContainsKey(id.ToString()))
+        public static MatchRoomManager GetInstance()
         {
-            var room = matchRooms[id.ToString()];
-
-
-
-            succeeded = true;
-
-        }
-        else
-        {
-
-            message = "No room";
-            succeeded = false;
+            return Instance;
         }
 
-        var result = new EnterMatchRoomResult(succeeded, message);
+        private void IncreaseRoomCounter()
+        {
+            Interlocked.Increment(ref roomNumberCount);
+        }
+
+        public MatchRoomManager()
+        {
+
+        }
+
+        public void CreateMatchRoomByWaitRoom(WaitRoom waitRoom)
+        {
+            waitRoom.MatchRoomLink = null;
+
+            //var newMatchRoom = new MatchRoom(roomNumberCount,"Live!Live!Live!","",);
 
 
-        return result;
-    }
+            IncreaseRoomCounter();
 
-    public void ExitRoom(string userid)
-    {
+        }
+
+        public List<AbstractGameRoom> AllRooms()
+        {
+            var rooms = new List<AbstractGameRoom>(matchRooms.Values);
 
 
-    }
 
-    public MatchRoom? SearchRoomByMemberID(string id)
-    {
-        if (string.IsNullOrEmpty(id))
+
+            return rooms;
+        }
+
+        public CreateNewRoomResult CreateNewDeathMatchRoom(in string roomName, in string ownerID, int capacity = 10, bool teamBalance = true)
+        {
+            var matchSetting = new DeathMatchSetting(10);
+
+            var matchRule = new DeathMatchRule();
+
+
+
+            var matchRoom = new MatchRoom(roomNumberCount, roomName, ownerID, matchRule);
+
+            matchRooms.Add(matchRoom.Id, matchRoom);
+
+            IncreaseRoomCounter();
+
+
+            var createNewRoomResult = new CreateNewRoomResult(eCreateNewRoomResult.Succeessful, eCreateNewRoomReason.NoReason);
+
+            return createNewRoomResult;
+        }
+
+        public void CreateNewTeamDeathMatchRoom(in string roomName, in string ownerID, int capacity = 10, bool teamBalance = true)
+        {
+            var tdmMatchSetting = new TDMMatchSetting();
+
+            var matchRule = new TDMMatchRule();
+            IncreaseRoomCounter();
+
+            var matchRoom = new MatchRoom(0, roomName, ownerID, matchRule);
+
+            matchRooms.Add(matchRoom.Id, matchRoom);
+
+            //var tdmMatchRule = new TDMMatchRule();
+
+            //var matchSetting = new TDMMatchSetting(capacity,);
+        }
+
+
+        public void CreateNewSuvRoom(in string roomName, in string OwnerID, int capacity = 10)
+        {
+            //var suvMatchRule = new SuvMatchRule();
+            var matchSetting = new SuvMatchSetting(capacity, true);
+
+            //var matchRoom = new MatchRoom(OwnerID, matchSetting);
+
+
+
+        }
+
+        public void CreateNewTSuvRoom(in string roomName)
+        {
+
+            var matchSetting = new TSuvMatchRule();
+
+
+            //var matchRoom = new MatchRoom(0, "", "",);
+
+
+        }
+
+        public void CreateNewCTFMatchRoom(string roomName, int capacity = 10)
+        {
+
+        }
+
+
+        public void CreateNewMissionRoom(in string roomName, in string ownerID, int capacity = 3)
+        {
+            //var missionRoom = new MissionRoom();
+
+
+
+        }
+
+        public EnterMatchRoomResult EnterRoom()
         {
             return null;
         }
 
+        public EnterMatchRoomResult EnterRoom(in Guid id)
+        {
+            id.ToString();
 
-        foreach (var item in matchRooms)
+            bool succeeded = false;
+
+            String message = "";
+
+            if (matchRooms.ContainsKey(id.ToString()))
+            {
+                var room = matchRooms[id.ToString()];
+
+
+
+                succeeded = true;
+
+            }
+            else
+            {
+
+                message = "No room";
+                succeeded = false;
+            }
+
+            var result = new EnterMatchRoomResult(succeeded, message);
+
+
+            return result;
+        }
+
+        public void ExitRoom(string userid)
         {
 
 
         }
 
-
-
-        return null;
-    }
-
-    public bool StartMatch(in string id)
-    {
-        string message = "";
-
-        if (matchRooms.ContainsKey(id))
+        public MatchRoom? SearchRoomByMemberID(string id)
         {
-            lock (matchRooms)
+            if (string.IsNullOrEmpty(id))
             {
-                var room = matchRooms[id];
+                return null;
+            }
 
-                room.GameStart();
+
+            foreach (var item in matchRooms)
+            {
+
 
             }
 
 
-            return true;
-        }
-        else
-        {
 
+            return null;
         }
 
-
-
-        return false;
-    }
-
-    public bool StartMatchTest()
-    {
-        foreach (var m in matchRooms)
+        public bool MatchStart(in string id)
         {
-            
-            m.Value.GameStart();
+            string message = "";
 
-
-
-        }
-
-
-
-
-        return false;
-    }
-
-    public bool StartAllMatch()
-    {
-        return false; 
-    }
-
-    public void UpdateAllRoom()
-    {
-
-
-    }
-
-    public int RoomCount()
-    {
-
-        return matchRooms.Count;
-    }
-
-    public void RemoveRoom(in string roomId, bool forceShutdownNowPlayingRooms = false)
-    {
-
-
-    }
-
-    public void RemoveAllRooms(bool forceShutdownNowPlayingRooms = false)
-    {
-        if (forceShutdownNowPlayingRooms)
-        {
-
-        }
-        else
-        {
-
-
-        }
-
-
-    }
-
-    public List<MatchRoom> CanEnterRooms()
-    {
-
-        return null;
-    }
-
-        public void OnCompleted()
-        {
-           
-        }
-
-   
-
-        public void OnNext(EMatchRoomEventType value)
-        {
-            switch (value)
+            if (matchRooms.ContainsKey(id))
             {
-                case EMatchRoomEventType.MatchStarted:
-                    
-                    
-                    break;
+                lock (matchRooms)
+                {
+                    var room = matchRooms[id];
 
-                case EMatchRoomEventType.MathEnded:
-                    OnMatchEnd();
+                    room.Start();
 
-                    break;
+                }
+
+
+                return true;
+            }
+            else
+            {
+
+            }
+
+
+
+            return false;
+        }
+
+        public void UpdateAllRoom()
+        {
+
+
+        }
+
+        public int RoomCount()
+        {
+
+            return matchRooms.Count;
+        }
+
+        public void RemoveRoom(in string roomId, bool forceShutdownNowPlayingRooms = false)
+        {
+
+
+        }
+
+        public void RemoveAllRooms(bool forceShutdownNowPlayingRooms = false)
+        {
+            if (forceShutdownNowPlayingRooms)
+            {
+
+            }
+            else
+            {
+
 
             }
 
 
         }
 
-
-        public void OnError(Exception error)
-        {
-            throw new NotImplementedException();
-        }
-
-        private void OnMatchStarted()
+        public List<MatchRoom> CanEnterRooms()
         {
 
+            return null;
         }
 
-        private void OnMatchEnd()
-        {
-
-        }
-
-        public void OnNext(MatchResult value)
-        {
-            switch (value.type)
-            {
-                case EMatchRoomEventType.MatchStarted:
 
 
-                    break;
-
-                case EMatchRoomEventType.MathEnded:
-                    OnMatchEnd();
-
-                    break;
-
-            }
-        }
     }
 }

@@ -9,12 +9,8 @@ namespace OpenGSServer
 {
     class Options
     {
-        [Option('h', "help", Required = false, HelpText = "Aの説明です。")]
+        [Option('a', "aaa", Required = false, HelpText = "Aの説明です。")]
         public string A { get; set; }
-
-        [Option()]
-        public string CreateRoom { get; set; }
-
 
     }
 

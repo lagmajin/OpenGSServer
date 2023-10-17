@@ -1,6 +1,8 @@
 ﻿
 using LiteDB;
-using System.Collections.Generic;
+
+
+
 
 namespace OpenGSServer
 {
@@ -25,14 +27,9 @@ namespace OpenGSServer
         }
         public void Connect()
         {
-            if (db == null)
-            {
-                db = new LiteDatabase(connectionString);
-            }
-            else
-            {
 
-            }
+            db = new LiteDatabase(connectionString);
+
         }
 
 
@@ -58,7 +55,10 @@ namespace OpenGSServer
 
         public void CreateNewGuild(in string guildName)
         {
-            Connect();
+            if (db == null)
+            {
+                Connect();
+            }
 
             if (db != null)
             {
@@ -81,44 +81,6 @@ namespace OpenGSServer
                 Connect();
             }
         }
-
-        public void AddGuildMember(in string id,in string guild)
-        {
-            if (ExistGuild(guild))
-            {
-                //var member = new DBGuildMember();
-
-                //member.Id = id;
- 
-                
-
-                var col = db.GetCollection<DBGuildMember>("guild_member");
-
-
-
-
-            }
-
-
-        }
-
-        public List<DBGuildMember> GetGuildMember()
-        {
-            var result=new List<DBGuildMember>();
-
-            return result;
-        }
-
-
-        public int GuildCount()
-        {
-            Connect();
-
-            return db.GetCollection<DBGuild>().Count();
-
-        }
-
-
 
 
     }

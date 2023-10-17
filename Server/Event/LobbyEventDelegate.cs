@@ -1,7 +1,6 @@
 ﻿using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Runtime.InteropServices;
 using OpenGSCore;
 
@@ -10,27 +9,23 @@ namespace OpenGSServer
 {
     public static class LobbyEventDelegate
     {
-        //#CreateNewWaitRoom
         public static void CreateNewWaitRoom(in ClientSession session, in IDictionary<string, JToken> dic)
         {
             string? playerName;
             string? playerID;
-            //string? gameMode;
-
-            
+            string? gameMode;
 
             var teamBalance = true;
 
             int maxCapacity = 0;
 
             var result = eCreateNewRoomResult.Fail;
-            var reason = ECreateNewRoomReason.NoReason;
+            var reason = eCreateNewRoomReason.NoReason;
 
             var gameRoomManager = MatchRoomManager.Instance;
 
-            var waitRoomManager = WaitRoomManager.GetInstance();
 
-          
+            //var createNewRoomResult = new CreateNewRoomResult();
 
             if (dic.ContainsKey("PlayerID"))
             {
@@ -51,50 +46,158 @@ namespace OpenGSServer
 
             }
 
-            var id=dic.GetValueOrDefaultString("PlayerID");
-
-            ConsoleWrite.WriteMessage("aaa:"+id);
-
-
-            //var t2=dic.GetOrDefault()
-
-            var test = dic.GetValueOrDefaultString("TeamBalance", "true");
-
-            var roomCapacity = dic.GetValueDefaultInt("RoomCapacity", 8);
-
-            
-
-
-
-            var gameMode=dic.GetValueOrDefaultString("GameMode", "dm");
 
 
 
 
 
-            if (gameMode == "dm" || gameMode == "deathmatch")
+            if (dic.TryGetValue("TeamBalance", out var playerNameToken))
+            {
+
+
+            }
+            else
             {
                 
 
+                return;
+            }
 
 
 
-                
+            if (dic.TryGetValue("TeamBalance", out var teamBalanceToken))
+            {
+                if (bool.TryParse(teamBalanceToken.ToString(), out teamBalance))
+                {
+
+                }
+                else
+                {
+
+                }
+
+            }
+            else
+            {
+                ConsoleWrite.WriteMessage("Test");
+
+                return;
+            }
+
+
+
+            if (dic.TryGetValue("RoomCapacity", out var roomCapacityToken))
+            {
+
+
+                if (Int32.TryParse(roomCapacityToken.ToString(), out maxCapacity))
+                {
+
+
+                }
+                else
+                {
+                    maxCapacity = 10;
+                }
+
+            }
+            else
+            {
+                return;
+            }
+
+
+            if (dic.TryGetValue("GameMode", out var gamemodeToken))
+            {
+                gameMode = gamemodeToken.ToString();
+
+
+            }
+            else
+            {
+                gameMode = null;
+
+                return;
+            }
+
+
+
+
+
+            //var matchRoomManager = GameRoomManager.GetInstance();
+
+
+
+
+
+            if (string.IsNullOrEmpty(gameMode))
+            {
+                var errorMessage = "Invalid game mode";
+
+
+                goto ErrorResult;
+            }
+
+            if (gameMode == "dm" || gameMode == "deathmatch")
+            {
+                var winConditionKill = 10;
+
+
+
+                if (dic.TryGetValue("WinConditionKill", out var conditionKillToken))
+                {
+
+                    winConditionKill = 10;
+
+
+                }
+                else
+                {
+                    winConditionKill = 10;
+                }
+
+                var deathMatchSetting = new DeathMatchSetting(winConditionKill, true);
+
+
+
+                gameRoomManager.CreateNewDeathMatchRoom("", "", 10, true);
+
+
+
+
 
             }
 
             if (gameMode == "tdm" || gameMode == "teamdeathmatch")
             {
 
-                var winConditionKill = dic.GetValueDefaultInt("WinConditionKill", 20);
+                var winConditionKill = 0;
 
-    
+                if (dic.ContainsKey("WinConditionKill"))
+                {
+                    if (Int32.TryParse(dic["WinConditionKill"].ToString(), out winConditionKill))
+                    {
+
+                    }
+                    else
+                    {
+                        winConditionKill = 10;
+
+                    }
+
+
+                }
+                else
+                {
+                    winConditionKill = 10;
+
+                }
 
 
 
 
 
-                
+                //gameRoomManager.CreateNewTDMRoom("", "", 10, true);
 
             }
 
@@ -118,7 +221,7 @@ namespace OpenGSServer
 
             if (gameMode == "ctf" || gameMode == "capturetheflag")
             {
-               
+                //var winConditionFlag = json["WinConditionKill"].ToString();
 
 
 
@@ -128,15 +231,14 @@ namespace OpenGSServer
             }
 
 
-            
-
-
             ErrorResult:
             {
 
 
+                //var createResult = new CreateNewRoomResult(result,reason);
 
 
+                //session.SendAsync(createResult.ToJson().ToString());
 
 
 
@@ -203,7 +305,6 @@ namespace OpenGSServer
             string playerID;
         }
 
-        //#UpdateRoom
         public static void UpdateRoom(in ClientSession session, in IDictionary<string, JToken> dic)
         {
             string playerName;
