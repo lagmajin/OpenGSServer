@@ -6,7 +6,12 @@ using OpenGSCore;
 
 namespace OpenGSServer
 {
-    
+    public enum EMatchRoomEventType
+    {
+        Started,
+        Ended,
+
+    }
 
     public struct MatchResult
     {
@@ -210,7 +215,7 @@ namespace OpenGSServer
             {
                 var room = matchRooms[id];
 
-                room.GameStart();
+                //room.GameStart();
 
             }
 
@@ -232,7 +237,7 @@ namespace OpenGSServer
         foreach (var m in matchRooms)
         {
             
-            m.Value.GameStart();
+            //m.Value.GameStart();
 
 
 
@@ -299,12 +304,12 @@ namespace OpenGSServer
         {
             switch (value)
             {
-                case EMatchRoomEventType.MatchStarted:
+                case EMatchRoomEventType.Started:
                     
                     
                     break;
 
-                case EMatchRoomEventType.MathEnded:
+                case EMatchRoomEventType.Ended:
                     OnMatchEnd();
 
                     break;
@@ -334,12 +339,12 @@ namespace OpenGSServer
         {
             switch (value.type)
             {
-                case EMatchRoomEventType.MatchStarted:
+                case EMatchRoomEventType.Started:
 
 
                     break;
 
-                case EMatchRoomEventType.MathEnded:
+                case EMatchRoomEventType.Ended:
                     OnMatchEnd();
 
                     break;

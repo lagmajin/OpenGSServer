@@ -8,7 +8,7 @@ using System.Text.RegularExpressions;
 
 namespace OpenGSServer
 {
-
+    /*
     public interface IMatchRoom
     {
 
@@ -16,7 +16,8 @@ namespace OpenGSServer
 
 
     }
-    public class MatchRoom : AbstractGameRoom, IMatchRoom, IDisposable
+    */
+    public class MatchRoom2 : AbstractGameRoom, IMatchRoom, IDisposable
     {
 
 
@@ -48,7 +49,7 @@ namespace OpenGSServer
 
 
 
-        public MatchRoom(int roomNumber, in string roomName, in string roomOwnerId, in AbstractMatchRule rule) : base(roomNumber, roomOwnerId)
+        public MatchRoom2(int roomNumber, in string roomName, in string roomOwnerId, in AbstractMatchRule rule) : base(roomNumber, roomOwnerId)
         {
 
 
@@ -173,7 +174,7 @@ namespace OpenGSServer
 
         public void Start()
         {
-            sw.Start();
+            ///sw.Start();
 
             
             if (Setting.TimeLimit)
@@ -186,6 +187,7 @@ namespace OpenGSServer
 
             Playing = true;
 
+            /*
             foreach (var sub in matchSubscriber)
             {
                 MatchResult result = new();
@@ -195,7 +197,7 @@ namespace OpenGSServer
                 sub.OnNext(result);
 
             }
-
+            */
             OnMatchStarted();
 
         }
@@ -207,11 +209,12 @@ namespace OpenGSServer
 
             Playing = false;
 
+            /*
             foreach (var s in matchSubscriber)
             {
                 MatchResult result = new();
 
-                result.type = EMatchRoomEventType.MathEnded;
+                result.type = EMatchRoomEventType.Ended;
                 result.room = this;
 
                 s.OnNext(result);
@@ -221,7 +224,7 @@ namespace OpenGSServer
             }
 
             OnMatchFinished();
-
+            */
         }
 
          void OnMatchStarted()

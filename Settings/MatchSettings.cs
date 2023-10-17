@@ -8,7 +8,7 @@ namespace OpenGSServer
 {
 
 
-    public class MatchSettings2
+    public class MatchSettings
     {
         private eGameMode gameMode = eGameMode.Unknown;
 

@@ -48,13 +48,13 @@ namespace OpenGSServer
                 roomName = Template.RandomRoomName();
             }
 
-            if (RoomLimit > _rooms.Count)
+            if (RoomLimit > waitRooms.Count)
             {
                 var id = CreateRoomId();
                 var room = new WaitRoom(roomName);
                 lock (_lockObj)
                 {
-                    _rooms.Add(room.RoomId, room);
+                    //waitRooms.Add(room.RoomId, room);
                 }
                 result = new CreateNewWaitRoomResult("Successful", room);
             }
@@ -73,13 +73,13 @@ namespace OpenGSServer
         {
             CreateNewWaitRoomResult result;
 
-            if (RoomLimit > _rooms.Count)
+            if (RoomLimit > waitRooms.Count)
             {
                 var id = CreateRoomId();
                 var room = new WaitRoom(roomName);
                 lock (_lockObj)
                 {
-                    _rooms.Add(room.RoomId, room);
+                   //waitRooms.Add(room.RoomId, room);
                 }
                 result = new CreateNewWaitRoomResult("Successful", room);
             }
@@ -103,14 +103,14 @@ namespace OpenGSServer
             }
 
 
-            if (RoomLimit > _rooms.Count)
+            if (RoomLimit > waitRooms.Count)
             {
 
 
             }
 
 
-            var id = CreateRoomID();
+            var id = CreateRoomId();
 
 
             var room = new WaitRoom(roomName);

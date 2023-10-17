@@ -4,7 +4,7 @@ using System.Threading;
 
 
 
-namespace OpenGSServer.Core
+namespace OpenGSServer
 {
     static class Cpu
     {

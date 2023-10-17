@@ -61,9 +61,9 @@ using Newtonsoft.Json.Linq;
             //room["RoomID"] = "";
             room["Capacity"] = 8;
             room["PlayerCount"] = 0;
-            room["RoomOptions"] = roomOptions;
+           // room["RoomOptions"] = roomOptions;
             
-            room["MatchOption"] = matchOptions;
+            //room["MatchOption"] = matchOptions;
 
 
             var room2 = new JObject();
@@ -212,10 +212,10 @@ using Newtonsoft.Json.Linq;
 
                             if (command == "serverinfo")
                             {
-                                var info = WaitRoomManager.Instance().RoomManagerInfo();
+                                //var info = WaitRoomManager.Instance().RoomManagerInfo();
 
 
-                                ConsoleWrite.WriteMessage(info.ToString());
+                                //ConsoleWrite.WriteMessage(info.ToString());
                             }
 
 

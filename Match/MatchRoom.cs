@@ -10,7 +10,7 @@ using System.Text.RegularExpressions;
 
 namespace OpenGSServer
 {
-    public enum EMatchRoomEventType
+    public enum EMatchRoomEventType2
     {
         Unknown,
         MatchStarted,
@@ -238,7 +238,7 @@ namespace OpenGSServer
             foreach (var sub in matchSubscriber)
             {
                 MatchResult result = new();
-                result.type = EMatchRoomEventType.MatchStarted;
+                result.type = EMatchRoomEventType.Started;
 
 
                 sub.OnNext(result);
@@ -260,7 +260,7 @@ namespace OpenGSServer
             {
                 MatchResult result = new();
 
-                result.type = EMatchRoomEventType.MathEnded;
+                result.type = EMatchRoomEventType.Ended;
                 result.room = this;
 
                 s.OnNext(result);
