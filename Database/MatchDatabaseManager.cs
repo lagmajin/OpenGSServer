@@ -17,7 +17,9 @@ namespace OpenGSServer
 
         private LiteDatabase db;
 
-        private string matchDatabaseFilename = "Database/match.db";
+        private static string matchDatabaseFilename = "Database/match.db";
+        public static string connectionString = $"Filename={matchDatabaseFilename};connection=shared";
+
         private MatchDatabaseManager()
         {
 

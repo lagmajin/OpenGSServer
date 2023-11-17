@@ -72,6 +72,8 @@ namespace OpenGSServer
 
 
             }
+
+            Disconnect();
         }
 
         public void RemoveGuild()
@@ -80,6 +82,13 @@ namespace OpenGSServer
             {
                 Connect();
             }
+
+            Disconnect();
+        }
+
+        public void RemoveAllGuild()
+        {
+
         }
 
         public void AddGuildMember(in string id,in string guild)

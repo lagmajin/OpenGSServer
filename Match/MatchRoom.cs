@@ -28,7 +28,7 @@ namespace OpenGSServer
     }
 
 
-    public class MatchRoom : AbstractGameRoom, IMatchRoom,IObservable<MatchResult>, IDisposable
+    public partial class MatchRoom : AbstractGameRoom, IMatchRoom,IObservable<MatchResult>, IDisposable
     {
 
         class Unsubscriber : IDisposable
