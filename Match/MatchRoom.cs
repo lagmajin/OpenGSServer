@@ -89,22 +89,7 @@ namespace OpenGSServer
         }
 
 
-        public bool IsOwner(in string id)
-        {
-            return false;
-        }
 
-        public bool ChangeOwner()
-        {
-            if (Players.Count <= 1)
-            {
-                return false;
-            }
-
-
-
-            return false;
-        }
 
         public bool ChangeOwnerRandom()
         {
@@ -120,64 +105,12 @@ namespace OpenGSServer
             return false;
         }
 
-#nullable enable
-        public string? RoomOwnerName()
-        {
-            if (Players.Count == 0)
-            {
-                return null;
-            }
-            else
-            {
-
-            }
 
 
 
 
 
-            return "";
-        }
 
-        public PlayerInfo? RoomOwnerInfo()
-        {
-
-            return null;
-        }
-
-        public List<string> RoomMembersNameList()
-        {
-            var result = new List<string>();
-
-            return result;
-        }
-
-        public List<PlayerInfo>? RoomMemberList()
-        {
-
-
-
-            return Players;
-        }
-
-        public bool IsMember(in string id)
-        {
-            if (Players.Count == 0)
-            {
-                return false;
-            }
-            else
-            {
-                if(true)
-                {
-
-                    return true;
-                }
-
-            }
-
-            return false;
-        }
 
 
 

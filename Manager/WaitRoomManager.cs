@@ -154,20 +154,6 @@ namespace OpenGSServer
 
         }
 
-        public string Info()
-        {
-            var utfNow = DateTime.UtcNow;
-
-
-
-
-            var count = rooms.Count;
-
-            string result = $"WaitRoomCount:{count}/{RoomLimit}";
-
-
-            return result;
-        }
 
         public JObject Info2()
         {

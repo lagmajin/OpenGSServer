@@ -46,6 +46,11 @@ namespace OpenGSServer
 
         }
 
+        public static void ResetServerSettings()
+        {
+
+        }
+
 
         
     }

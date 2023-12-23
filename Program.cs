@@ -12,6 +12,8 @@ using Newtonsoft.Json.Linq;
 
  namespace OpenGSServer
 {
+
+
     class Program
     {
         private static bool IsEnd { get; set; } = false;
@@ -47,6 +49,8 @@ using Newtonsoft.Json.Linq;
 
 
         }
+
+
         static void Main(string[] args)
         {
 
