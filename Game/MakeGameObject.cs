@@ -14,6 +14,13 @@ namespace OpenGSServer
             return result;
         }
 
+        public static BulletGameObject CreateBulletGameObject(float x,float y)
+        {
+
+
+            return null;
+        }
+
     }
 
 
