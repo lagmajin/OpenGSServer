@@ -131,7 +131,7 @@ namespace OpenGSServer
         public int ExplosionDamage { get => explosionDamage; set => explosionDamage = value; }
         public int Damage { get => damage; set => damage = value; }
 
-        protected AbstractGrenade()
+        protected AbstractGrenade(float x,float y):base(x,y)
         {
 
         }

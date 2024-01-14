@@ -16,6 +16,15 @@ namespace OpenGSServer
             return result;
         }
  
+        public static string CpuCoreCount()
+        {
+            return "";
+        }
+
+        public static string CpuVender()
+        {
+            return "";
+        }
 
     }
 }

@@ -125,10 +125,6 @@ namespace OpenGSServer
 
         }
 
-
-
-
-
         public WaitRoom? FindWaitRoom(in string roomId)
         {
             foreach(var room in waitRooms)
@@ -144,9 +140,14 @@ namespace OpenGSServer
             return null;
         }
 
-        public void FindWaitRoomsByGameMode()
+        public List<WaitRoom> FindWaitRoomsByGameMode()
         {
+            foreach (var room in waitRooms)
+            {
 
+            }
+
+            return null;
         }
 
         public void CreateRoomCache()
@@ -155,7 +156,7 @@ namespace OpenGSServer
         }
 
 
-        public JObject Info2()
+        public JObject RoomInfo()
         {
             var result = new JObject();
             result["WaitRoomCount"] = rooms.Count;
@@ -171,8 +172,8 @@ namespace OpenGSServer
 
                 roomJson["RoomNumber"] = 0;
                 roomJson["RoomID"] = value.RoomId.ToString();
-                roomJson["RoomName"] = "";
-                roomJson["Capacity"] = "";
+                roomJson["RoomName"] = value.RoomName.ToString();
+                roomJson["Capacity"] = value.Capacity.ToString();
                 roomJson["NowPlaying"] = value.NowPlaying.ToString();
                 roomJson["CanEnter"] = value.CanEnter.ToString();
 

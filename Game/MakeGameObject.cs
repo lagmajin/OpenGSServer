@@ -4,14 +4,18 @@ using System.Text;
 
 namespace OpenGSServer
 {
-    public class MakeGameObject
+    public static class MakeGameObject
     {
-        public static AbstractGameObject CreateFieldItem()
+        public static AbstractGameObject CreateFieldItem(float x,float y)
         {
-            var result = new FieldItem();
+
+            var result = new FieldItem(x,y);
 
             return result;
         }
 
     }
+
+
+    
 }

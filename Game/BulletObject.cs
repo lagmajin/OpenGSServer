@@ -6,21 +6,22 @@ namespace OpenGSServer
 {
     public abstract class AbstractBullet : AbstractGameObject
     {
-
-
         public int Damage { get; private set; } = 0;
         public int Angle { get; private set; } = 0;
         public int Speed { get; private set; } = 0;
         public int Power { get; private set; } = 0;
         public int StoppingPower { get; set; } = 0;
+
+        public AbstractBullet(float x,float y):base(x,y)
+        {
+
+        }
+
     }
 
-    public class Bullet : AbstractBullet
+    public class BulletObject : AbstractBullet
     {
-
-
-
-        public Bullet(int angle, int speed = 1)
+        public BulletObject(float x, float y) : base(x, y)
         {
 
         }

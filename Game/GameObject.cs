@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Newtonsoft.Json.Linq;
+using System;
 using System.Collections.Generic;
 using System.Text;
 
@@ -28,13 +29,27 @@ namespace OpenGSServer
         public string Id { get => id; set => id = value; }
         public bool Updated { get => updated; }
 
+        public AbstractGameObject(float x,float y)
+        {
+            Posx = x;posy = y;
+
+        }
+        public virtual void Created()
+        {
+
+        }
         public virtual void update()
         {
 
 
         }
 
+        public virtual JObject ToJSon()
+        {
 
+
+            return null;
+        }
 
     }
 
@@ -43,9 +58,7 @@ namespace OpenGSServer
     public class Character : AbstractGameObject
     {
 
-
-
-        public Character()
+        public Character(float x,float y) : base(x, y)
         {
 
         }
@@ -53,9 +66,12 @@ namespace OpenGSServer
         
     }
 
-    class FieldItem : AbstractGameObject
+     class FieldItem : AbstractGameObject
     {
+        public FieldItem(float x, float y, float time = 0.0f) : base(x, y)
+        {
 
+        }
     }
 
     class NormalGranade : AbstractGameObject
@@ -63,7 +79,8 @@ namespace OpenGSServer
 
         
 
-        public NormalGranade()
+ 
+        public NormalGranade(float x,float y,float time=0.0f):base(x,y)
         {
 
         }

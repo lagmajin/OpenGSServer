@@ -11,7 +11,7 @@ namespace OpenGSServer
     public class PowerGrenade : AbstractGrenade
     {
 
-        public PowerGrenade()
+        public PowerGrenade(float x, float y):base(x,y)
         {
 
 
@@ -27,7 +27,7 @@ namespace OpenGSServer
     {
         int child = 3;
 
-        public ClusterGrenade()
+        public ClusterGrenade(float x, float y):base(x, y)
         {
 
 
@@ -37,13 +37,15 @@ namespace OpenGSServer
 
         public override void Hit()
         {
-            throw new NotImplementedException();
+            
+
+
         }
     }
 
     public class ChildClusterGrenade : AbstractGrenade
     {
-        public ChildClusterGrenade()
+        public ChildClusterGrenade(float x, float y) : base(x, y)
         {
 
 

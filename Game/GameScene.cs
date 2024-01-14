@@ -13,7 +13,7 @@ namespace OpenGSServer
     {
         private List<AbstractGameObject> objects = new();
 
-        void AddBullet(Bullet bullet)
+        void AddBullet(BulletObject bullet)
         {
             objects.Add(bullet);
         }

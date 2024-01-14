@@ -8,7 +8,7 @@ namespace OpenGSServer
     {
         private int msec = 30000;
 
-        public AbstractStageItem()
+        public AbstractStageItem(float x, float y) : base(x, y)
         {
 
         }
@@ -17,26 +17,38 @@ namespace OpenGSServer
 
     public class InstantStagePowerItem : AbstractStageItem
     {
+        public InstantStagePowerItem(float x, float y) : base(x, y)
+        {
 
+        }
 
     }
 
     public class InstantStageDefenceItem : AbstractStageItem
     {
+        public InstantStageDefenceItem(float x, float y) : base(x, y)
+        {
 
+        }
 
     }
 
 
     public class InstantStageGranadeItem : AbstractStageItem
-    { 
+    {
+        public InstantStageGranadeItem(float x, float y) : base(x, y)
+        {
 
+        }
 
     }
 
     public class InstantFlameThrower : AbstractStageItem
     {
+        public InstantFlameThrower(float x, float y) : base(x, y)
+        {
 
+        }
     }
 
 
