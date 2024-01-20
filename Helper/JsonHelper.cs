@@ -23,7 +23,7 @@ namespace OpenGSServer
             return null;
         }
 
-        public static string GetValueString(this IDictionary<string,JToken?> t)
+        public static string GetValueString(this IDictionary<string,JToken?> t,String name)
         {
             string result = "";
 

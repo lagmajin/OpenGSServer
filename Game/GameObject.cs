@@ -1,4 +1,5 @@
 ﻿using Newtonsoft.Json.Linq;
+using OpenGSCore;
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -23,24 +24,34 @@ namespace OpenGSServer
         int frame = 0;
         DateTime time = DateTime.Now;
 
-        public string Name { get => name; set => name = value; }
-        public float Posx { get => posx; set => posx = value; }
-        public float Posy { get => posy; set => posy = value; }
-        public string Id { get => id; set => id = value; }
-        public bool Updated { get => updated; }
+        public string Name { get; set; }
+        public float Posx { get; set; }
+        public float Posy { get; set; }
+        public string Id { get; set; }
+        public bool Updated { get; }
 
         public AbstractGameObject(float x,float y)
         {
             Posx = x;posy = y;
 
         }
-        public virtual void Created()
+        public virtual void OnCreated()
         {
 
         }
-        public virtual void update()
+
+        public virtual void OnDestroy()
         {
 
+        }
+        public virtual void Update()
+        {
+
+
+        }
+
+        public void SetPos(float x,float y)
+        {
 
         }
 
@@ -55,10 +66,11 @@ namespace OpenGSServer
 
 
 
-    public class Character : AbstractGameObject
+    public class PlayerGameObject : AbstractGameObject
     {
+        PlayerStatus status;
 
-        public Character(float x,float y) : base(x, y)
+        public PlayerGameObject(String name,float x,float y) : base(x, y)
         {
 
         }
@@ -66,13 +78,6 @@ namespace OpenGSServer
         
     }
 
-     class FieldItem : AbstractGameObject
-    {
-        public FieldItem(float x, float y, float time = 0.0f) : base(x, y)
-        {
-
-        }
-    }
 
     class NormalGranade : AbstractGameObject
     {

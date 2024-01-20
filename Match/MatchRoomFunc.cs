@@ -47,7 +47,7 @@ namespace OpenGSServer
 
 
 
-            return "";
+            return null;
         }
         public PlayerInfo? RoomOwnerInfo()
         {

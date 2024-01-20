@@ -4,27 +4,41 @@ using System.Text;
 
 namespace OpenGSServer
 {
-    public abstract class AbstractStageItem : AbstractGameObject
+    public abstract class AbstractFieldItem : AbstractGameObject
     {
         private int msec = 30000;
 
-        public AbstractStageItem(float x, float y) : base(x, y)
+        public AbstractFieldItem(float x, float y) : base(x, y)
         {
 
         }
+
+        public override void Update()
+        {
+
+        }
+        public void PowerUp()
+        {
+
+        }
+
+
+
     }
 
 
-    public class InstantStagePowerItem : AbstractStageItem
+    public class InstantStagePowerUpItem : AbstractFieldItem
     {
-        public InstantStagePowerItem(float x, float y) : base(x, y)
+        public InstantStagePowerUpItem(float x, float y) : base(x, y)
         {
 
         }
 
+
+
     }
 
-    public class InstantStageDefenceItem : AbstractStageItem
+    public class InstantStageDefenceItem : AbstractFieldItem
     {
         public InstantStageDefenceItem(float x, float y) : base(x, y)
         {
@@ -34,7 +48,7 @@ namespace OpenGSServer
     }
 
 
-    public class InstantStageGranadeItem : AbstractStageItem
+    public class InstantStageGranadeItem : AbstractFieldItem
     {
         public InstantStageGranadeItem(float x, float y) : base(x, y)
         {
@@ -43,7 +57,7 @@ namespace OpenGSServer
 
     }
 
-    public class InstantFlameThrower : AbstractStageItem
+    public class InstantFlameThrower : AbstractFieldItem
     {
         public InstantFlameThrower(float x, float y) : base(x, y)
         {

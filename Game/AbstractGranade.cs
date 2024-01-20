@@ -125,12 +125,12 @@ namespace OpenGSServer
         int damage = 0;
         int explosionDamage = 0;
 
-        public int StoppingPower { get => stoppingPower; set => stoppingPower = value; }
-        public int Angle { get => angle; set => angle = value; }
-        public int Speed { get => speed; set => speed = value; }
-        public int ExplosionDamage { get => explosionDamage; set => explosionDamage = value; }
-        public int Damage { get => damage; set => damage = value; }
-
+        public int StoppingPower { get; }
+        public int Angle { get; }
+        public int Speed { get; set; }
+        public int ExplosionDamage { get; set; }
+        public int Damage { get; set; }
+        public string ownerId { get; set; }
         protected AbstractGrenade(float x,float y):base(x,y)
         {
 

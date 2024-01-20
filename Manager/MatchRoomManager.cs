@@ -29,10 +29,6 @@ namespace OpenGSServer
 
     public static MatchRoomManager Instance { get; } = new();
 
-    public static MatchRoomManager GetInstance()
-    {
-        return Instance;
-    }
 
     private void IncreaseRoomCounter()
     {
@@ -161,6 +157,9 @@ namespace OpenGSServer
         if (matchRooms.ContainsKey(id.ToString()))
         {
             var room = matchRooms[id.ToString()];
+            //var player
+                //room.AddNewPlayer()
+            
 
 
 

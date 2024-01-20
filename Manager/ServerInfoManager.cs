@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Newtonsoft.Json.Linq;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -19,6 +20,14 @@ namespace OpenGSServer
             Console.WriteLine(asm.GetName());
 
 
+        }
+
+        public JObject ToJson()
+        {
+            var result=new JObject();
+
+
+            return result;
         }
 
 

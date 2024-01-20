@@ -3,27 +3,33 @@ using System.Collections.Generic;
 using System.Text;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-
+using OpenGSServer.Utility;
 
 namespace OpenGSServer
 {
-
+    class GameSceneUpdateInfo
+    {
+        public GameSceneUpdateInfo(Time beforeTime,Time currentTime)
+        {
+            
+        }
+    }
 
     public class GameScene
     {
         private List<AbstractGameObject> objects = new();
 
-        void AddBullet(BulletObject bullet)
+        void AddBullet(BulletGameObject bullet)
         {
             objects.Add(bullet);
         }
 
-        void AddCharacter(Character character)
+        void AddPlayerCharacter(PlayerGameObject character)
         {
             objects.Add(character);
         }
 
-        void AddFieldItem(FieldItem item)
+        void AddFieldItem(AbstractFieldItem item)
         {
             objects.Add(item);
         }
@@ -44,7 +50,7 @@ namespace OpenGSServer
             foreach (var obj in objects)
             {
 
-                obj.update();
+                obj.Update();
 
 
             }

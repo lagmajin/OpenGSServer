@@ -336,7 +336,7 @@ namespace OpenGSServer
 
 
 
-            var matchRoomManager = MatchRoomManager.GetInstance();
+            var matchRoomManager = MatchRoomManager.Instance;
 
             var rooms = matchRoomManager.AllRooms();
 

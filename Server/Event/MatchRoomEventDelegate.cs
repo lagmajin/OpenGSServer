@@ -19,17 +19,20 @@ namespace OpenGSServer
 
         public void ChangeRoomOwnerRequest(in ClientSession session, in IDictionary<string, JToken> dic)
         {
+            var currentOwnerId = dic.GetValueString("currentOwnerId");
+            var newOwnerId = dic.GetValueString("newOwnerId");
+
+            
 
 
         }
 
-        public void ChangeRoomOwnerRequest()
+        public void QuitRoom(in ClientSession session, in IDictionary<string, JToken> dic)
         {
+            var waitRoom=WaitRoomManager.Instance;
+            var matchRoom=MatchRoomManager.Instance;
 
-        }
 
-        public void QuitRoom()
-        {
 
         }
 

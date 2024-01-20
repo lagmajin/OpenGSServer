@@ -1,4 +1,5 @@
-﻿using System;
+﻿using OpenGSCore;
+using System;
 using System.Collections.Generic;
 using System.Text;
 
@@ -9,19 +10,36 @@ namespace OpenGSServer
         public static AbstractGameObject CreateFieldItem(float x,float y)
         {
 
-            var result = new FieldItem(x,y);
-
-            return result;
-        }
-
-        public static BulletGameObject CreateBulletGameObject(float x,float y)
-        {
-
+            //var result = ;
 
             return null;
         }
 
+        public static AbstractBullet MakeBullet(in Guid id, EBulletType type)
+        {
+            AbstractBullet result = null;
+
+            switch (type)
+            {
+
+                case EBulletType.Normal:
+
+                    break;
+                case EBulletType.Poison:
+                    break;
+
+                    break;
+                    //case 
+            }
+
+
+            return result;
+        }
+
+
     }
+
+}
 
 
     

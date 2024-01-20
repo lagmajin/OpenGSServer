@@ -11,87 +11,22 @@ namespace OpenGSServer
     {
         public static void ShotFromPlayer(MatchRUdpSession session,in IDictionary<string, JToken> dic)
         {
-            string bulletType;
-
-            string roomID;
-
             string playerID;
 
-            if(dic.TryGetValue("BulletType",out var token))
-            {
+            var bulletType = dic.GetValueString("BulletType");
+            var roomId = dic.GetValueString("GameRoomID");
+            var frame = dic.GetValueString("Frame");
 
-                return;
+            
+ 
 
-                 
-            }
-            else
-            {
-
-            }
-
-            if(dic.TryGetValue("GameRoomID",out var roomIdToken))
-            {
-
-            }
-            else
-            {
-
-            }
-
-            if(dic.TryGetValue("Frame",out var frameToken))
-            {
-                return;
-            }
-            else
-            {
-
-            }
 
 
         }
 
         public static void RecieveGrenadeFromPlayer(MatchRUdpSession session,in IDictionary<string, JToken> dic)
         {
-            //eGrenadeType type;
 
-            string grenadeType;
-
-            string roomID;
-
-            string playerID;
-
-
-
-            if(dic.TryGetValue("GrenadeType",out var bulletToken))
-            {
-
-
-                
-            }
-            else
-            {
-
-            }
-
-            if(dic.TryGetValue("GameRoomID",out var roomIdToken))
-            {
-
-            }
-            else
-            {
-
-            }
-
-            if(dic.TryGetValue("",out var r))
-            {
-
-            }
-            else
-            {
-
-            }
-
-        
 
 
 
@@ -100,13 +35,16 @@ namespace OpenGSServer
 
         }
 
-        public static void UseInstanceItem()
+        public static void UseInstanceItem(MatchRUdpSession session, in IDictionary<string, JToken> dic)
         {
-            string instanceItemType;
+            string instanceItemType=dic.GetValueString("InstantItemType"); ;
 
-            string roomID;
+            string roomID= dic.GetValueString("RoomID");
 
-            string playerID;
+            string playerID=dic.GetValueString("PlayerID"); 
+
+
+
         }
 
     }
