@@ -92,6 +92,14 @@ namespace OpenGSServer
         }
 
 
+        public void SendErrorMessage(string errorType,string msg)
+        {
+            var json = new JObject();
+
+            json["MessageType"] = "";
+            json["Message"] = msg;
+            SendAsyncJsonWithTimeStamp(json);
+        }
 
 
         protected override void OnConnected()
@@ -293,17 +301,16 @@ namespace OpenGSServer
                 LobbyEventDelegate.EnterRoomRequest(this, dic);
             }
 
+            if("CloseWaitRoomReqauest"==messageType)
+            {
+
+            }
+
 
             if ("ExitRoomRequest" == messageType)
             {
-                var playerID = json["PlayerID"].ToString();
-                var roomID = json["RoomID"].ToString();
-                if (string.IsNullOrEmpty(playerID))
-                {
 
-                }
-
-                WaitRoomEventDelegate.ExitRoomRequest(this);
+                WaitRoomEventDelegate.ExitRoomRequest(this,dic);
 
             }
 

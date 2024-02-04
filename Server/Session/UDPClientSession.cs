@@ -28,5 +28,11 @@ namespace OpenGSServer
             peer_.Send(writer,DeliveryMethod.ReliableOrdered);
 
         }
+
+        public void SendErrorMessage(string errorMsg)
+        {
+
+        }
+
     }
 }

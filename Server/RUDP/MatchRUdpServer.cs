@@ -74,6 +74,16 @@ namespace OpenGSServer
 
         }
 
+        public void SendMessageToPlayer(in string id,JObject json)
+        {
+            if(players.TryGetValue(id, out var player))
+            {
+                var writer = new NetDataWriter();
+
+            }
+
+        }
+
         public void PolingEvent()
         {
             if (server!=null)

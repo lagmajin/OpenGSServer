@@ -7,7 +7,7 @@ namespace OpenGSServer
     public abstract class InstantItem
     {
 
-        abstract public void Use();
+        public abstract void  Use();
     }
 
     public class PowerGranadePack : InstantItem

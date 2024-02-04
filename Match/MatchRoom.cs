@@ -27,7 +27,7 @@ namespace OpenGSServer
 
     }
 
-
+    //#bookmark
     public partial class MatchRoom : AbstractGameRoom, IMatchRoom,IObservable<MatchResult>, IDisposable
     {
 
@@ -105,16 +105,6 @@ namespace OpenGSServer
             return false;
         }
 
-
-
-
-
-
-
-
-
-
-
         public void AddNewPlayer(PlayerInfo info)
         {
 
@@ -131,7 +121,7 @@ namespace OpenGSServer
 
         }
 
-        public void AddNewPlayers()
+        public void AddNewPlayers(List<PlayerInfo> list)
         {
 
         }
@@ -143,13 +133,6 @@ namespace OpenGSServer
             {
                 GameScene.UpdateFrame();
             }
-
-            
-
-
-
-
-
 
         }
 
@@ -217,8 +200,6 @@ namespace OpenGSServer
         {
 
         }
-
-
 
         public JObject ToJson()
         {

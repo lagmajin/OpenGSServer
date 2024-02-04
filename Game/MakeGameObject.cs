@@ -7,7 +7,7 @@ namespace OpenGSServer
 {
     public static class MakeGameObject
     {
-        public static AbstractGameObject CreateFieldItem(float x,float y)
+        public static AbstractGameObject MakeFieldItem(float x,float y)
         {
 
             //var result = ;
@@ -43,4 +43,4 @@ namespace OpenGSServer
 
 
     
-}
+

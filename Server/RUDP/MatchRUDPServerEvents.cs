@@ -19,7 +19,8 @@ namespace OpenGSServer
         }
 
         void OnConnect(NetPeer peer)
-        {ConsoleWrite.WriteMessage("Peer connected",ConsoleColor.Green);
+        {
+            ConsoleWrite.WriteMessage("Peer connected",ConsoleColor.Green);
             sessions.Add(new MatchRUdpSession(peer));
             
             
@@ -34,7 +35,13 @@ namespace OpenGSServer
             writer.Put(str);    
             peer.Send(writer, DeliveryMethod.ReliableOrdered);
         }
+        private void OnDisConnected(NetPeer peer, DisconnectInfo info)
+        {
+            ConsoleWrite.WriteMessage("Peer disconnected", ConsoleColor.Red);
 
+            
+
+        }
         void OnDisConnected()
         {
 
@@ -46,11 +53,6 @@ namespace OpenGSServer
         }
 
 
-        private void OnDisConnected(NetPeer peer, DisconnectInfo info)
-        {
-            ConsoleWrite.WriteMessage("Peer disconnected",ConsoleColor.Red);
 
-
-        }
     }
 }

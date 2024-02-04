@@ -12,10 +12,16 @@ namespace OpenGSServer
     {
         public static void ChangePlayerSettting(in ClientSession session, IDictionary<string, JToken> dic)
         {
-            string? playerId = "";
-            string playerCharacter = "";
+            string? playerId = dic.GetStringOrNull("PlayerId");
 
-            playerCharacter=dic.GetValueOrDefaultString("PlayerCharacter", "misty");
+            if(playerId == null) { return; }
+
+            
+
+            string playerCharacter = dic.GetStringOrNull("PlayerCharacter");
+
+
+
 
             if(dic.TryGetValue("EquipInstantItems",out var instantItemToken))
             {
@@ -37,8 +43,8 @@ namespace OpenGSServer
 
         public static void ChangeRoomSetting(in ClientSession session,IDictionary<string, JToken> dic)
         {
-            string roomId;
-            string roomOwnerId;
+            string? roomId;
+            string? roomOwnerId;
 
 
 
@@ -121,11 +127,27 @@ namespace OpenGSServer
 
         public static void CloseRoomRequest(in ClientSession session,IDictionary<string, JToken> dic)
         {
+            string? roomId = dic.GetStringOrNull("RoomId");
+            
+            if(roomId==null)
+            {
+
+            }
+
 
         }
 
-        public static void ExitRoomRequest(in ClientSession session)
+        public static void ExitRoomRequest(in ClientSession session, IDictionary<string, JToken> dic)
         {
+            string? roomId = dic.GetStringOrNull("RoomId");
+
+            if(roomId==null)
+            {
+
+            }
+
+            WaitRoomManager.Instance().FindWaitRoom(roomId);
+
 
         }
 

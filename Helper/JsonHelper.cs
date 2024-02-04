@@ -41,6 +41,19 @@ namespace OpenGSServer
             return result;
         }
 
+        public static string GetValueOrNull(this IDictionary<string, JToken?> dic, string name)
+        {
+            if (dic.TryGetValue(name, out var token))
+            {
+                var temp = token.ToString();
+
+                return temp;
+
+            }
+
+
+            return null;
+        }
         
         public static int GetValueDefaultInt(this IDictionary<string, JToken?> dic, string name, int defalut)
         {
