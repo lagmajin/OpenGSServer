@@ -18,20 +18,31 @@ namespace OpenGSServer
 
             if(type!=null)
             {
-                if(type=="Shot")
+
+                var id= json.GetStringOrNull("PlayerID");
+
+                if(id!=null)
                 {
-                    //ShotFromPlayer()
+                    if (type == "Shot")
+                    {
+                        //ShotFromPlayer()
+                    }
+
+                    if (type == "Grenade")
+                    {
+
+                    }
+
+                    if (type == "InstantItem")
+                    {
+
+                    }
                 }
+ 
 
-                if(type== "Grenade")
-                {
-
-                }
-
-                if(type=="InstantItem")
-                {
-
-                }
+            }
+            else
+            {
 
             }
 
