@@ -16,7 +16,7 @@ namespace OpenGSServer
 
         private NetManager server = null;
 
-        private Dictionary<string, NetPeer> players = new();
+        
         CancellationTokenSource tokenSource = new CancellationTokenSource();
         public MatchRUdpServer()
         {
@@ -36,7 +36,7 @@ namespace OpenGSServer
             listener.PeerConnectedEvent += OnConnect;
 
             listener.PeerDisconnectedEvent += OnDisConnected;
-
+            listener.NetworkReceiveEvent += OnNetworkReceive;
 
 
             server = new NetManager(listener);

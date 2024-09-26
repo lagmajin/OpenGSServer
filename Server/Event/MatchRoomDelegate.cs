@@ -5,10 +5,38 @@ using System.Runtime.InteropServices;
 using Newtonsoft.Json.Linq;
 using OpenGSCore;
 
+
 namespace OpenGSServer
 {
-    public class MatchRoomDelegate
+
+
+    public static class MatchRoomDelegate
     {
+        public static void ParseEvent(JObject json)
+        {
+            var type = json.GetStringOrNull("MessageType");
+
+            if(type!=null)
+            {
+                if(type=="Shot")
+                {
+                    //ShotFromPlayer()
+                }
+
+                if(type== "Grenade")
+                {
+
+                }
+
+                if(type=="InstantItem")
+                {
+
+                }
+
+            }
+
+        }
+
         public static void ShotFromPlayer(MatchRUdpSession session,in IDictionary<string, JToken> dic)
         {
             string playerID;

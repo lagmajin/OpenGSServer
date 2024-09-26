@@ -2,6 +2,7 @@
 using LiteNetLib;
 using LiteNetLib.Utils;
 using Newtonsoft.Json.Linq;
+using OpenGSServer;
 
 namespace OpenGSServer
 {
@@ -20,12 +21,12 @@ namespace OpenGSServer
 
         public void SendJson(JObject json)
         {
-            var str=json.ToString();
+            var str = json.ToString();
 
             var writer = new NetDataWriter();
-            
+
             writer.Put(str);
-            peer_.Send(writer,DeliveryMethod.ReliableOrdered);
+            peer_.Send(writer, DeliveryMethod.ReliableOrdered);
 
         }
 

@@ -98,7 +98,7 @@ namespace OpenGSServer
                 return false;
             }
 
-            //var currentOwnerID=owner
+            
 
 
 
