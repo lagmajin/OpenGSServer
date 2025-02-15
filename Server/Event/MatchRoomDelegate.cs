@@ -35,6 +35,7 @@ namespace OpenGSServer
 
                     if (type == "InstantItem")
                     {
+                        var itemNum = json.GetValueDefaultInt("InstantItemNum",0);
 
                     }
                 }
@@ -48,43 +49,12 @@ namespace OpenGSServer
 
         }
 
-        public static void ShotFromPlayer(MatchRUdpSession session,in IDictionary<string, JToken> dic)
+        public static void InstantItem(PlayerID id,int num)
         {
-            string playerID;
-
-            var bulletType = dic.GetValueString("BulletType");
-            var roomId = dic.GetValueString("GameRoomID");
-            var frame = dic.GetValueString("Frame");
-
-            
- 
-
 
 
         }
 
-        public static void RecieveGrenadeFromPlayer(MatchRUdpSession session,in IDictionary<string, JToken> dic)
-        {
-
-
-
-
-
-
-
-        }
-
-        public static void UseInstanceItem(MatchRUdpSession session, in IDictionary<string, JToken> dic)
-        {
-            string instanceItemType=dic.GetValueString("InstantItemType"); ;
-
-            string roomID= dic.GetValueString("RoomID");
-
-            string playerID=dic.GetValueString("PlayerID"); 
-
-
-
-        }
 
     }
 }

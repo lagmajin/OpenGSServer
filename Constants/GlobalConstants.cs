@@ -9,6 +9,7 @@ namespace OpenGSServer
     {
         static string MessageType = "MessageType";
         static string PlayerID = "PlayerID";
+        static string InstantItemNum = "InstantItemNum";
     }
 
    

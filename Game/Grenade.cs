@@ -19,7 +19,7 @@ namespace OpenGSServer
 
         public override void Hit()
         {
-            throw new NotImplementedException();
+            //throw new NotImplementedException();
         }
     }
 

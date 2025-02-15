@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net7.0</TargetFramework>
+    <TargetFramework>net8.0</TargetFramework>
     <ApplicationIcon />
     <StartupObject>OpenGSServer.Program</StartupObject>
     <RuntimeIdentifier>win10-x64</RuntimeIdentifier>
@@ -11,6 +11,7 @@
     <Nullable>warnings</Nullable>
     <AutoGenerateBindingRedirects>false</AutoGenerateBindingRedirects>
     <ServerGarbageCollection>true</ServerGarbageCollection>
+    <PlatformTarget>AnyCPU</PlatformTarget>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
@@ -18,6 +19,10 @@
     <NoWarn>1701;1702;1812;1822;1108;0219;1801;1812;CA1303;CA1823;CA1822;CA1801;CS0162;CS0414;CS0169</NoWarn>
     <WarningLevel>0</WarningLevel>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="Constants\ItemConstants.cs" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="CommandLineParser" Version="2.9.1" />
@@ -38,6 +43,10 @@
     <Folder Include="Server\TCP\" />
     <Folder Include="WebAPI\" />
     <Folder Include="Script\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Constants\ItemConstants.cs" />
   </ItemGroup>
 
   <ItemGroup>
