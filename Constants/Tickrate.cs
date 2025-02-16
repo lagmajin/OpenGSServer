@@ -8,10 +8,10 @@ namespace OpenGSServer
 {
     public static class Tickrate
     {
-        public static readonly int tickrate10 = 100;
-        public static readonly int tickrate25 = 40;
-        public static readonly int tickrate50 = 20;
-        public static readonly int tickrate100 =10;
+        public const int tickrate10 = 100;
+        public const int tickrate25 = 40;
+        public const int tickrate50 = 20;
+        public const int tickrate100 =10;
 
         public static int CalcTickrate()
         {

@@ -196,7 +196,7 @@ namespace OpenGSServer
 
         }
 
-         void OnMatchFinished()
+        void OnMatchFinished()
         {
 
         }
