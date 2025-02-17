@@ -49,7 +49,8 @@ namespace OpenGSServer
 
             var lobbyManager = LobbyServerManagerV2.Instance;
 
-            
+
+            //var chat = Chat("","");
 
             //LobbyServerManagerV2
 
