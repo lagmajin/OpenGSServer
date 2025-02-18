@@ -19,12 +19,14 @@ namespace OpenGSServer
         public MatchRoom room;
     }
 
-    public class MatchRoomManager:IObserver<MatchResult>
+    public class MatchRoomManager:IMatchSubscriber
     {
 
     private Dictionary<string, MatchRoom> matchRooms = new Dictionary<string, MatchRoom>();
 
     private int roomNumberCount = 0;
+
+    public readonly MatchRoomEventBus roomEventBus = new MatchRoomEventBus();
 
 
     public static MatchRoomManager Instance { get; } = new();
@@ -69,8 +71,11 @@ namespace OpenGSServer
         var matchRule = new DeathMatchRule();
 
 
+        var matchRoomInstance=    MatchRoomManager.Instance;
 
-        var matchRoom = new MatchRoom(roomNumberCount, roomName, ownerID, matchRule);
+
+
+        var matchRoom = new MatchRoom(roomNumberCount, roomName, ownerID, matchRule,Instance.roomEventBus);
 
         matchRooms.Add(matchRoom.Id, matchRoom);
 
@@ -91,7 +96,9 @@ namespace OpenGSServer
         var matchRule = new TDMMatchRule();
         IncreaseRoomCounter();
 
-        var matchRoom = new MatchRoom(0, roomName, ownerID, matchRule);
+        var matchRoomInstance = MatchRoomManager.Instance;
+
+        var matchRoom = new MatchRoom(0, roomName, ownerID, matchRule, Instance.roomEventBus);
 
         //matchRoom.Subscribe(this);
 
@@ -292,63 +299,10 @@ namespace OpenGSServer
         return null;
     }
 
-        public void OnCompleted()
-        {
-           
-        }
 
    
 
-        public void OnNext(EMatchRoomEventType value)
-        {
-            switch (value)
-            {
-                case EMatchRoomEventType.Started:
-                    
-                    
-                    break;
-
-                case EMatchRoomEventType.Ended:
-                    OnMatchEnd();
-
-                    break;
-
-            }
 
 
-        }
-
-
-        public void OnError(Exception error)
-        {
-            throw new NotImplementedException();
-        }
-
-        private void OnMatchStarted()
-        {
-
-        }
-
-        private void OnMatchEnd()
-        {
-
-        }
-
-        public void OnNext(MatchResult value)
-        {
-            switch (value.type)
-            {
-                case EMatchRoomEventType.Started:
-
-
-                    break;
-
-                case EMatchRoomEventType.Ended:
-                    OnMatchEnd();
-
-                    break;
-
-            }
-        }
     }
 }

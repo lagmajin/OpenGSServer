@@ -31,6 +31,8 @@ namespace OpenGSServer
     public partial class MatchRoom : AbstractGameRoom, IMatchRoom,IObservable<MatchResult>, IDisposable
     {
 
+        private readonly MatchRoomEventBus eventBus;
+
         class Unsubscriber : IDisposable
         {
             private List<IObserver<MatchResult>> m_observers;
@@ -80,10 +82,14 @@ namespace OpenGSServer
 
 
         private Stopwatch sw = new();
-        public MatchRoom(int roomNumber, in string roomName, in string roomOwnerId, in AbstractMatchRule rule) : base(roomNumber, roomOwnerId)
+
+        private HighPrecisionGameTimer timer;
+        public MatchRoom(int roomNumber, in string roomName, in string roomOwnerId, in AbstractMatchRule rule, MatchRoomEventBus bus) : base(roomNumber, roomOwnerId)
         {
 
+            eventBus = bus;
 
+            //eventBus.PublishGameStart();
 
             //ConsoleWrite.WriteMessage("Match Room Name:" + "" + "Capacity:" + "Room ID:" + id.ToString() + "GameMode:", ConsoleColor.Yellow);
         }
@@ -146,31 +152,43 @@ namespace OpenGSServer
                 //setting.MatchTime;
 
             }
-            
-            
+
+            var timer = new HighPrecisionGameTimer(100);
+
+            timer.OnTick += () => GameUpdate();
 
             Playing = true;
 
+            eventBus.PublishGameStart();
+
+
+
+            /*
             foreach (var sub in matchSubscriber)
             {
                 MatchResult result = new();
                 result.type = EMatchRoomEventType.Started;
 
 
-                sub.OnNext(result);
+                //sub.OnNext(result);
 
             }
 
-            OnMatchStarted();
-
+            //OnMatchStarted();
+            */
         }
 
         public void Finish()
         {
 
-
+            timer.Stop();
 
             Playing = false;
+
+
+            eventBus.PublishGameEnd();
+
+            /*
 
             foreach (var s in matchSubscriber)
             {
@@ -179,13 +197,13 @@ namespace OpenGSServer
                 result.type = EMatchRoomEventType.Ended;
                 result.room = this;
 
-                s.OnNext(result);
+                //s.OnNext(result);
 
 
 
             }
-
-            OnMatchFinished();
+            */
+            //OnMatchFinished();
 
         }
 

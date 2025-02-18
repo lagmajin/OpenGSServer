@@ -9,6 +9,11 @@ using System.Threading.Tasks;
 
 using System.Timers;
 
+using Microsoft.Extensions.DependencyInjection;
+
+
+
+
 namespace OpenGSServer
 {
 
