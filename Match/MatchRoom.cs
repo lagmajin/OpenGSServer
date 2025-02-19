@@ -72,16 +72,34 @@ namespace OpenGSServer
         private HighPrecisionGameTimer timer;
         
         private IMatchLogic logic { get; set; }
-        public MatchRoom(int roomNumber, in string roomName, in string roomOwnerId, in AbstractMatchRule rule, MatchRoomEventBus bus) : base(roomNumber, roomOwnerId)
+        public MatchRoom(int roomNumber, in string roomName, in string roomOwnerId,AbstractMatchSetting setting, MatchRoomEventBus bus) : base(roomNumber, roomOwnerId)
         {
-
+            
+            Setting = setting;  
+            
             eventBus = bus;
 
-            logic = GameModeFactory.CreateGameMode(EGameMode.DeathMatch);
+            switch (setting.Mode)
+            {
+                case EGameMode.DeathMatch:
+                    if (setting is DeathMatchSetting deathMatchSetting)
+                    {
+                        
+                    }
 
-            //eventBus.PublishGameStart();
+                    break;
+                    
+            case EGameMode.TeamDeathMatch:
 
-            //ConsoleWrite.WriteMessage("Match Room Name:" + "" + "Capacity:" + "Room ID:" + id.ToString() + "GameMode:", ConsoleColor.Yellow);
+                    break;
+                    
+         
+            }
+            
+            
+
+            //setting.Mode
+
         }
 
 

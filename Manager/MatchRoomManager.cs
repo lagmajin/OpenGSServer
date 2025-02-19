@@ -64,6 +64,19 @@ namespace OpenGSServer
         return rooms;
     }
 
+    public CreateNewRoomResult CreateNewRoom(in string roomName, in string ownerID,AbstractMatchSetting setting)
+    {
+        
+        
+        MatchRoomFactory.CreateMatchRoom(0,roomName, ownerID,setting);
+        
+        
+        var createNewRoomResult =
+            new CreateNewRoomResult(eCreateNewRoomResult.Successful, ECreateNewRoomReason.NoReason);
+
+        return createNewRoomResult;
+    }
+
     public CreateNewRoomResult CreateNewDeathMatchRoom(in string roomName, in string ownerID, int capacity = 10,
         bool teamBalance = true)
     {
@@ -77,11 +90,11 @@ namespace OpenGSServer
 
         var bus = new MatchRoomEventBus();
 
-        var matchRoom = new MatchRoom(roomNumberCount, roomName, ownerID, matchRule,bus);
+        //var matchRoom = new MatchRoom(roomNumberCount, roomName, ownerID, matchRule,bus);
 
-        matchRooms.Add(matchRoom.Id, matchRoom);
+        //matchRooms.Add(matchRoom.Id, matchRoom);
 
-        IncreaseRoomCounter();
+        //IncreaseRoomCounter();
 
 
         var createNewRoomResult =
@@ -95,18 +108,18 @@ namespace OpenGSServer
     {
         var tdmMatchSetting = new TDMMatchSetting();
 
-        var matchRule = new TDMMatchRule();
+        //var matchRule = new TDMMatchRule();
         IncreaseRoomCounter();
 
         var matchRoomInstance = MatchRoomManager.Instance;
-        var bus = new MatchRoomEventBus();
-        var matchRoom = new MatchRoom(0, roomName, ownerID, matchRule, bus);
+        //var bus = new MatchRoomEventBus();
+        //var matchRoom = new MatchRoom(0, roomName, ownerID, matchRule, bus);
 
         //matchRoom.Subscribe(this);
 
 
 
-        matchRooms.Add(matchRoom.Id, matchRoom);
+       // matchRooms.Add(matchRoom.Id, matchRoom);
 
         //var tdmMatchRule = new TDMMatchRule();
 
