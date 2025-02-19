@@ -51,7 +51,10 @@ namespace OpenGSServer
         // ゲーム終了イベントを発行
         public void PublishGameEnd()
         {
+       
             //Publish("GameEnd", null);
         }
+
+       
     }
 }

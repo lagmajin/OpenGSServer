@@ -4,6 +4,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Net.Sockets;
 using System.Text.RegularExpressions;
 
 
@@ -28,30 +29,13 @@ namespace OpenGSServer
     }
 
     //#bookmark
-    public partial class MatchRoom : AbstractGameRoom, IMatchRoom,IObservable<MatchResult>, IDisposable
+    public partial class MatchRoom : AbstractGameRoom, IMatchRoom
     {
 
         private readonly MatchRoomEventBus eventBus;
 
-        class Unsubscriber : IDisposable
-        {
-            private List<IObserver<MatchResult>> m_observers;
-            
-            private IObserver<MatchResult> m_observer;
 
-            public Unsubscriber(List<IObserver<MatchResult>> observers, IObserver<MatchResult> observer)
-            {
-                m_observers = observers;
-                m_observer = observer;
-            }
-            public void Dispose()
-            {
-                m_observers.Remove(m_observer);
-            }
-        }
-
-
-        public List<IObserver<MatchResult>> matchSubscriber = new();
+        //public List<IObserver<MatchResult>> matchSubscriber = new();
 
 
         AbstractMatchRule? rule;
@@ -79,6 +63,8 @@ namespace OpenGSServer
 
         public bool Playing { get; private set; } = false;
         public bool Finished { get; } = false;
+        
+        PlayerScore Score { get; set; } = new PlayerScore();
 
 
         private Stopwatch sw = new();
@@ -161,6 +147,7 @@ namespace OpenGSServer
 
             eventBus.PublishGameStart();
 
+            
 
 
             /*
@@ -188,6 +175,9 @@ namespace OpenGSServer
 
             eventBus.PublishGameEnd();
 
+            
+            
+            
             /*
 
             foreach (var s in matchSubscriber)
