@@ -85,7 +85,7 @@ using Newtonsoft.Json.Linq;
             json["Rooms"] = jArray;
 
 
-            Console.Write(json.ToString());
+            //Console.Write(json.ToString());
 
 
             AppDomain.CurrentDomain.ProcessExit += new EventHandler(CurrentDomain_ProcessExit);
@@ -142,14 +142,14 @@ using Newtonsoft.Json.Linq;
 
                     
                     //ConsoleWrite.WriteMessage("CPU"+System.Environment.,ConsoleColor.DarkYellow);
-                    ConsoleWrite.WriteMessage($"Cpu Archtecture:{Cpu.ArchtectureName()}", ConsoleColor.DarkYellow);
+                    ConsoleWrite.WriteMessage($"CPU Archtecture:{Cpu.ArchtectureName()}", ConsoleColor.DarkYellow);
                     ConsoleWrite.WriteMessage("Core Count:"+System.Environment.ProcessorCount,ConsoleColor.DarkYellow);
                     ConsoleWrite.WriteMessage("Memory:" +memoryMB +"(MB)", ConsoleColor.DarkYellow);
 
                     ConsoleWrite.WriteMessage("OS:"+System.Runtime.InteropServices.RuntimeInformation.OSDescription,ConsoleColor.DarkYellow);
                     ConsoleWrite.WriteMessage(".Net core version:"+System.Environment.Version,ConsoleColor.DarkYellow);
                     ConsoleWrite.WriteMessage("OpenGS Server Version:" + System.Environment.Version, ConsoleColor.DarkYellow);
-                    ConsoleWrite.WriteMessage("OpenGS game server initializing.....", ConsoleColor.Green);
+                    ConsoleWrite.WriteMessage("Initializing ....OpenGS game server", ConsoleColor.Green);
                     var accountDatabaseManager = AccountDatabaseManager.GetInstance();
 
                     accountDatabaseManager.Connect();

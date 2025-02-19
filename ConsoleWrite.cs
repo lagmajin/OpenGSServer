@@ -23,17 +23,28 @@ namespace OpenGSServer
 
         }
 
-        public static void WriteMessage(string message,System.ConsoleColor color=ConsoleColor.White,System.ConsoleColor bg=System.ConsoleColor.Black)
+        public static void WriteMessage(string message, 
+            System.ConsoleColor color = ConsoleColor.White, 
+            System.ConsoleColor bg = ConsoleColor.Black,
+            bool newLine = true) // newLine引数を追加
         {
             lock (_MessageLock)
             {
                 Console.ForegroundColor = color;
-                Console.BackgroundColor = ConsoleColor.Black;
-                Console.WriteLine(message);
+                Console.BackgroundColor = bg;
+
+                if (newLine)
+                {
+                    Console.WriteLine(message); // 改行あり
+                }
+                else
+                {
+                    Console.Write(message); // 改行なし
+                }
+
                 Console.ResetColor();
             }
         }
-
         public static void WriteMessage(string message,eMessageType type)
         {
             System.ConsoleColor color=ConsoleColor.White;
