@@ -192,6 +192,8 @@ namespace OpenGSServer
             eventBus.PublishGameEnd();
             
             
+            
+            
             Playing = false;
 
 

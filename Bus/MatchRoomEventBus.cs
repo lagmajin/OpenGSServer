@@ -29,6 +29,8 @@ namespace OpenGSServer
     {
 
     }
+    
+    
 
     public class MatchRoomEventBus : AbstractEventBus
     {
@@ -73,10 +75,18 @@ namespace OpenGSServer
             //Publish("GameEnd", null);
         }
 
+        public void PublishMatchResult(MatchResult result)
+        {
+            
+            
+        }
+
         public void PublishGameUpdateFromClient()
         {
             
         }
+        
+        
        
     }
 }

@@ -1,13 +1,11 @@
-﻿ using LiteDB;
+﻿
 using System;
 using System.Linq;
 using System.Threading;
 
-using System.CommandLine.Parser;
 using System.Diagnostics;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
- using OpenGSServer.Server;
 
 
  namespace OpenGSServer
@@ -108,10 +106,7 @@ using Newtonsoft.Json.Linq;
 
             if (args.Length > 0)
             {
-                while (args.Length >= 0)
-                {
 
-                }
 
             }
             else
