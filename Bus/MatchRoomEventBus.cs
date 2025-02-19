@@ -32,7 +32,7 @@ namespace OpenGSServer
 
     public class MatchRoomEventBus : AbstractEventBus
     {
-
+        private MatchRoom room;
         // ゲーム開始イベントを発行
 
         public MatchRoomEventBus()
@@ -55,6 +55,10 @@ namespace OpenGSServer
             //Publish("GameEnd", null);
         }
 
+        public void PublishGameUpdateFromClient()
+        {
+            
+        }
        
     }
 }

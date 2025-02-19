@@ -122,6 +122,10 @@ namespace OpenGSServer
 
         }
 
+        public void OnGameUpdateFromClient()
+        {
+            
+        }
         public override void GameUpdate()
         {
 

@@ -26,8 +26,9 @@ namespace OpenGSServer
 
     private int roomNumberCount = 0;
 
-    public readonly MatchRoomEventBus roomEventBus = new MatchRoomEventBus();
+    //public readonly MatchRoomEventBus roomEventBus = new MatchRoomEventBus();
 
+    public readonly Dictionary<string,MatchRoomEventBus> roomEventBuses = new Dictionary<string,MatchRoomEventBus>();
 
     public static MatchRoomManager Instance { get; } = new();
 
@@ -74,8 +75,9 @@ namespace OpenGSServer
         var matchRoomInstance=    MatchRoomManager.Instance;
 
 
+        var bus = new MatchRoomEventBus();
 
-        var matchRoom = new MatchRoom(roomNumberCount, roomName, ownerID, matchRule,Instance.roomEventBus);
+        var matchRoom = new MatchRoom(roomNumberCount, roomName, ownerID, matchRule,bus);
 
         matchRooms.Add(matchRoom.Id, matchRoom);
 
@@ -97,8 +99,8 @@ namespace OpenGSServer
         IncreaseRoomCounter();
 
         var matchRoomInstance = MatchRoomManager.Instance;
-
-        var matchRoom = new MatchRoom(0, roomName, ownerID, matchRule, Instance.roomEventBus);
+        var bus = new MatchRoomEventBus();
+        var matchRoom = new MatchRoom(0, roomName, ownerID, matchRule, bus);
 
         //matchRoom.Subscribe(this);
 
