@@ -7,14 +7,20 @@ namespace OpenGSServer
 
     public class MatchRoomFactory
     {
-        public static MatchRoom CreateMatchRoom(int roomNumber, string roomName, string ownerID, AbstractMatchSetting setting)
+        public static MatchRoom CreateMatchRoom(int roomNumber, string roomName, string ownerID, AbstractMatchSetting setting,MatchRoomManager manager)
         {
 
             
             var bus = new MatchRoomEventBus();
             
+            
          
-            return new MatchRoom(roomNumber, roomName, ownerID,setting,bus);
+            var room= new MatchRoom(roomNumber, roomName, ownerID,setting,bus);
+            
+            bus.setMatchRoom(room);
+            bus.setMatchRoomManager(manager);
+            
+            return room;
         }
         
         

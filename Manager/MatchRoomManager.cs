@@ -68,8 +68,9 @@ namespace OpenGSServer
     {
         
         
-        MatchRoomFactory.CreateMatchRoom(0,roomName, ownerID,setting);
+        var room=MatchRoomFactory.CreateMatchRoom(0,roomName, ownerID,setting,this);
         
+        matchRooms.Add(room.Id, room);
         
         var createNewRoomResult =
             new CreateNewRoomResult(eCreateNewRoomResult.Successful, ECreateNewRoomReason.NoReason);

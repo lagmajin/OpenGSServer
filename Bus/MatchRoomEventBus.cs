@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-
+using Antlr4.Runtime.Tree.Pattern;
 using OpenGSCore;
 
 namespace OpenGSServer
@@ -33,13 +33,31 @@ namespace OpenGSServer
     public class MatchRoomEventBus : AbstractEventBus
     {
         private MatchRoom room;
-        // ゲーム開始イベントを発行
-
+        private MatchRoomManager roomManager;
+        
         public MatchRoomEventBus()
         {
             Console.WriteLine("Match RoomEventBus");
 
         }
+
+        public void setMatchRoom(MatchRoom room)
+        {
+            this.room = room;
+        }
+
+        public void setMatchRoomManager(MatchRoomManager manager)
+        {
+            this.roomManager = manager;
+        }
+
+        public void setNetworkManager()
+        {
+            
+        }
+        
+        
+        
         public void PublishGameStart()
         {
             Console.WriteLine("GameStart");
