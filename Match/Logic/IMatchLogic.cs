@@ -6,10 +6,10 @@ namespace OpenGSServer
     public interface IMatchLogic
     {
         // マッチを開始する
-        void StartMatch(int matchId);
+        void StartMatch();
 
         // マッチを終了する
-        void EndMatch(int matchId);
+        void EndMatch();
 
         // プレイヤーをマッチに追加する
         void AddPlayerToMatch(int matchId, string playerName);
@@ -25,8 +25,9 @@ namespace OpenGSServer
     }
 public class SurvivalMode : IMatchLogic
 {
-    public void StartMatch(int matchId) { /* サバイバルモードのロジック */ }
-    public void EndMatch(int matchId) { /* サバイバルモードのロジック */ }
+    
+    public void StartMatch() { /* サバイバルモードのロジック */ }
+    public void EndMatch() { /* サバイバルモードのロジック */ }
     public void AddPlayerToMatch(int matchId, string playerName) { /* サバイバルモードのロジック */ }
     public void RemovePlayerFromMatch(int matchId, string playerName) { /* サバイバルモードのロジック */ }
     public string GetMatchStatus(int matchId) { return "Survival Mode"; }
@@ -36,8 +37,8 @@ public class SurvivalMode : IMatchLogic
 // デスマッチモード
 public class DeathMatchMode : IMatchLogic
 {
-    public void StartMatch(int matchId) { /* デスマッチモードのロジック */ }
-    public void EndMatch(int matchId) { /* デスマッチモードのロジック */ }
+    public void StartMatch() { /* デスマッチモードのロジック */ }
+    public void EndMatch() { /* デスマッチモードのロジック */ }
     public void AddPlayerToMatch(int matchId, string playerName) { /* デスマッチモードのロジック */ }
     public void RemovePlayerFromMatch(int matchId, string playerName) { /* デスマッチモードのロジック */ }
     public string GetMatchStatus(int matchId) { return "Death Match Mode"; }
@@ -47,8 +48,8 @@ public class DeathMatchMode : IMatchLogic
 // チームデスマッチモード
 public class TeamDeathMatchMode : IMatchLogic
 {
-    public void StartMatch(int matchId) { /* チームデスマッチモードのロジック */ }
-    public void EndMatch(int matchId) { /* チームデスマッチモードのロジック */ }
+    public void StartMatch() { /* チームデスマッチモードのロジック */ }
+    public void EndMatch() { /* チームデスマッチモードのロジック */ }
     public void AddPlayerToMatch(int matchId, string playerName) { /* チームデスマッチモードのロジック */ }
     public void RemovePlayerFromMatch(int matchId, string playerName) { /* チームデスマッチモードのロジック */ }
     public string GetMatchStatus(int matchId) { return "Team Death Match Mode"; }
@@ -58,8 +59,8 @@ public class TeamDeathMatchMode : IMatchLogic
 // キャプチャー・ザ・フラッグモード
 public class CaptureTheFlagMode : IMatchLogic
 {
-    public void StartMatch(int matchId) { /* キャプチャー・ザ・フラッグモードのロジック */ }
-    public void EndMatch(int matchId) { /* キャプチャー・ザ・フラッグモードのロジック */ }
+    public void StartMatch() { /* キャプチャー・ザ・フラッグモードのロジック */ }
+    public void EndMatch() { /* キャプチャー・ザ・フラッグモードのロジック */ }
     public void AddPlayerToMatch(int matchId, string playerName) { /* キャプチャー・ザ・フラッグモードのロジック */ }
     public void RemovePlayerFromMatch(int matchId, string playerName) { /* キャプチャー・ザ・フラッグモードのロジック */ }
     public string GetMatchStatus(int matchId) { return "Capture The Flag Mode"; }

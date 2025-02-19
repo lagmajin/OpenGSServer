@@ -70,10 +70,14 @@ namespace OpenGSServer
         private Stopwatch sw = new();
 
         private HighPrecisionGameTimer timer;
+        
+        private IMatchLogic logic { get; set; }
         public MatchRoom(int roomNumber, in string roomName, in string roomOwnerId, in AbstractMatchRule rule, MatchRoomEventBus bus) : base(roomNumber, roomOwnerId)
         {
 
             eventBus = bus;
+
+            logic = GameModeFactory.CreateGameMode(EGameMode.DeathMatch);
 
             //eventBus.PublishGameStart();
 
@@ -121,6 +125,8 @@ namespace OpenGSServer
         public override void GameUpdate()
         {
 
+            
+            
             if (!Finished)
             {
                 GameScene.UpdateFrame();
@@ -138,6 +144,8 @@ namespace OpenGSServer
                 //setting.MatchTime;
 
             }
+            
+            logic.StartMatch();
 
             var timer = new HighPrecisionGameTimer(100);
 
@@ -149,20 +157,7 @@ namespace OpenGSServer
 
             
 
-
-            /*
-            foreach (var sub in matchSubscriber)
-            {
-                MatchResult result = new();
-                result.type = EMatchRoomEventType.Started;
-
-
-                //sub.OnNext(result);
-
-            }
-
-            //OnMatchStarted();
-            */
+            
         }
 
         public void Finish()
@@ -170,45 +165,21 @@ namespace OpenGSServer
 
             timer.Stop();
 
+            logic.EndMatch();
+            
+            eventBus.PublishGameEnd();
+            
+            
             Playing = false;
 
 
-            eventBus.PublishGameEnd();
+            
 
             
             
-            
-            /*
-
-            foreach (var s in matchSubscriber)
-            {
-                MatchResult result = new();
-
-                result.type = EMatchRoomEventType.Ended;
-                result.room = this;
-
-                //s.OnNext(result);
-
-
-
-            }
-            */
-            //OnMatchFinished();
 
         }
-
-         void OnMatchStarted()
-        {
-
-
-
-        }
-
-        void OnMatchFinished()
-        {
-
-        }
-
+        
         public JObject ToJson()
         {
             var json = new JObject();
