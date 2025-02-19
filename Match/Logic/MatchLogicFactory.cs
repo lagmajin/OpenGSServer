@@ -1,6 +1,10 @@
-namespace OpenGSServer;
-
-public class MatchLogicFactory
+namespace OpenGSServer
 {
-    
+
+    public class MatchLogicFactory
+    {
+
+    }
+
+
 }
