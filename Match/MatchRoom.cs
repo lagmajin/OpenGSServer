@@ -229,13 +229,6 @@ namespace OpenGSServer
 
 
         }
-
-        public IDisposable Subscribe(IObserver<MatchResult> observer)
-        {
-   
-            matchSubscriber.Add(observer);
-
-            return new Unsubscriber(matchSubscriber, observer);
-        }
+        
     }
 }
