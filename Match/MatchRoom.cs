@@ -64,7 +64,7 @@ namespace OpenGSServer
         public bool Playing { get; private set; } = false;
         public bool Finished { get; } = false;
         
-        PlayerScore Score { get; set; } = new PlayerScore();
+        PlayerLifeTimeScore LifeTimeScore { get; set; } = new PlayerLifeTimeScore();
 
 
         private Stopwatch sw = new();
