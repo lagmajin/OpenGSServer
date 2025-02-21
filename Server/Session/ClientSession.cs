@@ -310,7 +310,7 @@ namespace OpenGSServer
             if ("ExitRoomRequest" == messageType)
             {
 
-                WaitRoomEventDelegate.ExitRoomRequest(this,dic);
+                WaitRoomEventHandler.ExitRoomRequest(this,dic);
 
             }
 

@@ -8,7 +8,7 @@ using Newtonsoft.Json.Linq;
 
 namespace OpenGSServer
 {
-    internal class WaitRoomEventDelegate
+    internal class WaitRoomEventHandler
     {
         public static void ChangePlayerSettting(in ClientSession session, IDictionary<string, JToken> dic)
         {

@@ -5,7 +5,7 @@ namespace OpenGSServer
 {
 
 
-    public class MatchRoomEventDelegate
+    public class MatchRoomEventHandler
     {
 
 
