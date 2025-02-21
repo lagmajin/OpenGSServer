@@ -26,7 +26,7 @@ namespace OpenGSServer
             _manager = manager;
 
 
-            ConsoleWrite.WriteMessage("LobbyServer initialized..." + "Port:" + port, ConsoleColor.Green);
+            ConsoleWrite.WriteMessage("[INFO]LobbyServer initialized..." + "Port:" + port, ConsoleColor.Green);
 
             
   

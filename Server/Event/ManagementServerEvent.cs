@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace OpenGSServer
 {
-    public static class ManagementServerDelegate
+    public static class ManagementServerEvent
     {
         public static void ProcessAdminLoginRequest()
         {

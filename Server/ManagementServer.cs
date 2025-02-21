@@ -15,7 +15,7 @@ namespace OpenGSServer
 
         public ManagementTcpServer(IPAddress address, int port,ManagementServer manager) : base(address, port)
         {
-            ConsoleWrite.WriteMessage("Management Server initialized..." + "Port:" + port, ConsoleColor.Green);
+            ConsoleWrite.WriteMessage("[INFO]Management Server initialized..." + "Port:" + port, ConsoleColor.Green);
         }
 
         protected override TcpSession CreateSession()

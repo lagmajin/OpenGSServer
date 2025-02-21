@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using Autofac;
 using static System.Net.Mime.MediaTypeNames;
 
 namespace OpenGSServer

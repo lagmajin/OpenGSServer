@@ -59,7 +59,7 @@ namespace OpenGSServer
 
                 var json=new JObject(JObject.FromObject(data));
 
-                MatchRoomDelegate.ParseEvent(json);
+                OldMatchRoomHandler.ParseEvent(json);
   
 
 

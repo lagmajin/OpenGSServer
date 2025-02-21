@@ -12,6 +12,7 @@
     <AutoGenerateBindingRedirects>false</AutoGenerateBindingRedirects>
     <ServerGarbageCollection>true</ServerGarbageCollection>
     <PlatformTarget>AnyCPU</PlatformTarget>
+    <PublishAot>True</PublishAot>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
@@ -46,6 +47,7 @@
     <Folder Include="Server\TCP\" />
     <Folder Include="WebAPI\" />
     <Folder Include="Script\" />
+    <Folder Include="Build\" />
   </ItemGroup>
 
   <ItemGroup>

@@ -35,9 +35,6 @@ namespace OpenGSServer
         private readonly MatchRoomEventBus eventBus;
 
 
-        //public List<IObserver<MatchResult>> matchSubscriber = new();
-
-
         AbstractMatchRule? rule;
 
 
@@ -64,7 +61,7 @@ namespace OpenGSServer
         public bool Playing { get; private set; } = false;
         public bool Finished { get; } = false;
         
-        PlayerLifeTimeScore LifeTimeScore { get; set; } = new PlayerLifeTimeScore();
+        //PlayerLifeTimeScore LifeTimeScore { get; set; } = new PlayerLifeTimeScore();
 
 
         private Stopwatch sw = new();
@@ -79,6 +76,8 @@ namespace OpenGSServer
             
             eventBus = bus;
 
+
+
             switch (setting.Mode)
             {
                 case EGameMode.DeathMatch:
@@ -89,7 +88,11 @@ namespace OpenGSServer
 
                     break;
                     
-            case EGameMode.TeamDeathMatch:
+                case EGameMode.TeamDeathMatch:
+                    if (setting is TDMMatchSetting teamDeathMatchSetting)
+                    {
+
+                    }
 
                     break;
                     

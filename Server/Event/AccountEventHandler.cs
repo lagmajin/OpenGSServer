@@ -7,7 +7,79 @@ using OpenGSCore;
 
 namespace OpenGSServer
 {
-    public static class AccountEventHandler
+    internal class AccountEventHandler
+    {
+        private static readonly int saltLenght=8;
+
+        public AccountEventHandler() { }
+
+        public static void CreateNewAccount(in ClientSession session, IDictionary<string, JToken> dic)
+        {
+        }
+
+        public static void Login(in ClientSession session, in IDictionary<string, JToken> dic)
+        {
+            string id;
+            string pass;
+
+            if (dic.ContainsKey("id"))
+            {
+                id = dic["id"].ToString();
+            }
+            else
+            {
+                return;
+            }
+
+            if (dic.ContainsKey("pass"))
+            {
+                pass = dic["pass"].ToString();
+            }
+            else
+            {
+                return;
+            }
+
+            var result = AccountManager.GetInstance().Login(id, pass);
+
+
+
+            ConsoleWrite.WriteMessage(result.ToString());
+
+            var json = result.ToJson();
+
+            json["YourIPAddress"] = session.ClientIpAddress();
+
+
+
+
+            session.SendAsyncJsonWithTimeStamp(json);
+
+
+            var encryptManager = EncryptManager.Instance;
+
+            var keyJson = new JObject();
+
+            keyJson["MessageType"] = "EncryptKey";
+            keyJson["RSAPublicKey"] = encryptManager.GetRSAPublicKey();
+
+
+            session.SendAsyncJsonWithTimeStamp(keyJson);
+
+
+
+
+
+        }
+
+        public  void RemoveAccount(ClientSession session, IDictionary<string, JToken> dic)
+        {
+
+        }
+    }
+
+
+    public static class OldAccountEventHandler
     {
         public static int saltLength = 8;
 

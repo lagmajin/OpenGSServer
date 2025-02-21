@@ -9,8 +9,56 @@ using OpenGSCore;
 namespace OpenGSServer
 {
 
+    public class IInGameMatchRoomHandler
+    {
 
-    public static class MatchRoomDelegate
+    }
+    internal class InGameMatchEventHandler:IInGameMatchRoomHandler
+    {
+        public InGameMatchEventHandler() { }
+
+        public void ParseEvent(JObject json)
+        {
+            var type = json.GetStringOrNull("MessageType");
+
+            if (type != null)
+            {
+
+                var id = json.GetStringOrNull("PlayerID");
+
+                if (id != null)
+                {
+                    if (type == "Shot")
+                    {
+                        //ShotFromPlayer()
+                    }
+
+                    if (type == "Grenade")
+                    {
+
+                    }
+
+                    if (type == "InstantItem")
+                    {
+                        var itemNum = json.GetValueDefaultInt("InstantItemNum", 0);
+
+                    }
+                }
+
+
+            }
+            else
+            {
+
+            }
+
+        }
+
+    }
+
+
+
+    public static class OldMatchRoomHandler
     {
         public static void ParseEvent(JObject json)
         {

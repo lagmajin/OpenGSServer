@@ -45,7 +45,7 @@ namespace OpenGSServer
 
             Task.Run(() => ServerUpdateTask(tokenSource.Token));
 
-            ConsoleWrite.WriteMessage("Match Server Online(RUDP)"+port.ToString());
+            ConsoleWrite.WriteMessage("[INFO]Match Server(RUDP) Started on Port:"+port.ToString());
 
         }
 
@@ -79,7 +79,9 @@ namespace OpenGSServer
             if(players.TryGetValue(id, out var player))
             {
                 var writer = new NetDataWriter();
+                writer.Put(json.ToString()); // JSON を文字列化して書き込む
 
+                player.Send(writer, DeliveryMethod.ReliableOrdered);
             }
 
         }
