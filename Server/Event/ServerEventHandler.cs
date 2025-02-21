@@ -5,7 +5,7 @@ using Newtonsoft.Json.Linq;
 
 namespace OpenGSServer
 {
-    public class ServerEventDelegate
+    public class ServerEventHandler
     {
         public static void ServerInfoRequest(ClientSession session, IDictionary<string, JToken> dic)
         {

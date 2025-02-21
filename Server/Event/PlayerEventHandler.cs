@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace OpenGSServer
 {
-    public static class PlayerDelegate
+    public static class PlayerEventHandler
     {
         public static  void UpdatePlayerRequest(in ClientSession session)
         {

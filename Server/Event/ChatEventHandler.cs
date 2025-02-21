@@ -4,7 +4,7 @@ using Newtonsoft.Json.Linq;
 
 namespace OpenGSServer
 {
-    internal class ChatEventDelegate
+    internal class ChatEventHandler
     {
 
         public static void ProcessOneOnOneChat(in ClientSession session, in IDictionary<string, JToken> dic)
@@ -47,7 +47,7 @@ namespace OpenGSServer
                 return;
             }
 
-            var lobbyManager = LobbyServerManagerV2.Instance;
+            //var lobbyManager = LobbyServerManagerV2.Instance;
 
 
             //var chat = Chat("","");

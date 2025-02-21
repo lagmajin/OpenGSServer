@@ -103,7 +103,7 @@ namespace OpenGSServer
 
 
 
-    public class MatchRUdpServerManager
+    public class MatchRUdpServerManager:IServerHost
     {
         public static MatchRUdpServerManager Instance { get; } = new();
 

@@ -1,6 +1,10 @@
-namespace OpenGSServer;
-
-public class PlayerScoreManager
+namespace OpenGSServer
 {
+    public class PlayerScoreManager
+    {
+    
+    }
+    
     
 }
+

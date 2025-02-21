@@ -7,6 +7,8 @@ using System.Diagnostics;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 
+using Autofac;
+
 
  namespace OpenGSServer
 {
@@ -52,7 +54,7 @@ using Newtonsoft.Json.Linq;
         static void Main(string[] args)
         {
 
-
+            /*
             var room = new JObject();
 
             room["RoomNumber"] = "001";
@@ -82,7 +84,7 @@ using Newtonsoft.Json.Linq;
 
             json["Rooms"] = jArray;
 
-
+            */
             //Console.Write(json.ToString());
 
 
@@ -150,19 +152,21 @@ using Newtonsoft.Json.Linq;
                     accountDatabaseManager.Connect();
 
 
+                    var builder = new ContainerBuilder();
+                    builder.RegisterType<LobbyServerManagerV2>().AsSelf().SingleInstance();
 
+                    builder.RegisterType<MatchRUdpServerManager>().AsSelf().SingleInstance();
+                    builder.RegisterType<ManagementServer>().AsSelf().SingleInstance();
 
+                    var container = builder.Build();
 
-                    var generalServerV2 = LobbyServerManagerV2.Instance;
+                    
 
-                    generalServerV2.Listen(50000);
+                    var lobbyServerV2 = container.Resolve<LobbyServerManagerV2>();
 
+   
 
-                    //var matchServerV2 = MatchServerV2.GetInstance();
-
-                    //matchServerV2.Listen(50010);
-
-                    var matchRUdpServer = MatchRUdpServerManager.Instance;
+                    var matchRUdpServer = container.Resolve<MatchRUdpServerManager>();
 
                     matchRUdpServer.Listen(63000);
 
@@ -344,7 +348,7 @@ using Newtonsoft.Json.Linq;
                                 ConsoleWrite.WriteMessage("Stop server");
 
 
-                                generalServerV2.Stop();
+                                //generalServerV2.Stop();
 
 
 
@@ -461,8 +465,8 @@ using Newtonsoft.Json.Linq;
 
                     }
 
-                    generalServerV2.Stop();
-                    matchRUdpServer.Stop();
+                    //generalServerV2.Stop();
+                   /matchRUdpServer.Stop();
                     managementServer.Stop();
 
                     MonitorTaskFlag = true;

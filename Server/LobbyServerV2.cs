@@ -90,7 +90,7 @@ namespace OpenGSServer
         }
     }
 
-    public class LobbyServerManagerV2 : IDisposable
+    public class LobbyServerManagerV2 : IDisposable,IServerHost
     {
         public static LobbyServerManagerV2 Instance { get; } = new();
         private LobbyTcpServer? server;
