@@ -144,7 +144,7 @@ namespace OpenGSServer
 
         private async void EventTask(CancellationToken token)
         {
-            ConsoleWrite.WriteMessage("Start RUdp Event Task",ConsoleColor.DarkGreen);
+            ConsoleWrite.WriteMessage("[INFO]Start RUdp Event Task",ConsoleColor.DarkGreen);
             while (true)
             {
                 if (token.IsCancellationRequested)

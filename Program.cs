@@ -146,7 +146,7 @@ using Autofac;
                     ConsoleWrite.WriteMessage("OS:" + System.Runtime.InteropServices.RuntimeInformation.OSDescription, ConsoleColor.DarkYellow);
                     ConsoleWrite.WriteMessage(".Net core version:" + System.Environment.Version, ConsoleColor.DarkYellow);
                     ConsoleWrite.WriteMessage("OpenGS Server Version:" + System.Environment.Version, ConsoleColor.DarkYellow);
-                    ConsoleWrite.WriteMessage("Initializing ....OpenGS game server", ConsoleColor.Green);
+                    ConsoleWrite.WriteMessage("[INFO]Initializing ....OpenGS game server", ConsoleColor.Green);
                     var accountDatabaseManager = AccountDatabaseManager.GetInstance();
 
                     accountDatabaseManager.Connect();
