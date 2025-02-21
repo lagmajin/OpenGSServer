@@ -9,7 +9,7 @@ using OpenGSCore;
 
 namespace OpenGSServer
 {
-    public static class LobbyEventDelegate
+    public static class LobbyEventHandler
     {
         public static void CreateNewWaitRoom(in ClientSession session, in IDictionary<string, JToken> dic)
         {

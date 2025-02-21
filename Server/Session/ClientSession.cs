@@ -273,7 +273,7 @@ namespace OpenGSServer
             if ("UpdateRoomRequest" == messageType)
             {
 
-                LobbyEventDelegate.UpdateRoom(this, dic);
+                LobbyEventHandler.UpdateRoom(this, dic);
 
             }
 
@@ -281,7 +281,7 @@ namespace OpenGSServer
             {
                 ConsoleWrite.WriteMessage("Create");
 
-                LobbyEventDelegate.CreateNewWaitRoom(this, dic);
+                LobbyEventHandler.CreateNewWaitRoom(this, dic);
 
 
 
@@ -291,14 +291,14 @@ namespace OpenGSServer
             {
                 ConsoleWrite.WriteMessage("QuickStart", ConsoleColor.Yellow);
 
-                LobbyEventDelegate.QuickStartRequest(this, dic);
+                LobbyEventHandler.QuickStartRequest(this, dic);
 
             }
 
             if ("EnterRoomRequest" == messageType)
             {
 
-                LobbyEventDelegate.EnterRoomRequest(this, dic);
+                LobbyEventHandler.EnterRoomRequest(this, dic);
             }
 
             if("CloseWaitRoomReqauest"==messageType)
