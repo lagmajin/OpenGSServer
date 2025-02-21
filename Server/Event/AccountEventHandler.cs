@@ -7,7 +7,7 @@ using OpenGSCore;
 
 namespace OpenGSServer
 {
-    public static class AccountEventDelegate
+    public static class AccountEventHandler
     {
         public static int saltLength = 8;
 
@@ -38,7 +38,7 @@ namespace OpenGSServer
             }
 
 
-            var salt = OpenGSCore.Hash.CreateSalt(8);
+            var salt = OpenGSCore.Hash.CreateSalt(saltLength);
 
             //var hashedPassword = OpenGSCore.Hash.CreateHashWithSalt(pass, salt);
 

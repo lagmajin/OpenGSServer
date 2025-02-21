@@ -225,13 +225,13 @@ namespace OpenGSServer
             if ("LoginRequest" == messageType)
             {
 
-                AccountEventDelegate.Login(this, dic);
-                AccountEventDelegate.SendUserInfo(this, dic);
+                AccountEventHandler.Login(this, dic);
+                AccountEventHandler.SendUserInfo(this, dic);
             }
 
             if ("LogoutRequest" == messageType)
             {
-                AccountEventDelegate.Logout(this, dic);
+                AccountEventHandler.Logout(this, dic);
             }
 
             if ("AddFriendRequest" == messageType)

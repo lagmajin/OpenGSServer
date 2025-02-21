@@ -133,18 +133,18 @@ using Autofac;
 
                 try
                 {
-                    
+
 
                     var memoryMB = Process.GetCurrentProcess().MaxWorkingSet / 1024;
 
-                    
+
                     //ConsoleWrite.WriteMessage("CPU"+System.Environment.,ConsoleColor.DarkYellow);
                     ConsoleWrite.WriteMessage($"CPU Archtecture:{Cpu.ArchtectureName()}", ConsoleColor.DarkYellow);
-                    ConsoleWrite.WriteMessage("Core Count:"+System.Environment.ProcessorCount,ConsoleColor.DarkYellow);
-                    ConsoleWrite.WriteMessage("Memory:" +memoryMB +"(MB)", ConsoleColor.DarkYellow);
+                    ConsoleWrite.WriteMessage("Core Count:" + System.Environment.ProcessorCount, ConsoleColor.DarkYellow);
+                    ConsoleWrite.WriteMessage("Memory:" + memoryMB + "(MB)", ConsoleColor.DarkYellow);
 
-                    ConsoleWrite.WriteMessage("OS:"+System.Runtime.InteropServices.RuntimeInformation.OSDescription,ConsoleColor.DarkYellow);
-                    ConsoleWrite.WriteMessage(".Net core version:"+System.Environment.Version,ConsoleColor.DarkYellow);
+                    ConsoleWrite.WriteMessage("OS:" + System.Runtime.InteropServices.RuntimeInformation.OSDescription, ConsoleColor.DarkYellow);
+                    ConsoleWrite.WriteMessage(".Net core version:" + System.Environment.Version, ConsoleColor.DarkYellow);
                     ConsoleWrite.WriteMessage("OpenGS Server Version:" + System.Environment.Version, ConsoleColor.DarkYellow);
                     ConsoleWrite.WriteMessage("Initializing ....OpenGS game server", ConsoleColor.Green);
                     var accountDatabaseManager = AccountDatabaseManager.GetInstance();
@@ -160,29 +160,29 @@ using Autofac;
 
                     var container = builder.Build();
 
-                    
+
 
                     var lobbyServerV2 = container.Resolve<LobbyServerManagerV2>();
 
-   
+
 
                     var matchRUdpServer = container.Resolve<MatchRUdpServerManager>();
 
                     matchRUdpServer.Listen(63000);
 
-                    //
+
                     var managementServer = ManagementServer.Instance;
-                    
+
                     managementServer.Listen(50020);
 
-                    int workMin;  
-                    int ioMin;  
-                    ThreadPool.GetMinThreads(out workMin, out ioMin);  
+                    int workMin;
+                    int ioMin;
+                    ThreadPool.GetMinThreads(out workMin, out ioMin);
 
                     Console.WriteLine("MinThreads work={0}, i/o={1}", workMin, ioMin);
-                    ConsoleWrite.WriteMessage("System all green...",ConsoleColor.Green);
+                    ConsoleWrite.WriteMessage("System all green...", ConsoleColor.Green);
 
-                    ThreadPool.SetMinThreads(26, ioMin);  
+                    ThreadPool.SetMinThreads(26, ioMin);
 
                     //var monitorTask = Task.Run(() => MonitorTask(cts.Token), cts.Token).ConfigureAwait(false);
 
@@ -265,12 +265,12 @@ using Autofac;
 
                                     var displayName = param[2];
 
-                                    
+
                                     ConsoleWrite.WriteMessage("AddNewUser");
 
                                     var accountManager = AccountManager.GetInstance();
 
-                                    accountManager.CreateNewAccount(id, pass,displayName);
+                                    accountManager.CreateNewAccount(id, pass, displayName);
 
                                     //accountManager.CreateNewAccount()
 
@@ -464,10 +464,12 @@ using Autofac;
                         }
 
                     }
+                
+                
 
                     //generalServerV2.Stop();
-                   /matchRUdpServer.Stop();
-                    managementServer.Stop();
+                   //matchRUdpServer.Stop();
+                    //managementServer.Stop();
 
                     MonitorTaskFlag = true;
                     //monitorTask.Wait();
