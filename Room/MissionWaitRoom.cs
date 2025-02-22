@@ -24,9 +24,14 @@ namespace OpenGSServer
             return false;
         }
 
-        public string roomName()
+        public string RoomName()
         {
             return roomName_;
+        }
+
+        public void ChangeRoomOwnerRandom()
+        {
+
         }
 
     }

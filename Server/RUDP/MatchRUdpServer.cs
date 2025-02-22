@@ -158,7 +158,7 @@ namespace OpenGSServer
                 await Task.Delay(1);
             }
 
-            ConsoleWrite.WriteMessage("End RUdp Event Task",ConsoleColor.Cyan);
+            ConsoleWrite.WriteMessage("[INFO]End RUdp Event Task", ConsoleColor.Cyan);
         }
 
     }
