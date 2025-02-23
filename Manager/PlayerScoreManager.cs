@@ -1,8 +1,18 @@
 namespace OpenGSServer
 {
-    public class PlayerScoreManager
+    internal interface IPlayerScoreManager
+    {
+
+    }
+
+    internal class PlayerScoreManager
     {
     
+
+        public PlayerScoreManager()
+        {
+
+        }
     }
     
     
