@@ -202,7 +202,9 @@ namespace OpenGSServer
             Playing = false;
 
 
-            
+            var matchResultService= new MatchResultService();
+
+
             
 
             
