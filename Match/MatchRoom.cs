@@ -69,6 +69,8 @@ namespace OpenGSServer
         private HighPrecisionGameTimer timer;
         
         private IMatchLogic logic { get; set; }
+
+        private IPlayerFinalScoreCalcurator    calcurator { get; set; }
         public MatchRoom(int roomNumber, in string roomName, in string roomOwnerId,AbstractMatchSetting setting, MatchRoomEventBus bus) : base(roomNumber, roomOwnerId)
         {
             
@@ -200,6 +202,7 @@ namespace OpenGSServer
             Playing = false;
 
 
+            
             
 
             
