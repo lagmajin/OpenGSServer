@@ -46,6 +46,8 @@ namespace OpenGSServer
         {
             var socket = base.CreateSocket();
 
+            //socket.DualMode = true;
+
             //socket.SetSocketOption( SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true );;
 
             return socket;
@@ -80,7 +82,8 @@ namespace OpenGSServer
 
         protected override void OnError(SocketError error)
         {
-            Console.WriteLine($"Chat TCP server caught an error with code {error}");
+            Console.WriteLine($"[ERROR] {MethodBase.GetCurrentMethod()?.Name}() - TCP server error: {error}");
+            Console.WriteLine(Environment.StackTrace);
         }
 
         public void SendToAllClient()

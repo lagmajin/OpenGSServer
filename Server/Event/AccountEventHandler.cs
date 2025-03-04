@@ -226,6 +226,10 @@ namespace OpenGSServer
                 pass = passToken.ToString();
             }
 
+       
+
+
+
             var json = new JObject();
 
             json["YourIPAddress"] = session.ClientIpAddress();

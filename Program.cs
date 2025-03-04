@@ -164,7 +164,7 @@ using Autofac;
 
                     var lobbyServerV2 = container.Resolve<LobbyServerManagerV2>();
 
-
+                    lobbyServerV2.Listen(60000);
 
                     var matchRUdpServer = container.Resolve<MatchRUdpServerManager>();
 
