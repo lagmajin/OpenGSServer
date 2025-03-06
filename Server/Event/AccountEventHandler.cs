@@ -7,12 +7,13 @@ using OpenGSCore;
 
 namespace OpenGSServer
 {
+
     internal class AccountEventHandler
     {
         private static readonly int saltLenght=8;
-        private readonly IAccountManager _accountManager;
+        private readonly AccountManager _accountManager;
         //public AccountEventHandler() { }
-        public AccountEventHandler(IAccountManager accountManager)
+        public AccountEventHandler(AccountManager accountManager)
         {
             _accountManager = accountManager;
 
@@ -21,7 +22,7 @@ namespace OpenGSServer
         {
         }
 
-        public void Login(in ClientSession session, in IDictionary<string, JToken> dic)
+        public void Login(in IClientSession session, in IDictionary<string, JToken> dic)
         {
      
 
@@ -116,7 +117,7 @@ namespace OpenGSServer
 
         }
 
-        public static void Login(in ClientSession session, in IDictionary<string, JToken> dic)
+        public static void Login(in IClientSession session, in IDictionary<string, JToken> dic)
         {
             string id;
             string pass;
@@ -250,7 +251,7 @@ namespace OpenGSServer
 
         }
 
-        public static void PlayerInfoRequest(ClientSession session,IDictionary<string,JToken> dic)
+        public static void PlayerInfoRequest(IClientSession session,IDictionary<string,JToken> dic)
         {
             var instance=AccountDatabaseManager.GetInstance();
 

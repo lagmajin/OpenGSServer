@@ -16,7 +16,13 @@ using Buffer = NetCoreServer.Buffer;
 
 namespace OpenGSServer
 {
-    public class ClientSession : TcpSession
+    public interface IClientSession
+    {
+        string ClientIpAddress();
+        public string ID();
+        public bool SendAsyncJsonWithTimeStamp(JObject json);
+    }
+    public class ClientSession : TcpSession,IClientSession
     {
         private string id = "";
 
