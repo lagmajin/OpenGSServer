@@ -6,7 +6,7 @@ using System.Threading;
 using System.Diagnostics;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
-
+using Microsoft.Extensions.DependencyInjection;
 using Autofac;
 
 
@@ -157,6 +157,9 @@ using Autofac;
 
                     builder.RegisterType<MatchRUdpServerManager>().AsSelf().SingleInstance();
                     builder.RegisterType<ManagementServer>().AsSelf().SingleInstance();
+                    builder.RegisterType<AccountManager>().AsSelf().SingleInstance();
+
+
 
                     var container = builder.Build();
 

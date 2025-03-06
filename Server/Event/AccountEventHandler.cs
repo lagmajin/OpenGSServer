@@ -10,35 +10,28 @@ namespace OpenGSServer
     internal class AccountEventHandler
     {
         private static readonly int saltLenght=8;
+        private readonly IAccountManager _accountManager;
+        //public AccountEventHandler() { }
+        public AccountEventHandler(IAccountManager accountManager)
+        {
+            _accountManager = accountManager;
 
-        public AccountEventHandler() { }
-
-        public static void CreateNewAccount(in ClientSession session, IDictionary<string, JToken> dic)
+        }
+        public  void CreateNewAccount(in ClientSession session, IDictionary<string, JToken> dic)
         {
         }
 
-        public static void Login(in ClientSession session, in IDictionary<string, JToken> dic)
+        public void Login(in ClientSession session, in IDictionary<string, JToken> dic)
         {
-            string id;
-            string pass;
+     
 
-            if (dic.ContainsKey("id"))
-            {
-                id = dic["id"].ToString();
-            }
-            else
+            if (!dic.TryGetValue("id", out var idToken) || !dic.TryGetValue("pass", out var passToken))
             {
                 return;
             }
 
-            if (dic.ContainsKey("pass"))
-            {
-                pass = dic["pass"].ToString();
-            }
-            else
-            {
-                return;
-            }
+            string id = idToken.ToString();
+            string pass = passToken.ToString();
 
             var result = AccountManager.GetInstance().Login(id, pass);
 
@@ -178,6 +171,13 @@ namespace OpenGSServer
 
         }
 
+        public static void Logout(ClientSession session)
+        {
+
+            //AccountManager.GetInstance().
+
+        }
+
         public static void Logout(ClientSession session, in IDictionary<string, JToken> dic)
         {
             string id="";
@@ -209,9 +209,8 @@ namespace OpenGSServer
 
         public static void SendUserInfo(ClientSession session, in IDictionary<string, JToken> dic)
         {
-            string id;
-            string pass;
-
+            string id = string.Empty;
+            string pass = string.Empty;
 
             if (dic.TryGetValue("id", out var idToken))
             {
@@ -226,13 +225,15 @@ namespace OpenGSServer
                 pass = passToken.ToString();
             }
 
-       
 
 
 
-            var json = new JObject();
 
-            json["YourIPAddress"] = session.ClientIpAddress();
+            var json = new JObject
+            {
+                ["YourIPAddress"] = session.ClientIpAddress(),
+        
+            };
 
             session.SendAsync(json.ToString() + "\n");
 

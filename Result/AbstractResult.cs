@@ -6,13 +6,15 @@ using System.Threading.Tasks;
 
 namespace OpenGSServer
 {
-    public enum eResultType
+    public enum EResultType
     {
-        LoginSucceeful,
-        LoginFaild,
-
-
+        Success,
+        Failed,
+        InProgress,
+        Unknown
     }
+
+
     abstract public class AbstractResult
     {
         public static readonly string messageTypeString="MessageType";

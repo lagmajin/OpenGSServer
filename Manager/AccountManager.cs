@@ -31,7 +31,12 @@ namespace OpenGSServer
 
     }
 
-    public class AccountManager
+    internal interface IAccountManager
+    {
+
+    }
+
+    public class AccountManager:IAccountManager
     {
 
         private Dictionary<string, PlayerAccount> logonUser = new();
@@ -51,7 +56,7 @@ namespace OpenGSServer
             return _singleInstance;
         }
 
-        private AccountManager()
+        public AccountManager()
         {
 
         }

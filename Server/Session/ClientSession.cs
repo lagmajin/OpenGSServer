@@ -138,6 +138,10 @@ namespace OpenGSServer
             //Console.WriteLine($"TCP session with Id {Id} disconnected!");
             ConsoleWrite.WriteMessage($"TCP session with Id {Id} disconnected!", ConsoleColor.Red);
 
+
+            OldAccountEventHandler.Logout(this);
+
+
             Disconnect();
 
         }
@@ -198,6 +202,7 @@ namespace OpenGSServer
             Console.WriteLine($"Chat TCP session caught an error with code {error}");
         }
 
+        //#hotspot #network  #important
         private void ParseMessageFromClient(in JObject json)
         {
             string messageType;
