@@ -158,7 +158,7 @@ using Autofac;
                     builder.RegisterType<MatchRUdpServerManager>().AsSelf().SingleInstance();
                     builder.RegisterType<ManagementServer>().AsSelf().SingleInstance();
                     builder.RegisterType<AccountManager>().AsSelf().SingleInstance();
-
+                    
 
 
                     var container = builder.Build();

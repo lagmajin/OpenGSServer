@@ -7,6 +7,11 @@ using OpenGSCore;
 
 namespace OpenGSServer
 {
+    internal interface IAccountEventHandler
+    {
+
+    }
+
 
     internal class AccountEventHandler
     {
@@ -18,7 +23,7 @@ namespace OpenGSServer
             _accountManager = accountManager;
 
         }
-        public  void CreateNewAccount(in ClientSession session, IDictionary<string, JToken> dic)
+        public  void CreateNewAccount(in IClientSession session, IDictionary<string, JToken> dic)
         {
         }
 
@@ -61,6 +66,14 @@ namespace OpenGSServer
             session.SendAsyncJsonWithTimeStamp(keyJson);
 
 
+
+
+
+        }
+
+        public void Logout(IClientSession session) 
+        {
+        
 
 
 
@@ -117,7 +130,7 @@ namespace OpenGSServer
 
         }
 
-        public static void Login(in IClientSession session, in IDictionary<string, JToken> dic)
+        public static string?  Login(in IClientSession session, in IDictionary<string, JToken> dic)
         {
             string id;
             string pass;
@@ -128,7 +141,7 @@ namespace OpenGSServer
             }
             else
             {
-                return;
+                return null;
             }
 
             if (dic.ContainsKey("pass"))
@@ -137,7 +150,7 @@ namespace OpenGSServer
             }
             else
             {
-                return;
+                return null;
             }
 
             var result = AccountManager.GetInstance().Login(id, pass);
@@ -167,12 +180,20 @@ namespace OpenGSServer
             session.SendAsyncJsonWithTimeStamp(keyJson);
 
 
-
+         
+            if(result.succeeded)
+            {
+                return id;
+            }
+            else
+            {
+                return null;
+            }
 
 
         }
 
-        public static void Logout(ClientSession session)
+        public static void Logout(IClientSession session)
         {
 
             //AccountManager.GetInstance().
@@ -246,7 +267,7 @@ namespace OpenGSServer
 
         
 
-        public static void RemoveAccount(ClientSession session, IDictionary<string, JToken> dic)
+        public static void RemoveAccount(IClientSession session, IDictionary<string, JToken> dic)
         {
 
         }

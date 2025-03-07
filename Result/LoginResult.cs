@@ -15,7 +15,7 @@ namespace OpenGSServer
 
     public class LoginResult : AbstractResult
     {
-        readonly bool succeeded = false;
+        public readonly bool succeeded = false;
 
         readonly string reason = "";
 

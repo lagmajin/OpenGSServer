@@ -20,6 +20,8 @@ namespace OpenGSServer
     {
         string ClientIpAddress();
         public string ID();
+
+
         public bool SendAsyncJsonWithTimeStamp(JObject json);
     }
     public class ClientSession : TcpSession,IClientSession
@@ -36,7 +38,7 @@ namespace OpenGSServer
         private string _utf_format = "";
 
 
-
+        public string? PlayerID { get; private set; }
 
         public ClientSession(TcpServer server) : base(server) { }
 
@@ -239,13 +241,13 @@ namespace OpenGSServer
             if ("LoginRequest" == messageType)
             {
 
-                OldAccountEventHandler.Login(this, dic);
+                PlayerID=OldAccountEventHandler.Login(this, dic);
                 OldAccountEventHandler.SendUserInfo(this, dic);
             }
 
             if ("LogoutRequest" == messageType)
             {
-                OldAccountEventHandler.Logout(this, dic);
+                OldAccountEventHandler.Logout(this);
             }
 
             if ("AddFriendRequest" == messageType)

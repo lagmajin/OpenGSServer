@@ -289,7 +289,10 @@ namespace OpenGSServer
 
         }
 
+        public void Logout(string id,bool force=false)
+        {
 
+        }
 
 
         public JObject Logout(string id, string pass)
