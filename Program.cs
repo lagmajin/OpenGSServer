@@ -87,6 +87,8 @@ using Autofac;
             */
             //Console.Write(json.ToString());
 
+            Thread.CurrentThread.Name = "MainServerThread";
+
 
             AppDomain.CurrentDomain.ProcessExit += new EventHandler(CurrentDomain_ProcessExit);
             string mutexName = "Global\\OpenGSServer";
@@ -157,7 +159,8 @@ using Autofac;
 
                     builder.RegisterType<MatchRUdpServerManager>().AsSelf().SingleInstance();
                     builder.RegisterType<ManagementServer>().AsSelf().SingleInstance();
-                    builder.RegisterType<AccountManager>().AsSelf().SingleInstance();
+                    //builder.RegisterType<AccountEventHandler>().As<IAccountEventHandler>().SingleInstance();
+                    //builder.RegisterType<AccountManager>().AsSelf().SingleInstance();
                     
 
 

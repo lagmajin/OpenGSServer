@@ -13,7 +13,7 @@ namespace OpenGSServer
 {
     enum EDealWithDuplicateLogin
     {
-        KICK_FIRST_USER,
+        KICK_FIRST_USER=0,
         KICK_SECOND_USER,
         KICK_BOTH_USER
 
@@ -51,6 +51,8 @@ namespace OpenGSServer
 
         private int DefaultSaltCount = 8;
 
+        private readonly object lockObject = new object();
+
         public static AccountManager GetInstance()
         {
             return _singleInstance;
@@ -66,7 +68,7 @@ namespace OpenGSServer
         {
             //accountList.Add(new UserAccount(db.AccountID, db.DisplayName, db.Password));
 
-            lock (logonUser)
+            lock (lockObject)
             {
 
                 if (!logonUser.ContainsKey(db.AccountId))
@@ -291,7 +293,14 @@ namespace OpenGSServer
 
         public void Logout(string id,bool force=false)
         {
+            lock (lockObject)
+            {
+                if (logonUser.ContainsKey(id))
+                {
+                    logonUser.Remove(id);
+                }
 
+            }
         }
 
 
