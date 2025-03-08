@@ -164,7 +164,7 @@ using Autofac;
 
                     builder.RegisterType<MatchRUdpServerManager>().AsSelf().SingleInstance();
                     builder.RegisterType<ManagementServer>().AsSelf().SingleInstance();
-                    //builder.RegisterType<AccountEventHandler>().As<IAccountEventHandler>().SingleInstance();
+                    builder.RegisterType<AccountEventHandler>().As<IAccountEventHandler>().SingleInstance();
                     //builder.RegisterType<AccountManager>().AsSelf().SingleInstance();
                     
 

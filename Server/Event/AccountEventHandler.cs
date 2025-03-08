@@ -13,7 +13,7 @@ namespace OpenGSServer
     }
 
 
-    internal class AccountEventHandler
+    internal class AccountEventHandler:IAccountEventHandler
     {
         private static readonly int saltLenght=8;
         private readonly AccountManager _accountManager;
