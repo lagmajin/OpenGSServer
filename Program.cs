@@ -141,13 +141,18 @@ using Autofac;
 
 
                     //ConsoleWrite.WriteMessage("CPU"+System.Environment.,ConsoleColor.DarkYellow);
-                    ConsoleWrite.WriteMessage($"CPU Archtecture:{Cpu.ArchtectureName()}", ConsoleColor.DarkYellow);
-                    ConsoleWrite.WriteMessage("Core Count:" + System.Environment.ProcessorCount, ConsoleColor.DarkYellow);
-                    ConsoleWrite.WriteMessage("Memory:" + memoryMB + "(MB)", ConsoleColor.DarkYellow);
+                    ConsoleWrite.WriteMessage("[SYS]OpenGS Server", ConsoleColor.Red);
+                    ConsoleWrite.WriteMessage($"[ENV]CPU Archtecture:{Cpu.ArchtectureName()}", ConsoleColor.DarkYellow);
+                    ConsoleWrite.WriteMessage("[ENV]Core Count:" + System.Environment.ProcessorCount, ConsoleColor.DarkYellow);
+                    ConsoleWrite.WriteMessage("[ENV]Memory:" + memoryMB + "(MB)", ConsoleColor.DarkYellow);
 
-                    ConsoleWrite.WriteMessage("OS:" + System.Runtime.InteropServices.RuntimeInformation.OSDescription, ConsoleColor.DarkYellow);
-                    ConsoleWrite.WriteMessage(".Net core version:" + System.Environment.Version, ConsoleColor.DarkYellow);
-                    ConsoleWrite.WriteMessage("OpenGS Server Version:" + System.Environment.Version, ConsoleColor.DarkYellow);
+                    ConsoleWrite.WriteMessage("[ENV]OS:" + System.Runtime.InteropServices.RuntimeInformation.OSDescription, ConsoleColor.DarkYellow);
+                    ConsoleWrite.WriteMessage("[ENV].Net core version:" + System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription, ConsoleColor.DarkYellow);
+
+                    ConsoleWrite.WriteMessage("[ENV]OpenGS Server Version:" + System.Environment.Version, ConsoleColor.DarkYellow);
+                    ConsoleWrite.WriteMessage("[ENV] Process ID: " + System.Diagnostics.Process.GetCurrentProcess().Id, ConsoleColor.DarkYellow);
+                    ConsoleWrite.WriteMessage("[ENV] Thread Count: " + System.Diagnostics.Process.GetCurrentProcess().Threads.Count, ConsoleColor.DarkYellow);
+                    //ConsoleWrite.WriteMessage("[ENV] PATH: " + Environment.GetEnvironmentVariable("PATH"), ConsoleColor.DarkYellow);
                     ConsoleWrite.WriteMessage("[INFO]Initializing ....OpenGS game server", ConsoleColor.Green);
                     var accountDatabaseManager = AccountDatabaseManager.GetInstance();
 
