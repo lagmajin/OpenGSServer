@@ -10,6 +10,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Microsoft.VisualBasic;
 using Buffer = NetCoreServer.Buffer;
+using MessagePack;
 
 
 
@@ -37,7 +38,7 @@ namespace OpenGSServer
 
         private string _utf_format = "";
 
-
+        byte separator = 0x1F;
         public string? PlayerID { get; private set; }
 
         public ClientSession(TcpServer server) : base(server) { }
@@ -81,17 +82,68 @@ namespace OpenGSServer
             return true;
         }
 
-        public bool SendAsyncJsonWithTimeStamp(JObject obj)
+        public void SendMessagePackWithTimeStamp(object obj)
         {
-            string utcFormat = "hh:mm:ss:ffff";
+            string utcFormat = "HH:mm:ss:ffff";
 
-            var utcDate = DateTime.UtcNow;
+            var serverTimeStamp = DateTime.UtcNow;
+
+            byte[] serializedData = MessagePackSerializer.Serialize(obj);
+
+            var str=new StringBuilder();
+            str.Append("MSG");
+            str.Append(serializedData);     // メッセージ
+            str.Append((char)0x1F);
+
+
+
+            SendAsync(str.ToString());
+
+        }
+        public bool SendAsyncJsonWithTimeStamp2(JObject obj)
+        {
+            string utcFormat = "HH:mm:ss:ffff";
+
+            var serverTimeStamp = DateTime.UtcNow;
 
 
             //obj["ServerTimeStampFormat"] = utcFormat;
             //obj["ServerTimeStampUTC"] = utcDate.ToString(utcFormat);
 
-            var str = obj.ToString() + "\n";
+            var str = new StringBuilder();
+            str.Append("JS");
+            str.Append(obj.ToString());     // メッセージ
+            str.Append((char)0x1F);
+
+
+            //var str = obj.ToString(Formatting.None) + "\n";
+
+
+
+
+            ConsoleWrite.WriteMessage(str.ToString(), ConsoleColor.Green);
+
+
+            //Send(str);
+
+
+            return SendAsync(str.ToString());
+        }
+
+        public bool SendAsyncJsonWithTimeStamp(JObject obj)
+        {
+            string utcFormat = "HH:mm:ss:ffff";
+
+            var serverTimeStamp = DateTime.UtcNow;
+
+
+            //obj["ServerTimeStampFormat"] = utcFormat;
+            //obj["ServerTimeStampUTC"] = utcDate.ToString(utcFormat);
+
+
+
+
+            var str = obj.ToString(Formatting.None) + "\n";
 
             ConsoleWrite.WriteMessage(str, ConsoleColor.Green);
 
@@ -210,7 +262,7 @@ namespace OpenGSServer
             Console.WriteLine($"Chat TCP session caught an error with code {error}");
         }
 
-        //#hotspot #network  #important
+        //#networkcore
         private void ParseMessageFromClient(in JObject json)
         {
             string messageType;
