@@ -3,6 +3,7 @@ using LiteNetLib;
 using LiteNetLib.Utils;
 using Newtonsoft.Json.Linq;
 using OpenGSServer;
+using System.Threading.Tasks;
 
 namespace OpenGSServer
 {
@@ -30,10 +31,20 @@ namespace OpenGSServer
 
         }
 
+        public async Task SendJsonAsync(JObject json)
+        {
+
+
+        }
+
         public void SendErrorMessage(string errorMsg)
         {
 
         }
 
+        public void SendErrorMessageAsync()
+        {
+
+        }
     }
 }

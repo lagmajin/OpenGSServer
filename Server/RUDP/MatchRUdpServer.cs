@@ -74,6 +74,12 @@ namespace OpenGSServer
 
         }
 
+        public async Task SendMessageAllPlayer()
+        {
+
+
+        }
+
         public void SendMessageToPlayer(in string id,JObject json)
         {
             if(players.TryGetValue(id, out var player))
@@ -83,6 +89,11 @@ namespace OpenGSServer
 
                 player.Send(writer, DeliveryMethod.ReliableOrdered);
             }
+
+        }
+
+        public async Task SendMessageToPlayerAsync(string id)
+        {
 
         }
 

@@ -30,9 +30,9 @@ namespace OpenGSServer
         private string id = "";
 
 
-        readonly string rs = ((char)30).ToString();
+        //readonly string rs = ((char)30).ToString();
 
-        readonly char unitSeperatorChar = (char)Convert.ToInt32("0x1f", 16);
+        //readonly char unitSeperatorChar = (char)Convert.ToInt32("0x1f", 16);
 
         private string ip = "";
 
@@ -93,7 +93,7 @@ namespace OpenGSServer
             var str=new StringBuilder();
             str.Append("MSG");
             str.Append(serializedData);     // メッセージ
-            str.Append((char)0x1F);
+            str.Append(separator);
 
 
 
@@ -113,21 +113,22 @@ namespace OpenGSServer
             var str = new StringBuilder();
             str.Append("JS");
             str.Append(obj.ToString());     // メッセージ
-            str.Append((char)0x1F);
+            str.Append(separator);
 
+            var data=str.ToString();
 
             //var str = obj.ToString(Formatting.None) + "\n";
 
 
 
 
-            ConsoleWrite.WriteMessage(str.ToString(), ConsoleColor.Green);
+            ConsoleWrite.WriteMessage(data, ConsoleColor.Green);
 
 
             //Send(str);
 
 
-            return SendAsync(str.ToString());
+            return SendAsync(data);
         }
 
         public bool SendAsyncJsonWithTimeStamp(JObject obj)
@@ -143,7 +144,7 @@ namespace OpenGSServer
 
 
 
-            var str = obj.ToString(Formatting.None) + "\n";
+            string str = "JS" + obj.ToString(Formatting.None) + Encoding.UTF8.GetString(new byte[] { separator });
 
             ConsoleWrite.WriteMessage(str, ConsoleColor.Green);
 
@@ -204,8 +205,71 @@ namespace OpenGSServer
 
             Disconnect();
 
+        
+       　}
+        private List<byte> receiveBuffer = new List<byte>();
+        //private readonly byte delimiter = (byte)'\n'; // 制御文字
+
+        protected override void OnReceived(byte[] buffer, long offset, long size)
+        {
+            // 受信データをバッファに追加
+            receiveBuffer.AddRange(buffer.Skip((int)offset).Take((int)size));
+
+            while (true)
+            {
+                // 制御文字（\n）の位置を探す
+                int delimiterIndex = receiveBuffer.IndexOf(separator);
+                if (delimiterIndex == -1)
+                {
+                    // 制御文字がないなら、まだ完全なデータが届いていない
+                    return;
+                }
+
+                // 1つのメッセージを取り出す
+                byte[] completeData = receiveBuffer.Take(delimiterIndex).ToArray();
+                receiveBuffer.RemoveRange(0, delimiterIndex + 1); // データ + 制御文字を削除
+
+                // 最低3バイト（識別子+1バイト以上のデータ）がないと無効
+                if (completeData.Length < 3) continue;
+
+                // 先頭の識別子を取得
+                string identifier = Encoding.UTF8.GetString(completeData, 0, 2);
+                byte[] payload = completeData.Skip(2).ToArray();
+
+                if (identifier == "JS") // JSON処理
+                {
+                    try
+                    {
+                        string jsonString = Encoding.UTF8.GetString(payload);
+                        JObject json = JObject.Parse(jsonString);
+                        ParseMessageFromClient(json);
+                    }
+                    catch (JsonReaderException e)
+                    {
+                        ConsoleWrite.WriteMessage($"JSON parse error: {e.Message}", ConsoleColor.Red);
+                    }
+                }
+                else if (identifier == "MSG") // MessagePack処理
+                {
+                    try
+                    {
+                        var obj = MessagePack.MessagePackSerializer.Deserialize<object>(payload);
+                        //HandleMessagePackData(obj);
+                    }
+                    catch (Exception e)
+                    {
+                        ConsoleWrite.WriteMessage($"MessagePack parse error: {e.Message}", ConsoleColor.Red);
+                    }
+                }
+                else
+                {
+                    ConsoleWrite.WriteMessage($"Unknown identifier: {identifier}", ConsoleColor.Yellow);
+                }
+            }
         }
 
+
+        /*
         protected override void OnReceived(byte[] buffer, long offset, long size)
         {
             if (string.IsNullOrEmpty(ip))
@@ -228,19 +292,29 @@ namespace OpenGSServer
 
             var end = message.IndexOf("}");
 
-            var k = message.Substring(begin, end + 1);
+
+            if (begin == -1 || end == -1 || end <= begin)
+            {
+                ConsoleWrite.WriteMessage("Invalid JSON format in received message!", ConsoleColor.Red);
+                return;
+            }
+
+            // end - begin + 1 に修正して範囲を適切に
+            string jsonString = message.Substring(begin, end - begin + 1);
+            //var k = message.Substring(begin, end + 1);
 
             JObject json;
 
             try
             {
 
-                json = JObject.Parse(k);
+                json = JObject.Parse(jsonString);
 
             }
             catch (JsonReaderException e)
             {
-                ConsoleWrite.WriteMessage("Json parse error!!", ConsoleColor.Red);
+                ConsoleWrite.WriteMessage($"JSON parse error: {e.Message}", ConsoleColor.Red);
+                ConsoleWrite.WriteMessage($"Raw JSON: {jsonString}", ConsoleColor.Red);
 
                 return;
             }
@@ -254,7 +328,7 @@ namespace OpenGSServer
                 Disconnect();
         }
 
-
+        */
 
 
         protected override void OnError(SocketError error)
