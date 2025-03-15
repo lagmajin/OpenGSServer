@@ -49,8 +49,10 @@ namespace OpenGSServer
 
         }
 
-        private async void ServerUpdateTask(CancellationToken token)
+        private async Task ServerUpdateTask(CancellationToken token)
         {
+
+            Thread.CurrentThread.Name = "ServerUpdateThread";
             while (true)
             {
 
@@ -77,6 +79,11 @@ namespace OpenGSServer
         public async Task SendMessageAllPlayer()
         {
 
+
+        }
+
+        public async Task SendMessageAllPlayer(object obj)
+        {
 
         }
 
@@ -132,15 +139,21 @@ namespace OpenGSServer
 
         public void Listen(int port)
         {
-            var token = source.Token;
+        var token = source.Token;
 
-            eventTask=Task.Run(() => EventTask(token), token);
+        // 非同期タスク内でスレッド名を設定し、EventTaskを非同期に実行
+        eventTask = Task.Run(async () =>
+        {
+            Thread.CurrentThread.Name = "EventTaskThread";  // スレッドに名前を付ける
+            await EventTask(token);  // 非同期タスクの実行
+        }, token);
 
-            //ConsoleWrite("")
+        // Console.WriteLineなどを使ってメッセージを表示
+        Console.WriteLine("Listening on port: " + port);
 
-
-            server.Listen(port);
-        }
+        // サーバーを起動
+        server.Listen(port);
+    }
 
         public void Stop()
         {
@@ -153,7 +166,7 @@ namespace OpenGSServer
             eventTask.Wait();
         }
 
-        private async void EventTask(CancellationToken token)
+        private async Task EventTask(CancellationToken token)
         {
             ConsoleWrite.WriteMessage("[INFO]Start RUdp Event Task",ConsoleColor.DarkGreen);
             while (true)
