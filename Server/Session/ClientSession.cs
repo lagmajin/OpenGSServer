@@ -38,7 +38,11 @@ namespace OpenGSServer
 
         private string _utf_format = "";
 
-        byte separator = 0x1F;
+        //private byte separator = 0x1F;
+
+        private char separator = '\u001F';
+
+
         public string? PlayerID { get; private set; }
 
         public ClientSession(TcpServer server) : base(server) { }
@@ -66,7 +70,7 @@ namespace OpenGSServer
 
         public bool SendPing()
         {
-            string utcFormat = "hh:mm:ss:FFFF";
+            string utcFormat = "HH:mm:ss:FFFF";
 
             var utcDate = DateTime.UtcNow;
 
@@ -80,6 +84,11 @@ namespace OpenGSServer
             SendAsync(json.ToString());
 
             return true;
+        }
+
+        private void HandlePongFromServer()
+        {
+
         }
 
         public void SendMessagePackWithTimeStamp(object obj)
@@ -144,7 +153,7 @@ namespace OpenGSServer
 
 
 
-            string str = "JS" + obj.ToString(Formatting.None) + Encoding.UTF8.GetString(new byte[] { separator });
+            string str = "JS" + obj.ToString(Formatting.None) + separator;
 
             ConsoleWrite.WriteMessage(str, ConsoleColor.Green);
 
