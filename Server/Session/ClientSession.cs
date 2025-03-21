@@ -126,10 +126,6 @@ namespace OpenGSServer
 
             var serverTimeStamp = DateTime.UtcNow;
 
-
-            //obj["ServerTimeStampFormat"] = utcFormat;
-            //obj["ServerTimeStampUTC"] = utcDate.ToString(utcFormat);
-
             var str = new StringBuilder();
             str.Append("JS");
             str.Append(obj.ToString());     // メッセージ
@@ -137,15 +133,10 @@ namespace OpenGSServer
 
             var data=str.ToString();
 
-            //var str = obj.ToString(Formatting.None) + "\n";
-
 
 
 
             ConsoleWrite.WriteMessage(data, ConsoleColor.Green);
-
-
-            //Send(str);
 
 
             return SendAsync(data);
