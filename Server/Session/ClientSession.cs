@@ -8,9 +8,13 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
-using Microsoft.VisualBasic;
-using Buffer = NetCoreServer.Buffer;
+//using Microsoft.VisualBasic;
+
 using MessagePack;
+using System.Diagnostics;
+
+using Buffer = NetCoreServer.Buffer;
+using Cysharp.Text;
 
 
 
@@ -28,8 +32,6 @@ namespace OpenGSServer
     public class ClientSession : TcpSession,IClientSession
     {
         private string id = "";
-
-
         //readonly string rs = ((char)30).ToString();
 
         //readonly char unitSeperatorChar = (char)Convert.ToInt32("0x1f", 16);
@@ -42,6 +44,9 @@ namespace OpenGSServer
 
         private char separator = '\u001F';
 
+        private Stopwatch forPing=new();
+
+        private string utcDefaultFormat = "HH:mm:ss:ffff";
 
         public string? PlayerID { get; private set; }
 
@@ -82,6 +87,12 @@ namespace OpenGSServer
 
 
             SendAsync(json.ToString());
+
+            return true;
+        }
+
+        public bool SendPingRequestToClient()
+        {
 
             return true;
         }
@@ -164,6 +175,22 @@ namespace OpenGSServer
             return SendAsync(str);
         }
 
+        public bool SendAsyncMemoryPack(byte[] data)
+        {
+            string utcFormat = "HH:mm:ss:ffff";
+            var prefix = Encoding.UTF8.GetBytes("MP");
+            var separatorBytes = new byte[] { (byte)separator };  // `char` → `byte`
+
+            byte[] result = new byte[prefix.Length + data.Length + separatorBytes.Length];
+
+            System.Buffer.BlockCopy(prefix, 0, result, 0, prefix.Length);
+            System.Buffer.BlockCopy(data, 0, result, prefix.Length, data.Length);
+            System.Buffer.BlockCopy(separatorBytes, 0, result, prefix.Length + data.Length, separatorBytes.Length);
+
+            return SendAsync(result);
+
+        }
+
 
         public void SendErrorMessage(string errorType,string msg)
         {
@@ -199,7 +226,7 @@ namespace OpenGSServer
 
 
 
-            SendAsyncJsonWithTimeStamp(jobject);
+            SendAsyncJsonWithTimeStamp2(jobject);
 
         }
 
@@ -227,7 +254,7 @@ namespace OpenGSServer
             while (true)
             {
                 // 制御文字（\n）の位置を探す
-                int delimiterIndex = receiveBuffer.IndexOf(separator);
+                int delimiterIndex = receiveBuffer.IndexOf((byte)separator);
                 if (delimiterIndex == -1)
                 {
                     // 制御文字がないなら、まだ完全なデータが届いていない

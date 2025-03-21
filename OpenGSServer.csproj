@@ -31,6 +31,7 @@
     <PackageReference Include="DynaJson" Version="2.0.0" />
     <PackageReference Include="LiteDB" Version="5.0.21" />
     <PackageReference Include="LiteNetLib" Version="0.9.5.2" />
+    <PackageReference Include="MemoryPack" Version="1.21.4" />
     <PackageReference Include="Microsoft.Extensions.CommandLineUtils" Version="1.1.1" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.2" />
     <PackageReference Include="NetCoreServer" Version="5.0.18" />
@@ -39,7 +40,7 @@
     <PackageReference Include="SimpleInjector" Version="5.5.0" />
     <PackageReference Include="System.CommandLine.Parser" Version="0.1.1" />
     <PackageReference Include="System.Reactive" Version="5.0.0" />
-    <PackageReference Include="ZString" Version="2.4.4" />
+    <PackageReference Include="ZString" Version="2.6.0" />
   </ItemGroup>
 
   <ItemGroup>
