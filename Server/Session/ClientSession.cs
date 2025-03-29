@@ -384,7 +384,7 @@ namespace OpenGSServer
             {
                 var str = dic["ClientTimeStampUTC"].ToString();
 
-                var time = DateTime.ParseExact(str, "hh:mm:ss:ffff", null);
+                var time = DateTime.ParseExact(str, "HH:mm:ss:ffff", null);
 
 
                 ConsoleWrite.WriteMessage("ParseTime" + time.ToString("ffff"));
