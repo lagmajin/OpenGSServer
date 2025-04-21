@@ -6,12 +6,18 @@ using System.Text;
 
 namespace OpenGSServer
 {
-    public enum eGameObjectType
+    public enum EGameObjectType
     {
         Grenade,
         Character,
         FieldItem,
 
+    }
+    public interface ISyncable
+    {
+        JObject ToJson();
+        bool HasChanged();
+        void SaveSyncState();
     }
 
     public abstract class AbstractGameObject
@@ -27,6 +33,8 @@ namespace OpenGSServer
         public string Name { get; set; }
         public float Posx { get; set; }
         public float Posy { get; set; }
+
+        protected float lastPosx, lastPosy;
         public string Id { get; set; }
         public bool Updated { get; }
 
@@ -51,6 +59,15 @@ namespace OpenGSServer
         }
 
         public void SetPos(float x,float y)
+        {
+
+        }
+
+        public virtual bool HasChanged()
+        {
+            return (Posx != lastPosx || Posy != lastPosy);
+        }
+        public virtual void Save()
         {
 
         }

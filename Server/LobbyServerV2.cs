@@ -32,6 +32,13 @@ namespace OpenGSServer
   
         }
 
+        public int Port()
+        {
+            return Endpoint.Port;
+        }
+        
+
+
         private string CreateUniqueID()
         {
             string str = Guid.NewGuid().ToString("N");
@@ -111,6 +118,18 @@ namespace OpenGSServer
 
                 server.Start();
             }
+        }
+
+        public int Port()
+        {
+
+
+            return server.Port();
+        }
+
+        public bool IsStarted() { 
+
+            return server.IsStarted;
         }
 
         public void Stop()

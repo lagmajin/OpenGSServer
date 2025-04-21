@@ -17,7 +17,7 @@ namespace OpenGSServer
 
     }
     */
-    public class MatchRoom2 : AbstractGameRoom, IMatchRoom, IDisposable
+    public class OldMatchRoom2 : AbstractGameRoom, IMatchRoom, IDisposable
     {
 
 
@@ -49,7 +49,7 @@ namespace OpenGSServer
 
 
 
-        public MatchRoom2(int roomNumber, in string roomName, in string roomOwnerId, in AbstractMatchRule rule) : base(roomNumber, roomOwnerId)
+        public OldMatchRoom2(int roomNumber, in string roomName, in string roomOwnerId, in AbstractMatchRule rule) : base(roomNumber, roomOwnerId)
         {
 
 

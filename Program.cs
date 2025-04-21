@@ -51,7 +51,7 @@ using Autofac;
         }
 
 
-        static void Main(string[] args)
+        static async void Main(string[] args)
         {
 
             /*
@@ -86,6 +86,10 @@ using Autofac;
 
             */
             //Console.Write(json.ToString());
+
+            var batchService = new ServerBatchService();
+
+            batchService.OnStart();
 
             Thread.CurrentThread.Name = "MainServerThread";
 
@@ -185,6 +189,13 @@ using Autofac;
                     var managementServer = ManagementServer.Instance;
 
                     managementServer.Listen(50020);
+
+                    if(lobbyServerV2.IsStarted())
+                    {
+                        batchService.WriteLocalPortToFile(lobbyServerV2.Port());
+                    }
+                    
+
 
                     int workMin;
                     int ioMin;
@@ -336,7 +347,7 @@ using Autofac;
                                 for (var i = 0; i < 3; i++)
                                 {
                                     ConsoleWrite.WriteMessage("Exit application in 3 seconds...", ConsoleColor.Red);
-                                    Thread.Sleep(1000);
+                                    await Task.Delay(1000);
                                 }
 
                                 //Thread.Sleep(3000);
@@ -506,7 +517,8 @@ using Autofac;
             
             ServerManager.Instance.SaveSetting();
 
-
+            
+            batchService.OnStop();
 
 
 
