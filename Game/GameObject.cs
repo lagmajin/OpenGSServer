@@ -3,6 +3,7 @@ using OpenGSCore;
 using System;
 using System.Collections.Generic;
 using System.Text;
+using System.Text.Json;
 
 namespace OpenGSServer
 {
@@ -75,7 +76,14 @@ namespace OpenGSServer
 
         }
 
-        
+        public override JObject ToJSon()
+        {
+            JObject json = new JObject();
+
+
+            return json;
+        }
+
     }
 
 
