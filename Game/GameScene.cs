@@ -58,7 +58,7 @@ namespace OpenGSServer
 
 
 
-        JObject ToJson()
+        public JObject ToJson()
         {
             var json = new JObject();
 
@@ -77,6 +77,15 @@ namespace OpenGSServer
 
             return json;
         }
+
+        public JObject AllPlayerDataToJson()
+        {
+            var json = new JObject();
+
+            return json;
+        }
+
+
 
     }
 
