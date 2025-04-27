@@ -4,6 +4,8 @@ using System.Text;
 
 namespace OpenGSServer
 {
+    
+
     public abstract class InstantItem
     {
 

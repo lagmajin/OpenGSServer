@@ -114,6 +114,15 @@ namespace OpenGSServer
         {
 
         }
+
+        public override JObject ToJSon()
+        {
+            JObject json = new JObject();
+
+
+            return json;
+
+        }
     }
 
 
