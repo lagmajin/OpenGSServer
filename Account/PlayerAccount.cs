@@ -1,6 +1,7 @@
 ﻿using System;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using OpenGSCore;
 
 
 namespace OpenGSServer
@@ -9,14 +10,14 @@ namespace OpenGSServer
 
 
 
-
-    public class PlayerAccount
+    //#PlayerAccount
+    [Tag("PlayerAccount")]public class PlayerAccount
     {
         //private string pass;
         private string dbUniqueId;
-
+        //#PlayerID
         private string globalID = Guid.NewGuid().ToString("N");
-
+        private string localID = "";
 
         public int Wins { get; set; }
         public int Kill { get; set; }

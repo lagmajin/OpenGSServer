@@ -7,7 +7,7 @@ namespace OpenGSServer
 {
     public class ServerEventHandler
     {
-        public static void ServerInfoRequest(ClientSession session, IDictionary<string, JToken> dic)
+        public static void HandleServerInfoRequestFromClient(ClientSession session, IDictionary<string, JToken> dic)
         {
             var timezone = TimeZoneInfo.Local;
 
@@ -29,7 +29,7 @@ namespace OpenGSServer
             session.SendAsyncJsonWithTimeStamp(json);
         }
 
-        public static void PingRequest(ClientSession session, Dictionary<string, JToken> dic)
+        public static void HandlePingRequestFromClient(ClientSession session, Dictionary<string, JToken> dic)
         {
             var pingResult = new PingResult(0);
 

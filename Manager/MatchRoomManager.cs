@@ -73,7 +73,7 @@ namespace OpenGSServer
         matchRooms.Add(room.Id, room);
         
         var createNewRoomResult =
-            new CreateNewRoomResult(eCreateNewRoomResult.Successful, ECreateNewRoomReason.NoReason);
+            new CreateNewRoomResult(ECreateNewRoomResult.Successful, ECreateNewRoomReason.NoReason);
 
         return createNewRoomResult;
     }
@@ -99,7 +99,7 @@ namespace OpenGSServer
 
 
         var createNewRoomResult =
-            new CreateNewRoomResult(eCreateNewRoomResult.Successful, ECreateNewRoomReason.NoReason);
+            new CreateNewRoomResult(ECreateNewRoomResult.Successful, ECreateNewRoomReason.NoReason);
 
         return createNewRoomResult;
     }

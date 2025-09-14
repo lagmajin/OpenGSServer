@@ -22,6 +22,15 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="Build\**" />
+    <Compile Remove="Script\**" />
+    <EmbeddedResource Remove="Build\**" />
+    <EmbeddedResource Remove="Script\**" />
+    <None Remove="Build\**" />
+    <None Remove="Script\**" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Compile Remove="Constants\ItemConstants.cs" />
   </ItemGroup>
 
@@ -39,7 +48,7 @@
     <PackageReference Include="NodaTime" Version="3.1.0" />
     <PackageReference Include="SimpleInjector" Version="5.5.0" />
     <PackageReference Include="System.CommandLine.Parser" Version="0.1.1" />
-    <PackageReference Include="System.Reactive" Version="5.0.0" />
+    <PackageReference Include="System.Reactive" Version="6.0.2" />
     <PackageReference Include="ZString" Version="2.6.0" />
   </ItemGroup>
 
@@ -47,8 +56,7 @@
     <Folder Include="Platform\Linus" />
     <Folder Include="Server\TCP\" />
     <Folder Include="WebAPI\" />
-    <Folder Include="Script\" />
-    <Folder Include="Build\" />
+    <Folder Include="新しいフォルダー\" />
   </ItemGroup>
 
   <ItemGroup>

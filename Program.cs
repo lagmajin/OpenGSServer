@@ -51,7 +51,7 @@ using Autofac;
         }
 
 
-        static async void Main(string[] args)
+        static async Task Main(string[] args)
         {
 
             /*
@@ -146,7 +146,7 @@ using Autofac;
 
                     //ConsoleWrite.WriteMessage("CPU"+System.Environment.,ConsoleColor.DarkYellow);
                     ConsoleWrite.WriteMessage("[SYS]OpenGS Server", ConsoleColor.Red);
-                    ConsoleWrite.WriteMessage($"[ENV]CPU Archtecture:{Cpu.ArchtectureName()}", ConsoleColor.DarkYellow);
+                    ConsoleWrite.WriteMessage($"[ENV]CPU Archtecture:{Cpu.ArchitectureName()}", ConsoleColor.DarkYellow);
                     ConsoleWrite.WriteMessage("[ENV]Core Count:" + System.Environment.ProcessorCount, ConsoleColor.DarkYellow);
                     ConsoleWrite.WriteMessage("[ENV]Memory:" + memoryMB + "(MB)", ConsoleColor.DarkYellow);
 

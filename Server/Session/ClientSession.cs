@@ -29,6 +29,8 @@ namespace OpenGSServer
 
         public bool SendAsyncJsonWithTimeStamp(JObject json);
     }
+
+    //#
     public class ClientSession : TcpSession,IClientSession
     {
         private string id = "";
@@ -405,7 +407,8 @@ namespace OpenGSServer
 
             if ("AddFriendRequest" == messageType)
             {
-                //AccountEventDelegate.AddFriendRequest()
+                var playerID = "";
+                var friendID = "";
 
             }
 
@@ -535,6 +538,16 @@ namespace OpenGSServer
                 //var chat = json["message"].ToString();
 
 
+
+            }
+
+            if("LoadingStarted"==messageType)
+            {
+
+            }
+
+            if("LoadingCompleted"==messageType)
+            {
 
             }
 

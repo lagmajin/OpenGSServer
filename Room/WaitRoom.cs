@@ -10,7 +10,7 @@ namespace OpenGSServer
 {
 
     
-    public class WaitRoom
+    public partial class WaitRoom
     {
         public MatchRoom? MatchRoomLink { get; set; } = null;
 
@@ -30,6 +30,8 @@ namespace OpenGSServer
         public List<PlayerAccount> players = new();
 
         public AbstractMatchSetting Setting { get; }
+
+        MatchLoadingTracker _matchLoadingTracker=new();
 
         private object _lock = new object();
 
@@ -70,6 +72,13 @@ namespace OpenGSServer
         {
 
         }
+
+        public void LoadingStart()
+        {
+
+        }
+
+
 
         public void GameStart()
         {
@@ -130,6 +139,8 @@ namespace OpenGSServer
 
             return result;
         }
+
+        
 
     }
 }

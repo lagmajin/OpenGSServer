@@ -13,58 +13,41 @@ namespace OpenGSServer
     {
         public static void CreateNewWaitRoom(in ClientSession session, in IDictionary<string, JToken> dic)
         {
-            string? playerName;
-            string? playerID;
-            string? gameMode;
-
-            var teamBalance = true;
-
-            int maxCapacity = 0;
+            string? playerName = null;
+            string? playerID = null;
+            string? gameMode = null;
+            bool teamBalance = true; // デフォルト値は true
+            int maxCapacity = 0;     // デフォルト値
 
             //var result = eCreateNewRoomResult.Fail;
-           // var reason = ECreateNewRoomReason.NoReason;
+            // var reason = ECreateNewRoomReason.NoReason;
+            ECreateNewRoomReason reason = ECreateNewRoomReason.NoReason;
+
 
             var gameRoomManager = MatchRoomManager.Instance;
 
             var waitRoomManager = WaitRoomManager.Instance();
 
-          
 
-            if (dic.ContainsKey("PlayerID"))
+
+            if (dic.TryGetValue("PlayerID", out JToken? playerIDToken) && !string.IsNullOrEmpty(playerID = playerIDToken?.ToString()))
             {
-                playerID = dic["PlayerID"].ToString();
-                if (string.IsNullOrEmpty(playerID))
-                {
-
-
-
-                }
-                else
-                {
-
-                }
+                // PlayerID は有効
+                Console.WriteLine($"[CreateWaitRoom] PlayerID: {playerID}");
             }
             else
             {
-
+                // PlayerID が dic にない、または空文字列の場合
+                //reason = ECreateNewRoomReason.InvalidPlayerID;
+                //session.SendErrorMessage($"待機部屋作成に失敗しました: {reason} - PlayerIDが不正です。");
+                //Console.WriteLine($"[WARN] Client {session.Peer.EndPoint} からの待機部屋作成リクエスト: PlayerIDが不正です。");
+                return; // 必須データが不足しているため、ここで処理を終了
             }
 
 
 
 
 
-
-            if (dic.TryGetValue("TeamBalance", out var playerNameToken))
-            {
-
-
-            }
-            else
-            {
-                
-
-                return;
-            }
 
 
 
@@ -91,16 +74,24 @@ namespace OpenGSServer
 
             if (dic.TryGetValue("RoomCapacity", out var roomCapacityToken))
             {
-
-
-                if (Int32.TryParse(roomCapacityToken.ToString(), out maxCapacity))
+                if (roomCapacityToken.Type == JTokenType.Integer)
                 {
-
-
+                    
+                    maxCapacity = roomCapacityToken.Value<int>();
                 }
-                else
+                // または、ToString() を経由してTryParseを使う場合
+                else if (roomCapacityToken.Type == JTokenType.String) // 文字列形式の数値も許容する場合
                 {
-                    maxCapacity = 10;
+                    if (!Int32.TryParse(roomCapacityToken.ToString(), out maxCapacity))
+                    {
+                      
+                    }
+                }
+                else 
+                {
+                    
+                    Console.WriteLine($"Warning: RoomCapacity has unexpected type: {roomCapacityToken.Type}. Using default value 10.");
+                    
                 }
 
             }

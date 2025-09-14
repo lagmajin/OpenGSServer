@@ -5,7 +5,7 @@ using Newtonsoft.Json.Linq;
 
 namespace OpenGSServer
 {
-    public enum eCreateNewRoomResult
+    public enum ECreateNewRoomResult
     {
         Successful,
         Fail,
@@ -22,11 +22,11 @@ namespace OpenGSServer
 
     public class CreateNewRoomResult:AbstractResult
     {
-        public eCreateNewRoomResult Result { get; } = eCreateNewRoomResult.Fail;
+        public ECreateNewRoomResult Result { get; } = ECreateNewRoomResult.Fail;
 
         public ECreateNewRoomReason Reason { get; } = ECreateNewRoomReason.NoReason;
 
-        public CreateNewRoomResult(eCreateNewRoomResult result,ECreateNewRoomReason reason)
+        public CreateNewRoomResult(ECreateNewRoomResult result,ECreateNewRoomReason reason)
         {
 
         }

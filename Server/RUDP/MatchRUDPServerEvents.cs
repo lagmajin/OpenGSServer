@@ -41,13 +41,22 @@ namespace OpenGSServer
         {
             ConsoleWrite.WriteMessage("Peer disconnected", ConsoleColor.Red);
 
-            
+            List<string> removedKeys = new List<string>();
+            foreach (var kvp in players)
+            {
+                if (kvp.Value == peer)
+                {
+                    removedKeys.Add(kvp.Key);
+                }
+            }
+            foreach (var key in removedKeys)
+            {
+                players.Remove(key);
+                ConsoleWrite.WriteMessage($"[INFO]Removed player {key} from session list.");
+            }
 
         }
-        void OnDisConnected()
-        {
-
-        }
+ 
 
         void OnNetworkReceive(NetPeer peer, NetPacketReader reader, DeliveryMethod deliveryMethod)
         {

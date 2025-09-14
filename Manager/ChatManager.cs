@@ -18,6 +18,7 @@ namespace OpenGSServer
 
         }
 
+        
         public void AddChat(Chat chat)
         {
             Log.Add(chat);

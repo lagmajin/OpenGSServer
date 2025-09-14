@@ -11,6 +11,7 @@ using System.Text.RegularExpressions;
 
 namespace OpenGSServer
 {
+    /*
     public enum EMatchRoomEventType2
     {
         Unknown,
@@ -19,6 +20,7 @@ namespace OpenGSServer
 
     }
 
+    */
 
     public interface IMatchRoom
     {
@@ -52,14 +54,18 @@ namespace OpenGSServer
 
 
         public bool MatchEnd { get; } = false;
+        public bool isSuddenDeathModeNow { get; private set; } = false;
 
         public int PlayerCount { get; } = 0;
 
         public int Capacity { get; } = 20;
 
+        
 
         public bool Playing { get; private set; } = false;
         public bool Finished { get; } = false;
+
+        
         
         //PlayerLifeTimeScore LifeTimeScore { get; set; } = new PlayerLifeTimeScore();
 

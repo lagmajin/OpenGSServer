@@ -17,12 +17,15 @@ namespace OpenGSServer
     {
         public InGameMatchEventHandler() { }
 
-        public void ParseEvent(JObject json)
+        public static void ParseEvent(JObject json)
         {
             var type = json.GetStringOrNull("MessageType");
 
             if (type != null)
             {
+                MatchRoomManager manager=MatchRoomManager.Instance;
+
+                
 
                 var id = json.GetStringOrNull("PlayerID");
 
@@ -86,6 +89,14 @@ namespace OpenGSServer
                         var itemNum = json.GetValueDefaultInt("InstantItemNum",0);
 
                     }
+
+                    if(type=="Jump")
+                    {
+
+                    }
+
+
+
                 }
  
 

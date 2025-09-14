@@ -4,27 +4,22 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace OpenGSServer
+namespace OpenGSServer.Room
 {
-    public class MissionLobby
+    public partial class WaitRoom
     {
-
-        public MissionLobby()
+        private void OnLoadingCompleted()
         {
 
         }
 
-        void ClearChat()
+        private void OnLoadingCanceled()
         {
 
         }
 
-        void AddNewUser()
-        {
 
-        }
 
 
     }
-
 }
