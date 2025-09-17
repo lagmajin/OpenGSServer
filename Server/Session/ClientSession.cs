@@ -415,7 +415,11 @@ namespace OpenGSServer
             if ("PlayerInfoRequest" == messageType)
             {
 
+
+
             }
+
+            
 
 
             if ("MatchServerInformationRequest" == messageType)
@@ -473,7 +477,7 @@ namespace OpenGSServer
                 LobbyEventHandler.EnterRoomRequest(this, dic);
             }
 
-            if("CloseWaitRoomReqauest"==messageType)
+            if("CloseWaitRoomRequest"==messageType)
             {
 
             }
@@ -543,11 +547,19 @@ namespace OpenGSServer
 
             if("LoadingStarted"==messageType)
             {
-
+                json["PlayerLocalId"] = "";
             }
 
-            if("LoadingCompleted"==messageType)
+            if("UpdateProgress"==messageType)
             {
+                json["PlayerLocalId"] = "";
+            }
+
+            if("PlayerLoadingCompleted"==messageType)
+            {
+                json["PlayerLocalId"] = "";
+
+
 
             }
 
