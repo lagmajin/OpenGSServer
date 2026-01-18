@@ -143,6 +143,26 @@ using Autofac;
 
                     var memoryMB = Process.GetCurrentProcess().MaxWorkingSet / 1024;
 
+                    // Unicode表示を有効化（Windows対応）
+                    Console.OutputEncoding = System.Text.Encoding.UTF8;
+
+                    // ASCII Art Banner
+                    Console.WriteLine();
+                    Console.ForegroundColor = ConsoleColor.White;
+                    Console.WriteLine(@"    ╔═══════════════════════════════════════════════════════════════╗");
+                    Console.WriteLine(@"    ║   ██████╗ ██████╗ ███████╗███╗   ██╗ ██████╗ ███████╗         ║");
+                    Console.WriteLine(@"    ║  ██╔═══██╗██╔══██╗██╔════╝████╗  ██║██╔════╝ ██╔════╝         ║");
+                    Console.WriteLine(@"    ║  ██║   ██║██████╔╝█████╗  ██╔██╗ ██║██║  ███╗███████╗         ║");
+                    Console.WriteLine(@"    ║  ██║   ██║██╔═══╝ ██╔══╝  ██║╚██╗██║██║   ██║╚════██║         ║");
+                    Console.WriteLine(@"    ║  ╚██████╔╝██║     ███████╗██║ ╚████║╚██████╔╝███████║         ║");
+                    Console.WriteLine(@"    ║   ╚═════╝ ╚═╝     ╚══════╝╚═╝  ╚═══╝ ╚═════╝ ╚══════╝         ║");
+                    Console.ForegroundColor = ConsoleColor.Gray;
+                    Console.WriteLine(@"    ║                                                               ║");
+                    Console.WriteLine(@"    ║                   - Game Server Edition -                     ║");
+                    Console.ForegroundColor = ConsoleColor.White;
+                    Console.WriteLine(@"    ╚═══════════════════════════════════════════════════════════════╝");
+                    Console.ResetColor();
+                    Console.WriteLine();
 
                     //ConsoleWrite.WriteMessage("CPU"+System.Environment.,ConsoleColor.DarkYellow);
                     ConsoleWrite.WriteMessage("[SYS]OpenGS Server", ConsoleColor.Red);

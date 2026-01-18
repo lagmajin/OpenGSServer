@@ -12,6 +12,14 @@ namespace OpenGSServer
     {
 
 
+        public enum EAccountStatus
+        {
+            Unknown = 0,
+            Active,
+            Suspended,
+            Banned,
+        }
+
         [BsonId] public string Id { get; set; }
         public string AccountId { get; set; }
 
@@ -29,6 +37,12 @@ namespace OpenGSServer
         public string FirstAccessIPAddress { get; set; }
 
         public string LastAccessIPAddress { get; set; }
+        public string LastLoginIPAddress { get; set; }
+        public string LastLoginTimeUtc { get; set; }
+        public string LastUpdatedUtc { get; set; }
+        public EAccountStatus Status { get; set; } = EAccountStatus.Active;
+        public PlayerLifeTimeScore LifeTimeScore { get; set; } = new();
+        public List<string> ProfileTags { get; set; } = new();
 
         public DBAccount()
         {

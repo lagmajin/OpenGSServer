@@ -173,7 +173,7 @@ namespace OpenGSServer
                 return;
             }
 
-            lock (playersLock)
+            lock (playerSyncLock)
             {
                 if (!Players.Exists(p => p.Id == info.Id))
                 {
