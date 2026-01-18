@@ -215,318 +215,55 @@ using Autofac;
                     {
                         var input = Console.ReadLine();
 
-                        ConsoleWrite.WriteMessage("Command:" + input);
-
-                        if (input == null)
+                        if (string.IsNullOrWhiteSpace(input))
                         {
                             continue;
-
                         }
 
-                        var words = input.Split(" ").ToArray();
+                        ConsoleWrite.WriteMessage($"[CMD] {input}", ConsoleColor.Yellow);
 
-                        var command = words[0].ToLower();
-
-                        var param = words.Skip(1).ToList();
-
-
-
-                        if (words.Length > 0)
+                        // 終了コマンド処理（特別に分離）
+                        if (input.Equals("exit", StringComparison.OrdinalIgnoreCase) || 
+                            input.Equals("shutdown", StringComparison.OrdinalIgnoreCase))
                         {
-                            //var firstWord = words[0].ToLower();
-
-                            if (command == "serverinfo")
+                            for (var i = 0; i < 3; i++)
                             {
-                                //var info = WaitRoomManager.Instance().RoomManagerInfo();
-
-
-                                //ConsoleWrite.WriteMessage(info.ToString());
+                                ConsoleWrite.WriteMessage("Shutting down in 3 seconds...", ConsoleColor.Red);
+                                await Task.Delay(1000);
                             }
-
-
-                            if (command == "playerinfo")
-                            {
-                                if (param.Count < 1)
-                                {
-
-                                    var name = param[0];
-
-                                    var instance = AccountDatabaseManager.GetInstance();
-
-
-
-
-
-
-                                }
-
-
-                            }
-
-                            if (command == "guildinfo")
-                            {
-
-                                if (param.Count < 1)
-                                {
-                                    var name = param[1];
-
-
-
-
-                                }
-
-                            }
-
-                            if (command == "addnewuser")
-                            {
-                                if (param.Count > 2)
-                                {
-                                    var id = param[0];
-
-                                    var pass = param[1];
-
-                                    var displayName = param[2];
-
-
-                                    ConsoleWrite.WriteMessage("AddNewUser");
-
-                                    var accountManager = AccountManager.GetInstance();
-
-                                    accountManager.CreateNewAccount(id, pass, displayName);
-
-                                    //accountManager.CreateNewAccount()
-
-
-
-                                }
-
-
-                            }
-
-
-                            if (command == "addnewguild")
-                            {
-                                if (param.Count < 1)
-                                {
-
-                                }
-
-
-                            }
-
-                            if (command == "addnewroom")
-                            {
-
-                                if (param.Count > 0)
-                                {
-                                    ConsoleWrite.WriteMessage("Add new wait room");
-                                    var roomName = param[0];
-
-
-                                    var roomManager = WaitRoomManager.Instance();
-
-                                    roomManager.CreateNewWaitRoom("");
-
-
-
-                                }
-                                else
-                                {
-
-
-                                }
-
-
-
-                            }
-
-
-
-                            if (command == "exit" || command == "shutdown")
-                            {
-                                for (var i = 0; i < 3; i++)
-                                {
-                                    ConsoleWrite.WriteMessage("Exit application in 3 seconds...", ConsoleColor.Red);
-                                    await Task.Delay(1000);
-                                }
-
-                                //Thread.Sleep(3000);
-
-                                Environment.Exit(0);
-                            }
-
-                            if (command == "run" | command == "-r")
-                            {
-
-                            }
-
-                            if (command == "stop" | command == "-s")
-                            {
-                                if (param.Count < 0)
-                                {
-                                    continue;
-                                }
-
-                                ConsoleWrite.WriteMessage("Stop server");
-
-
-                                //generalServerV2.Stop();
-
-
-
-                            }
-
-                            if (command == "new" | command == "-n")
-                            {
-                                if (param.Count < 0)
-                                {
-
-                                    continue;
-                                }
-
-                                if (param[0] == "player")
-                                {
-                                    if (param.Count < 1)
-                                    {
-
-                                        ConsoleWrite.WriteMessage("Create new player", ConsoleColor.Red);
-
-
-
-                                    }
-                                    else
-                                    {
-                                        ConsoleWrite.WriteMessage("");
-
-
-
-                                    }
-
-
-
-                                }
-
-                                if (param[0] == "guild")
-                                {
-
-                                }
-
-
-                                ConsoleWrite.WriteMessage("");
-
-
-
-
-                            }
-
-                            if (command == "remove" | command == "delete")
-                            {
-                                if (param.Count < 0)
-                                {
-                                    continue;
-                                }
-
-                                if (param[0] == "player")
-                                {
-
-
-
-
-                                }
-
-                                if (param[0] == "guild")
-                                {
-                                    ConsoleWrite.WriteMessage("[Warning] Delete guild [y,n]", ConsoleColor.Red);
-
-
-
-                                    var q = Console.ReadLine();
-
-
-
-                                    GuildDatabaseManager.GetInstance().RemoveGuild();
-
-                                }
-
-
-
-                            }
-
-
-
-                            if (command == "info" | command == "-i")
-                            {
-                                ConsoleWrite.WriteMessage("Server Info");
-
-
-                            }
-
-                            if (command == "help" | command == "-h")
-                            {
-                                ConsoleWrite.WriteMessage("help -h");
-                                ConsoleWrite.WriteMessage("new -n");
-                                ConsoleWrite.WriteMessage("remove -r");
-                                ConsoleWrite.WriteMessage("info -i");
-
-
-                                ConsoleWrite.WriteMessage("run -r");
-
-                            }
-
-                            if (command == "clear")
-                            {
-                                Console.Clear();
-
-                            }
-
-
-
-
-
+                            IsEnd = true;
+                            Environment.Exit(0);
                         }
 
+                        // コマンドを CommandParser に委譲
+                        CommandParser.Parse(input);
                     }
-                
-                
-
-                    //generalServerV2.Stop();
-                   //matchRUdpServer.Stop();
-                    //managementServer.Stop();
-
-                    MonitorTaskFlag = true;
-                    //monitorTask.Wait();
-
-                    
+                }
+                catch (Exception ex)
+                {
+                    ConsoleWrite.WriteMessage($"[ERR] Exception: {ex.Message}", ConsoleColor.Red);
                 }
                 finally
                 {
-                    ConsoleWrite.WriteMessage("", ConsoleColor.Red);
-
-                    cts.Dispose();
+                    if (hasHandle)
+                    {
+                        mutex.ReleaseMutex();
+                        mutex.Close();
+                    }
                     
+                    ServerManager.Instance.SaveSetting();
+                    batchService.OnStop();
                 }
-
             }
             else
             {
-                mutex.ReleaseMutex();
-                mutex.Close();
-
+                ConsoleWrite.WriteMessage("[ERR] Server is already running", ConsoleColor.Red);
+                if (hasHandle)
+                {
+                    mutex.ReleaseMutex();
+                    mutex.Close();
+                }
             }
-
-            
-            ServerManager.Instance.SaveSetting();
-
-            
-            batchService.OnStop();
-
-
-
-        }
-        static void timerCB(object obj)
-        {
-            var msec = DateTime.Now.Millisecond;
-            Console.WriteLine("msec: {0}", msec);
         }
     }
 

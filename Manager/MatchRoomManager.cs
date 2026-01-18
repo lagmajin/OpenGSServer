@@ -23,6 +23,7 @@ namespace OpenGSServer
     {
 
     private Dictionary<string, MatchRoom> matchRooms = new Dictionary<string, MatchRoom>();
+    private readonly object matchRoomsLock = new();
 
     private int roomNumberCount = 0;
 
@@ -56,22 +57,21 @@ namespace OpenGSServer
 
     public List<AbstractGameRoom> AllRooms()
     {
-        var rooms = new List<AbstractGameRoom>(matchRooms.Values);
-
-
-
-
-        return rooms;
+        lock (matchRoomsLock)
+        {
+            return new List<AbstractGameRoom>(matchRooms.Values);
+        }
     }
 
     public CreateNewRoomResult CreateNewRoom(in string roomName, in string ownerID,AbstractMatchSetting setting)
     {
-        
-        
         var room=MatchRoomFactory.CreateMatchRoom(0,roomName, ownerID,setting,this);
-        
-        matchRooms.Add(room.Id, room);
-        
+
+        lock (matchRoomsLock)
+        {
+            matchRooms.Add(room.Id, room);
+        }
+
         var createNewRoomResult =
             new CreateNewRoomResult(ECreateNewRoomResult.Successful, ECreateNewRoomReason.NoReason);
 
@@ -175,29 +175,23 @@ namespace OpenGSServer
 
         bool succeeded = false;
 
-        String message = "";
+        string message = "";
 
-        if (matchRooms.ContainsKey(id.ToString()))
+        lock (matchRoomsLock)
         {
-            var room = matchRooms[id.ToString()];
-            //var player
+            if (matchRooms.TryGetValue(id.ToString(), out var room))
+            {
+                //var player
                 //room.AddNewPlayer()
-            
-
-
-
-            succeeded = true;
-
-        }
-        else
-        {
-
-            message = "No room";
-            succeeded = false;
+                succeeded = true;
+            }
+            else
+            {
+                message = "No room";
+            }
         }
 
         var result = new EnterMatchRoomResult(succeeded, message);
-
 
         return result;
     }
@@ -215,14 +209,16 @@ namespace OpenGSServer
             return null;
         }
 
-
-        foreach (var item in matchRooms)
+        lock (matchRoomsLock)
         {
-
-
+            foreach (var room in matchRooms.Values)
+            {
+                if (room.Players.Exists(p => p.Id == id))
+                {
+                    return room;
+                }
+            }
         }
-
-
 
         return null;
     }
@@ -231,22 +227,13 @@ namespace OpenGSServer
     {
         string message = "";
 
-        if (matchRooms.ContainsKey(id))
+        lock (matchRoomsLock)
         {
-            lock (matchRooms)
+            if (matchRooms.TryGetValue(id, out var room))
             {
-                var room = matchRooms[id];
-
-                //room.GameStart();
-
+                room.StartLoading();
+                return true;
             }
-
-
-            return true;
-        }
-        else
-        {
-
         }
 
 
@@ -256,13 +243,13 @@ namespace OpenGSServer
 
     public bool StartMatchTest()
     {
-        foreach (var m in matchRooms)
+        lock (matchRoomsLock)
         {
-            
-            //m.Value.GameStart();
-
-
-
+            foreach (var m in matchRooms)
+            {
+                
+                //m.Value.GameStart();
+            }
         }
 
 
@@ -284,8 +271,10 @@ namespace OpenGSServer
 
     public int RoomCount()
     {
-
-        return matchRooms.Count;
+        lock (matchRoomsLock)
+        {
+            return matchRooms.Count;
+        }
     }
 
     public void RemoveRoom(in string roomId, bool forceShutdownNowPlayingRooms = false)

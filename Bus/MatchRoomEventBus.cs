@@ -60,6 +60,11 @@ namespace OpenGSServer
         
         
         
+        public void PublishLoadingStart()
+        {
+            Console.WriteLine("LoadingStart");
+        }
+
         public void PublishGameStart()
         {
             Console.WriteLine("GameStart");

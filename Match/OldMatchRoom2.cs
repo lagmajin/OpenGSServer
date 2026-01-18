@@ -47,6 +47,8 @@ namespace OpenGSServer
         private AbstractMatchSetting Setting { get; set; }
         
         private AbstractMatchSituation situation { get; set; } = null;
+        private readonly HashSet<string> _readyPlayers = new();
+        private readonly object playerSyncLock = new();
 
 
         public GameScene GameScene { get; set; } = new();
@@ -117,6 +119,36 @@ namespace OpenGSServer
 
         }
 
+        public void StartLoading()
+        {
+            lock (playerSyncLock)
+            {
+                _readyPlayers.Clear();
+            }
+            eventBus.PublishLoadingStart();
+        }
+
+        public void SetPlayerReady(string playerId)
+        {
+            bool shouldStart = false;
+
+            lock (playerSyncLock)
+            {
+                if (!Players.Exists(p => p.Id == playerId))
+                {
+                    return;
+                }
+
+                _readyPlayers.Add(playerId);
+                shouldStart = _readyPlayers.Count >= Players.Count && Players.Count > 0 && !Playing;
+            }
+
+            if (shouldStart)
+            {
+                GameStart();
+            }
+        }
+
 
 
 
@@ -136,23 +168,26 @@ namespace OpenGSServer
 
         public void AddNewPlayer(PlayerInfo info)
         {
-
             if (Playing)
             {
-
+                return;
             }
-            else
+
+            lock (playersLock)
             {
-
+                if (!Players.Exists(p => p.Id == info.Id))
+                {
+                    Players.Add(info);
+                }
             }
-
-
-
         }
 
         public void AddNewPlayers(List<PlayerInfo> list)
         {
-
+            foreach (var info in list)
+            {
+                AddNewPlayer(info);
+            }
         }
 
         public void OnGameUpdateFromClient()

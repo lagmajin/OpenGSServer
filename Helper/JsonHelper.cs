@@ -25,9 +25,11 @@ namespace OpenGSServer
 
         public static string GetValueString(this IDictionary<string,JToken?> t,String name)
         {
-            string result = "";
-
-            return result;
+            if(t.TryGetValue(name, out var token))
+            {
+                return token?.ToString() ?? "";
+            }
+            return "";
         }
 
         public static string GetValueOrDefaultString(this IDictionary<string, JToken?> dic,string name,string defalut="")

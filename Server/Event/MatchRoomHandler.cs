@@ -31,6 +31,11 @@ namespace OpenGSServer
 
                 if (id != null)
                 {
+                    if (type == "LoadingFinished")
+                    {
+                        manager.SearchRoomByMemberID(id)?.SetPlayerReady(id);
+                    }
+
                     if (type == "Shot")
                     {
                         //ShotFromPlayer()
@@ -74,6 +79,11 @@ namespace OpenGSServer
 
                 if(id!=null)
                 {
+                    if (type == "LoadingFinished")
+                    {
+                        MatchRoomManager.Instance.SearchRoomByMemberID(id)?.SetPlayerReady(id);
+                    }
+
                     if (type == "Shot")
                     {
                         //ShotFromPlayer()

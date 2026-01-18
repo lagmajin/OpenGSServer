@@ -1,6 +1,11 @@
 ﻿
 
 
+
+
+using Newtonsoft.Json.Linq;
+using OpenGSCore;
+
 namespace OpenGSServer
 {
     public enum eGranadeType : int
@@ -13,85 +18,70 @@ namespace OpenGSServer
         Unknown
     }
 
+    /// <summary>
+    /// 手榴弾の種類を管理するクラス
+    /// </summary>
     public class GranadeType
     {
-        eGranadeType type_ = eGranadeType.Unknown;
+        private eGranadeType type_ = eGranadeType.Unknown;
 
-        GranadeType(eGranadeType type=eGranadeType.Unknown)
+        public eGranadeType Type { get => type_; set => type_ = value; }
+
+        public GranadeType()
         {
-            type = type_;
-
-
-
+            type_ = eGranadeType.Unknown;
         }
 
-        public string ToString()
+        public GranadeType(eGranadeType type)
         {
-            string result=new string("");
+            type_ = type;
+        }
 
+        public override string ToString()
+        {
             switch(type_)
             {
                 case eGranadeType.Normal:
-
-                    result = "Normal";
-
-                    break;
-
+                    return "Normal";
                 case eGranadeType.Fire:
-
-                    result = "Fire";
-
-                    break;
-
+                    return "Fire";
                 case eGranadeType.Power:
-                    result = "Power";
-                    break;
-
-
+                    return "Power";
                 case eGranadeType.Cluster:
-                    result = "Cluster";
-                    break;
-
+                    return "Cluster";
+                case eGranadeType.Magnet:
+                    return "Magnet";
                 default:
-                    result = "Unknown";
-
-                    break;
-
+                    return "Unknown";
             }
-
-            return result;
         }
 
+        /// <summary>
+        /// 文字列から手榴弾タイプへ変換
+        /// </summary>
         public bool FromStr(in string str)
         {
-            switch(str)
+            switch(str.ToLower())
             {
-                case "Normal":
+                case "normal":
                     type_ = eGranadeType.Normal;
-                    break;
-
-
-                case "Fire":
+                    return true;
+                case "fire":
                     type_ = eGranadeType.Fire;
-                    break;
-
-                case "Power":
+                    return true;
+                case "power":
                     type_ = eGranadeType.Power;
-                    break;
-
-                case "Cluster":
+                    return true;
+                case "cluster":
                     type_ = eGranadeType.Cluster;
-                    break;
-
+                    return true;
+                case "magnet":
+                    type_ = eGranadeType.Magnet;
+                    return true;
                 default:
                     type_ = eGranadeType.Unknown;
-                    break;
-
+                    return false;
             }
-
-
-
-            return false;
         }
 
         public override bool Equals(object obj)
@@ -100,42 +90,74 @@ namespace OpenGSServer
                    type_ == type.type_;
         }
 
-        public static bool operator==(GranadeType a,GranadeType b)
+        public override int GetHashCode()
         {
+            return type_.GetHashCode();
+        }
 
-            return true;
+        public static bool operator==(GranadeType a, GranadeType b)
+        {
+            if (a is null && b is null) return true;
+            if (a is null || b is null) return false;
+            return a.type_ == b.type_;
         }
 
         public static bool operator !=(GranadeType a, GranadeType b)
         {
-
             return !(a == b);
         }
-
     }
 
-    public abstract class AbstractGrenade :AbstractGameObject
+    /// <summary>
+    /// 手榴弾の基本クラス
+    /// </summary>
+    public abstract class AbstractGrenade : OpenGSCore.AbstractGameObject
     {
-        
+        private int stoppingPower = 0;
+        private int angle = 0;
+        private int speed = 0;
+        private int damage = 0;
+        private int explosionDamage = 0;
+        private GranadeType granadeType = new();
+        private string ownerId = "";
+        private float lifeTime = 3.0f; // 秒単位
 
-        int stoppingPower = 0;
-        int angle = 0;
-        int speed = 0;
+        public int StoppingPower { get => stoppingPower; set => stoppingPower = value; }
+        public int Angle { get => angle; set => angle = value; }
+        public int Speed { get => speed; set => speed = value; }
+        public int ExplosionDamage { get => explosionDamage; set => explosionDamage = value; }
+        public int Damage { get => damage; set => damage = value; }
+        public string OwnerId { get => ownerId; set => ownerId = value; }
+        public GranadeType GranadeType { get => granadeType; set => granadeType = value; }
+        public float LifeTime { get => lifeTime; set => lifeTime = value; }
 
-        int damage = 0;
-        int explosionDamage = 0;
-
-        public int StoppingPower { get; }
-        public int Angle { get; }
-        public int Speed { get; set; }
-        public int ExplosionDamage { get; set; }
-        public int Damage { get; set; }
-        public string ownerId { get; set; }
-        protected AbstractGrenade(float x,float y):base(x,y)
+        protected AbstractGrenade()
         {
-
         }
 
-        abstract public void Hit();
+        protected AbstractGrenade(float x, float y)
+        {
+            Posx = x;
+            Posy = y;
+        }
+
+        /// <summary>
+        /// 手榴弾が何かにぶつかったときの処理
+        /// </summary>
+        public abstract void Hit();
+
+        public override Newtonsoft.Json.Linq.JObject ToJSon()
+        {
+            var json = base.ToJSon();
+            json["stoppingPower"] = StoppingPower;
+            json["angle"] = Angle;
+            json["speed"] = Speed;
+            json["damage"] = Damage;
+            json["explosionDamage"] = ExplosionDamage;
+            json["ownerId"] = OwnerId;
+            json["granadeType"] = GranadeType.ToString();
+            json["lifeTime"] = LifeTime;
+            return json;
+        }
     }
 }

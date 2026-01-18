@@ -44,7 +44,7 @@ namespace OpenGSServer
             this.succeeded = succeeded;
             this.type_ = type;
         }
-        private string MessageType()
+        public string MessageType()
         {
             switch (type_)
             {
@@ -69,9 +69,9 @@ namespace OpenGSServer
                 case eLoginResultType.Unknown:
                     return "Unknown Message";
                 case eLoginResultType.LoginSucceeded:
-                    return "LoginSucceeded";
+                    return "Login Successful";
                 case eLoginResultType.AccountNotFound:
-                    return "AccountNotFound";
+                    return "Account Not Found";
                 case eLoginResultType.InvalidIDorPassword:
                     return "Invalid ID or Password";
                 case eLoginResultType.AlreadyLogonSameUser:
