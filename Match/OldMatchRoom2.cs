@@ -22,6 +22,7 @@ namespace OpenGSServer
 
     */
 
+    /*
     public interface IMatchRoom
     {
 
@@ -30,7 +31,10 @@ namespace OpenGSServer
 
     }
 
+    */
+
     //#bookmark
+    //#old
     public partial class MatchRoom : AbstractGameRoom, IMatchRoom
     {
 

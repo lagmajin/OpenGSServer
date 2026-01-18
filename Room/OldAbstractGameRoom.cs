@@ -6,10 +6,15 @@ using System.Timers;
 
 namespace OpenGSServer
 {
+    /*
     public interface IAbstractGameRoom
     {
 
     }
+
+    */
+
+    /*
     public class AbstractGameRoom:IAbstractGameRoom
     {
         //Timer timer;
@@ -54,4 +59,6 @@ namespace OpenGSServer
         }
 
     }
+
+    */
 }

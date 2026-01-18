@@ -140,7 +140,7 @@ namespace OpenGSServer
 
                 var setting = new DeathMatchSetting();
 
-                room.ChangeMatchSetting(setting);
+                //room.ChangeMatchSetting(setting);
 
                
 

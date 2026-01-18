@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using OpenGSCore;
 using OpenGSServer.Utility;
 
 namespace OpenGSServer
@@ -26,12 +27,12 @@ namespace OpenGSServer
 
         void AddPlayerCharacter(PlayerGameObject character)
         {
-            objects.Add(character);
+            //objects.Add(character);
         }
 
         void AddFieldItem(AbstractFieldItem item)
         {
-            objects.Add(item);
+            //objects.Add(item);
         }
 
         void AddGrenade()

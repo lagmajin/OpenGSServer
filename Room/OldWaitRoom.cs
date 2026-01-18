@@ -6,10 +6,13 @@ using System;
 using System.Collections.Generic;
 using Newtonsoft.Json.Linq;
 using OpenGSCore;
-namespace OpenGSServer
+using OpenGSServer;
+
+
+namespace OpenGSCore
 {
 
-    
+    /*
     public partial class WaitRoom
     {
         public MatchRoom? MatchRoomLink { get; set; } = null;
@@ -143,4 +146,6 @@ namespace OpenGSServer
         
 
     }
+
+    */
 }

@@ -175,7 +175,7 @@ namespace OpenGSServer
                 roomJson["RoomName"] = value.RoomName.ToString();
                 roomJson["Capacity"] = value.Capacity.ToString();
                 roomJson["NowPlaying"] = value.NowPlaying.ToString();
-                roomJson["CanEnter"] = value.CanEnter.ToString();
+                //roomJson["CanEnter"] = value.CanEnter.ToString();
 
                 var gameModeJson = new JObject();
 

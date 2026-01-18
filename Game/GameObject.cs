@@ -84,24 +84,6 @@ namespace OpenGSServer
 
 
 
-    public class PlayerGameObject : AbstractGameObject
-    {
-        PlayerStatus status;
-
-        public PlayerGameObject(String name,float x,float y) : base(x, y)
-        {
-
-        }
-
-        public override JObject ToJSon()
-        {
-            JObject json = new JObject();
-
-
-            return json;
-        }
-
-    }
 
 
     class NormalGranade : AbstractGameObject
