@@ -1,69 +1,338 @@
-
-
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using OpenGSCore;
 
 namespace OpenGSServer
 {
     public interface IMatchLogic
     {
-        // ãƒãƒƒãƒã‚’é–‹å§‹ã™ã‚‹
+        // ƒ}ƒbƒ`‚ğŠJn‚·‚é
         void StartMatch();
 
-        // ãƒãƒƒãƒã‚’çµ‚äº†ã™ã‚‹
+        // ƒ}ƒbƒ`‚ğI—¹‚·‚é
         void EndMatch();
 
-        // ãƒ—ãƒ¬ã‚¤ãƒ¤ãƒ¼ã‚’ãƒãƒƒãƒã«è¿½åŠ ã™ã‚‹
-        void AddPlayerToMatch(int matchId, string playerName);
+        // ƒvƒŒƒCƒ„[‚ğƒ}ƒbƒ`‚É’Ç‰Á‚·‚é
+        void AddPlayer(string playerName);
 
-        // ãƒ—ãƒ¬ã‚¤ãƒ¤ãƒ¼ã‚’ãƒãƒƒãƒã‹ã‚‰å‰Šé™¤ã™ã‚‹
-        void RemovePlayerFromMatch(int matchId, string playerName);
+        // ƒvƒŒƒCƒ„[‚ğƒ}ƒbƒ`‚©‚çíœ‚·‚é
+        void RemovePlayer(string playerName);
 
-        // ç¾åœ¨ã®ãƒãƒƒãƒã®çŠ¶æ…‹ã‚’å–å¾—ã™ã‚‹
-        string GetMatchStatus(int matchId);
+        // Œ»İ‚Ìƒ}ƒbƒ`‚Ìó‘Ô‚ğæ“¾‚·‚é
+        string GetMatchStatus();
 
-        // ã‚¹ã‚³ã‚¢ã‚’æ›´æ–°ã™ã‚‹
-        void UpdateScore(int matchId, string playerName, int score);
+        // ƒXƒRƒA‚ğXV‚·‚é
+        void UpdateScore(string playerName, int score);
+
+        // Ÿ—˜ğŒ‚ğƒ`ƒFƒbƒN‚·‚é
+        bool CheckWinCondition();
+
+        // ŸÒ‚ğŒˆ’è‚·‚é
+        List<string> GetWinners();
     }
-public class SurvivalMode : IMatchLogic
-{
-    
-    public void StartMatch() { /* ã‚µãƒã‚¤ãƒãƒ«ãƒ¢ãƒ¼ãƒ‰ã®ãƒ­ã‚¸ãƒƒã‚¯ */ }
-    public void EndMatch() { /* ã‚µãƒã‚¤ãƒãƒ«ãƒ¢ãƒ¼ãƒ‰ã®ãƒ­ã‚¸ãƒƒã‚¯ */ }
-    public void AddPlayerToMatch(int matchId, string playerName) { /* ã‚µãƒã‚¤ãƒãƒ«ãƒ¢ãƒ¼ãƒ‰ã®ãƒ­ã‚¸ãƒƒã‚¯ */ }
-    public void RemovePlayerFromMatch(int matchId, string playerName) { /* ã‚µãƒã‚¤ãƒãƒ«ãƒ¢ãƒ¼ãƒ‰ã®ãƒ­ã‚¸ãƒƒã‚¯ */ }
-    public string GetMatchStatus(int matchId) { return "Survival Mode"; }
-    public void UpdateScore(int matchId, string playerName, int score) { /* ã‚µãƒã‚¤ãƒãƒ«ãƒ¢ãƒ¼ãƒ‰ã®ã‚¹ã‚³ã‚¢æ›´æ–° */ }
-}
 
-// ãƒ‡ã‚¹ãƒãƒƒãƒãƒ¢ãƒ¼ãƒ‰
-public class DeathMatchMode : IMatchLogic
-{
-    public void StartMatch() { /* ãƒ‡ã‚¹ãƒãƒƒãƒãƒ¢ãƒ¼ãƒ‰ã®ãƒ­ã‚¸ãƒƒã‚¯ */ }
-    public void EndMatch() { /* ãƒ‡ã‚¹ãƒãƒƒãƒãƒ¢ãƒ¼ãƒ‰ã®ãƒ­ã‚¸ãƒƒã‚¯ */ }
-    public void AddPlayerToMatch(int matchId, string playerName) { /* ãƒ‡ã‚¹ãƒãƒƒãƒãƒ¢ãƒ¼ãƒ‰ã®ãƒ­ã‚¸ãƒƒã‚¯ */ }
-    public void RemovePlayerFromMatch(int matchId, string playerName) { /* ãƒ‡ã‚¹ãƒãƒƒãƒãƒ¢ãƒ¼ãƒ‰ã®ãƒ­ã‚¸ãƒƒã‚¯ */ }
-    public string GetMatchStatus(int matchId) { return "Death Match Mode"; }
-    public void UpdateScore(int matchId, string playerName, int score) { /* ãƒ‡ã‚¹ãƒãƒƒãƒãƒ¢ãƒ¼ãƒ‰ã®ã‚¹ã‚³ã‚¢æ›´æ–° */ }
-}
+    public class SurvivalMode : IMatchLogic
+    {
+        private List<string> players = new();
+        private List<string> alivePlayers = new();
+        private bool matchActive = false;
+        private DateTime matchStartTime;
+        private const int SURVIVAL_TIME_MINUTES = 10;
 
-// ãƒãƒ¼ãƒ ãƒ‡ã‚¹ãƒãƒƒãƒãƒ¢ãƒ¼ãƒ‰
-public class TeamDeathMatchMode : IMatchLogic
-{
-    public void StartMatch() { /* ãƒãƒ¼ãƒ ãƒ‡ã‚¹ãƒãƒƒãƒãƒ¢ãƒ¼ãƒ‰ã®ãƒ­ã‚¸ãƒƒã‚¯ */ }
-    public void EndMatch() { /* ãƒãƒ¼ãƒ ãƒ‡ã‚¹ãƒãƒƒãƒãƒ¢ãƒ¼ãƒ‰ã®ãƒ­ã‚¸ãƒƒã‚¯ */ }
-    public void AddPlayerToMatch(int matchId, string playerName) { /* ãƒãƒ¼ãƒ ãƒ‡ã‚¹ãƒãƒƒãƒãƒ¢ãƒ¼ãƒ‰ã®ãƒ­ã‚¸ãƒƒã‚¯ */ }
-    public void RemovePlayerFromMatch(int matchId, string playerName) { /* ãƒãƒ¼ãƒ ãƒ‡ã‚¹ãƒãƒƒãƒãƒ¢ãƒ¼ãƒ‰ã®ãƒ­ã‚¸ãƒƒã‚¯ */ }
-    public string GetMatchStatus(int matchId) { return "Team Death Match Mode"; }
-    public void UpdateScore(int matchId, string playerName, int score) { /* ãƒãƒ¼ãƒ ãƒ‡ã‚¹ãƒãƒƒãƒãƒ¢ãƒ¼ãƒ‰ã®ã‚¹ã‚³ã‚¢æ›´æ–° */ }
-}
+        public void StartMatch()
+        {
+            matchActive = true;
+            matchStartTime = DateTime.Now;
+            Console.WriteLine("Survival Mode started");
+        }
 
-// ã‚­ãƒ£ãƒ—ãƒãƒ£ãƒ¼ãƒ»ã‚¶ãƒ»ãƒ•ãƒ©ãƒƒã‚°ãƒ¢ãƒ¼ãƒ‰
-public class CaptureTheFlagMode : IMatchLogic
-{
-    public void StartMatch() { /* ã‚­ãƒ£ãƒ—ãƒãƒ£ãƒ¼ãƒ»ã‚¶ãƒ»ãƒ•ãƒ©ãƒƒã‚°ãƒ¢ãƒ¼ãƒ‰ã®ãƒ­ã‚¸ãƒƒã‚¯ */ }
-    public void EndMatch() { /* ã‚­ãƒ£ãƒ—ãƒãƒ£ãƒ¼ãƒ»ã‚¶ãƒ»ãƒ•ãƒ©ãƒƒã‚°ãƒ¢ãƒ¼ãƒ‰ã®ãƒ­ã‚¸ãƒƒã‚¯ */ }
-    public void AddPlayerToMatch(int matchId, string playerName) { /* ã‚­ãƒ£ãƒ—ãƒãƒ£ãƒ¼ãƒ»ã‚¶ãƒ»ãƒ•ãƒ©ãƒƒã‚°ãƒ¢ãƒ¼ãƒ‰ã®ãƒ­ã‚¸ãƒƒã‚¯ */ }
-    public void RemovePlayerFromMatch(int matchId, string playerName) { /* ã‚­ãƒ£ãƒ—ãƒãƒ£ãƒ¼ãƒ»ã‚¶ãƒ»ãƒ•ãƒ©ãƒƒã‚°ãƒ¢ãƒ¼ãƒ‰ã®ãƒ­ã‚¸ãƒƒã‚¯ */ }
-    public string GetMatchStatus(int matchId) { return "Capture The Flag Mode"; }
-    public void UpdateScore(int matchId, string playerName, int score) { /* ã‚­ãƒ£ãƒ—ãƒãƒ£ãƒ¼ãƒ»ã‚¶ãƒ»ãƒ•ãƒ©ãƒƒã‚°ãƒ¢ãƒ¼ãƒ‰ã®ã‚¹ã‚³ã‚¢æ›´æ–° */ }
-}
+        public void EndMatch()
+        {
+            matchActive = false;
+            Console.WriteLine("Survival Mode ended");
+        }
+
+        public void AddPlayer(string playerName)
+        {
+            if (!players.Contains(playerName))
+            {
+                players.Add(playerName);
+                alivePlayers.Add(playerName);
+            }
+        }
+
+        public void RemovePlayer(string playerName)
+        {
+            players.Remove(playerName);
+            alivePlayers.Remove(playerName);
+        }
+
+        public string GetMatchStatus()
+        {
+            if (!matchActive)
+                return "Match not active";
+
+            return $"Survival Mode - Alive: {alivePlayers.Count}/{players.Count}";
+        }
+
+        public void UpdateScore(string playerName, int score)
+        {
+            // Survivalƒ‚[ƒh‚Å‚ÍƒXƒRƒA‚Íg—p‚µ‚È‚¢i¶‘¶ŠÔ‚ªƒƒCƒ“j
+            // ‚½‚¾‚µAƒLƒ‹”‚È‚Ç‚Ì’Ç‰ÁƒXƒRƒA‚Í•Û‰Â”\
+        }
+
+        public bool CheckWinCondition()
+        {
+            if (!matchActive)
+                return false;
+
+            // ŠÔØ‚ê‚Ü‚½‚ÍÅŒã‚Ì¶‘¶Ò‚Ì‚İ
+            var timeUp = (DateTime.Now - matchStartTime).TotalMinutes >= SURVIVAL_TIME_MINUTES;
+            var lastPlayerStanding = alivePlayers.Count <= 1;
+
+            return timeUp || lastPlayerStanding;
+        }
+
+        public List<string> GetWinners()
+        {
+            // ¶‘¶‚µ‚Ä‚¢‚éƒvƒŒƒCƒ„[‚ªŸÒ
+            return new List<string>(alivePlayers);
+        }
+
+        // Survivalƒ‚[ƒh“Á—L‚Ìƒƒ\ƒbƒh
+        public void PlayerEliminated(string playerName)
+        {
+            alivePlayers.Remove(playerName);
+        }
+    }
+
+    // ƒfƒXƒ}ƒbƒ`ƒ‚[ƒh
+    public class DeathMatchMode : IMatchLogic
+    {
+        private Dictionary<string, int> playerScores = new();
+        private List<string> players = new();
+        private bool matchActive = false;
+        private const int WIN_KILL_COUNT = 20;
+
+        public void StartMatch()
+        {
+            matchActive = true;
+            Console.WriteLine("Death Match started");
+        }
+
+        public void EndMatch()
+        {
+            matchActive = false;
+            Console.WriteLine("Death Match ended");
+        }
+
+        public void AddPlayer(string playerName)
+        {
+            if (!players.Contains(playerName))
+            {
+                players.Add(playerName);
+                playerScores[playerName] = 0;
+            }
+        }
+
+        public void RemovePlayer(string playerName)
+        {
+            players.Remove(playerName);
+            playerScores.Remove(playerName);
+        }
+
+        public string GetMatchStatus()
+        {
+            if (!matchActive)
+                return "Match not active";
+
+            var topPlayer = playerScores.OrderByDescending(x => x.Value).FirstOrDefault();
+            return $"Death Match Active - Leader: {topPlayer.Key} ({topPlayer.Value} kills)";
+        }
+
+        public void UpdateScore(string playerName, int score)
+        {
+            if (playerScores.ContainsKey(playerName))
+            {
+                playerScores[playerName] += score;
+            }
+        }
+
+        public bool CheckWinCondition()
+        {
+            if (!matchActive)
+                return false;
+
+            return playerScores.Any(x => x.Value >= WIN_KILL_COUNT);
+        }
+
+        public List<string> GetWinners()
+        {
+            var maxScore = playerScores.Max(x => x.Value);
+            return playerScores.Where(x => x.Value == maxScore).Select(x => x.Key).ToList();
+        }
+    }
+
+    // ƒ`[ƒ€ƒfƒXƒ}ƒbƒ`ƒ‚[ƒh
+    public class TeamDeathMatchMode : IMatchLogic
+    {
+        private Dictionary<string, int> teamScores = new();
+        private Dictionary<string, string> playerTeams = new();
+        private List<string> players = new();
+        private bool matchActive = false;
+        private const int WIN_KILL_COUNT = 50; // ƒ`[ƒ€‡ŒvƒLƒ‹”
+
+        public void StartMatch()
+        {
+            matchActive = true;
+            // ‰Šúƒ`[ƒ€ì¬
+            teamScores["Red"] = 0;
+            teamScores["Blue"] = 0;
+            Console.WriteLine("Team Death Match started");
+        }
+
+        public void EndMatch()
+        {
+            matchActive = false;
+            Console.WriteLine("Team Death Match ended");
+        }
+
+        public void AddPlayer(string playerName)
+        {
+            if (!players.Contains(playerName))
+            {
+                players.Add(playerName);
+                // ƒVƒ“ƒvƒ‹‚Èƒ`[ƒ€Š„‚è“–‚ÄiŒğŒİ‚Éj
+                var team = players.Count % 2 == 1 ? "Red" : "Blue";
+                playerTeams[playerName] = team;
+            }
+        }
+
+        public void RemovePlayer(string playerName)
+        {
+            players.Remove(playerName);
+            playerTeams.Remove(playerName);
+        }
+
+        public string GetMatchStatus()
+        {
+            if (!matchActive)
+                return "Match not active";
+
+            var redScore = teamScores.GetValueOrDefault("Red", 0);
+            var blueScore = teamScores.GetValueOrDefault("Blue", 0);
+
+            return $"Team Death Match - Red: {redScore}, Blue: {blueScore}";
+        }
+
+        public void UpdateScore(string playerName, int score)
+        {
+            if (playerTeams.ContainsKey(playerName))
+            {
+                var team = playerTeams[playerName];
+                teamScores[team] += score;
+            }
+        }
+
+        public bool CheckWinCondition()
+        {
+            if (!matchActive)
+                return false;
+
+            return teamScores.Any(x => x.Value >= WIN_KILL_COUNT);
+        }
+
+        public List<string> GetWinners()
+        {
+            var maxScore = teamScores.Max(x => x.Value);
+            return teamScores.Where(x => x.Value == maxScore).Select(x => x.Key).ToList();
+        }
+    }
+
+    // ƒLƒƒƒvƒ`ƒƒ[EƒUEƒtƒ‰ƒbƒOƒ‚[ƒh
+    public class CaptureTheFlagMode : IMatchLogic
+    {
+        private Dictionary<string, int> teamScores = new();
+        private Dictionary<string, string> playerTeams = new();
+        private List<string> players = new();
+        private bool matchActive = false;
+        private const int WIN_CAPTURE_COUNT = 3; // ƒtƒ‰ƒbƒOƒLƒƒƒvƒ`ƒƒ[”
+
+        public void StartMatch()
+        {
+            matchActive = true;
+            // ‰Šúƒ`[ƒ€ì¬
+            teamScores["Red"] = 0;
+            teamScores["Blue"] = 0;
+            Console.WriteLine("Capture The Flag started");
+        }
+
+        public void EndMatch()
+        {
+            matchActive = false;
+            Console.WriteLine("Capture The Flag ended");
+        }
+
+        public void AddPlayer(string playerName)
+        {
+            if (!players.Contains(playerName))
+            {
+                players.Add(playerName);
+                // ƒVƒ“ƒvƒ‹‚Èƒ`[ƒ€Š„‚è“–‚Ä
+                var team = players.Count % 2 == 1 ? "Red" : "Blue";
+                playerTeams[playerName] = team;
+            }
+        }
+
+        public void RemovePlayer(string playerName)
+        {
+            players.Remove(playerName);
+            playerTeams.Remove(playerName);
+        }
+
+        public string GetMatchStatus()
+        {
+            if (!matchActive)
+                return "Match not active";
+
+            var redScore = teamScores.GetValueOrDefault("Red", 0);
+            var blueScore = teamScores.GetValueOrDefault("Blue", 0);
+
+            return $"CTF - Red: {redScore}, Blue: {blueScore}";
+        }
+
+        public void UpdateScore(string playerName, int score)
+        {
+            // CTF‚Å‚ÍƒXƒRƒA‚Íƒtƒ‰ƒbƒOƒLƒƒƒvƒ`ƒƒ[”‚ğ•\‚·
+            if (playerTeams.ContainsKey(playerName))
+            {
+                var team = playerTeams[playerName];
+                teamScores[team] += score;
+            }
+        }
+
+        public bool CheckWinCondition()
+        {
+            if (!matchActive)
+                return false;
+
+            return teamScores.Any(x => x.Value >= WIN_CAPTURE_COUNT);
+        }
+
+        public List<string> GetWinners()
+        {
+            var maxScore = teamScores.Max(x => x.Value);
+            return teamScores.Where(x => x.Value == maxScore).Select(x => x.Key).ToList();
+        }
+
+        // CTF“Á—L‚Ìƒƒ\ƒbƒh
+        public void FlagCaptured(string capturingTeam)
+        {
+            if (teamScores.ContainsKey(capturingTeam))
+            {
+                teamScores[capturingTeam]++;
+            }
+        }
+    }
 }

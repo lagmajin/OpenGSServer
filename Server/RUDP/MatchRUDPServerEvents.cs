@@ -1,5 +1,4 @@
-﻿
-using System;
+﻿using System;
 using System.Collections.Generic;
 using LiteNetLib;
 using LiteNetLib.Utils;
@@ -66,14 +65,18 @@ namespace OpenGSServer
             {
                 ConsoleWrite.WriteMessage(data.ToString());
 
-                var json=new JObject(JObject.FromObject(data));
-
-                OldMatchRoomHandler.ParseEvent(json);
-  
-
-
-
-
+                // UDPデータをJSONとして処理
+                try
+                {
+                    var jsonString = System.Text.Encoding.UTF8.GetString(new byte[] { data });
+                    var json = JObject.Parse(jsonString);
+                    InGameMatchEventHandler.HandleTcpSystemEvent(json); // TCPとして処理
+                }
+                catch
+                {
+                    // JSONパース失敗時はUDPゲームイベントとして扱う
+                    InGameMatchEventHandler.HandleUdpGameEvent(new byte[] { data }, "unknown");
+                }
             }
 
 

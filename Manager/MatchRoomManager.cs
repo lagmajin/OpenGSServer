@@ -81,87 +81,81 @@ namespace OpenGSServer
     public CreateNewRoomResult CreateNewDeathMatchRoom(in string roomName, in string ownerID, int capacity = 10,
         bool teamBalance = true)
     {
-        var matchSetting = new DeathMatchSetting(10);
+        var matchSetting = new DeathMatchSetting(20, teamBalance);
+        matchSetting.MaxPlayerCount = capacity;
 
-        var matchRule = new DeathMatchRule();
+        var result = CreateNewRoom(roomName, ownerID, matchSetting);
 
-
-        var matchRoomInstance=    MatchRoomManager.Instance;
-
-
-        var bus = new MatchRoomEventBus();
-
-        //var matchRoom = new MatchRoom(roomNumberCount, roomName, ownerID, matchRule,bus);
-
-        //matchRooms.Add(matchRoom.Id, matchRoom);
-
-        //IncreaseRoomCounter();
-
-
-        var createNewRoomResult =
-            new CreateNewRoomResult(ECreateNewRoomResult.Successful, ECreateNewRoomReason.NoReason);
-
-        return createNewRoomResult;
+        return result;
     }
 
-    public void CreateNewTeamDeathMatchRoom(in string roomName, in string ownerID, int capacity = 10,
+    public CreateNewRoomResult CreateNewTeamDeathMatchRoom(in string roomName, in string ownerID, int capacity = 10,
         bool teamBalance = true)
     {
-        var tdmMatchSetting = new TDMMatchSetting();
+        var matchSetting = new TDMMatchSetting(capacity, teamBalance);
 
-        //var matchRule = new TDMMatchRule();
-        IncreaseRoomCounter();
+        var result = CreateNewRoom(roomName, ownerID, matchSetting);
 
-        var matchRoomInstance = MatchRoomManager.Instance;
-        //var bus = new MatchRoomEventBus();
-        //var matchRoom = new MatchRoom(0, roomName, ownerID, matchRule, bus);
-
-        //matchRoom.Subscribe(this);
-
-
-
-       // matchRooms.Add(matchRoom.Id, matchRoom);
-
-        //var tdmMatchRule = new TDMMatchRule();
-
-        //var matchSetting = new TDMMatchSetting(capacity,);
+        return result;
     }
 
 
-    public void CreateNewSuvRoom(in string roomName, in string OwnerID, int capacity = 10)
+    public CreateNewRoomResult CreateNewSuvRoom(in string roomName, in string ownerID, int capacity = 10)
     {
-        //var suvMatchRule = new SuvMatchRule();
         var matchSetting = new SuvMatchSetting(capacity, true);
+        matchSetting.MaxPlayerCount = capacity;
 
-        //var matchRoom = new MatchRoom(OwnerID, matchSetting);
-
-
-
+        var result = CreateNewRoom(roomName, ownerID, matchSetting);
+        return result;
     }
 
-    public void CreateNewTSuvRoom(in string roomName)
+    public CreateNewRoomResult CreateNewTSuvRoom(in string roomName, in string ownerID, int capacity = 10)
     {
+        var matchSetting = new TeamSurvivalMatchSetting(capacity, true);
+        matchSetting.MaxPlayerCount = capacity;
 
-        var matchSetting = new TSuvMatchRule();
+        var result = CreateNewRoom(roomName, ownerID, matchSetting);
 
-
-        //var matchRoom = new MatchRoom(0, "", "",);
-
-
+        return result;
     }
 
-    public void CreateNewCTFMatchRoom(string roomName, int capacity = 10)
+    public CreateNewRoomResult CreateNewCTFMatchRoom(string roomName, string ownerID, int capacity = 10)
     {
+        // CTFモード - チームベースなのでTDM設定を使用
+        var matchSetting = new TDMMatchSetting(capacity, true);
+        matchSetting.MaxPlayerCount = capacity;
 
+        var result = CreateNewRoom(roomName, ownerID, matchSetting);
+        return result;
     }
 
-
-    public void CreateNewMissionRoom(in string roomName, in string ownerID, int capacity = 3)
+    public CreateNewRoomResult CreateNewOneShotKillRoom(in string roomName, in string ownerID, int capacity = 10)
     {
-        //var missionRoom = new MissionRoom();
+        var matchSetting = new OneShotKillMatchSetting(capacity, true);
+        matchSetting.MaxPlayerCount = capacity;
 
+        var result = CreateNewRoom(roomName, ownerID, matchSetting);
 
+        return result;
+    }
 
+    public CreateNewRoomResult CreateNewArmsRaceRoom(in string roomName, in string ownerID, int capacity = 10)
+    {
+        var matchSetting = new ArmsRaceMatchSetting(capacity, true);
+        matchSetting.MaxPlayerCount = capacity;
+
+        var result = CreateNewRoom(roomName, ownerID, matchSetting);
+
+        return result;
+    }
+
+    public CreateNewRoomResult CreateNewMissionRoom(in string roomName, in string ownerID, int capacity = 3)
+    {
+        var matchSetting = new MissionMatchSetting(capacity, "Default");
+        matchSetting.MaxPlayerCount = capacity;
+
+        var result = CreateNewRoom(roomName, ownerID, matchSetting);
+        return result;
     }
 
     public EnterMatchRoomResult EnterRoom()
