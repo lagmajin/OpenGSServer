@@ -14,9 +14,9 @@ namespace OpenGSServer
     // Deprecation名前空間は削除
 
     /// <summary>
-    /// ゲームモード管理クラス（後方互換性のため）
+    /// ゲームモード管理クラス
+    /// OpenGSCore.eGameModeの補助クラス
     /// </summary>
-    [Obsolete("Use OpenGSCore.eGameMode directly", false)]
     public class GameMode
     {
         private eGameMode mode = eGameMode.Unknown;

@@ -39,13 +39,3 @@ public static class GameObjectExtensions
         };
     }
 }
-
-/// <summary>
-/// 後方互換性のための型エイリアス
-/// 段階的な移行中に使用
-/// </summary>
-public static class TypeAliases
-{
-    // 将来的に削除予定
-    // 現在は既存コードとの互換性のため
-}

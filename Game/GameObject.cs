@@ -15,12 +15,7 @@ namespace OpenGSServer
     // OpenGSCoreのenumを使用
     // public enum EGameObjectType は削除（OpenGSCore.eGameObjectType を使用）
 
-    public interface ISyncable
-    {
-        JObject ToJson();
-        bool HasChanged();
-        void SaveSyncState();
-    }
+    // ISyncable は削除（OpenGSCore.AbstractGameObjectで代替）
 
     // ===============================================
     // 後方互換性のためのエイリアス
@@ -40,29 +35,6 @@ namespace OpenGSServer
         // 追加のコンストラクタ
         protected AbstractGameObject()
         {
-        }
-    }
-
-    /// <summary>
-    /// 通常の手榴弾（参考実装）
-    /// OpenGSCoreのToJsonメソッドはJObjectではなくstring返すため、オーバーライドしない
-    /// </summary>
-    class NormalGranade : OpenGSCore.AbstractGameObject
-    {
-        public NormalGranade(float x, float y, float time = 0.0f)
-        {
-            SetPos(x, y);
-        }
-
-        // OpenGSCoreのToJsonはstring返すため、別メソッドとして実装
-        public JObject ToJObject()
-        {
-            return new JObject
-            {
-                ["Type"] = "Grenade",
-                ["X"] = Posx,
-                ["Y"] = Posy
-            };
         }
     }
 }

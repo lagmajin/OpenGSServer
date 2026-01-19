@@ -1,28 +1,21 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace OpenGSServer.Utility
 {
-    class Time
-    {
-        public static int TotalSec(int h, int m, int sec)
-        {
+    // Timeクラスは削除（.NET標準のTimeSpanを使用してください）
+    // 例: TimeSpan.FromHours(1).Add(TimeSpan.FromMinutes(30)).TotalSeconds
 
-
-            return h * 3600 + m * 60 + sec;
-        }
-
-
-    }
-
-
+    /// <summary>
+    /// Ping計算ユーティリティ
+    /// </summary>
     public class Ping
     {
+        /// <summary>
+        /// 2つのタイムスタンプからPingを計算
+        /// </summary>
         public static int CalcPing(int m1, int m2)
         {
             return Math.Abs(m1 - m2);
         }
-
     }
 }
