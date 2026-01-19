@@ -59,28 +59,23 @@ namespace OpenGSServer
 
         void OnNetworkReceive(NetPeer peer, NetPacketReader reader, DeliveryMethod deliveryMethod)
         {
+            if(reader.TryGetByte(out var data))
+             {
+                 ConsoleWrite.WriteMessage(data.ToString());
 
-
-           if(reader.TryGetByte(out var data))
-            {
-                ConsoleWrite.WriteMessage(data.ToString());
-
-                // UDPデータをJSONとして処理
-                try
-                {
-                    var jsonString = System.Text.Encoding.UTF8.GetString(new byte[] { data });
-                    var json = JObject.Parse(jsonString);
-                    InGameMatchEventHandler.HandleTcpSystemEvent(json); // TCPとして処理
-                }
-                catch
-                {
-                    // JSONパース失敗時はUDPゲームイベントとして扱う
-                    InGameMatchEventHandler.HandleUdpGameEvent(new byte[] { data }, "unknown");
-                }
+                 // UDPデータをJSONとして処理
+                 try
+                 {
+                     var jsonString = System.Text.Encoding.UTF8.GetString(new byte[] { data });
+                     var json = JObject.Parse(jsonString);
+                     InGameMatchEventHandler.HandleTcpSystemEvent(json); // TCPとして処理
+                 }
+                 catch
+                 {
+                     // JSONパース失敗時はUDPゲームイベントとして扱う
+                     InGameMatchEventHandler.HandleUdpGameEvent(new byte[] { data }, "unknown");
+                 }
             }
-
-
-
         }
 
 

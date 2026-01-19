@@ -1,5 +1,4 @@
-﻿
-using System;
+﻿using System;
 using System.Linq;
 using System.Threading;
 
@@ -18,6 +17,9 @@ using Autofac;
     {
         private static bool IsEnd { get; set; } = false;
         private static bool MonitorTaskFlag { get; set; } = false;
+
+        // UDPサーバーマネージャー
+        private static MatchRUdpServerManager? udpServerManager;
 
 
         static void CurrentDomain_ProcessExit(object sender, EventArgs e)
@@ -203,8 +205,6 @@ using Autofac;
 
                     var matchRUdpServer = container.Resolve<MatchRUdpServerManager>();
 
-                    matchRUdpServer.Listen(63000);
-
 
                     var managementServer = ManagementServer.Instance;
 
@@ -226,6 +226,10 @@ using Autofac;
 
                     ThreadPool.SetMinThreads(26, ioMin);
 
+                    // UDPゲームサーバーの初期化
+                    udpServerManager = MatchRUdpServerManager.Instance;
+                    ConsoleWrite.WriteMessage("[UDP]Game Server initialized", ConsoleColor.Cyan);
+
                     //var monitorTask = Task.Run(() => MonitorTask(cts.Token), cts.Token).ConfigureAwait(false);
 
 
@@ -233,6 +237,9 @@ using Autofac;
 
                     while (!IsEnd)
                     {
+                        // UDPサーバーの更新
+                        udpServerManager.Update();
+
                         var input = Console.ReadLine();
 
                         if (string.IsNullOrWhiteSpace(input))
@@ -273,6 +280,9 @@ using Autofac;
                     
                     ServerManager.Instance.SaveSetting();
                     batchService.OnStop();
+
+                    // UDPサーバーのシャットダウン
+                    udpServerManager.Shutdown();
                 }
             }
             else
