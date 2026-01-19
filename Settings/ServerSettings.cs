@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using Deprecation;
+using OpenGSCore; // OpenGSCore.eGameModeを使用
 using Newtonsoft.Json.Linq;
 
 namespace OpenGSServer
@@ -23,9 +23,9 @@ namespace OpenGSServer
             _allowGameModes.AddRange(new[]
             {
                 eGameMode.DeathMatch,
-                eGameMode.TDM,
-                eGameMode.SUV,
-                eGameMode.TSUV,
+                eGameMode.TeamDeathMatch,
+                eGameMode.Survival,
+                eGameMode.TeamSurvival,
                 eGameMode.CTF
             });
         }

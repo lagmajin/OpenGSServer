@@ -1,74 +1,72 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
+using OpenGSCore; // OpenGSCore.eGameModeを使用
 
-namespace Deprecation
+namespace OpenGSServer
 {
+    // ===============================================
+    // 注意: このファイルは段階的に削除予定
+    // OpenGSCore.eGameModeを使用してください
+    // ===============================================
 
+    // OpenGSCore.eGameModeを使用するため、ここでは定義しない
+    // Deprecation名前空間は削除
 
-
-
-    public enum eGameMode : byte
-    {
-        DeathMatch=0,
-        Practice,
-        FreeStyle,
-        TDM,
-        Ichigeki,
-        Sniper,
-        TowerMatch,
-        SUV,
-        TSUV,
-        CTF,
-        Unknown,
-
-    }
-
+    /// <summary>
+    /// ゲームモード管理クラス（後方互換性のため）
+    /// </summary>
+    [Obsolete("Use OpenGSCore.eGameMode directly", false)]
     public class GameMode
     {
-        eGameMode mode=eGameMode.Unknown;
-
+        private eGameMode mode = eGameMode.Unknown;
         private string str = "";
 
-
-        public GameMode(eGameMode mode)
+        public eGameMode Mode
         {
-
+            get => mode;
+            set => mode = value;
         }
 
-        public GameMode(string mode)
+        public GameMode()
         {
-            mode = mode.ToLower();
-            str = "unkonown";
+        }
 
-            
+        public GameMode(eGameMode gameMode)
+        {
+            mode = gameMode;
+        }
 
-            if(mode=="DeathMatch" || mode=="DM")
+        public GameMode(string modeStr)
+        {
+            var lowerMode = modeStr.ToLower();
+            str = "unknown";
+
+            if (lowerMode == "deathmatch" || lowerMode == "dm")
             {
                 str = "dm";
+                mode = eGameMode.DeathMatch;
             }
-
-            if (mode == "TeamDeathMatch" || mode == "TDM")
+            else if (lowerMode == "teamdeathmatch" || lowerMode == "tdm")
             {
                 str = "tdm";
+                mode = eGameMode.TeamDeathMatch; // OpenGSCoreの正式名
             }
-
-            if (mode=="Survival"|| mode=="SUV")
+            else if (lowerMode == "survival" || lowerMode == "suv")
             {
                 str = "suv";
+                mode = eGameMode.Survival; // OpenGSCoreの正式名
             }
-            if (mode == "TeamSurvival" || mode == "TSUV")
+            else if (lowerMode == "teamsurvival" || lowerMode == "tsuv")
             {
                 str = "tsuv";
+                mode = eGameMode.TeamSurvival; // OpenGSCoreの正式名
             }
-
-            if(mode=="CaptureTheFlag" || mode=="CTF")
+            else if (lowerMode == "capturetheflag" || lowerMode == "ctf")
             {
                 str = "ctf";
+                mode = eGameMode.CTF;
             }
-
-            
-
         }
 
         public string name()
@@ -78,11 +76,7 @@ namespace Deprecation
 
         public bool Valid()
         {
-            return false;
+            return mode != eGameMode.Unknown;
         }
-
-        internal eGameMode Mode { get => mode; set => mode = value; }
     }
-
-
 }

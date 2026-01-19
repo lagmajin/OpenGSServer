@@ -228,7 +228,7 @@ namespace OpenGSServer
         public void DisposeGrenade()
         {
             state = GrenadeState.Disposed;
-            OnDestroy();
+            // OnDestroy(); // TODO: AbstractGameObjectにOnDestroyメソッドを追加する必要がある
         }
 
         protected virtual void OnArmed()

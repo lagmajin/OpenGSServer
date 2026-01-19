@@ -262,13 +262,13 @@ using Autofac;
                                 ConsoleWrite.WriteMessage("Shutting down in 3 seconds...", ConsoleColor.Red);
                                 await Task.Delay(1000);
                             }
-                            IsEnd = true;
-                            Environment.Exit(0);
-                        }
-
-                        // コマンドを CommandParser に委譲
-                        CommandParser.Parse(input);
+                        IsEnd = true;
+                        Environment.Exit(0);
                     }
+
+                    // コマンドを CommandParser に委譲
+                    // CommandParser.Parse(input); // TODO: CommandParserを再実装する必要がある
+                }
                 }
                 catch (Exception ex)
                 {

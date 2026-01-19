@@ -1,34 +1,49 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using OpenGSCore;
 
 namespace OpenGSServer
 {
     /// <summary>
     /// ロビーサーバーマネージャー - ロビー機能の全体管理
+    /// C# 14.0: スレッドセーフ + イベントシステム + レート制限
     /// </summary>
-    public class LobbyServerManager
+    public sealed class LobbyServerManager : IDisposable
     {
-        private static LobbyServerManager? instance;
-        private readonly Lobby lobby = new();
-        private readonly Dictionary<string, LobbyPlayerInfo> connectedPlayers = new();
+        private static readonly Lazy<LobbyServerManager> _instance = 
+            new(() => new LobbyServerManager(), LazyThreadSafetyMode.ExecutionAndPublication);
+        
+        private readonly Lobby _lobby = new();
+        private readonly ConcurrentDictionary<string, LobbyPlayerInfo> _connectedPlayers = new();
+        private readonly ConcurrentDictionary<string, PlayerRateLimiter> _rateLimiters = new();
+        private readonly ReaderWriterLockSlim _lobbyLock = new();
+        private readonly Timer _cleanupTimer;
+        private bool _disposed;
 
-        public static LobbyServerManager Instance
-        {
-            get
-            {
-                if (instance == null)
-                {
-                    instance = new LobbyServerManager();
-                }
-                return instance;
-            }
-        }
+        public static LobbyServerManager Instance => _instance.Value;
+
+        // イベント
+        public event Action<string, LobbyPlayerInfo>? OnPlayerJoined;
+        public event Action<string>? OnPlayerLeft;
+        public event Action<string, LobbyRoomInfo>? OnRoomCreated;
+        public event Action<string, string>? OnPlayerJoinedRoom;
+        public event Action<string>? OnRoomClosed;
+        public event Action<string, string>? OnChatMessage;
 
         private LobbyServerManager()
         {
             InitializeLobby();
+            
+            // 定期的にクリーンアップ（5分ごと）
+            _cleanupTimer = new Timer(
+                callback: _ => CleanupInactivePlayers(),
+                state: null,
+                dueTime: TimeSpan.FromMinutes(5),
+                period: TimeSpan.FromMinutes(5)
+            );
         }
 
         private void InitializeLobby()
@@ -36,148 +51,341 @@ namespace OpenGSServer
             ConsoleWrite.WriteMessage("[LOBBY] Lobby server initialized", ConsoleColor.Cyan);
         }
 
+        private void CleanupInactivePlayers()
+        {
+            try
+            {
+                var inactivePlayers = _connectedPlayers
+                    .Where(kvp => (DateTime.UtcNow - kvp.Value.JoinedAt).TotalMinutes > 30)
+                    .Select(kvp => kvp.Key)
+                    .ToList();
+
+                foreach (var playerId in inactivePlayers)
+                {
+                    ConsoleWrite.WriteMessage($"[LOBBY] Removing inactive player: {playerId}", ConsoleColor.Yellow);
+                    PlayerLeaveLobby(playerId);
+                }
+            }
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage($"[LOBBY] Cleanup error: {ex.Message}", ConsoleColor.Red);
+            }
+        }
+
         #region プレイヤー管理
 
-        /// <summary>
-        /// プレイヤーをロビーに参加させる
-        /// </summary>
-        public bool PlayerJoinLobby(string playerId, string playerName)
+        public LobbyResult<LobbyPlayerInfo> PlayerJoinLobby(string playerId, string playerName)
         {
-            if (connectedPlayers.ContainsKey(playerId))
-                return false;
+            if (string.IsNullOrWhiteSpace(playerId))
+                return LobbyResult<LobbyPlayerInfo>.Error("Player ID cannot be empty");
+            
+            if (string.IsNullOrWhiteSpace(playerName))
+                return LobbyResult<LobbyPlayerInfo>.Error("Player name cannot be empty");
+            
+            if (playerName.Length > 20)
+                return LobbyResult<LobbyPlayerInfo>.Error("Player name too long (max 20 characters)");
 
-            var success = lobby.AddPlayer(playerId, playerName);
-            if (success)
+            var rateLimiter = _rateLimiters.GetOrAdd(playerId, _ => new PlayerRateLimiter());
+            if (!rateLimiter.AllowJoin())
+                return LobbyResult<LobbyPlayerInfo>.Error("Too many join attempts. Please wait.");
+
+            _lobbyLock.EnterWriteLock();
+            try
             {
-                connectedPlayers[playerId] = lobby.GetPlayers().First(p => p.PlayerId == playerId);
-                ConsoleWrite.WriteMessage($"[LOBBY] Player {playerId} joined lobby", ConsoleColor.Green);
-            }
+                if (_connectedPlayers.ContainsKey(playerId))
+                    return LobbyResult<LobbyPlayerInfo>.Error("Player already in lobby");
 
-            return success;
+                var success = _lobby.AddPlayer(playerId, playerName);
+                if (!success)
+                    return LobbyResult<LobbyPlayerInfo>.Error("Failed to add player to lobby");
+
+                var playerInfo = _lobby.GetPlayers().FirstOrDefault(p => p.PlayerId == playerId);
+                if (playerInfo == null)
+                    return LobbyResult<LobbyPlayerInfo>.Error("Player info not found after join");
+
+                _connectedPlayers[playerId] = playerInfo;
+                ConsoleWrite.WriteMessage($"[LOBBY] Player {playerId} ({playerName}) joined lobby", ConsoleColor.Green);
+                
+                OnPlayerJoined?.Invoke(playerId, playerInfo);
+                
+                return LobbyResult<LobbyPlayerInfo>.Success(playerInfo);
+            }
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage($"[LOBBY] Error joining lobby: {ex.Message}", ConsoleColor.Red);
+                return LobbyResult<LobbyPlayerInfo>.Error($"Internal error: {ex.Message}");
+            }
+            finally
+            {
+                _lobbyLock.ExitWriteLock();
+            }
         }
 
-        /// <summary>
-        /// プレイヤーをロビーから退出させる
-        /// </summary>
-        public bool PlayerLeaveLobby(string playerId)
+        public LobbyResult<bool> PlayerLeaveLobby(string playerId)
         {
-            if (!connectedPlayers.ContainsKey(playerId))
-                return false;
+            if (string.IsNullOrWhiteSpace(playerId))
+                return LobbyResult<bool>.Error("Player ID cannot be empty");
 
-            // ルームから退出
-            lobby.LeaveRoom(playerId);
-
-            var success = lobby.RemovePlayer(playerId);
-            if (success)
+            _lobbyLock.EnterWriteLock();
+            try
             {
-                connectedPlayers.Remove(playerId);
+                if (!_connectedPlayers.ContainsKey(playerId))
+                    return LobbyResult<bool>.Error("Player not in lobby");
+
+                _lobby.LeaveRoom(playerId);
+                var success = _lobby.RemovePlayer(playerId);
+                if (!success)
+                    return LobbyResult<bool>.Error("Failed to remove player from lobby");
+
+                _connectedPlayers.TryRemove(playerId, out _);
+                _rateLimiters.TryRemove(playerId, out _);
+                
                 ConsoleWrite.WriteMessage($"[LOBBY] Player {playerId} left lobby", ConsoleColor.Yellow);
+                OnPlayerLeft?.Invoke(playerId);
+                
+                return LobbyResult<bool>.Success(true);
             }
-
-            return success;
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage($"[LOBBY] Error leaving lobby: {ex.Message}", ConsoleColor.Red);
+                return LobbyResult<bool>.Error($"Internal error: {ex.Message}");
+            }
+            finally
+            {
+                _lobbyLock.ExitWriteLock();
+            }
         }
 
-        /// <summary>
-        /// 接続中のプレイヤー情報を取得
-        /// </summary>
-        public LobbyPlayerInfo? GetPlayerInfo(string playerId)
+        public LobbyResult<LobbyPlayerInfo> GetPlayerInfo(string playerId)
         {
-            return connectedPlayers.ContainsKey(playerId) ? connectedPlayers[playerId] : null;
+            if (string.IsNullOrWhiteSpace(playerId))
+                return LobbyResult<LobbyPlayerInfo>.Error("Player ID cannot be empty");
+
+            _lobbyLock.EnterReadLock();
+            try
+            {
+                if (!_connectedPlayers.TryGetValue(playerId, out var playerInfo))
+                    return LobbyResult<LobbyPlayerInfo>.Error("Player not found");
+
+                return LobbyResult<LobbyPlayerInfo>.Success(playerInfo);
+            }
+            finally
+            {
+                _lobbyLock.ExitReadLock();
+            }
         }
 
-        /// <summary>
-        /// ロビー内の全プレイヤー情報を取得
-        /// </summary>
-        public List<LobbyPlayerInfo> GetAllPlayers()
+        public LobbyResult<List<LobbyPlayerInfo>> GetAllPlayers()
         {
-            return lobby.GetPlayers();
+            _lobbyLock.EnterReadLock();
+            try
+            {
+                var players = _lobby.GetPlayers();
+                return LobbyResult<List<LobbyPlayerInfo>>.Success(players);
+            }
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage($"[LOBBY] Error getting players: {ex.Message}", ConsoleColor.Red);
+                return LobbyResult<List<LobbyPlayerInfo>>.Error($"Internal error: {ex.Message}");
+            }
+            finally
+            {
+                _lobbyLock.ExitReadLock();
+            }
         }
 
         #endregion
 
         #region ルーム管理
 
-        /// <summary>
-        /// 新しいルームを作成
-        /// </summary>
-        public LobbyRoomInfo? CreateRoom(string roomName, string ownerId, EGameMode gameMode)
+        public LobbyResult<LobbyRoomInfo> CreateRoom(string roomName, string ownerId, EGameMode gameMode)
         {
-            var room = lobby.CreateRoom(roomName, ownerId, gameMode);
-            if (room != null)
+            if (string.IsNullOrWhiteSpace(roomName))
+                return LobbyResult<LobbyRoomInfo>.Error("Room name cannot be empty");
+            
+            if (roomName.Length > 30)
+                return LobbyResult<LobbyRoomInfo>.Error("Room name too long (max 30 characters)");
+            
+            if (string.IsNullOrWhiteSpace(ownerId))
+                return LobbyResult<LobbyRoomInfo>.Error("Owner ID cannot be empty");
+
+            var rateLimiter = _rateLimiters.GetOrAdd(ownerId, _ => new PlayerRateLimiter());
+            if (!rateLimiter.AllowRoomAction())
+                return LobbyResult<LobbyRoomInfo>.Error("Too many room actions. Please wait.");
+
+            _lobbyLock.EnterWriteLock();
+            try
             {
+                if (!_connectedPlayers.ContainsKey(ownerId))
+                    return LobbyResult<LobbyRoomInfo>.Error("Owner not in lobby");
+
+                var room = _lobby.CreateRoom(roomName, ownerId, gameMode);
+                if (room == null)
+                    return LobbyResult<LobbyRoomInfo>.Error("Failed to create room");
+
                 ConsoleWrite.WriteMessage($"[LOBBY] Room '{roomName}' created by {ownerId}", ConsoleColor.Green);
+                OnRoomCreated?.Invoke(ownerId, room);
+                
+                return LobbyResult<LobbyRoomInfo>.Success(room);
             }
-            return room;
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage($"[LOBBY] Error creating room: {ex.Message}", ConsoleColor.Red);
+                return LobbyResult<LobbyRoomInfo>.Error($"Internal error: {ex.Message}");
+            }
+            finally
+            {
+                _lobbyLock.ExitWriteLock();
+            }
         }
 
-        /// <summary>
-        /// ルームに参加
-        /// </summary>
-        public bool JoinRoom(string roomId, string playerId)
+        public LobbyResult<bool> JoinRoom(string roomId, string playerId)
         {
-            var success = lobby.JoinRoom(roomId, playerId);
-            if (success)
+            if (string.IsNullOrWhiteSpace(roomId))
+                return LobbyResult<bool>.Error("Room ID cannot be empty");
+            
+            if (string.IsNullOrWhiteSpace(playerId))
+                return LobbyResult<bool>.Error("Player ID cannot be empty");
+
+            var rateLimiter = _rateLimiters.GetOrAdd(playerId, _ => new PlayerRateLimiter());
+            if (!rateLimiter.AllowRoomAction())
+                return LobbyResult<bool>.Error("Too many room actions. Please wait.");
+
+            _lobbyLock.EnterWriteLock();
+            try
             {
+                if (!_connectedPlayers.ContainsKey(playerId))
+                    return LobbyResult<bool>.Error("Player not in lobby");
+
+                var success = _lobby.JoinRoom(roomId, playerId);
+                if (!success)
+                    return LobbyResult<bool>.Error("Failed to join room (room full or not found)");
+
                 ConsoleWrite.WriteMessage($"[LOBBY] Player {playerId} joined room {roomId}", ConsoleColor.Green);
+                OnPlayerJoinedRoom?.Invoke(playerId, roomId);
+                
+                return LobbyResult<bool>.Success(true);
             }
-            return success;
-        }
-
-        /// <summary>
-        /// ルームから退出
-        /// </summary>
-        public bool LeaveRoom(string playerId)
-        {
-            var success = lobby.LeaveRoom(playerId);
-            if (success)
+            catch (Exception ex)
             {
-                ConsoleWrite.WriteMessage($"[LOBBY] Player {playerId} left room", ConsoleColor.Yellow);
+                ConsoleWrite.WriteMessage($"[LOBBY] Error joining room: {ex.Message}", ConsoleColor.Red);
+                return LobbyResult<bool>.Error($"Internal error: {ex.Message}");
             }
-            return success;
+            finally
+            {
+                _lobbyLock.ExitWriteLock();
+            }
         }
 
-        /// <summary>
-        /// 利用可能なルーム一覧を取得
-        /// </summary>
-        public List<LobbyRoomInfo> GetAvailableRooms()
+        public LobbyResult<bool> LeaveRoom(string playerId)
         {
-            return lobby.GetAvailableRooms();
-        }
+            if (string.IsNullOrWhiteSpace(playerId))
+                return LobbyResult<bool>.Error("Player ID cannot be empty");
 
-        /// <summary>
-        /// ルーム情報を取得
-        /// </summary>
-        public LobbyRoomInfo? GetRoomInfo(string roomId)
-        {
-            return lobby.GetRoom(roomId);
+            _lobbyLock.EnterWriteLock();
+            try
+            {
+                var success = _lobby.LeaveRoom(playerId);
+                if (!success)
+                    return LobbyResult<bool>.Error("Player not in any room");
+
+                ConsoleWrite.WriteMessage($"[LOBBY] Player {playerId} left room", ConsoleColor.Yellow);
+                return LobbyResult<bool>.Success(true);
+            }
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage($"[LOBBY] Error leaving room: {ex.Message}", ConsoleColor.Red);
+                return LobbyResult<bool>.Error($"Internal error: {ex.Message}");
+            }
+            finally
+            {
+                _lobbyLock.ExitWriteLock();
+            }
         }
 
         #endregion
 
         #region チャット機能
 
-        /// <summary>
-        /// ロビーチャットにメッセージを追加
-        /// </summary>
-        public void AddLobbyChat(string playerId, string message)
+        public LobbyResult<bool> AddLobbyChat(string playerId, string message)
         {
-            if (connectedPlayers.ContainsKey(playerId))
+            if (string.IsNullOrWhiteSpace(playerId))
+                return LobbyResult<bool>.Error("Player ID cannot be empty");
+            
+            if (string.IsNullOrWhiteSpace(message))
+                return LobbyResult<bool>.Error("Message cannot be empty");
+            
+            if (message.Length > 200)
+                return LobbyResult<bool>.Error("Message too long (max 200 characters)");
+
+            var rateLimiter = _rateLimiters.GetOrAdd(playerId, _ => new PlayerRateLimiter());
+            if (!rateLimiter.AllowChat())
+                return LobbyResult<bool>.Error("Too many chat messages. Please slow down.");
+
+            _lobbyLock.EnterReadLock();
+            try
             {
-                lobby.AddChat(playerId, message);
+                if (!_connectedPlayers.ContainsKey(playerId))
+                    return LobbyResult<bool>.Error("Player not in lobby");
+
+                _lobby.AddChat(playerId, message);
                 ConsoleWrite.WriteMessage($"[LOBBY] Chat from {playerId}: {message}", ConsoleColor.Gray);
+                
+                OnChatMessage?.Invoke(playerId, message);
+                
+                return LobbyResult<bool>.Success(true);
+            }
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage($"[LOBBY] Error adding chat: {ex.Message}", ConsoleColor.Red);
+                return LobbyResult<bool>.Error($"Internal error: {ex.Message}");
+            }
+            finally
+            {
+                _lobbyLock.ExitReadLock();
             }
         }
 
-        /// <summary>
-        /// ルームチャットにメッセージを追加
-        /// </summary>
-        public void AddRoomChat(string roomId, string playerId, string message)
+        public LobbyResult<bool> AddRoomChat(string roomId, string playerId, string message)
         {
-            var room = lobby.GetRoom(roomId);
-            if (room != null && room.Players.Contains(playerId))
+            if (string.IsNullOrWhiteSpace(roomId))
+                return LobbyResult<bool>.Error("Room ID cannot be empty");
+            
+            if (string.IsNullOrWhiteSpace(playerId))
+                return LobbyResult<bool>.Error("Player ID cannot be empty");
+            
+            if (string.IsNullOrWhiteSpace(message))
+                return LobbyResult<bool>.Error("Message cannot be empty");
+            
+            if (message.Length > 200)
+                return LobbyResult<bool>.Error("Message too long (max 200 characters)");
+
+            var rateLimiter = _rateLimiters.GetOrAdd(playerId, _ => new PlayerRateLimiter());
+            if (!rateLimiter.AllowChat())
+                return LobbyResult<bool>.Error("Too many chat messages. Please slow down.");
+
+            _lobbyLock.EnterReadLock();
+            try
             {
-                // ルームチャットの実装（将来的に拡張）
+                var room = _lobby.GetRoom(roomId);
+                if (room == null)
+                    return LobbyResult<bool>.Error("Room not found");
+
+                if (!room.Players.Contains(playerId))
+                    return LobbyResult<bool>.Error("Player not in this room");
+
                 ConsoleWrite.WriteMessage($"[LOBBY] Room chat in {roomId} from {playerId}: {message}", ConsoleColor.Gray);
+                
+                return LobbyResult<bool>.Success(true);
+            }
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage($"[LOBBY] Error adding room chat: {ex.Message}", ConsoleColor.Red);
+                return LobbyResult<bool>.Error($"Internal error: {ex.Message}");
+            }
+            finally
+            {
+                _lobbyLock.ExitReadLock();
             }
         }
 
@@ -185,81 +393,161 @@ namespace OpenGSServer
 
         #region マッチメイキング
 
-        /// <summary>
-        /// クイックマッチ - 自動的に適切なルームを探すまたは作成
-        /// </summary>
-        public string? QuickMatch(string playerId, EGameMode preferredMode)
+        public LobbyResult<string> QuickMatch(string playerId, EGameMode preferredMode)
         {
-            if (!connectedPlayers.ContainsKey(playerId))
-                return null;
+            if (string.IsNullOrWhiteSpace(playerId))
+                return LobbyResult<string>.Error("Player ID cannot be empty");
 
-            // 同じゲームモードの空いているルームを探す
-            var availableRoom = lobby.GetAvailableRooms()
-                .FirstOrDefault(r => r.GameMode == preferredMode);
-
-            if (availableRoom != null)
+            _lobbyLock.EnterUpgradeableReadLock();
+            try
             {
-                // 既存ルームに参加
-                if (lobby.JoinRoom(availableRoom.RoomId, playerId))
+                if (!_connectedPlayers.ContainsKey(playerId))
+                    return LobbyResult<string>.Error("Player not in lobby");
+
+                var availableRoom = _lobby.GetAvailableRooms()
+                    .FirstOrDefault(r => r.GameMode == preferredMode);
+
+                if (availableRoom != null)
                 {
-                    return availableRoom.RoomId;
+                    _lobbyLock.EnterWriteLock();
+                    try
+                    {
+                        if (_lobby.JoinRoom(availableRoom.RoomId, playerId))
+                        {
+                            ConsoleWrite.WriteMessage($"[LOBBY] Quick match: {playerId} joined existing room", ConsoleColor.Cyan);
+                            return LobbyResult<string>.Success(availableRoom.RoomId);
+                        }
+                    }
+                    finally
+                    {
+                        _lobbyLock.ExitWriteLock();
+                    }
                 }
-            }
-            else
-            {
-                // 新しいルームを作成
-                var roomName = $"{preferredMode} Quick Match";
-                var newRoom = lobby.CreateRoom(roomName, playerId, preferredMode);
-                return newRoom?.RoomId;
-            }
-
-            return null;
-        }
-
-        /// <summary>
-        /// カスタムマッチ - 指定された条件でルームを探す
-        /// </summary>
-        public string? CustomMatch(string playerId, EGameMode gameMode, int maxPlayers, bool isPrivate = false)
-        {
-            if (!connectedPlayers.ContainsKey(playerId))
-                return null;
-
-            // 条件に合うルームを探す
-            var suitableRoom = lobby.GetAvailableRooms()
-                .FirstOrDefault(r => r.GameMode == gameMode &&
-                                   r.MaxPlayers == maxPlayers &&
-                                   r.IsPrivate == isPrivate);
-
-            if (suitableRoom != null)
-            {
-                if (lobby.JoinRoom(suitableRoom.RoomId, playerId))
+                
+                _lobbyLock.EnterWriteLock();
+                try
                 {
-                    return suitableRoom.RoomId;
+                    var roomName = $"{preferredMode} Quick Match";
+                    var newRoom = _lobby.CreateRoom(roomName, playerId, preferredMode);
+                    
+                    if (newRoom != null)
+                    {
+                        ConsoleWrite.WriteMessage($"[LOBBY] Quick match: {playerId} created new room", ConsoleColor.Cyan);
+                        return LobbyResult<string>.Success(newRoom.RoomId);
+                    }
                 }
-            }
+                finally
+                {
+                    _lobbyLock.ExitWriteLock();
+                }
 
-            return null;
+                return LobbyResult<string>.Error("Failed to create or join room");
+            }
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage($"[LOBBY] Error in quick match: {ex.Message}", ConsoleColor.Red);
+                return LobbyResult<string>.Error($"Internal error: {ex.Message}");
+            }
+            finally
+            {
+                _lobbyLock.ExitUpgradeableReadLock();
+            }
         }
 
         #endregion
 
-        #region 統計情報
+        #region 統計情報とルーム取得
 
-        /// <summary>
-        /// ロビーの統計情報を取得
-        /// </summary>
-        public LobbyStats GetLobbyStats()
+        public LobbyResult<List<LobbyRoomInfo>> GetAvailableRooms()
         {
-            var rooms = lobby.GetAvailableRooms();
-            var players = lobby.GetPlayers();
-
-            return new LobbyStats
+            _lobbyLock.EnterReadLock();
+            try
             {
-                TotalPlayers = players.Count,
-                ActiveRooms = rooms.Count,
-                RoomsByGameMode = rooms.GroupBy(r => r.GameMode)
-                    .ToDictionary(g => g.Key, g => g.Count())
-            };
+                var rooms = _lobby.GetAvailableRooms();
+                return LobbyResult<List<LobbyRoomInfo>>.Success(rooms);
+            }
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage($"[LOBBY] Error getting rooms: {ex.Message}", ConsoleColor.Red);
+                return LobbyResult<List<LobbyRoomInfo>>.Error($"Internal error: {ex.Message}");
+            }
+            finally
+            {
+                _lobbyLock.ExitReadLock();
+            }
+        }
+
+        public LobbyResult<LobbyRoomInfo> GetRoomInfo(string roomId)
+        {
+            if (string.IsNullOrWhiteSpace(roomId))
+                return LobbyResult<LobbyRoomInfo>.Error("Room ID cannot be empty");
+
+            _lobbyLock.EnterReadLock();
+            try
+            {
+                var room = _lobby.GetRoom(roomId);
+                if (room == null)
+                    return LobbyResult<LobbyRoomInfo>.Error("Room not found");
+
+                return LobbyResult<LobbyRoomInfo>.Success(room);
+            }
+            finally
+            {
+                _lobbyLock.ExitReadLock();
+            }
+        }
+
+        public LobbyResult<LobbyStats> GetLobbyStats()
+        {
+            _lobbyLock.EnterReadLock();
+            try
+            {
+                var rooms = _lobby.GetAvailableRooms();
+                var players = _lobby.GetPlayers();
+
+                var stats = new LobbyStats
+                {
+                    TotalPlayers = players.Count,
+                    ActiveRooms = rooms.Count,
+                    RoomsByGameMode = rooms.GroupBy(r => r.GameMode)
+                        .ToDictionary(g => g.Key, g => g.Count())
+                };
+
+                return LobbyResult<LobbyStats>.Success(stats);
+            }
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage($"[LOBBY] Error getting stats: {ex.Message}", ConsoleColor.Red);
+                return LobbyResult<LobbyStats>.Error($"Internal error: {ex.Message}");
+            }
+            finally
+            {
+                _lobbyLock.ExitReadLock();
+            }
+        }
+
+        #endregion
+
+        #region IDisposable
+
+        public void Dispose()
+        {
+            if (_disposed) return;
+
+            ConsoleWrite.WriteMessage("[LOBBY] Disposing lobby server manager", ConsoleColor.Yellow);
+
+            _cleanupTimer?.Dispose();
+            _lobbyLock?.Dispose();
+
+            foreach (var playerId in _connectedPlayers.Keys.ToList())
+            {
+                PlayerLeaveLobby(playerId);
+            }
+
+            _connectedPlayers.Clear();
+            _rateLimiters.Clear();
+
+            _disposed = true;
         }
 
         #endregion
@@ -268,7 +556,7 @@ namespace OpenGSServer
     /// <summary>
     /// ロビー統計情報
     /// </summary>
-    public class LobbyStats
+    public sealed class LobbyStats
     {
         public int TotalPlayers { get; set; }
         public int ActiveRooms { get; set; }
