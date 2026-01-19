@@ -64,6 +64,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Folder Include="Examples\" />
     <Folder Include="Platform\Linus" />
     <Folder Include="WebAPI\" />
     <Folder Include="新しいフォルダー\" />

@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using OpenGSCore;
+using OpenGSServer.Utility; // Ping管理を追加
 
 namespace OpenGSServer
 {
@@ -19,6 +20,8 @@ namespace OpenGSServer
         private readonly Lobby _lobby = new();
         private readonly ConcurrentDictionary<string, LobbyPlayerInfo> _connectedPlayers = new();
         private readonly ConcurrentDictionary<string, PlayerRateLimiter> _rateLimiters = new();
+        private readonly ConcurrentDictionary<PlayerID, string> _playerIdMapping = new(); // PlayerID <-> string ID のマッピング
+        private readonly PingManager _pingManager = new(); // Ping管理（PlayerID型使用）
         private readonly ReaderWriterLockSlim _lobbyLock = new();
         private readonly Timer _cleanupTimer;
         private bool _disposed;
@@ -106,6 +109,11 @@ namespace OpenGSServer
                 _connectedPlayers[playerId] = playerInfo;
                 ConsoleWrite.WriteMessage($"[LOBBY] Player {playerId} ({playerName}) joined lobby", ConsoleColor.Green);
                 
+                // Ping追跡を開始（PlayerID型で）
+                var pid = PlayerID.FromString(playerId);
+                _playerIdMapping[pid] = playerId;
+                _pingManager.AddPlayer(pid);
+                
                 OnPlayerJoined?.Invoke(playerId, playerInfo);
                 
                 return LobbyResult<LobbyPlayerInfo>.Success(playerInfo);
@@ -139,6 +147,11 @@ namespace OpenGSServer
 
                 _connectedPlayers.TryRemove(playerId, out _);
                 _rateLimiters.TryRemove(playerId, out _);
+                
+                // Ping追跡を停止
+                var pid = PlayerID.FromString(playerId);
+                _pingManager.RemovePlayer(pid);
+                _playerIdMapping.TryRemove(pid, out _);
                 
                 ConsoleWrite.WriteMessage($"[LOBBY] Player {playerId} left lobby", ConsoleColor.Yellow);
                 OnPlayerLeft?.Invoke(playerId);
@@ -456,6 +469,171 @@ namespace OpenGSServer
 
         #endregion
 
+        #region Ping管理
+
+        /// <summary>
+        /// プレイヤーのPing測定を記録
+        /// </summary>
+        public void RecordPlayerPing(string playerId, double pingMs, bool packetLost = false)
+        {
+            if (string.IsNullOrWhiteSpace(playerId)) return;
+
+            _lobbyLock.EnterReadLock();
+            try
+            {
+                if (_connectedPlayers.ContainsKey(playerId))
+                {
+                    var pid = PlayerID.FromString(playerId);
+                    _pingManager.RecordPing(pid, pingMs, packetLost);
+                }
+            }
+            finally
+            {
+                _lobbyLock.ExitReadLock();
+            }
+        }
+
+        /// <summary>
+        /// プレイヤーのPing測定を記録（PlayerID型）
+        /// </summary>
+        public void RecordPlayerPing(PlayerID playerId, double pingMs, bool packetLost = false)
+        {
+            if (playerId == null || playerId.IsNull) return;
+
+            _lobbyLock.EnterReadLock();
+            try
+            {
+                var stringId = _playerIdMapping.GetValueOrDefault(playerId);
+                if (!string.IsNullOrEmpty(stringId) && _connectedPlayers.ContainsKey(stringId))
+                {
+                    _pingManager.RecordPing(playerId, pingMs, packetLost);
+                }
+            }
+            finally
+            {
+                _lobbyLock.ExitReadLock();
+            }
+        }
+
+        /// <summary>
+        /// プレイヤーのPing統計を取得
+        /// </summary>
+        public LobbyResult<PingStats> GetPlayerPingStats(string playerId)
+        {
+            if (string.IsNullOrWhiteSpace(playerId))
+                return LobbyResult<PingStats>.Error("Player ID cannot be empty");
+
+            _lobbyLock.EnterReadLock();
+            try
+            {
+                var pid = PlayerID.FromString(playerId);
+                var tracker = _pingManager.GetTracker(pid);
+                if (tracker == null)
+                    return LobbyResult<PingStats>.Error("Player not found");
+
+                var stats = tracker.GetStats();
+                return LobbyResult<PingStats>.Success(stats);
+            }
+            finally
+            {
+                _lobbyLock.ExitReadLock();
+            }
+        }
+
+        /// <summary>
+        /// プレイヤーのPing統計を取得（PlayerID型）
+        /// </summary>
+        public LobbyResult<PingStats> GetPlayerPingStats(PlayerID playerId)
+        {
+            if (playerId == null || playerId.IsNull)
+                return LobbyResult<PingStats>.Error("Player ID cannot be null");
+
+            _lobbyLock.EnterReadLock();
+            try
+            {
+                var tracker = _pingManager.GetTracker(playerId);
+                if (tracker == null)
+                    return LobbyResult<PingStats>.Error("Player not found");
+
+                var stats = tracker.GetStats();
+                return LobbyResult<PingStats>.Success(stats);
+            }
+            finally
+            {
+                _lobbyLock.ExitReadLock();
+            }
+        }
+
+        /// <summary>
+        /// 全プレイヤーのPing統計を取得
+        /// </summary>
+        public LobbyResult<Dictionary<string, PingStats>> GetAllPlayerPingStats()
+        {
+            _lobbyLock.EnterReadLock();
+            try
+            {
+                var stats = _pingManager.GetAllStats();
+                
+                // PlayerID → string に変換
+                var stringStats = new Dictionary<string, PingStats>();
+                foreach (var kvp in stats)
+                {
+                    var stringId = _playerIdMapping.GetValueOrDefault(kvp.Key);
+                    if (!string.IsNullOrEmpty(stringId))
+                    {
+                        stringStats[stringId] = kvp.Value;
+                    }
+                }
+                
+                return LobbyResult<Dictionary<string, PingStats>>.Success(stringStats);
+            }
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage($"[LOBBY] Error getting ping stats: {ex.Message}", ConsoleColor.Red);
+                return LobbyResult<Dictionary<string, PingStats>>.Error($"Internal error: {ex.Message}");
+            }
+            finally
+            {
+                _lobbyLock.ExitReadLock();
+            }
+        }
+
+        /// <summary>
+        /// 接続品質の悪いプレイヤーを取得
+        /// </summary>
+        public LobbyResult<List<(string PlayerId, PingStats Stats)>> GetPoorConnectionPlayers()
+        {
+            _lobbyLock.EnterReadLock();
+            try
+            {
+                var poorPlayers = _pingManager.GetPoorQualityPlayers(NetworkQuality.Poor);
+                
+                // PlayerID → string に変換
+                var result = new List<(string PlayerId, PingStats Stats)>();
+                foreach (var (pid, stats) in poorPlayers)
+                {
+                    var stringId = _playerIdMapping.GetValueOrDefault(pid);
+                    if (!string.IsNullOrEmpty(stringId))
+                    {
+                        result.Add((stringId, stats));
+                    }
+                }
+                
+                return LobbyResult<List<(string PlayerId, PingStats Stats)>>.Success(result);
+            }
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage($"[LOBBY] Error getting poor connection players: {ex.Message}", ConsoleColor.Red);
+                return LobbyResult<List<(string PlayerId, PingStats Stats)>>.Error($"Internal error: {ex.Message}");
+            }
+            finally
+            {
+                _lobbyLock.ExitReadLock();
+            }
+        }
+
+        #endregion
+
         #region 統計情報とルーム取得
 
         public LobbyResult<List<LobbyRoomInfo>> GetAvailableRooms()
@@ -510,7 +688,10 @@ namespace OpenGSServer
                     TotalPlayers = players.Count,
                     ActiveRooms = rooms.Count,
                     RoomsByGameMode = rooms.GroupBy(r => r.GameMode)
-                        .ToDictionary(g => g.Key, g => g.Count())
+                        .ToDictionary(g => g.Key, g => g.Count()),
+                    AveragePing = _pingManager.GetAllStats().Values.Any() 
+                        ? _pingManager.GetAllStats().Values.Average(s => s.AveragePing) 
+                        : 0
                 };
 
                 return LobbyResult<LobbyStats>.Success(stats);
@@ -561,5 +742,6 @@ namespace OpenGSServer
         public int TotalPlayers { get; set; }
         public int ActiveRooms { get; set; }
         public Dictionary<EGameMode, int> RoomsByGameMode { get; set; } = new();
+        public double AveragePing { get; set; }
     }
 }

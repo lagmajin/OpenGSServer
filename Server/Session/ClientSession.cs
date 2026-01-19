@@ -433,13 +433,13 @@ namespace OpenGSServer
             {
                 var infoJson = new JObject();
 
-                var matchServer = MatchServerV2.GetInstance();
+                var matchServer = MatchServerV2.Instance; // Instanceプロパティを使用
 
 
 
                 infoJson["MessageType"] = "MatchServerInformationNotification";
 
-                infoJson["Port"] = matchServer.Port();
+                infoJson["Port"] = matchServer.TcpPort; // TcpPortプロパティを使用
 
                 infoJson["SubPort"] = 2000;
 

@@ -1,21 +1,286 @@
-ï»¿using System;
+using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Linq;
+using OpenGSCore; // PlayerIDŒ^‚ğg—p
 
-namespace OpenGSServer.Utility
+namespace OpenGSServer.Utility;
+
+/// <summary>
+/// PingŒvZƒ†[ƒeƒBƒŠƒeƒB
+/// </summary>
+public static class PingCalculator
 {
-    // Timeã‚¯ãƒ©ã‚¹ã¯å‰Šé™¤ï¼ˆ.NETæ¨™æº–ã®TimeSpanã‚’ä½¿ç”¨ã—ã¦ãã ã•ã„ï¼‰
-    // ä¾‹: TimeSpan.FromHours(1).Add(TimeSpan.FromMinutes(30)).TotalSeconds
+    /// <summary>
+    /// 2‚Â‚Ìƒ^ƒCƒ€ƒXƒ^ƒ“ƒv‚©‚çPing‚ğŒvZ
+    /// </summary>
+    public static int CalcPing(int m1, int m2) => Math.Abs(m1 - m2);
 
     /// <summary>
-    /// Pingè¨ˆç®—ãƒ¦ãƒ¼ãƒ†ã‚£ãƒªãƒ†ã‚£
+    /// RTTiRound Trip Timej‚ğŒvZ
     /// </summary>
-    public class Ping
+    public static double CalcRtt(DateTime sentTime, DateTime receivedTime) 
+        => (receivedTime - sentTime).TotalMilliseconds;
+
+    /// <summary>
+    /// ƒ^ƒCƒ€ƒXƒ^ƒ“ƒv‚©‚çRTT‚ğŒvZiUnixŠÔj
+    /// </summary>
+    public static long CalcRtt(long sentTimestamp, long receivedTimestamp) 
+        => Math.Abs(receivedTimestamp - sentTimestamp);
+}
+
+/// <summary>
+/// Ping“Œvî•ñ
+/// C# 14.0: RecordŒ^
+/// </summary>
+public readonly record struct PingStats
+{
+    public required double AveragePing { get; init; }
+    public required double MinPing { get; init; }
+    public required double MaxPing { get; init; }
+    public required double Jitter { get; init; }
+    public required int SampleCount { get; init; }
+    public required double PacketLoss { get; init; }
+    public required NetworkQuality Quality { get; init; }
+
+    /// <summary>
+    /// ƒŒƒCƒeƒ“ƒV•â’li—\‘ª—pj
+    /// </summary>
+    public double LatencyCompensation => AveragePing + (Jitter * 2);
+
+    public override string ToString() =>
+        $"Ping: {AveragePing:F1}ms (Min: {MinPing:F1}ms, Max: {MaxPing:F1}ms), Jitter: {Jitter:F1}ms, Quality: {Quality}";
+}
+
+/// <summary>
+/// ƒlƒbƒgƒ[ƒN•i¿•]‰¿
+/// </summary>
+public enum NetworkQuality
+{
+    Excellent,  // < 30ms
+    Good,       // 30-50ms
+    Fair,       // 50-100ms
+    Poor,       // 100-200ms
+    VeryPoor    // > 200ms
+}
+
+/// <summary>
+/// Ping‘ª’è’li“à•”—pj
+/// </summary>
+internal readonly record struct PingMeasurement
+{
+    public required DateTime Timestamp { get; init; }
+    public required double PingMs { get; init; }
+}
+
+/// <summary>
+/// ƒvƒŒƒCƒ„[‚ÌPingŠÇ—
+/// PlayerIDŒ^‚ÅŒ^ˆÀ‘S‚É
+/// </summary>
+public sealed class PlayerPingTracker
+{
+    private readonly ConcurrentQueue<PingMeasurement> _measurements = new();
+    private readonly int _maxSamples;
+    private int _totalPacketsSent;
+    private int _totalPacketsReceived;
+
+    public PlayerID PlayerId { get; init; }
+    public DateTime LastUpdate { get; private set; }
+
+    public PlayerPingTracker(PlayerID playerId, int maxSamples = 50)
     {
-        /// <summary>
-        /// 2ã¤ã®ã‚¿ã‚¤ãƒ ã‚¹ã‚¿ãƒ³ãƒ—ã‹ã‚‰Pingã‚’è¨ˆç®—
-        /// </summary>
-        public static int CalcPing(int m1, int m2)
+        PlayerId = playerId;
+        _maxSamples = maxSamples;
+        LastUpdate = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Ping‘ª’è’l‚ğ’Ç‰Á
+    /// </summary>
+    public void AddMeasurement(double pingMs, bool packetLost = false)
+    {
+        _totalPacketsSent++;
+        
+        if (!packetLost)
         {
-            return Math.Abs(m1 - m2);
+            _totalPacketsReceived++;
+            
+            _measurements.Enqueue(new PingMeasurement
+            {
+                Timestamp = DateTime.UtcNow,
+                PingMs = pingMs
+            });
+
+            // Å‘åƒTƒ“ƒvƒ‹”‚ğ’´‚¦‚½‚çŒÃ‚¢‚à‚Ì‚ğíœ
+            while (_measurements.Count > _maxSamples)
+            {
+                _measurements.TryDequeue(out _);
+            }
         }
+
+        LastUpdate = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// “Œvî•ñ‚ğŒvZ
+    /// </summary>
+    public PingStats GetStats()
+    {
+        var samples = _measurements.ToArray();
+        
+        if (samples.Length == 0)
+        {
+            return new PingStats
+            {
+                AveragePing = 0,
+                MinPing = 0,
+                MaxPing = 0,
+                Jitter = 0,
+                SampleCount = 0,
+                PacketLoss = 0,
+                Quality = NetworkQuality.VeryPoor
+            };
+        }
+
+        var pings = samples.Select(m => m.PingMs).ToArray();
+        var avgPing = pings.Average();
+        var minPing = pings.Min();
+        var maxPing = pings.Max();
+        var jitter = CalculateJitter(pings);
+        
+        var packetLoss = _totalPacketsSent > 0 
+            ? (double)(_totalPacketsSent - _totalPacketsReceived) / _totalPacketsSent * 100 
+            : 0;
+
+        return new PingStats
+        {
+            AveragePing = avgPing,
+            MinPing = minPing,
+            MaxPing = maxPing,
+            Jitter = jitter,
+            SampleCount = samples.Length,
+            PacketLoss = packetLoss,
+            Quality = EvaluateQuality(avgPing, jitter, packetLoss)
+        };
+    }
+
+    private static double CalculateJitter(double[] pings)
+    {
+        if (pings.Length < 2) return 0;
+
+        var differences = new List<double>();
+        for (int i = 1; i < pings.Length; i++)
+        {
+            differences.Add(Math.Abs(pings[i] - pings[i - 1]));
+        }
+
+        return differences.Average();
+    }
+
+    private static NetworkQuality EvaluateQuality(double avgPing, double jitter, double packetLoss)
+    {
+        if (packetLoss > 5) return NetworkQuality.VeryPoor;
+        if (packetLoss > 2) return NetworkQuality.Poor;
+        if (jitter > 50) return NetworkQuality.Poor;
+        if (jitter > 20) return NetworkQuality.Fair;
+
+        return avgPing switch
+        {
+            < 30 => NetworkQuality.Excellent,
+            < 50 => NetworkQuality.Good,
+            < 100 => NetworkQuality.Fair,
+            < 200 => NetworkQuality.Poor,
+            _ => NetworkQuality.VeryPoor
+        };
+    }
+
+    public void Reset()
+    {
+        while (_measurements.TryDequeue(out _)) { }
+        _totalPacketsSent = 0;
+        _totalPacketsReceived = 0;
+        LastUpdate = DateTime.UtcNow;
+    }
+}
+
+/// <summary>
+/// ‘SƒvƒŒƒCƒ„[‚ÌPingŠÇ—
+/// PlayerIDŒ^‚ÅŒ^ˆÀ‘S‚É
+/// </summary>
+public sealed class PingManager
+{
+    private readonly ConcurrentDictionary<PlayerID, PlayerPingTracker> _playerTrackers = new();
+    private readonly int _maxSamplesPerPlayer;
+
+    public int PlayerCount => _playerTrackers.Count;
+
+    public PingManager(int maxSamplesPerPlayer = 50)
+    {
+        _maxSamplesPerPlayer = maxSamplesPerPlayer;
+    }
+
+    public PlayerPingTracker AddPlayer(PlayerID playerId)
+    {
+        if (playerId == null || playerId.IsNull || playerId.IsEmpty)
+            throw new ArgumentException("PlayerID cannot be null or empty", nameof(playerId));
+
+        return _playerTrackers.GetOrAdd(playerId, 
+            id => new PlayerPingTracker(id, _maxSamplesPerPlayer));
+    }
+
+    public bool RemovePlayer(PlayerID playerId)
+    {
+        if (playerId == null) return false;
+        return _playerTrackers.TryRemove(playerId, out _);
+    }
+
+    public PlayerPingTracker? GetTracker(PlayerID playerId)
+    {
+        if (playerId == null) return null;
+        return _playerTrackers.GetValueOrDefault(playerId);
+    }
+
+    public void RecordPing(PlayerID playerId, double pingMs, bool packetLost = false)
+    {
+        if (playerId == null || playerId.IsNull || playerId.IsEmpty) return;
+
+        var tracker = AddPlayer(playerId);
+        tracker.AddMeasurement(pingMs, packetLost);
+    }
+
+    public Dictionary<PlayerID, PingStats> GetAllStats()
+    {
+        return _playerTrackers.ToDictionary(
+            kvp => kvp.Key,
+            kvp => kvp.Value.GetStats()
+        );
+    }
+
+    public int CleanupInactive(TimeSpan timeout)
+    {
+        var cutoff = DateTime.UtcNow - timeout;
+        var removed = 0;
+
+        foreach (var kvp in _playerTrackers)
+        {
+            if (kvp.Value.LastUpdate < cutoff)
+            {
+                if (_playerTrackers.TryRemove(kvp.Key, out _))
+                {
+                    removed++;
+                }
+            }
+        }
+
+        return removed;
+    }
+
+    public List<(PlayerID PlayerId, PingStats Stats)> GetPoorQualityPlayers(NetworkQuality threshold = NetworkQuality.Poor)
+    {
+        return _playerTrackers
+            .Select(kvp => (PlayerId: kvp.Key, Stats: kvp.Value.GetStats()))
+            .Where(x => x.Stats.Quality >= threshold)
+            .OrderByDescending(x => x.Stats.AveragePing)
+            .ToList();
     }
 }
