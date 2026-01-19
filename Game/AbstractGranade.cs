@@ -3,6 +3,7 @@
 
 
 
+using System;
 using Newtonsoft.Json.Linq;
 using OpenGSCore;
 
@@ -16,6 +17,14 @@ namespace OpenGSServer
         Fire,
         Magnet,
         Unknown
+    }
+
+    public enum GrenadeState
+    {
+        Idle,
+        Armed,
+        Exploded,
+        Disposed
     }
 
     /// <summary>
@@ -121,6 +130,14 @@ namespace OpenGSServer
         private GranadeType granadeType = new();
         private string ownerId = "";
         private float lifeTime = 3.0f; // 秒単位
+        private float fuseTime = 3.0f;
+        private float elapsedTime;
+        private float explosionRadius = 2.5f;
+        private GrenadeState state = GrenadeState.Idle;
+
+        public event Action<AbstractGrenade>? Armed;
+        public event Action<AbstractGrenade>? Exploded;
+        public event Action<AbstractGrenade>? ChildGrenadeCreated;
 
         public int StoppingPower { get => stoppingPower; set => stoppingPower = value; }
         public int Angle { get => angle; set => angle = value; }
@@ -130,6 +147,15 @@ namespace OpenGSServer
         public string OwnerId { get => ownerId; set => ownerId = value; }
         public GranadeType GranadeType { get => granadeType; set => granadeType = value; }
         public float LifeTime { get => lifeTime; set => lifeTime = value; }
+        public float FuseTime { get => fuseTime; set => fuseTime = Math.Max(0f, value); }
+        public float ExplosionRadius { get => explosionRadius; set => explosionRadius = Math.Max(0f, value); }
+        public GrenadeState State => state;
+        public float ElapsedTime => elapsedTime;
+        public float RemainingFuseTime => Math.Max(0f, FuseTime - elapsedTime);
+        public bool AutoExplodeOnFuseTimeout { get; set; } = true;
+        public bool IsArmed => state == GrenadeState.Armed;
+        public bool IsExploded => state == GrenadeState.Exploded;
+        public bool IsDisposed => state == GrenadeState.Disposed;
 
         protected AbstractGrenade()
         {
@@ -144,11 +170,92 @@ namespace OpenGSServer
         /// <summary>
         /// 手榴弾が何かにぶつかったときの処理
         /// </summary>
+        public void Arm()
+        {
+            if (state != GrenadeState.Idle)
+            {
+                return;
+            }
+
+            state = GrenadeState.Armed;
+            elapsedTime = 0f;
+            OnArmed();
+            Armed?.Invoke(this);
+        }
+
+        public bool Disarm()
+        {
+            if (state != GrenadeState.Armed)
+            {
+                return false;
+            }
+
+            state = GrenadeState.Idle;
+            elapsedTime = 0f;
+            return true;
+        }
+
+        public void ForceExplode()
+        {
+            if (state == GrenadeState.Exploded || state == GrenadeState.Disposed)
+            {
+                return;
+            }
+
+            state = GrenadeState.Exploded;
+            OnExploded();
+            Exploded?.Invoke(this);
+        }
+
+        public bool UpdateCountdown(float deltaSeconds)
+        {
+            if (!IsArmed || deltaSeconds <= 0f)
+            {
+                return false;
+            }
+
+            elapsedTime += deltaSeconds;
+
+            if (AutoExplodeOnFuseTimeout && elapsedTime >= FuseTime)
+            {
+                ForceExplode();
+                return true;
+            }
+
+            return false;
+        }
+
+        public void DisposeGrenade()
+        {
+            state = GrenadeState.Disposed;
+            OnDestroy();
+        }
+
+        protected virtual void OnArmed()
+        {
+        }
+
+        protected virtual void OnExploded()
+        {
+            Hit();
+        }
+
+        protected bool NotifyChildCreated(AbstractGrenade child)
+        {
+            if (child == null)
+            {
+                return false;
+            }
+
+            ChildGrenadeCreated?.Invoke(child);
+            return true;
+        }
+
         public abstract void Hit();
 
         public override Newtonsoft.Json.Linq.JObject ToJSon()
         {
-            var json = base.ToJSon();
+            var json = base.ToJSon() ?? new JObject();
             json["stoppingPower"] = StoppingPower;
             json["angle"] = Angle;
             json["speed"] = Speed;
@@ -157,6 +264,10 @@ namespace OpenGSServer
             json["ownerId"] = OwnerId;
             json["granadeType"] = GranadeType.ToString();
             json["lifeTime"] = LifeTime;
+            json["fuseTime"] = FuseTime;
+            json["remainingFuseTime"] = RemainingFuseTime;
+            json["explosionRadius"] = ExplosionRadius;
+            json["state"] = State.ToString();
             return json;
         }
     }
