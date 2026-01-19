@@ -217,8 +217,15 @@ namespace OpenGSServer
         {
             try
             {
-                ConsoleWrite.WriteMessage($"[OK] Guild '{guildName}' created successfully", ConsoleColor.Green);
-                // 実装は GuildManager に委譲
+                var manager = GuildManager.Instance;
+                if (manager.CreateNewGuild(guildName))
+                {
+                    ConsoleWrite.WriteMessage($"[OK] Guild '{guildName}' created successfully", ConsoleColor.Green);
+                }
+                else
+                {
+                    ConsoleWrite.WriteMessage($"[ERR] Guild '{guildName}' already exists or name is invalid", ConsoleColor.Red);
+                }
             }
             catch (Exception ex)
             {
@@ -309,8 +316,28 @@ namespace OpenGSServer
         {
             try
             {
-                ConsoleWrite.WriteMessage($"[INFO] Guild: {guildName}", ConsoleColor.Cyan);
-                ConsoleWrite.WriteMessage($"[INFO] Members: 0", ConsoleColor.Cyan);
+                var manager = GuildManager.Instance;
+                var guild = manager.FindGuild(guildName);
+
+                if (guild == null)
+                {
+                    ConsoleWrite.WriteMessage($"[ERR] Guild '{guildName}' not found", ConsoleColor.Red);
+                    return;
+                }
+
+                var members = manager.GetGuildMembers(guildName);
+
+                ConsoleWrite.WriteMessage($"[INFO] Guild: {guild.GuildName}", ConsoleColor.Cyan);
+                if (!string.IsNullOrWhiteSpace(guild.GuildShortName))
+                {
+                    ConsoleWrite.WriteMessage($"[INFO] Short Name: {guild.GuildShortName}", ConsoleColor.Cyan);
+                }
+                ConsoleWrite.WriteMessage($"[INFO] Created: {guild.CreationTime}", ConsoleColor.Cyan);
+                ConsoleWrite.WriteMessage($"[INFO] Members: {members.Count}", ConsoleColor.Cyan);
+                foreach (var member in members)
+                {
+                    ConsoleWrite.WriteMessage($" - {member.Id} (joined {member.TimeStamp})", ConsoleColor.White);
+                }
             }
             catch (Exception ex)
             {

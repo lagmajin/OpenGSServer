@@ -9,57 +9,84 @@ namespace OpenGSServer
 {
     public class GuildManager
     {
-        public static GuildManager Instance
-        {
-            get;
-            set;
-        } = new();
+        private readonly GuildDatabaseManager _database = GuildDatabaseManager.GetInstance();
+        private readonly object _syncRoot = new();
 
-        public GuildManager()
-        {
-
-        }
+        public static GuildManager Instance { get; } = new();
 
         public bool Exist(in string guildName)
         {
-            var guildDatabaseManager = new GuildDatabaseManager();
-
-            return guildDatabaseManager.ExistGuild(guildName);
-
-
+            return _database.ExistGuild(guildName);
         }
 
-        public void CreateNewGuild(in string guildName)
+        public bool CreateNewGuild(in string guildName, string guildShortName = null)
         {
-            var guildDatabaseManager = new GuildDatabaseManager();
+            if (string.IsNullOrWhiteSpace(guildName))
+            {
+                return false;
+            }
 
-            guildDatabaseManager.CreateNewGuild(guildName);
-
-
+            lock (_syncRoot)
+            {
+                return _database.CreateNewGuild(guildName, guildShortName);
+            }
         }
 
-        public void RemoveGuild(in string guildName)
+        public bool RemoveGuild(in string guildName)
         {
-            var guildDatabaseManager = new GuildDatabaseManager();
+            if (string.IsNullOrWhiteSpace(guildName))
+            {
+                return false;
+            }
 
+            lock (_syncRoot)
+            {
+                return _database.RemoveGuild(guildName);
+            }
         }
 
         public void RemoveAllGuild()
         {
-
+            lock (_syncRoot)
+            {
+                _database.RemoveAllGuild();
+            }
         }
 
-        public void AddGuildMember()
+        public bool AddGuildMember(in string memberId, in string guildName)
         {
+            if (string.IsNullOrWhiteSpace(memberId))
+            {
+                return false;
+            }
 
+            lock (_syncRoot)
+            {
+                return _database.AddGuildMember(memberId, guildName);
+            }
         }
 
-        public void AddGuildMembers()
+        public int AddGuildMembers(IEnumerable<string> memberIds, in string guildName)
         {
+            if (memberIds == null)
+            {
+                return 0;
+            }
 
+            lock (_syncRoot)
+            {
+                return _database.AddGuildMembers(memberIds, guildName);
+            }
         }
 
+        public DBGuild? FindGuild(in string guildName)
+        {
+            return _database.FindGuildByName(guildName);
+        }
 
-
+        public IReadOnlyList<DBGuildMember> GetGuildMembers(in string guildName)
+        {
+            return _database.GetGuildMember(guildName);
+        }
     }
 }

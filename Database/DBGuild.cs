@@ -18,22 +18,24 @@ namespace OpenGSServer
 
         public string CreationTime { get; set; }
 
-        public DBGuild(in string guildName)
+        public DBGuild(in string guildName) : this(guildName, guildName)
         {
-            id = Guid.NewGuid().ToString("N");
-            GuildName = guildName;
-
-
         }
 
         public DBGuild(in string guildName, in string guildShortName)
         {
-
+            id = Guid.NewGuid().ToString("N");
+            GuildName = guildName;
+            GuildShortName = guildShortName;
+            CreationTime = DateTime.UtcNow.ToString("o");
         }
 
         public DBGuild(in DBGuild guild)
         {
-
+            id = guild.id;
+            GuildName = guild.GuildName;
+            GuildShortName = guild.GuildShortName;
+            CreationTime = guild.CreationTime;
         }
 
         

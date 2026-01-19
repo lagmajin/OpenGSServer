@@ -1,6 +1,8 @@
 ﻿
 using LiteDB;
+using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace OpenGSServer
 {
@@ -10,6 +12,7 @@ namespace OpenGSServer
     public class GuildDatabaseManager : IAbstractDatabaseManager
     {
         private LiteDatabase db;
+        private readonly object _syncRoot = new();
 
         static GuildDatabaseManager instance = new GuildDatabaseManager();
 
@@ -23,97 +26,190 @@ namespace OpenGSServer
         {
             return instance;
         }
-        public void Connect()
+        private LiteDatabase EnsureDatabase()
         {
             if (db == null)
             {
-                db = new LiteDatabase(connectionString);
+                lock (_syncRoot)
+                {
+                    db ??= new LiteDatabase(connectionString);
+                }
             }
-            else
-            {
 
-            }
+            return db;
+        }
+        private ILiteCollection<DBGuild> GuildCollection()
+        {
+            var collection = EnsureDatabase().GetCollection<DBGuild>(dbGuildTableName);
+            collection.EnsureIndex(g => g.GuildName, true);
+            return collection;
+        }
+
+        private ILiteCollection<DBGuildMember> GuildMemberCollection()
+        {
+            var collection = EnsureDatabase().GetCollection<DBGuildMember>(dbGuildMemberName);
+            collection.EnsureIndex(m => m.guildId);
+            collection.EnsureIndex(m => m.Id);
+            return collection;
+        }
+        public void Connect()
+        {
+            EnsureDatabase();
         }
 
 
         public void Disconnect()
         {
-            db?.Dispose();
+            lock (_syncRoot)
+            {
+                db?.Dispose();
+                db = null;
+            }
         }
 
         public bool ExistGuild(in string guildName)
         {
-            var col = db.GetCollection<DBGuild>("guild");
-
-            if (col.FindOne(Query.EQ("", guildName)) == null)
+            if (string.IsNullOrWhiteSpace(guildName))
             {
                 return false;
             }
-            else
-            {
-                return true;
-            }
+
+            var col = GuildCollection();
+
+            return col.Exists(g => g.GuildName == guildName);
 
         }
 
-        public void CreateNewGuild(in string guildName)
+        public bool CreateNewGuild(in string guildName, string guildShortName = null)
         {
-            Connect();
-
-            if (db != null)
+            if (string.IsNullOrWhiteSpace(guildName))
             {
-                var col = db.GetCollection<DBGuild>("guild");
-
-                //var data = col.FindOne(Query.EQ(("Guild"), ""));
-
-                var dbGuild = new DBGuild(guildName);
-
-                col.Insert(dbGuild);
-
-
+                return false;
             }
 
-            Disconnect();
+            var col = GuildCollection();
+
+            if (col.Exists(g => g.GuildName == guildName))
+            {
+                return false;
+            }
+
+            var dbGuild = string.IsNullOrWhiteSpace(guildShortName) ? new DBGuild(guildName) : new DBGuild(guildName, guildShortName);
+
+            col.Insert(dbGuild);
+
+            return true;
         }
 
-        public void RemoveGuild()
+        public bool RemoveGuild(in string guildName)
         {
-            if (db == null)
+            if (string.IsNullOrWhiteSpace(guildName))
             {
-                Connect();
+                return false;
             }
 
-            Disconnect();
+            var guild = FindGuildByName(guildName);
+
+            if (guild == null)
+            {
+                return false;
+            }
+
+            var removed = GuildCollection().Delete(guild.id);
+            GuildMemberCollection().DeleteMany(m => m.guildId == guild.id);
+
+            return removed;
         }
 
         public void RemoveAllGuild()
         {
-
+            GuildCollection().DeleteAll();
+            GuildMemberCollection().DeleteAll();
         }
 
-        public void AddGuildMember(in string id,in string guild)
+        public bool AddGuildMember(in string id,in string guild)
         {
-            if (ExistGuild(guild))
+            if (string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(guild))
             {
-                //var member = new DBGuildMember();
-
-                //member.Id = id;
- 
-                
-
-                var col = db.GetCollection<DBGuildMember>("guild_member");
-
-
-
-
+                return false;
             }
 
+            var guildData = FindGuildByName(guild);
 
+            if (guildData == null)
+            {
+                return false;
+            }
+
+            var memberCollection = GuildMemberCollection();
+
+            if (memberCollection.Exists(m => m.guildId == guildData.id && m.Id == id))
+            {
+                return false;
+            }
+
+            memberCollection.Insert(new DBGuildMember(guildData.id, id));
+
+            return true;
         }
 
-        public List<DBGuildMember> GetGuildMember()
+        public int AddGuildMembers(IEnumerable<string> ids, in string guild)
+        {
+            if (ids == null)
+            {
+                return 0;
+            }
+
+            var added = 0;
+
+            foreach (var id in ids.Where(x => !string.IsNullOrWhiteSpace(x)))
+            {
+                if (AddGuildMember(id, guild))
+                {
+                    added++;
+                }
+            }
+
+            return added;
+        }
+
+        public List<DBGuildMember> GetGuildMember(in string guildName)
         {
             var result=new List<DBGuildMember>();
+
+            var guild = FindGuildByName(guildName);
+
+            if (guild == null)
+            {
+                return result;
+            }
+
+            var col = GuildMemberCollection();
+
+            result.AddRange(col.Find(m => m.guildId == guild.id));
+
+            return result;
+        }
+
+        public DBGuild? FindGuildByName(in string guildName)
+        {
+            if (string.IsNullOrWhiteSpace(guildName))
+            {
+                return null;
+            }
+
+            var col = GuildCollection();
+
+            return col.FindOne(g => g.GuildName == guildName);
+        }
+
+        public List<DBGuildMember> GetAllGuildMembers()
+        {
+            var result=new List<DBGuildMember>();
+
+            var col = GuildMemberCollection();
+
+            result.AddRange(col.FindAll());
 
             return result;
         }
@@ -121,9 +217,7 @@ namespace OpenGSServer
 
         public int GuildCount()
         {
-            Connect();
-
-            return db.GetCollection<DBGuild>().Count();
+            return GuildCollection().Count();
 
         }
 
