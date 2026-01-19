@@ -133,6 +133,32 @@ namespace OpenGSServer
                     CommandExecutor.ListPlayers();
                     break;
 
+                case "banip":
+                    if (parameters.Count >= 1)
+                    {
+                        CommandExecutor.BanIp(parameters[0]);
+                    }
+                    else
+                    {
+                        ConsoleWrite.WriteMessage("[ERR] Usage: banip <ipAddress>", ConsoleColor.Red);
+                    }
+                    break;
+
+                case "unbanip":
+                    if (parameters.Count >= 1)
+                    {
+                        CommandExecutor.UnbanIp(parameters[0]);
+                    }
+                    else
+                    {
+                        ConsoleWrite.WriteMessage("[ERR] Usage: unbanip <ipAddress>", ConsoleColor.Red);
+                    }
+                    break;
+
+                case "listban":
+                    CommandExecutor.ListBannedIps();
+                    break;
+
                 default:
                     ConsoleWrite.WriteMessage($"[ERR] Unknown command: {command}", ConsoleColor.Red);
                     break;
@@ -160,6 +186,9 @@ namespace OpenGSServer
             ConsoleWrite.WriteMessage("matchserverinfo - Show match server information", ConsoleColor.White);
             ConsoleWrite.WriteMessage("listrooms - List all wait rooms", ConsoleColor.White);
             ConsoleWrite.WriteMessage("listplayers - List all connected players", ConsoleColor.White);
+            ConsoleWrite.WriteMessage("banip <ipAddress> - Block incoming connections from the IP", ConsoleColor.White);
+            ConsoleWrite.WriteMessage("unbanip <ipAddress> - Remove the IP from blacklist", ConsoleColor.White);
+            ConsoleWrite.WriteMessage("listban - Display currently banned IP addresses", ConsoleColor.White);
             ConsoleWrite.WriteMessage("help, ? - Show this help message", ConsoleColor.White);
             ConsoleWrite.WriteMessage("====================================", ConsoleColor.Cyan);
         }
@@ -194,6 +223,47 @@ namespace OpenGSServer
             catch (Exception ex)
             {
                 ConsoleWrite.WriteMessage($"[ERR] Failed to create guild: {ex.Message}", ConsoleColor.Red);
+            }
+        }
+
+        public static void BanIp(string ipAddress)
+        {
+            if (BlackList.Instance.AddIp(ipAddress))
+            {
+                ConsoleWrite.WriteMessage($"[OK] {ipAddress} added to blacklist", ConsoleColor.Green);
+            }
+            else
+            {
+                ConsoleWrite.WriteMessage($"[ERR] Failed to add IP '{ipAddress}'. Check the format or duplication.", ConsoleColor.Red);
+            }
+        }
+
+        public static void UnbanIp(string ipAddress)
+        {
+            if (BlackList.Instance.RemoveIp(ipAddress))
+            {
+                ConsoleWrite.WriteMessage($"[OK] {ipAddress} removed from blacklist", ConsoleColor.Green);
+            }
+            else
+            {
+                ConsoleWrite.WriteMessage($"[ERR] IP '{ipAddress}' is not currently banned", ConsoleColor.Yellow);
+            }
+        }
+
+        public static void ListBannedIps()
+        {
+            var entries = BlackList.Instance.GetEntries();
+
+            if (entries.Count == 0)
+            {
+                ConsoleWrite.WriteMessage("[INFO] No banned IP addresses", ConsoleColor.Cyan);
+                return;
+            }
+
+            ConsoleWrite.WriteMessage("=== Banned IP Addresses ===", ConsoleColor.Cyan);
+            foreach (var entry in entries)
+            {
+                ConsoleWrite.WriteMessage(entry, ConsoleColor.White);
             }
         }
 

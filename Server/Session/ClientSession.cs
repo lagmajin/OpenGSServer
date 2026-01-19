@@ -203,6 +203,13 @@ namespace OpenGSServer
                 setIPAddress();
             }
 
+            if (BlackList.Instance.IsBlocked(ip))
+            {
+                ConsoleWrite.WriteMessage($"Connection rejected for banned IP {ip}", ConsoleColor.Red);
+                Disconnect();
+                return;
+            }
+
 
             ConsoleWrite.WriteMessage("IP Address:" + ip, ConsoleColor.Green);
             ConsoleWrite.WriteMessage($"TCP session with Id {Id} connected!", ConsoleColor.DarkMagenta);
