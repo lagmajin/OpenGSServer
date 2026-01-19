@@ -230,6 +230,10 @@ using Autofac;
                     udpServerManager = MatchRUdpServerManager.Instance;
                     ConsoleWrite.WriteMessage("[UDP]Game Server initialized", ConsoleColor.Cyan);
 
+                    // ロビーサーバーの初期化
+                    var lobbyServerManager = LobbyServerManager.Instance;
+                    ConsoleWrite.WriteMessage("[LOBBY] Lobby Server initialized", ConsoleColor.Cyan);
+
                     //var monitorTask = Task.Run(() => MonitorTask(cts.Token), cts.Token).ConfigureAwait(false);
 
 
