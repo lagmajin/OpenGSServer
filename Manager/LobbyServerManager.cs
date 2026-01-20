@@ -3,8 +3,11 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
+using System.Net;
+using System.Net.Sockets;
+using NetCoreServer; // NetCoreServer追加
 using OpenGSCore;
-using OpenGSServer.Utility; // Ping管理を追加
+using OpenGSServer.Utility;
 
 namespace OpenGSServer
 {
@@ -20,10 +23,14 @@ namespace OpenGSServer
         private readonly Lobby _lobby = new();
         private readonly ConcurrentDictionary<string, LobbyPlayerInfo> _connectedPlayers = new();
         private readonly ConcurrentDictionary<string, PlayerRateLimiter> _rateLimiters = new();
-        private readonly ConcurrentDictionary<PlayerID, string> _playerIdMapping = new(); // PlayerID <-> string ID のマッピング
-        private readonly PingManager _pingManager = new(); // Ping管理（PlayerID型使用）
+        private readonly ConcurrentDictionary<PlayerID, string> _playerIdMapping = new();
+        private readonly PingManager _pingManager = new();
         private readonly ReaderWriterLockSlim _lobbyLock = new();
         private readonly Timer _cleanupTimer;
+        
+        // NetCoreServer TCP機能
+        private LobbyTcpServer? _tcpServer;
+        
         private bool _disposed;
 
         public static LobbyServerManager Instance => _instance.Value;
@@ -709,6 +716,78 @@ namespace OpenGSServer
 
         #endregion
 
+        #region TCP サーバー管理
+
+        /// <summary>
+        /// NetCoreServerを使用したTCPサーバーを起動
+        /// </summary>
+        public void StartTcpServer(int port)
+        {
+            if (_tcpServer != null)
+            {
+                ConsoleWrite.WriteMessage("[LOBBY] TCP server already running", ConsoleColor.Yellow);
+                return;
+            }
+
+            try
+            {
+                _tcpServer = new LobbyTcpServer(IPAddress.Any, port, this);
+                _tcpServer.Start();
+                
+                ConsoleWrite.WriteMessage($"[LOBBY] TCP server started on port {port}", ConsoleColor.Green);
+            }
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage($"[LOBBY] Failed to start TCP server: {ex.Message}", ConsoleColor.Red);
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// TCPサーバーを停止
+        /// </summary>
+        public void StopTcpServer()
+        {
+            if (_tcpServer == null)
+            {
+                ConsoleWrite.WriteMessage("[LOBBY] TCP server not running", ConsoleColor.Yellow);
+                return;
+            }
+
+            try
+            {
+                _tcpServer.Stop();
+                _tcpServer.Dispose();
+                _tcpServer = null;
+                
+                ConsoleWrite.WriteMessage("[LOBBY] TCP server stopped", ConsoleColor.Green);
+            }
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage($"[LOBBY] Error stopping TCP server: {ex.Message}", ConsoleColor.Red);
+            }
+        }
+
+        /// <summary>
+        /// TCPサーバーが起動しているか
+        /// </summary>
+        public bool IsTcpServerRunning => _tcpServer?.IsStarted ?? false;
+
+        /// <summary>
+        /// TCPポート番号を取得
+        /// </summary>
+        public int? TcpPort => _tcpServer?.Endpoint.Port;
+
+        /// <summary>
+        /// 全クライアントにメッセージをブロードキャスト
+        /// </summary>
+        public void BroadcastToAllClients(string message)
+        {
+            _tcpServer?.Multicast(message);
+        }
+
+        #endregion
+
         #region IDisposable
 
         public void Dispose()
@@ -716,6 +795,9 @@ namespace OpenGSServer
             if (_disposed) return;
 
             ConsoleWrite.WriteMessage("[LOBBY] Disposing lobby server manager", ConsoleColor.Yellow);
+
+            // TCPサーバー停止
+            StopTcpServer();
 
             _cleanupTimer?.Dispose();
             _lobbyLock?.Dispose();
@@ -743,5 +825,53 @@ namespace OpenGSServer
         public int ActiveRooms { get; set; }
         public Dictionary<EGameMode, int> RoomsByGameMode { get; set; } = new();
         public double AveragePing { get; set; }
+    }
+
+    /// <summary>
+    /// ロビーTCPサーバー（NetCoreServer実装）
+    /// LobbyServerManagerと統合
+    /// </summary>
+    public sealed class LobbyTcpServer : TcpServer
+    {
+        private readonly LobbyServerManager _manager;
+
+        public LobbyTcpServer(IPAddress address, int port, LobbyServerManager manager) 
+            : base(address, port)
+        {
+            _manager = manager ?? throw new ArgumentNullException(nameof(manager));
+            ConsoleWrite.WriteMessage($"[LOBBY] TCP Server initialized on port {port}", ConsoleColor.Green);
+        }
+
+        protected override TcpSession CreateSession()
+        {
+            return new ClientSession(this);
+        }
+
+        protected override void OnConnected(TcpSession session)
+        {
+            if (session is ClientSession clientSession)
+            {
+                var ip = clientSession.Socket.RemoteEndPoint;
+                ConsoleWrite.WriteMessage($"[LOBBY] Client connected from {ip}", ConsoleColor.Cyan);
+            }
+        }
+
+        protected override void OnDisconnected(TcpSession session)
+        {
+            if (session is ClientSession clientSession)
+            {
+                ConsoleWrite.WriteMessage($"[LOBBY] Client disconnected", ConsoleColor.Yellow);
+            }
+        }
+
+        protected override void OnError(SocketError error)
+        {
+            ConsoleWrite.WriteMessage($"[LOBBY] TCP Server error: {error}", ConsoleColor.Red);
+        }
+
+        /// <summary>
+        /// LobbyServerManagerへのアクセス
+        /// </summary>
+        public LobbyServerManager Manager => _manager;
     }
 }

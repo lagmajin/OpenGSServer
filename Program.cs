@@ -24,9 +24,9 @@ using Autofac;
 
         static void CurrentDomain_ProcessExit(object sender, EventArgs e)
         {
-            var generalServerV2 = LobbyServerManagerV2.Instance;
+            var lobbyServer = LobbyServerManager.Instance;
 
-            generalServerV2.Stop();
+            lobbyServer.StopTcpServer();
             Console.WriteLine("exit");
         }
         static async void MonitorTask(CancellationToken cancelToken = default)
@@ -91,7 +91,7 @@ using Autofac;
 
             var batchService = new ServerBatchService();
 
-            batchService.OnStart();
+            // OnStart()は削除（Start()を後で呼ぶ）
 
             Thread.CurrentThread.Name = "MainServerThread";
 
@@ -186,7 +186,8 @@ using Autofac;
 
 
                     var builder = new ContainerBuilder();
-                    builder.RegisterType<LobbyServerManagerV2>().AsSelf().SingleInstance();
+                    builder.RegisterInstance(LobbyServerManager.Instance).AsSelf().SingleInstance();
+                    builder.RegisterInstance(batchService).AsSelf().SingleInstance(); // BatchServiceを登録
 
                     builder.RegisterType<MatchRUdpServerManager>().AsSelf().SingleInstance();
                     builder.RegisterType<ManagementServer>().AsSelf().SingleInstance();
@@ -199,9 +200,9 @@ using Autofac;
 
 
 
-                    var lobbyServerV2 = container.Resolve<LobbyServerManagerV2>();
+                    var lobbyServer = container.Resolve<LobbyServerManager>();
 
-                    lobbyServerV2.Listen(60000);
+                    lobbyServer.StartTcpServer(60000);
 
                     var matchRUdpServer = container.Resolve<MatchRUdpServerManager>();
 
@@ -210,11 +211,13 @@ using Autofac;
 
                     managementServer.Listen(50020);
 
-                    if(lobbyServerV2.IsStarted())
+                    if(lobbyServer.IsTcpServerRunning)
                     {
-                        batchService.WriteLocalPortToFile(lobbyServerV2.Port());
+                        batchService.WriteLocalPortToFile(lobbyServer.TcpPort.Value);
                     }
                     
+                    // バッチサービス起動
+                    batchService.Start();
 
 
                     int workMin;
@@ -283,7 +286,8 @@ using Autofac;
                     }
                     
                     ServerManager.Instance.SaveSetting();
-                    batchService.OnStop();
+                    batchService.Stop();
+                    batchService.Dispose();
 
                     // UDPサーバーのシャットダウン
                     udpServerManager.Shutdown();
