@@ -22,8 +22,13 @@ namespace OpenGSServer
         {
             ConsoleWrite.WriteMessage("Peer connected",ConsoleColor.Green);
             //sessions.Add(new MatchRUdpSession(peer));
-            
 
+            // playersに追加
+            string playerId = peer.Id.ToString();
+            players[playerId] = peer;
+
+            // ハートビート初期化
+            lastHeartbeat[playerId] = DateTime.UtcNow;
             
             var json = new JObject();
 
@@ -51,6 +56,7 @@ namespace OpenGSServer
             foreach (var key in removedKeys)
             {
                 players.Remove(key);
+                lastHeartbeat.Remove(key); // ハートビートからも削除
                 ConsoleWrite.WriteMessage($"[INFO]Removed player {key} from session list.");
             }
 
@@ -59,23 +65,69 @@ namespace OpenGSServer
 
         void OnNetworkReceive(NetPeer peer, NetPacketReader reader, DeliveryMethod deliveryMethod)
         {
-            if(reader.TryGetByte(out var data))
-             {
-                 ConsoleWrite.WriteMessage(data.ToString());
+            try
+            {
+                var seq = reader.GetInt();
+                var data = reader.GetRemainingBytes();
 
-                 // UDPデータをJSONとして処理
-                 try
-                 {
-                     var jsonString = System.Text.Encoding.UTF8.GetString(new byte[] { data });
-                     var json = JObject.Parse(jsonString);
-                     InGameMatchEventHandler.HandleTcpSystemEvent(json); // TCPとして処理
-                 }
-                 catch
-                 {
-                     // JSONパース失敗時はUDPゲームイベントとして扱う
-                     InGameMatchEventHandler.HandleUdpGameEvent(new byte[] { data }, "unknown");
-                 }
+                if (data.Length == 0) // ACKパケット
+                {
+                    HandleAck(peer, seq);
+                }
+                else
+                {
+                    // データパケット
+                    HandleData(peer, seq, data);
+
+                    // ACK送信
+                    SendAck(peer, seq);
+                }
             }
+            catch
+            {
+                // 旧処理
+                if (reader.TryGetByte(out var data))
+                {
+                    ConsoleWrite.WriteMessage(data.ToString());
+
+                    try
+                    {
+                        var jsonString = System.Text.Encoding.UTF8.GetString(new byte[] { data });
+                        var json = JObject.Parse(jsonString);
+
+                        // ハートビート応答チェック
+                        if (json["MessageType"]?.ToString() == "HeartbeatResponse")
+                        {
+                            string playerId = GetPlayerIdByPeer(peer);
+                            if (playerId != null)
+                            {
+                                lastHeartbeat[playerId] = DateTime.UtcNow;
+                                ConsoleWrite.WriteMessage($"[RUDP] Heartbeat response from {playerId}");
+                            }
+                        }
+                        else
+                        {
+                            InGameMatchEventHandler.HandleTcpSystemEvent(json);
+                        }
+                    }
+                    catch
+                    {
+                        InGameMatchEventHandler.HandleUdpGameEvent(new byte[] { data }, "unknown");
+                    }
+                }
+            }
+        }
+
+        private string GetPlayerIdByPeer(NetPeer peer)
+        {
+            foreach (var kvp in players)
+            {
+                if (kvp.Value == peer)
+                {
+                    return kvp.Key;
+                }
+            }
+            return null;
         }
 
 
