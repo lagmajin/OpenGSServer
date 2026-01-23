@@ -31,6 +31,9 @@ namespace OpenGSServer
         // NetCoreServer TCP機能
         private LobbyTcpServer? _tcpServer;
         
+        // アイドルチェック用
+        private readonly Timer _idleCheckTimer;
+
         private bool _disposed;
 
         public static LobbyServerManager Instance => _instance.Value;
@@ -53,6 +56,14 @@ namespace OpenGSServer
                 state: null,
                 dueTime: TimeSpan.FromMinutes(5),
                 period: TimeSpan.FromMinutes(5)
+            );
+
+            // アイドルチェックタイマー（1分ごと）
+            _idleCheckTimer = new Timer(
+                callback: _ => CheckIdlePlayers(),
+                state: null,
+                dueTime: TimeSpan.FromMinutes(1),
+                period: TimeSpan.FromMinutes(1)
             );
         }
 
@@ -79,6 +90,42 @@ namespace OpenGSServer
             catch (Exception ex)
             {
                 ConsoleWrite.WriteMessage($"[LOBBY] Cleanup error: {ex.Message}", ConsoleColor.Red);
+            }
+        }
+
+        private void CheckIdlePlayers()
+        {
+            try
+            {
+                var now = DateTime.UtcNow;
+                var idlePlayers = new List<string>();
+
+                foreach (var kvp in _connectedPlayers)
+                {
+                    var player = kvp.Value;
+                    if ((now - player.LastActivity).TotalMinutes >= 15)
+                    {
+                        idlePlayers.Add(kvp.Key);
+                    }
+                }
+
+                foreach (var playerId in idlePlayers)
+                {
+                    ConsoleWrite.WriteMessage($"[LOBBY] Kicking idle player: {playerId}", ConsoleColor.Yellow);
+                    RemovePlayer(playerId);
+                }
+            }
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage($"[LOBBY] Error in idle check: {ex.Message}", ConsoleColor.Red);
+            }
+        }
+
+        private void UpdatePlayerActivity(string playerId)
+        {
+            if (_connectedPlayers.TryGetValue(playerId, out var player))
+            {
+                player.LastActivity = DateTime.UtcNow;
             }
         }
 
@@ -111,8 +158,9 @@ namespace OpenGSServer
 
                 var playerInfo = _lobby.GetPlayers().FirstOrDefault(p => p.PlayerId == playerId);
                 if (playerInfo == null)
-                    return LobbyResult<LobbyPlayerInfo>.Error("Player info not found after join");
+                    return LobbyResult<LobbyPlayerInfo>.Error("Failed to retrieve player info");
 
+                playerInfo.LastActivity = DateTime.UtcNow; // 初期化
                 _connectedPlayers[playerId] = playerInfo;
                 ConsoleWrite.WriteMessage($"[LOBBY] Player {playerId} ({playerName}) joined lobby", ConsoleColor.Green);
                 
@@ -244,6 +292,7 @@ namespace OpenGSServer
                     return LobbyResult<LobbyRoomInfo>.Error("Failed to create room");
 
                 ConsoleWrite.WriteMessage($"[LOBBY] Room '{roomName}' created by {ownerId}", ConsoleColor.Green);
+                UpdatePlayerActivity(ownerId); // アクティビティ更新
                 OnRoomCreated?.Invoke(ownerId, room);
                 
                 return LobbyResult<LobbyRoomInfo>.Success(room);
@@ -282,6 +331,7 @@ namespace OpenGSServer
                     return LobbyResult<bool>.Error("Failed to join room (room full or not found)");
 
                 ConsoleWrite.WriteMessage($"[LOBBY] Player {playerId} joined room {roomId}", ConsoleColor.Green);
+                UpdatePlayerActivity(playerId); // アクティビティ更新
                 OnPlayerJoinedRoom?.Invoke(playerId, roomId);
                 
                 return LobbyResult<bool>.Success(true);
@@ -351,6 +401,7 @@ namespace OpenGSServer
                 _lobby.AddChat(playerId, message);
                 ConsoleWrite.WriteMessage($"[LOBBY] Chat from {playerId}: {message}", ConsoleColor.Gray);
                 
+                UpdatePlayerActivity(playerId); // アクティビティ更新
                 OnChatMessage?.Invoke(playerId, message);
                 
                 return LobbyResult<bool>.Success(true);
@@ -800,6 +851,7 @@ namespace OpenGSServer
             StopTcpServer();
 
             _cleanupTimer?.Dispose();
+            _idleCheckTimer?.Dispose();
             _lobbyLock?.Dispose();
 
             foreach (var playerId in _connectedPlayers.Keys.ToList())
