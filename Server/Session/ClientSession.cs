@@ -52,6 +52,11 @@ namespace OpenGSServer
 
         public string? PlayerID { get; private set; }
 
+        public void SetPlayerID(string id)
+        {
+            PlayerID = id;
+        }
+
         public ClientSession(TcpServer server) : base(server) { }
 
         private void setIPAddress()
@@ -242,7 +247,7 @@ namespace OpenGSServer
             Disconnect();
 
         
-       　}
+        }
         private List<byte> receiveBuffer = new List<byte>();
         //private readonly byte delimiter = (byte)'\n'; // 制御文字
 
@@ -375,201 +380,12 @@ namespace OpenGSServer
         //#networkcore
         private void ParseMessageFromClient(in JObject json)
         {
-            string messageType;
-
-            IDictionary<string, JToken> dic = json;
-
-
-            if (dic.ContainsKey("MessageType"))
-            {
-                messageType = dic["MessageType"].ToString();
-            }
-            else
-            {
-                return;
-            }
-
-            if (dic.ContainsKey("ClientTimeStampUTC"))
-            {
-                var str = dic["ClientTimeStampUTC"].ToString();
-
-                var time = DateTime.ParseExact(str, "HH:mm:ss:ffff", null);
-
-
-                ConsoleWrite.WriteMessage("ParseTime" + time.ToString("ffff"));
-            }
-
-
-            if ("LoginRequest" == messageType)
-            {
-
-                PlayerID=OldAccountEventHandler.Login(this, dic);
-                OldAccountEventHandler.SendUserInfo(this, dic);
-            }
-
-            if ("LogoutRequest" == messageType)
-            {
-                OldAccountEventHandler.Logout(this);
-            }
-
-            if ("AddFriendRequest" == messageType)
-            {
-                var playerID = "";
-                var friendID = "";
-
-            }
-
-            if ("PlayerInfoRequest" == messageType)
-            {
-
-
-
-            }
-
-            
-
-
-            if ("MatchServerInformationRequest" == messageType)
-            {
-                var infoJson = new JObject();
-
-                var matchServer = MatchServerV2.Instance; // Instanceプロパティを使用
-
-
-
-                infoJson["MessageType"] = "MatchServerInformationNotification";
-
-                infoJson["Port"] = matchServer.TcpPort; // TcpPortプロパティを使用
-
-                infoJson["SubPort"] = 2000;
-
-                var str = infoJson.ToString(Formatting.None);
-
-                ConsoleWrite.WriteMessage(str);
-
-                SendAsync(str);
-
-            }
-
-
-
-            if ("UpdateRoomRequest" == messageType)
-            {
-
-                LobbyEventHandler.UpdateRoom(this, dic);
-
-            }
-
-            if ("CreateNewWaitRoomRequest" == messageType)
-            {
-                ConsoleWrite.WriteMessage("Create");
-
-                LobbyEventHandler.CreateNewWaitRoom(this, dic);
-
-
-
-            }
-
-            if ("QuickStartRequest" == messageType)
-            {
-                ConsoleWrite.WriteMessage("QuickStart", ConsoleColor.Yellow);
-
-                LobbyEventHandler.QuickStartRequest(this, dic);
-
-            }
-
-            if ("EnterRoomRequest" == messageType)
-            {
-
-                LobbyEventHandler.EnterRoomRequest(this, dic);
-            }
-
-            if("CloseWaitRoomRequest"==messageType)
-            {
-
-            }
-
-
-            if ("ExitRoomRequest" == messageType)
-            {
-
-                WaitRoomEventHandler.ExitRoomRequest(this,dic);
-
-            }
-
-            if ("MatchStartRequest" == messageType)
-            {
-                var playerID = json["PlayerID"].ToString();
-                var roomID = json["RoomID"].ToString();
-
-
-
-
-            }
-
-            if ("AddNewLobbyChat" == messageType)
-            {
-                //var playerID = json["id"].ToString();
-
-                //var message = json["Message"].ToString();
-
-                /*
-                if (string.IsNullOrEmpty(playerID))
-                {
-
-                }
-
-                */
-
-            }
-
-            if ("AddNewRoomChatRequest" == messageType)
-            {
-                string idString;
-                string roomIdString;
-
-                if (json.TryGetValue("id", out var id))
-                {
-
-
-                }
-                else
-                {
-
-                    return;
-                }
-
-                if (json.TryGetValue("roomid", out var roomID))
-                {
-
-                }
-
-                //var id = json["id"].ToString();
-                //var roomId = json["roomid"].ToString();
-                //var chat = json["message"].ToString();
-
-
-
-            }
-
-            if("LoadingStarted"==messageType)
-            {
-                json["PlayerLocalId"] = "";
-            }
-
-            if("UpdateProgress"==messageType)
-            {
-                json["PlayerLocalId"] = "";
-            }
-
-            if("PlayerLoadingCompleted"==messageType)
-            {
-                json["PlayerLocalId"] = "";
-
-
-
-            }
-
+            string messageType = json["MessageType"]?.ToString();
+            if (string.IsNullOrEmpty(messageType)) return;
+
+            // LobbyServerManager に委譲
+            var lobbyManager = (Server as LobbyTcpServer)?.Manager;
+            lobbyManager?.HandleMessage(messageType, json, this);
         }
 
         protected override void OnSent(long sent, long pending)

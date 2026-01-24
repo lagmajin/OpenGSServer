@@ -26,7 +26,8 @@ namespace OpenGSServer
         private static GeneralServer generalServer_ = new GeneralServer();
         private static ManagementServer managementServer = new ManagementServer();
 
-        private static List<ServerAdminAccount> adminAccounts = new List<ServerAdminAccount>();
+        // 管理者アカウントは AdminManager で管理
+        private readonly AdminManager adminManager = AdminManager.CreateDefault();
 
 
         internal ServerSettings Settings { get => settings; set => settings = value; }
@@ -49,22 +50,39 @@ namespace OpenGSServer
 
         public ManagementServer GetManagementServer()
         {
-
-            return null;
+            return managementServer;
         }
 
         void AddRegisterAdminAccount(string id, string pass)
         {
-            var aa = new ServerAdminAccount(id, pass);
-
-            adminAccounts.Add(aa);
-
+            try
+            {
+                var added = adminManager.AddAdmin(id, pass);
+                if (!added)
+                {
+                    ConsoleWrite.WriteMessage($"[SERVER] Admin '{id}' already exists", ConsoleColor.Yellow);
+                }
+            }
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage($"[SERVER] Failed to add admin: {ex.Message}", ConsoleColor.Red);
+            }
         }
 
         void RemoveAdminAccount(String id, String pass)
         {
-
-
+            try
+            {
+                var removed = adminManager.RemoveAdmin(id);
+                if (!removed)
+                {
+                    ConsoleWrite.WriteMessage($"[SERVER] Admin '{id}' not found", ConsoleColor.Yellow);
+                }
+            }
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage($"[SERVER] Failed to remove admin: {ex.Message}", ConsoleColor.Red);
+            }
         }
 
         public void LoadSetting()

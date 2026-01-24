@@ -12,25 +12,12 @@ namespace OpenGSServer
     /// </summary>
     public class MatchRUdpServerManager
     {
-        private static MatchRUdpServerManager? instance;
         private NetManager? netManager;
         private EventBasedNetListener? listener;
         private Dictionary<string, NetPeer> connectedPlayers = new();
         private Dictionary<string, string> playerRoomMapping = new();
 
-        public static MatchRUdpServerManager Instance
-        {
-            get
-            {
-                if (instance == null)
-                {
-                    instance = new MatchRUdpServerManager();
-                }
-                return instance;
-            }
-        }
-
-        private MatchRUdpServerManager()
+        public MatchRUdpServerManager()
         {
             InitializeUdpServer();
         }

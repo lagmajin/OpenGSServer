@@ -205,6 +205,8 @@ using Autofac;
                     lobbyServer.StartTcpServer(60000);
 
                     var matchRUdpServer = container.Resolve<MatchRUdpServerManager>();
+                    // Ensure the static reference is assigned from the DI-resolved instance
+                    udpServerManager = matchRUdpServer;
 
 
                     var managementServer = ManagementServer.Instance;
@@ -229,8 +231,7 @@ using Autofac;
 
                     ThreadPool.SetMinThreads(26, ioMin);
 
-                    // UDPゲームサーバーの初期化
-                    udpServerManager = MatchRUdpServerManager.Instance;
+                    // UDPゲームサーバーの初期化 (already assigned from DI)
                     ConsoleWrite.WriteMessage("[UDP]Game Server initialized", ConsoleColor.Cyan);
 
                     // ロビーサーバーの初期化
@@ -275,7 +276,8 @@ using Autofac;
                 }
                 catch (Exception ex)
                 {
-                    ConsoleWrite.WriteMessage($"[ERR] Exception: {ex.Message}", ConsoleColor.Red);
+                    // Log full exception (includes stack trace) to aid root-cause analysis
+                    ConsoleWrite.WriteMessage($"[ERR] Exception: {ex.ToString()}", ConsoleColor.Red);
                 }
                 finally
                 {
@@ -289,8 +291,15 @@ using Autofac;
                     batchService.Stop();
                     batchService.Dispose();
 
-                    // UDPサーバーのシャットダウン
-                    udpServerManager.Shutdown();
+                    // UDPサーバーのシャットダウン（ヌルチェック）
+                    if (udpServerManager != null)
+                    {
+                        udpServerManager.Shutdown();
+                    }
+                    else
+                    {
+                        ConsoleWrite.WriteMessage("[WARN] udpServerManager is null, skipping shutdown.", ConsoleColor.Yellow);
+                    }
                 }
             }
             else

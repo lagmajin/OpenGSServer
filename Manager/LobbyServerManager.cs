@@ -8,6 +8,7 @@ using System.Net.Sockets;
 using NetCoreServer; // NetCoreServer追加
 using OpenGSCore;
 using OpenGSServer.Utility;
+using Newtonsoft.Json;
 
 namespace OpenGSServer
 {
@@ -112,7 +113,7 @@ namespace OpenGSServer
                 foreach (var playerId in idlePlayers)
                 {
                     ConsoleWrite.WriteMessage($"[LOBBY] Kicking idle player: {playerId}", ConsoleColor.Yellow);
-                    RemovePlayer(playerId);
+                    //RemovePlayer(playerId);
                 }
             }
             catch (Exception ex)
@@ -835,6 +836,71 @@ namespace OpenGSServer
         public void BroadcastToAllClients(string message)
         {
             _tcpServer?.Multicast(message);
+        }
+
+        /// <summary>
+        /// クライアントからのメッセージを処理（TCP専用）
+        /// </summary>
+        public void HandleMessage(string messageType, JObject data, ClientSession? session = null)
+        {
+            var clientSession = session as ClientSession; // キャスト
+            switch (messageType)
+            {
+                case "LoginRequest":
+                    // ログイン処理（既存の OldAccountEventHandler を移行）
+                    var playerId = OldAccountEventHandler.Login(clientSession, data);
+                    if (clientSession != null && playerId != null) clientSession.SetPlayerID(playerId);
+                    break;
+                case "LogoutRequest":
+                    OldAccountEventHandler.Logout(clientSession);
+                    break;
+                case "CreateNewWaitRoomRequest":
+                    LobbyEventHandler.CreateNewWaitRoom(clientSession, data);
+                    break;
+                case "EnterRoomRequest":
+                    LobbyEventHandler.EnterRoomRequest(clientSession, data);
+                    break;
+                case "QuickStartRequest":
+                    LobbyEventHandler.QuickStartRequest(clientSession, data);
+                    break;
+                case "UpdateRoomRequest":
+                    LobbyEventHandler.UpdateRoom(clientSession, data);
+                    break;
+                case "ExitRoomRequest":
+                    WaitRoomEventHandler.ExitRoomRequest(clientSession, data);
+                    break;
+                case "MatchServerInformationRequest":
+                    HandleMatchServerInfoRequest(clientSession, data);
+                    break;
+                case "AddNewLobbyChat":
+                    // チャット処理（例）
+                    var playerIdChat = data["PlayerID"]?.ToString();
+                    var message = data["Message"]?.ToString();
+                    if (!string.IsNullOrEmpty(playerIdChat) && !string.IsNullOrEmpty(message))
+                    {
+                        AddLobbyChat(playerIdChat, message);
+                    }
+                    break;
+                default:
+                    ConsoleWrite.WriteMessage($"[LOBBY] Unknown message type: {messageType}", ConsoleColor.Yellow);
+                    break;
+            }
+        }
+
+        private void HandleMatchServerInfoRequest(ClientSession? session, JObject data)
+        {
+            if (session == null) return;
+
+            var infoJson = new JObject();
+            var matchServer = MatchServerV2.Instance; // Instanceプロパティを使用
+
+            infoJson["MessageType"] = "MatchServerInformationNotification";
+            infoJson["Port"] = matchServer.TcpPort; // TcpPortプロパティを使用
+            infoJson["SubPort"] = 2000;
+
+            var str = infoJson.ToString(Formatting.None);
+            ConsoleWrite.WriteMessage(str);
+            session.SendAsyncJsonWithTimeStamp(infoJson);
         }
 
         #endregion
