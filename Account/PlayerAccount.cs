@@ -32,6 +32,8 @@ namespace OpenGSServer
         public int Matches { get; set; }
         public DateTime Time { get; set; }
 
+        public EPlayerCharacter defaultPlayer { get; set; }= EPlayerCharacter.Ami;
+
         public PlayerAccount(in string id, in string name, in string pass)
         {
             Id = id;
