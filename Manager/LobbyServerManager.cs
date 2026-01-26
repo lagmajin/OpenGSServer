@@ -101,19 +101,29 @@ namespace OpenGSServer
                 var now = DateTime.UtcNow;
                 var idlePlayers = new List<string>();
 
-                foreach (var kvp in _connectedPlayers)
+                // 読み取りロックでスナップショットを作成
+                _lobbyLock.EnterReadLock();
+                try
                 {
-                    var player = kvp.Value;
-                    if ((now - player.LastActivity).TotalMinutes >= 15)
+                    foreach (var kvp in _connectedPlayers)
                     {
-                        idlePlayers.Add(kvp.Key);
+                        var player = kvp.Value;
+                        if ((now - player.LastActivity).TotalMinutes >= 15)
+                        {
+                            idlePlayers.Add(kvp.Key);
+                        }
                     }
                 }
+                finally
+                {
+                    _lobbyLock.ExitReadLock();
+                }
 
+                // スナップショットに基づいて書き込み操作を行う（PlayerLeaveLobbyは内部でロックを取得する）
                 foreach (var playerId in idlePlayers)
                 {
                     ConsoleWrite.WriteMessage($"[LOBBY] Kicking idle player: {playerId}", ConsoleColor.Yellow);
-                    //RemovePlayer(playerId);
+                    PlayerLeaveLobby(playerId);
                 }
             }
             catch (Exception ex)
