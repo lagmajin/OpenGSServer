@@ -16,13 +16,13 @@ namespace OpenGSServer
     public struct MatchResult
     {
         public EMatchRoomEventType type;
-        public MatchRoom room;
+        public OpenGSCore.MatchRoom room;
     }
 
     public class MatchRoomManager:IMatchSubscriber
     {
 
-    private Dictionary<string, MatchRoom> matchRooms = new Dictionary<string, MatchRoom>();
+    private Dictionary<string, OpenGSCore.MatchRoom> matchRooms = new Dictionary<string, OpenGSCore.MatchRoom>();
     private readonly object matchRoomsLock = new();
 
     private int roomNumberCount = 0;
@@ -44,15 +44,53 @@ namespace OpenGSServer
 
     }
 
-    public void CreateMatchRoomByWaitRoom(WaitRoom waitRoom)
+    /// <summary>
+    /// WaitRoom から MatchRoom を生成し、プレイヤーを移行する
+    /// </summary>
+    public OpenGSCore.MatchRoom? CreateMatchRoomByWaitRoom(WaitRoom waitRoom)
     {
-        waitRoom.MatchRoomLink = null;
+        if (waitRoom == null) return null;
+        if (!waitRoom.CanStartMatch()) return null;
 
-        //var newMatchRoom = new MatchRoom(roomNumberCount,"Live!Live!Live!","",);
+        lock (matchRoomsLock)
+        {
+            // 設定とオーナーを取得
+            var setting = waitRoom.GetOrCreateSetting();
+            var ownerId = waitRoom.GetFirstPlayerId();
 
+            // EventBus を作成
+            var bus = new MatchRoomEventBus();
 
-        IncreaseRoomCounter();
+            // MatchRoom を生成
+            var matchRoom = MatchRoomFactory.CreateMatchRoom(roomNumberCount, waitRoom.RoomName, ownerId, setting, this);
 
+            // プレイヤーを移行
+            matchRoom.AddNewPlayers(waitRoom.AllPlayers());
+
+            // 相互リンク
+            waitRoom.LinkMatchRoom(matchRoom);
+
+            // 管理辞書に追加
+            matchRooms.Add(matchRoom.Id, matchRoom);
+            roomEventBuses[matchRoom.Id] = bus;
+
+            IncreaseRoomCounter();
+
+            return matchRoom;
+        }
+    }
+
+    /// <summary>
+    /// WaitRoom から MatchRoom を生成し、ゲームを開始する
+    /// </summary>
+    public OpenGSCore.MatchRoom? StartMatchFromWaitRoom(WaitRoom waitRoom)
+    {
+        var matchRoom = CreateMatchRoomByWaitRoom(waitRoom);
+        if (matchRoom == null) return null;
+
+        // ゲーム開始
+        matchRoom.GameStart();
+        return matchRoom;
     }
 
     public List<AbstractGameRoom> AllRooms()

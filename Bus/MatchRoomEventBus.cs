@@ -34,7 +34,7 @@ namespace OpenGSServer
 
     public class MatchRoomEventBus : AbstractEventBus
     {
-        private MatchRoom room;
+        private OpenGSCore.MatchRoom room;
         private MatchRoomManager roomManager;
         
         public MatchRoomEventBus()
@@ -43,7 +43,7 @@ namespace OpenGSServer
 
         }
 
-        public void setMatchRoom(MatchRoom room)
+        public void setMatchRoom(OpenGSCore.MatchRoom room)
         {
             this.room = room;
         }

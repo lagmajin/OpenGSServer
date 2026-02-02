@@ -40,6 +40,9 @@ namespace OpenGSServer
             _server = new NetManager(_listener);
             _server.Start(port);
 
+            // start periodic snapshot broadcast (default 20Hz)
+            StartSnapshotBroadcast(50);
+
             // イベントハンドラー登録
             _listener.ConnectionRequestEvent += OnConnectionRequest;
             _listener.PeerConnectedEvent += OnPeerConnected;
@@ -295,6 +298,58 @@ namespace OpenGSServer
         public void PollingEvent()
         {
             _server?.PollEvents();
+        }
+
+        private System.Timers.Timer? _snapshotTimer;
+
+        public void StartSnapshotBroadcast(int intervalMs = 50)
+        {
+            if (_snapshotTimer != null) return;
+            _snapshotTimer = new System.Timers.Timer(intervalMs);
+            _snapshotTimer.Elapsed += (s, e) => BroadcastSnapshots();
+            _snapshotTimer.Start();
+        }
+
+        public void StopSnapshotBroadcast()
+        {
+            _snapshotTimer?.Stop();
+            _snapshotTimer?.Dispose();
+            _snapshotTimer = null;
+        }
+
+        private void BroadcastSnapshots()
+        {
+            try
+            {
+                var matchRoomManager = MatchRoomManager.Instance;
+                var rooms = matchRoomManager.AllRooms();
+
+                foreach (var abstractRoom in rooms)
+                {
+                    if (abstractRoom is MatchRoom room)
+                    {
+                        var snap = room.GameScene.GetSnapshot();
+
+                        // send snapshot to all players in room
+                        var writer = new NetDataWriter();
+                        writer.Put("Snapshot");
+                        writer.Put(snap.ToString());
+
+                        foreach (var player in room.Players)
+                        {
+                            if (int.TryParse(player.Id, out var pid))
+                            {
+                                var peer = _server?.GetPeerById(pid);
+                                peer?.Send(writer, DeliveryMethod.Unreliable);
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage($"[UDP] Error broadcasting snapshots: {ex.Message}", ConsoleColor.Red);
+            }
         }
 
         /// <summary>

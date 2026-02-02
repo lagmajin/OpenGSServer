@@ -1,5 +1,8 @@
 
 
+
+
+
 using OpenGSCore;
 
 namespace OpenGSServer
@@ -7,25 +10,15 @@ namespace OpenGSServer
 
     public class MatchRoomFactory
     {
-        public static MatchRoom CreateMatchRoom(int roomNumber, string roomName, string ownerID, AbstractMatchSetting setting,MatchRoomManager manager)
+        public static OpenGSCore.MatchRoom CreateMatchRoom(int roomNumber, string roomName, string ownerID, AbstractMatchSetting setting, MatchRoomManager manager)
         {
-
+            // OpenGSCore.MatchRoomEventBus ‚ðŽg—p
+            var bus = new OpenGSCore.MatchRoomEventBus();
             
-            var bus = new MatchRoomEventBus();
-            
-            
-         
-            var room= new MatchRoom(roomNumber, roomName, ownerID,setting,bus);
-            
-            bus.setMatchRoom(room);
-            bus.setMatchRoomManager(manager);
+            var room = new OpenGSCore.MatchRoom(roomNumber, roomName, ownerID, setting, bus);
             
             return room;
         }
-        
-        
     }
-
-
 
 }

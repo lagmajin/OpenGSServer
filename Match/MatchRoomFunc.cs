@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace OpenGSServer
 {
-    public partial class MatchRoom
+    public partial class DeprecatedMatchRoom
     {
         public bool IsOwner(in string id)
         {

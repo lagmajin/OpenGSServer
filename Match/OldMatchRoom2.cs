@@ -35,7 +35,11 @@ namespace OpenGSServer
 
     //#bookmark
     //#old
-    public partial class MatchRoom : AbstractGameRoom, IMatchRoom
+    /// <summary>
+    /// 非推奨: OpenGSCore.MatchRoom を使用してください
+    /// </summary>
+    [Obsolete("Use OpenGSCore.MatchRoom instead")]
+    public partial class DeprecatedMatchRoom : AbstractGameRoom, IMatchRoom
     {
 
         private readonly MatchRoomEventBus eventBus;
@@ -83,7 +87,7 @@ namespace OpenGSServer
         private IMatchLogic logic { get; set; }
 
         private IPlayerFinalScoreCalcurator    calcurator { get; set; }
-        public MatchRoom(int roomNumber, in string roomName, in string roomOwnerId,AbstractMatchSetting setting, MatchRoomEventBus bus) : base(roomNumber, roomOwnerId)
+        public DeprecatedMatchRoom(int roomNumber, in string roomName, in string roomOwnerId,AbstractMatchSetting setting, MatchRoomEventBus bus) : base(roomNumber, roomOwnerId)
         {
             
             Setting = setting;  
