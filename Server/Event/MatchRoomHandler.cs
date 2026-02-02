@@ -236,8 +236,16 @@ namespace OpenGSServer
 
             Console.WriteLine($"Player {playerId} threw grenade");
 
-            // 全プレイヤーにグレネードイベントをブロードキャスト
-            BroadcastGrenadeEvent(room, playerId, grenadeData);
+            // Relay grenade message as-is to room players (clients are authoritative)
+            var message = new JObject
+            {
+                ["MessageType"] = grenadeData.GetStringOrNull("MessageType") ?? "GrenadeSpawn",
+                ["PlayerID"] = playerId,
+                ["GrenadeData"] = grenadeData,
+                ["Timestamp"] = DateTime.UtcNow.ToString("o")
+            };
+
+            UdpBroadcastToRoom(room.Id.ToString(), message);
         }
 
         private static void HandleShotHit(MatchRoom room, string shooterId, string targetId, string? weaponType, JObject? hitPosition)

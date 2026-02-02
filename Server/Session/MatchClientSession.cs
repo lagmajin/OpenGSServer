@@ -146,6 +146,22 @@ namespace OpenGSServer
 
             }
 
+            // Grenade messages (client-authoritative): forward to room handler which will broadcast to room players
+            if (messageType == "GrenadeSpawn" || messageType == "GrenadeUpdate" || messageType == "GrenadeExplode")
+            {
+                try
+                {
+                    // Forward to match room handler (expects PlayerID and RoomID in JSON)
+                    InGameMatchEventHandler.ParseTcpEvent(json);
+                }
+                catch (Exception ex)
+                {
+                    ConsoleWrite.WriteMessage($"[ERROR] Grenade message handling failed: {ex.Message}", ConsoleWrite.eMessageType.Error);
+                }
+
+                return;
+            }
+
             if (messageType == "FlagReturnRequest")
             {
 

@@ -216,9 +216,10 @@ namespace OpenGSServer
 
             elapsedTime += deltaSeconds;
 
-            if (AutoExplodeOnFuseTimeout && elapsedTime >= FuseTime)
+            if (elapsedTime >= FuseTime)
             {
-                ForceExplode();
+                // Reached or passed fuse time; caller (GameScene/network) may notify clients.
+                elapsedTime = FuseTime;
                 return true;
             }
 
@@ -228,7 +229,70 @@ namespace OpenGSServer
         public void DisposeGrenade()
         {
             state = GrenadeState.Disposed;
-            // OnDestroy(); // TODO: AbstractGameObjectにOnDestroyメソッドを追加する必要がある
+        }
+
+        // Apply state from client-provided JSON without invoking server-side explosion logic.
+        public void ApplyState(Newtonsoft.Json.Linq.JObject json)
+        {
+            if (json == null) return;
+
+            if (json.TryGetValue("PosX", out var px))
+            {
+                if (float.TryParse(px.ToString(), out var fx)) Posx = fx;
+            }
+            if (json.TryGetValue("PosY", out var py))
+            {
+                if (float.TryParse(py.ToString(), out var fy)) Posy = fy;
+            }
+
+            if (json.TryGetValue("ownerId", out var oid))
+            {
+                OwnerId = oid.ToString();
+            }
+
+            if (json.TryGetValue("fuseTime", out var ft))
+            {
+                if (float.TryParse(ft.ToString(), out var f)) FuseTime = f;
+            }
+
+            if (json.TryGetValue("remainingFuseTime", out var rft))
+            {
+                if (float.TryParse(rft.ToString(), out var rf))
+                {
+                    elapsedTime = Math.Max(0f, FuseTime - rf);
+                }
+            }
+
+            if (json.TryGetValue("explosionRadius", out var er))
+            {
+                if (float.TryParse(er.ToString(), out var fr)) ExplosionRadius = fr;
+            }
+
+            if (json.TryGetValue("damage", out var dmg))
+            {
+                if (int.TryParse(dmg.ToString(), out var di)) Damage = di;
+            }
+
+            if (json.TryGetValue("explosionDamage", out var ed))
+            {
+                if (int.TryParse(ed.ToString(), out var ei)) ExplosionDamage = ei;
+            }
+
+            if (json.TryGetValue("state", out var st))
+            {
+                var s = st.ToString();
+                if (Enum.TryParse<GrenadeState>(s, true, out var parsed))
+                {
+                    state = parsed;
+                }
+            }
+        }
+
+        // Explicitly set state without invoking explosion side-effects.
+        public void SetState(GrenadeState toState, float elapsed = 0f)
+        {
+            state = toState;
+            elapsedTime = Math.Max(0f, elapsed);
         }
 
         protected virtual void OnArmed()
