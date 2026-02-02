@@ -236,8 +236,16 @@ namespace OpenGSServer
 
             Console.WriteLine($"Player {playerId} threw grenade");
 
-            // 全プレイヤーにグレネードイベントをブロードキャスト
-            BroadcastGrenadeEvent(room, playerId, grenadeData);
+            // Relay grenade message as-is to room players (clients are authoritative)
+            var message = new JObject
+            {
+                ["MessageType"] = grenadeData.GetStringOrNull("MessageType") ?? "GrenadeSpawn",
+                ["PlayerID"] = playerId,
+                ["GrenadeData"] = grenadeData,
+                ["Timestamp"] = DateTime.UtcNow.ToString("o")
+            };
+
+            UdpBroadcastToRoom(room.Id.ToString(), message);
         }
 
         private static void HandleShotHit(MatchRoom room, string shooterId, string targetId, string? weaponType, JObject? hitPosition)
@@ -282,15 +290,16 @@ namespace OpenGSServer
 
         private static void BroadcastGrenadeEvent(MatchRoom room, string playerId, JObject grenadeData)
         {
-            var message = new JObject
-            {
-                ["MessageType"] = "GrenadeThrown",
-                ["PlayerID"] = playerId,
-                ["GrenadeData"] = grenadeData,
-                ["Timestamp"] = DateTime.UtcNow.ToString("o")
-            };
+            var message = grenadeData.DeepClone() as JObject ?? new JObject();
+            // Ensure basic routing fields
+            message["MessageType"] = message.GetStringOrNull("MessageType") ?? "GrenadeSpawn";
+            message["PlayerID"] = playerId;
+            message["RoomID"] = room.Id.ToString();
+            message["Timestamp"] = DateTime.UtcNow.ToString("o");
 
-            UdpBroadcastToRoom(room.Id.ToString(), message);
+            // Broadcast via UDP manager
+            var udpManager = new MatchRUdpServerManager();
+            udpManager.BroadcastToRoom(room.Id.ToString(), message);
         }
 
         private static void BroadcastShotHitEvent(MatchRoom room, string shooterId, string targetId, int damage, JObject? hitPosition)

@@ -21,6 +21,10 @@ namespace OpenGSServer
 
     public class GameScene
     {
+        // Event raised when the scene wants to notify network layer / other systems
+        // about a grenade-related message that should be forwarded to clients.
+        public event Action<Newtonsoft.Json.Linq.JObject>? OnGrenadeEvent;
+
         private readonly List<AbstractGameObject> _objects = new();
         private readonly Dictionary<string, AbstractGameObject> _objectIndex = new(StringComparer.Ordinal);
         private readonly object _syncRoot = new();
@@ -105,9 +109,35 @@ namespace OpenGSServer
 
         public void UpdateFrame(GameSceneUpdateInfo updateInfo)
         {
+            var dt = (updateInfo.CurrentTime - updateInfo.BeforeTime).TotalSeconds();
+
             foreach (var obj in Snapshot())
             {
+                // Update object normally
                 obj.Update();
+
+                // If it's a grenade, do not perform server-side collision/explosion
+                if (obj is AbstractGrenade grenade)
+                {
+                    // grenade.UpdateCountdown should not trigger server-side explosion per rule; it only advances timer
+                    grenade.UpdateCountdown((float)dt);
+
+                    // Broadcast grenade state to connected clients (so clients remain authoritative)
+                    var json = new Newtonsoft.Json.Linq.JObject
+                    {
+                        ["MessageType"] = "GrenadeState",
+                        ["ObjectID"] = grenade.Id,
+                        ["Type"] = grenade.GranadeType.ToString(),
+                        ["PosX"] = grenade.Posx,
+                        ["PosY"] = grenade.Posy,
+                        ["RemainingFuseTime"] = grenade.RemainingFuseTime,
+                        ["State"] = grenade.State.ToString(),
+                        ["ExplosionRadius"] = grenade.ExplosionRadius,
+                        ["PlayerID"] = grenade.OwnerId
+                    };
+
+                    OnGrenadeEvent?.Invoke(json);
+                }
             }
         }
 
