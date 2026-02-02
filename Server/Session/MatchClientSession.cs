@@ -24,6 +24,46 @@ namespace OpenGSServer
             SendAsync(message);
         }
 
+        private bool ValidateGrenadeMessage(JObject json, out string reason)
+        {
+            reason = string.Empty;
+
+            if (json == null)
+            {
+                reason = "json is null";
+                return false;
+            }
+
+            if (!json.TryGetValue("MessageType", out var mt))
+            {
+                reason = "MessageType missing";
+                return false;
+            }
+
+            // require player id
+            if (!json.TryGetValue("PlayerID", out var pid) && !json.TryGetValue("PlayerId", out pid))
+            {
+                reason = "PlayerID missing";
+                return false;
+            }
+
+            // require object id
+            if (!json.TryGetValue("ObjectId", out var oid) && !json.TryGetValue("ID", out oid))
+            {
+                reason = "ObjectId missing";
+                return false;
+            }
+
+            // require room id for routing via InGameMatchEventHandler
+            if (!json.TryGetValue("RoomID", out var rid) && !json.TryGetValue("RoomId", out rid))
+            {
+                reason = "RoomID missing";
+                return false;
+            }
+
+            return true;
+        }
+
         protected override void OnDisconnected()
         {
             Console.WriteLine($"Chat TCP session with Id {Id} disconnected!");
@@ -151,6 +191,20 @@ namespace OpenGSServer
             {
                 try
                 {
+                    // Basic validation before forwarding
+                    if (!ValidateGrenadeMessage(json, out var reason))
+                    {
+                        ConsoleWrite.WriteMessage($"[WARN] Invalid grenade message: {reason}", ConsoleWrite.eMessageType.Warning);
+                        var err = new JObject
+                        {
+                            ["MessageType"] = "Error",
+                            ["Detail"] = reason
+                        };
+                        // send error back to sender
+                        try { SendAsync(err.ToString()); } catch { }
+                        return;
+                    }
+
                     // Forward to match room handler (expects PlayerID and RoomID in JSON)
                     InGameMatchEventHandler.ParseTcpEvent(json);
                 }

@@ -126,14 +126,14 @@ namespace OpenGSServer
                     var json = new Newtonsoft.Json.Linq.JObject
                     {
                         ["MessageType"] = "GrenadeState",
-                        ["ID"] = grenade.Id,
+                        ["ObjectID"] = grenade.Id,
                         ["Type"] = grenade.GranadeType.ToString(),
                         ["PosX"] = grenade.Posx,
                         ["PosY"] = grenade.Posy,
                         ["RemainingFuseTime"] = grenade.RemainingFuseTime,
                         ["State"] = grenade.State.ToString(),
                         ["ExplosionRadius"] = grenade.ExplosionRadius,
-                        ["OwnerId"] = grenade.OwnerId
+                        ["PlayerID"] = grenade.OwnerId
                     };
 
                     OnGrenadeEvent?.Invoke(json);
