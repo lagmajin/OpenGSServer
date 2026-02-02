@@ -64,6 +64,24 @@ namespace OpenGSServer
             return true;
         }
 
+        // Per-session rate limiters
+        private static readonly double GrenadeSpawnCapacity = 5; // tokens
+        private static readonly double GrenadeSpawnRefillPerSecond = 5; // tokens/sec
+
+        private TokenBucket _grenadeSpawnBucket = new TokenBucket(GrenadeSpawnCapacity, GrenadeSpawnRefillPerSecond);
+
+        private bool CheckGrenadeRateLimit()
+        {
+            // consume 1 token per spawn/update/explode message
+            if (!_grenadeSpawnBucket.TryConsume(1))
+            {
+                ConsoleWrite.WriteMessage("[RATE] Grenade message rate exceeded", ConsoleColor.Yellow);
+                return false;
+            }
+
+            return true;
+        }
+
         protected override void OnDisconnected()
         {
             Console.WriteLine($"Chat TCP session with Id {Id} disconnected!");
@@ -201,6 +219,18 @@ namespace OpenGSServer
                             ["Detail"] = reason
                         };
                         // send error back to sender
+                        try { SendAsync(err.ToString()); } catch { }
+                        return;
+                    }
+
+                    // Rate limit check
+                    if (!CheckGrenadeRateLimit())
+                    {
+                        var err = new JObject
+                        {
+                            ["MessageType"] = "Error",
+                            ["Detail"] = "Rate limit exceeded"
+                        };
                         try { SendAsync(err.ToString()); } catch { }
                         return;
                     }
