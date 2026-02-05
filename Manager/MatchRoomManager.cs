@@ -201,37 +201,61 @@ namespace OpenGSServer
         return null;
     }
 
-    public EnterMatchRoomResult EnterRoom(in Guid id)
+    public EnterMatchRoomResult EnterRoom(in Guid id, PlayerAccount player)
     {
-        id.ToString();
-
-        bool succeeded = false;
-
         string message = "";
 
         lock (matchRoomsLock)
         {
             if (matchRooms.TryGetValue(id.ToString(), out var room))
             {
-                //var player
-                //room.AddNewPlayer()
-                succeeded = true;
+                if (room.Playing)
+                {
+                    message = "Match has already started";
+                    return new EnterMatchRoomResult(false, message);
+                }
+
+                if (room.Players.Count >= room.Setting.MaxPlayerCount)
+                {
+                    message = "Room capacity is full";
+                    return new EnterMatchRoomResult(false, message);
+                }
+
+                room.AddNewPlayer(player);
+                return new EnterMatchRoomResult(true, "Success");
             }
             else
             {
-                message = "No room";
+                message = "Room not found";
+                return new EnterMatchRoomResult(false, message);
             }
         }
+    }
 
-        var result = new EnterMatchRoomResult(succeeded, message);
-
-        return result;
+    public EnterMatchRoomResult EnterRoom(in Guid id)
+    {
+        return new EnterMatchRoomResult(false, "Player information missing");
     }
 
     public void ExitRoom(string userid)
     {
-
-
+        lock (matchRoomsLock)
+        {
+            foreach (var room in matchRooms.Values)
+            {
+                if (room.Players.Exists(p => p.Id == userid))
+                {
+                    room.RemovePlayer(userid);
+                    // ルームが空になったら削除
+                    if (room.Players.Count == 0)
+                    {
+                        matchRooms.Remove(room.Id);
+                        roomEventBuses.Remove(room.Id);
+                    }
+                    break;
+                }
+            }
+        }
     }
 
     public MatchRoom? SearchRoomByMemberID(string id)
@@ -292,13 +316,17 @@ namespace OpenGSServer
 
     public bool StartAllMatch()
     {
-        return false; 
-    }
-
-    public void UpdateAllRoom()
-    {
-
-
+        lock (matchRoomsLock)
+        {
+            foreach (var room in matchRooms.Values)
+            {
+                if (!room.Playing)
+                {
+                    room.StartLoading();
+                }
+            }
+        }
+        return true;
     }
 
     public int RoomCount()
@@ -311,29 +339,78 @@ namespace OpenGSServer
 
     public void RemoveRoom(in string roomId, bool forceShutdownNowPlayingRooms = false)
     {
+        lock (matchRoomsLock)
+        {
+            if (matchRooms.TryGetValue(roomId, out var room))
+            {
+                // プレイ中のルームの強制シャットダウンチェック
+                if (!forceShutdownNowPlayingRooms && room.Playing)
+                {
+                    return;
+                }
 
-
+                matchRooms.Remove(roomId);
+                roomEventBuses.Remove(roomId);
+            }
+        }
     }
 
     public void RemoveAllRooms(bool forceShutdownNowPlayingRooms = false)
     {
-        if (forceShutdownNowPlayingRooms)
+        lock (matchRoomsLock)
         {
+            if (forceShutdownNowPlayingRooms)
+            {
+                matchRooms.Clear();
+                roomEventBuses.Clear();
+            }
+            else
+            {
+                // プレイ中のルーム以外を削除
+                var roomsToRemove = new List<string>();
+                foreach (var room in matchRooms.Values)
+                {
+                    if (!room.Playing)
+                    {
+                        roomsToRemove.Add(room.Id);
+                    }
+                }
 
+                foreach (var roomId in roomsToRemove)
+                {
+                    matchRooms.Remove(roomId);
+                    roomEventBuses.Remove(roomId);
+                }
+            }
         }
-        else
-        {
-
-
-        }
-
-
     }
 
     public List<MatchRoom> CanEnterRooms()
     {
+        lock (matchRoomsLock)
+        {
+            var result = new List<MatchRoom>();
+            foreach (var room in matchRooms.Values)
+            {
+                if (!room.Playing && room.Players.Count < room.Setting.MaxPlayerCount)
+                {
+                    result.Add(room);
+                }
+            }
+            return result;
+        }
+    }
 
-        return null;
+    public MatchRoom? GetRoomById(string roomId)
+    {
+        lock (matchRoomsLock)
+        {
+            if (matchRooms.TryGetValue(roomId, out var room))
+            {
+                return room;
+            }
+            return null;
+        }
     }
 
 
