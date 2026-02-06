@@ -54,11 +54,12 @@ namespace OpenGSServer
             return base.HasChanged() || Rotation != 0f || VelocityX != 0f || VelocityY != 0f || !IsAlive;
         }
 
-        public override void Save()
+        public override void SaveSyncState()
         {
             // reset sync state
             lastPosx = Posx;
             lastPosy = Posy;
+            updated = false;
         }
 
         public override Newtonsoft.Json.Linq.JObject ToJSon()

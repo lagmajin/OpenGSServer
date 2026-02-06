@@ -46,10 +46,8 @@ namespace OpenGSServer
         public JObject ToJson()
         {
             var json = new JObject();
-
             json["id"] = Id;
             json["name"] = Name;
-
             json["character"] = Character;
             json["guid"] = globalID;
             json["lv"] = Lv;
@@ -58,18 +56,18 @@ namespace OpenGSServer
             json["wins"] = Wins;
             json["kill"] = Kill;
             json["death"] = Death;
-
-
-
             return json;
         }
 
-
-
-
+        /// <summary>
+        /// PlayerAccount から PlayerInfo オブジェクトに変換する
+        /// </summary>
+        public OpenGSCore.PlayerInfo ToPlayerInfo()
+        {
+            return new OpenGSCore.PlayerInfo(Id, Name)
+            {
+                playerCharacter = defaultPlayer
+            };
+        }
     }
-
-
-
-
 }

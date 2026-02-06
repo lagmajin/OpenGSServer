@@ -10,7 +10,6 @@ namespace OpenGSServer
     {
         Started,
         Ended,
-
     }
 
     public struct MatchResult
@@ -19,102 +18,129 @@ namespace OpenGSServer
         public OpenGSCore.MatchRoom room;
     }
 
-    public class MatchRoomManager:IMatchSubscriber
+    public class MatchRoomManager : IMatchSubscriber
     {
+        private Dictionary<string, OpenGSCore.MatchRoom> matchRooms = new Dictionary<string, OpenGSCore.MatchRoom>();
+        private readonly object matchRoomsLock = new();
+        private int roomNumberCount = 0;
+        public readonly Dictionary<string, MatchRoomEventBus> roomEventBuses = new Dictionary<string, MatchRoomEventBus>();
+        public static MatchRoomManager Instance { get; } = new();
 
-    private Dictionary<string, OpenGSCore.MatchRoom> matchRooms = new Dictionary<string, OpenGSCore.MatchRoom>();
-    private readonly object matchRoomsLock = new();
-
-    private int roomNumberCount = 0;
-
-    //public readonly MatchRoomEventBus roomEventBus = new MatchRoomEventBus();
-
-    public readonly Dictionary<string,MatchRoomEventBus> roomEventBuses = new Dictionary<string,MatchRoomEventBus>();
-
-    public static MatchRoomManager Instance { get; } = new();
-
-
-    private void IncreaseRoomCounter()
-    {
-        Interlocked.Increment(ref roomNumberCount);
-    }
-
-    public MatchRoomManager()
-    {
-
-    }
-
-    /// <summary>
-    /// WaitRoom から MatchRoom を生成し、プレイヤーを移行する
-    /// </summary>
-    public OpenGSCore.MatchRoom? CreateMatchRoomByWaitRoom(WaitRoom waitRoom)
-    {
-        if (waitRoom == null) return null;
-        if (!waitRoom.CanStartMatch()) return null;
-
-        lock (matchRoomsLock)
+        private void IncreaseRoomCounter()
         {
-            // 設定とオーナーを取得
-            var setting = waitRoom.GetOrCreateSetting();
-            var ownerId = waitRoom.GetFirstPlayerId();
+            Interlocked.Increment(ref roomNumberCount);
+        }
 
-            // EventBus を作成
-            var bus = new MatchRoomEventBus();
+        public MatchRoomManager()
+        {
+        }
 
-            // MatchRoom を生成
-            var matchRoom = MatchRoomFactory.CreateMatchRoom(roomNumberCount, waitRoom.RoomName, ownerId, setting, this);
+        /// <summary>
+        /// IMatchSubscriber インターフェース実装: マッチ開始通知
+        /// </summary>
+        public void OnMatchStarted(OpenGSCore.MatchRoom room)
+        {
+            // マッチ開始時の処理（必要に応じて拡張）
+            if (roomEventBuses.TryGetValue(room.Id, out var bus))
+            {
+                bus.PublishMatchStarted(room);
+            }
+        }
 
-            // プレイヤーを移行
-            matchRoom.AddNewPlayers(waitRoom.AllPlayers());
+        /// <summary>
+        /// IMatchSubscriber インターフェース実装: マッチ終了通知
+        /// </summary>
+        public void OnMatchEnded(OpenGSCore.MatchRoom room)
+        {
+            // マッチ終了時の処理（必要に応じて拡張）
+            if (roomEventBuses.TryGetValue(room.Id, out var bus))
+            {
+                bus.PublishMatchEnded(room);
+            }
+        }
 
-            // 相互リンク
-            waitRoom.LinkMatchRoom(matchRoom);
+        /// <summary>
+        /// IMatchSubscriber インターフェース実装: プレイヤー参加通知
+        /// </summary>
+        public void OnPlayerJoined(OpenGSCore.MatchRoom room, PlayerAccount player)
+        {
+            if (roomEventBuses.TryGetValue(room.Id, out var bus))
+            {
+                bus.PublishPlayerJoined(room, player);
+            }
+        }
 
-            // 管理辞書に追加
-            matchRooms.Add(matchRoom.Id, matchRoom);
-            roomEventBuses[matchRoom.Id] = bus;
+        /// <summary>
+        /// IMatchSubscriber インターフェース実装: プレイヤー退出通知
+        /// </summary>
+        public void OnPlayerLeft(OpenGSCore.MatchRoom room, PlayerAccount player)
+        {
+            if (roomEventBuses.TryGetValue(room.Id, out var bus))
+            {
+                bus.PublishPlayerLeft(room, player);
+            }
+        }
 
-            IncreaseRoomCounter();
+        /// <summary>
+        /// WaitRoom から MatchRoom を生成し、プレイヤーを移行する
+        /// </summary>
+        public OpenGSCore.MatchRoom? CreateMatchRoomByWaitRoom(WaitRoom waitRoom)
+        {
+            if (waitRoom == null) return null;
+            if (!waitRoom.CanStartMatch()) return null;
 
+            lock (matchRoomsLock)
+            {
+                var setting = waitRoom.GetOrCreateSetting();
+                var ownerId = waitRoom.GetFirstPlayerId();
+                var bus = new MatchRoomEventBus();
+                var matchRoom = MatchRoomFactory.CreateMatchRoom(roomNumberCount, waitRoom.RoomName, ownerId, setting, this);
+                matchRoom.AddNewPlayers(waitRoom.AllPlayers());
+                waitRoom.LinkMatchRoom(matchRoom);
+                matchRooms.Add(matchRoom.Id, matchRoom);
+                roomEventBuses[matchRoom.Id] = bus;
+                IncreaseRoomCounter();
+                return matchRoom;
+            }
+        }
+
+        /// <summary>
+        /// WaitRoom から MatchRoom を生成し、ゲームを開始する
+        /// </summary>
+        public OpenGSCore.MatchRoom? StartMatchFromWaitRoom(WaitRoom waitRoom)
+        {
+            var matchRoom = CreateMatchRoomByWaitRoom(waitRoom);
+            if (matchRoom == null) return null;
+            matchRoom.GameStart();
             return matchRoom;
         }
-    }
 
-    /// <summary>
-    /// WaitRoom から MatchRoom を生成し、ゲームを開始する
-    /// </summary>
-    public OpenGSCore.MatchRoom? StartMatchFromWaitRoom(WaitRoom waitRoom)
-    {
-        var matchRoom = CreateMatchRoomByWaitRoom(waitRoom);
-        if (matchRoom == null) return null;
-
-        // ゲーム開始
-        matchRoom.GameStart();
-        return matchRoom;
-    }
-
-    public List<AbstractGameRoom> AllRooms()
-    {
-        lock (matchRoomsLock)
+        public List<AbstractGameRoom> AllRooms()
         {
-            return new List<AbstractGameRoom>(matchRooms.Values);
-        }
-    }
-
-    public CreateNewRoomResult CreateNewRoom(in string roomName, in string ownerID,AbstractMatchSetting setting)
-    {
-        var room=MatchRoomFactory.CreateMatchRoom(0,roomName, ownerID,setting,this);
-
-        lock (matchRoomsLock)
-        {
-            matchRooms.Add(room.Id, room);
+            lock (matchRoomsLock)
+            {
+                return new List<AbstractGameRoom>(matchRooms.Values);
+            }
         }
 
-        var createNewRoomResult =
-            new CreateNewRoomResult(ECreateNewRoomResult.Successful, ECreateNewRoomReason.NoReason);
+        public CreateNewRoomResult CreateNewRoom(in string roomName, in string ownerID, AbstractMatchSetting setting)
+        {
+            var room = MatchRoomFactory.CreateMatchRoom(roomNumberCount, roomName, ownerID, setting, this);
+            
+            lock (matchRoomsLock)
+            {
+                matchRooms.Add(room.Id, room);
+                roomEventBuses[room.Id] = new MatchRoomEventBus();
+                IncreaseRoomCounter();
+            }
 
-        return createNewRoomResult;
-    }
+            var createNewRoomResult = new CreateNewRoomResult(ECreateNewRoomResult.Successful, ECreateNewRoomReason.NoReason)
+            {
+                RoomId = room.Id
+            };
+
+            return createNewRoomResult;
+        }
 
     public CreateNewRoomResult CreateNewDeathMatchRoom(in string roomName, in string ownerID, int capacity = 10,
         bool teamBalance = true)
@@ -198,7 +224,7 @@ namespace OpenGSServer
 
     public EnterMatchRoomResult EnterRoom()
     {
-        return null;
+        return new EnterMatchRoomResult(false, "Room ID and player information missing");
     }
 
     public EnterMatchRoomResult EnterRoom(in Guid id, PlayerAccount player)
@@ -221,7 +247,7 @@ namespace OpenGSServer
                     return new EnterMatchRoomResult(false, message);
                 }
 
-                room.AddNewPlayer(player);
+                room.AddNewPlayer(player.ToPlayerInfo());
                 return new EnterMatchRoomResult(true, "Success");
             }
             else
