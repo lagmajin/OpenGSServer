@@ -59,7 +59,6 @@ namespace OpenGSServer
             // reset sync state
             lastPosx = Posx;
             lastPosy = Posy;
-            updated = false;
         }
 
         public override Newtonsoft.Json.Linq.JObject ToJSon()

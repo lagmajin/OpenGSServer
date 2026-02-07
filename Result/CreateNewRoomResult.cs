@@ -1,7 +1,5 @@
 ﻿using System;
-
 using Newtonsoft.Json.Linq;
-
 
 namespace OpenGSServer
 {
@@ -17,18 +15,16 @@ namespace OpenGSServer
         InvalidPlayerId,
         AlreadyOtherRoom,
         OverflowServerMaxCapacity
-
     }
 
-    public class CreateNewRoomResult:AbstractResult
+    public class CreateNewRoomResult : AbstractResult
     {
         public ECreateNewRoomResult Result { get; } = ECreateNewRoomResult.Fail;
-
         public ECreateNewRoomReason Reason { get; } = ECreateNewRoomReason.NoReason;
+        public string RoomId { get; set; } = string.Empty;
 
-        public CreateNewRoomResult(ECreateNewRoomResult result,ECreateNewRoomReason reason)
+        public CreateNewRoomResult(ECreateNewRoomResult result, ECreateNewRoomReason reason)
         {
-
         }
 
         public CreateNewRoomResult()
@@ -36,30 +32,16 @@ namespace OpenGSServer
             //throw new NotImplementedException();
         }
 
-        public  string Message()
+        public string Message()
         {
-            string result="";
-
-
-
-
+            string result = "";
             return result;
         }
 
         public JObject ToJson()
         {
             var result = new JObject();
-
-
-
             return result;
         }
-        
-
-
-
-
     }
-
-
 }

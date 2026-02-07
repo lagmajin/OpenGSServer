@@ -40,7 +40,6 @@ namespace OpenGSServer
         public MatchRoomEventBus()
         {
             Console.WriteLine("Match RoomEventBus");
-
         }
 
         public void setMatchRoom(OpenGSCore.MatchRoom room)
@@ -58,8 +57,6 @@ namespace OpenGSServer
             
         }
         
-        
-        
         public void PublishLoadingStart()
         {
             Console.WriteLine("LoadingStart");
@@ -68,27 +65,38 @@ namespace OpenGSServer
         public void PublishGameStart()
         {
             Console.WriteLine("GameStart");
-
-
-            //Publish("GameStart", null);
         }
 
-        // ゲーム終了イベントを発行
         public void PublishGameEnd()
         {
-       
-            //Publish("GameEnd", null);
         }
 
         public void PublishMatchResult(MatchResult result)
         {
-            
-            
         }
 
         public void PublishGameUpdateFromClient()
         {
-            
+        }
+
+        public void PublishMatchStarted(OpenGSCore.MatchRoom room)
+        {
+            Console.WriteLine($"Match started: {room.RoomName}");
+        }
+
+        public void PublishMatchEnded(OpenGSCore.MatchRoom room)
+        {
+            Console.WriteLine($"Match ended: {room.RoomName}");
+        }
+
+        public void PublishPlayerJoined(OpenGSCore.MatchRoom room, PlayerAccount player)
+        {
+            Console.WriteLine($"Player joined: {player.Name} in {room.RoomName}");
+        }
+
+        public void PublishPlayerLeft(OpenGSCore.MatchRoom room, PlayerAccount player)
+        {
+            Console.WriteLine($"Player left: {player.Name} from {room.RoomName}");
         }
         
         
