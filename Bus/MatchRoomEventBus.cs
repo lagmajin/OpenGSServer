@@ -10,33 +10,27 @@ namespace OpenGSServer
 {
     public interface IMatchSubscriber
     {
-
         void OnMatchEnd()
         {
             Console.WriteLine("[Default] MatchEnd: Game has ended.");
         }
 
-
-
         void OnReceiveMatchResult(MatchResult eventData)
         {
             //Console.WriteLine($"[Default] MatchResult: Winner={eventData.Winner}, Score={eventData.Score}");
         }
-
     }
 
     public interface IMatchPublisher
     {
-
     }
-    
-    
 
     public class MatchRoomEventBus : AbstractEventBus
     {
         private OpenGSCore.MatchRoom room;
         private MatchRoomManager roomManager;
-        
+        private List<IMatchSubscriber> subscribers = new List<IMatchSubscriber>();
+
         public MatchRoomEventBus()
         {
             Console.WriteLine("Match RoomEventBus");
@@ -54,9 +48,24 @@ namespace OpenGSServer
 
         public void setNetworkManager()
         {
-            
         }
-        
+
+        public void AddSubscriber(IMatchSubscriber subscriber)
+        {
+            if (subscriber != null && !subscribers.Contains(subscriber))
+            {
+                subscribers.Add(subscriber);
+            }
+        }
+
+        public void RemoveSubscriber(IMatchSubscriber subscriber)
+        {
+            if (subscriber != null && subscribers.Contains(subscriber))
+            {
+                subscribers.Remove(subscriber);
+            }
+        }
+
         public void PublishLoadingStart()
         {
             Console.WriteLine("LoadingStart");
@@ -65,14 +74,27 @@ namespace OpenGSServer
         public void PublishGameStart()
         {
             Console.WriteLine("GameStart");
+            foreach (var subscriber in subscribers)
+            {
+                subscriber.OnMatchEnd(); // 必要に応じて適切なイベントメソッドに変更
+            }
         }
 
         public void PublishGameEnd()
         {
+            Console.WriteLine("GameEnd");
+            foreach (var subscriber in subscribers)
+            {
+                subscriber.OnMatchEnd();
+            }
         }
 
         public void PublishMatchResult(MatchResult result)
         {
+            foreach (var subscriber in subscribers)
+            {
+                subscriber.OnReceiveMatchResult(result);
+            }
         }
 
         public void PublishGameUpdateFromClient()
@@ -98,8 +120,5 @@ namespace OpenGSServer
         {
             Console.WriteLine($"Player left: {player.Name} from {room.RoomName}");
         }
-        
-        
-       
     }
 }

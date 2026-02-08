@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json;
+﻿﻿using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
@@ -221,7 +221,7 @@ namespace OpenGSServer
 
             
 
-            var result=AccountManager.GetInstance().Logout(id, pass);
+            var result = AccountManager.GetInstance().LogoutWithPassword(id, pass);
 
 
             session.SendAsyncJsonWithTimeStamp(result);

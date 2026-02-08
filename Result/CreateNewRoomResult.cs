@@ -19,28 +19,54 @@ namespace OpenGSServer
 
     public class CreateNewRoomResult : AbstractResult
     {
-        public ECreateNewRoomResult Result { get; } = ECreateNewRoomResult.Fail;
-        public ECreateNewRoomReason Reason { get; } = ECreateNewRoomReason.NoReason;
+        public ECreateNewRoomResult Result { get; }
+        public ECreateNewRoomReason Reason { get; }
         public string RoomId { get; set; } = string.Empty;
 
         public CreateNewRoomResult(ECreateNewRoomResult result, ECreateNewRoomReason reason)
         {
+            Result = result;
+            Reason = reason;
         }
 
         public CreateNewRoomResult()
         {
-            //throw new NotImplementedException();
+            Result = ECreateNewRoomResult.Fail;
+            Reason = ECreateNewRoomReason.NoReason;
         }
 
         public string Message()
         {
-            string result = "";
-            return result;
+            switch (Result)
+            {
+                case ECreateNewRoomResult.Successful:
+                    return "Room created successfully";
+                case ECreateNewRoomResult.Fail:
+                    switch (Reason)
+                    {
+                        case ECreateNewRoomReason.InvalidPlayerId:
+                            return "Invalid player ID";
+                        case ECreateNewRoomReason.AlreadyOtherRoom:
+                            return "Player is already in another room";
+                        case ECreateNewRoomReason.OverflowServerMaxCapacity:
+                            return "Server capacity reached";
+                        default:
+                            return "Unknown error";
+                    }
+                default:
+                    return "Unknown error";
+            }
         }
 
         public JObject ToJson()
         {
-            var result = new JObject();
+            var result = new JObject
+            {
+                ["Result"] = Result.ToString(),
+                ["Reason"] = Reason.ToString(),
+                ["RoomId"] = RoomId,
+                ["Message"] = Message()
+            };
             return result;
         }
     }
