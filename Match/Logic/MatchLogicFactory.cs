@@ -5,7 +5,6 @@ namespace OpenGSServer
 {
     public static class GameModeFactory
     {
-
         public static IMatchLogic CreateGameMode(EGameMode mode)
         {
             switch (mode)
@@ -16,12 +15,15 @@ namespace OpenGSServer
                     return new DeathMatchMode();
                 case EGameMode.TeamDeathMatch:
                     return new TeamDeathMatchMode();
-                case EGameMode.CaptureTheFlag:
+                case EGameMode.CTF:
                     return new CaptureTheFlagMode();
+                case EGameMode.OneShotKill:
+                    return new OneShotKillMode();
+                case EGameMode.ArmsRace:
+                    return new ArmsRaceMode();
                 default:
                     throw new ArgumentOutOfRangeException(nameof(mode), mode, null);
             }
         }
     }
-
 }

@@ -35,12 +35,12 @@ namespace OpenGSServer
         public GameMode(eGameMode gameMode)
         {
             mode = gameMode;
+            str = GetGameModeString(gameMode);
         }
 
         public GameMode(string modeStr)
         {
             var lowerMode = modeStr.ToLower();
-            str = "unknown";
 
             if (lowerMode == "deathmatch" || lowerMode == "dm")
             {
@@ -50,22 +50,37 @@ namespace OpenGSServer
             else if (lowerMode == "teamdeathmatch" || lowerMode == "tdm")
             {
                 str = "tdm";
-                mode = eGameMode.TeamDeathMatch; // OpenGSCoreの正式名
+                mode = eGameMode.TeamDeathMatch;
             }
             else if (lowerMode == "survival" || lowerMode == "suv")
             {
                 str = "suv";
-                mode = eGameMode.Survival; // OpenGSCoreの正式名
+                mode = eGameMode.Survival;
             }
             else if (lowerMode == "teamsurvival" || lowerMode == "tsuv")
             {
                 str = "tsuv";
-                mode = eGameMode.TeamSurvival; // OpenGSCoreの正式名
+                mode = eGameMode.TeamSurvival;
             }
             else if (lowerMode == "capturetheflag" || lowerMode == "ctf")
             {
                 str = "ctf";
                 mode = eGameMode.CTF;
+            }
+            else if (lowerMode == "oneshotkill" || lowerMode == "osk")
+            {
+                str = "osk";
+                mode = eGameMode.OneShotKill;
+            }
+            else if (lowerMode == "armsrace" || lowerMode == "ar")
+            {
+                str = "ar";
+                mode = eGameMode.ArmsRace;
+            }
+            else
+            {
+                str = "unknown";
+                mode = eGameMode.Unknown;
             }
         }
 
@@ -77,6 +92,29 @@ namespace OpenGSServer
         public bool Valid()
         {
             return mode != eGameMode.Unknown;
+        }
+
+        private static string GetGameModeString(eGameMode mode)
+        {
+            switch (mode)
+            {
+                case eGameMode.DeathMatch:
+                    return "dm";
+                case eGameMode.TeamDeathMatch:
+                    return "tdm";
+                case eGameMode.Survival:
+                    return "suv";
+                case eGameMode.TeamSurvival:
+                    return "tsuv";
+                case eGameMode.CTF:
+                    return "ctf";
+                case eGameMode.OneShotKill:
+                    return "osk";
+                case eGameMode.ArmsRace:
+                    return "ar";
+                default:
+                    return "unknown";
+            }
         }
     }
 }
