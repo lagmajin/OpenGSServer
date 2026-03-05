@@ -28,10 +28,62 @@ namespace OpenGSServer
 
         // 管理者アカウントは AdminManager で管理
         private readonly AdminManager adminManager = AdminManager.CreateDefault();
+        private readonly object _adminInitLock = new();
+        private bool _adminInitialized;
 
 
         internal ServerSettings Settings { get => settings; set => settings = value; }
 
+        private ServerManager()
+        {
+            InitializeAdminAccounts();
+        }
+
+        public void InitializeAdminAccounts()
+        {
+            lock (_adminInitLock)
+            {
+                if (_adminInitialized)
+                {
+                    return;
+                }
+
+                adminManager.Load();
+
+                if (adminManager.ListAdminIds().Count == 0)
+                {
+                    var envAdminId = Environment.GetEnvironmentVariable("OPENGS_ADMIN_ID");
+                    var envAdminPassword = Environment.GetEnvironmentVariable("OPENGS_ADMIN_PASSWORD");
+
+                    if (!string.IsNullOrWhiteSpace(envAdminId) && !string.IsNullOrWhiteSpace(envAdminPassword))
+                    {
+                        adminManager.AddAdmin(envAdminId, envAdminPassword);
+                        adminManager.Save();
+                        ConsoleWrite.WriteMessage("[SERVER] Admin account initialized from environment variables.", ConsoleColor.Green);
+                    }
+                    else
+                    {
+                        ConsoleWrite.WriteMessage(
+                            "[SERVER] No admin account found. Set OPENGS_ADMIN_ID and OPENGS_ADMIN_PASSWORD to enable management login.",
+                            ConsoleColor.Yellow);
+                    }
+                }
+
+                _adminInitialized = true;
+            }
+        }
+
+        public bool VerifyAdminCredential(string id, string pass)
+        {
+            InitializeAdminAccounts();
+            return adminManager.VerifyAdmin(id, pass);
+        }
+
+        public bool HasAdminAccount()
+        {
+            InitializeAdminAccounts();
+            return adminManager.ListAdminIds().Count > 0;
+        }
 
 
 

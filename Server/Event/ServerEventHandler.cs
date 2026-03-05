@@ -21,7 +21,7 @@ namespace OpenGSServer
 
             var json = new JObject();
 
-            json["MessageType"] = "ServerInfo";
+            json[ServerMessageTypes.MessageType] = ServerMessageTypes.ServerInfo;
             json["LobbyServerInfo"] = lobbyServerInfoJson;
             json["MatchServerInfo"] = matchServerInfoJson;
 

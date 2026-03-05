@@ -308,11 +308,11 @@ namespace OpenGSServer
             string adminId = json["AdminID"]?.ToString() ?? "";
             string adminPassword = json["AdminPassword"]?.ToString() ?? "";
 
-            // 簡易的なハードコード認証（実運用ではDBから取得）
-            const string VALID_ADMIN_ID = "admin";
-            const string VALID_ADMIN_PASSWORD = "admin123"; // TODO: ハッシュ化推奨
+            var serverManager = ServerManager.Instance;
+            var hasAdminAccount = serverManager.HasAdminAccount();
+            var loginSucceeded = hasAdminAccount && serverManager.VerifyAdminCredential(adminId, adminPassword);
 
-            if (adminId == VALID_ADMIN_ID && adminPassword == VALID_ADMIN_PASSWORD)
+            if (loginSucceeded)
             {
                 _adminId = adminId;
                 _isAuthenticated = true;
@@ -333,7 +333,9 @@ namespace OpenGSServer
                 {
                     ["MessageType"] = NetworkingConstants.MessageType.AdminLoginResponse,
                     ["Success"] = false,
-                    ["Message"] = "Invalid credentials"
+                    ["Message"] = hasAdminAccount
+                        ? "Invalid credentials"
+                        : "No admin account configured on server"
                 };
 
                 SendJsonAsyncWithTimeStamp(response);

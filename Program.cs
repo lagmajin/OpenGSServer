@@ -107,6 +107,7 @@ using Autofac;
 
 
             ServerManager.Instance.LoadSetting();
+            ServerManager.Instance.InitializeAdminAccounts();
 
             //ServerManager.GetInstance().SaveSetting();
 

@@ -194,7 +194,7 @@ namespace OpenGSServer
         {
             var json = new JObject();
 
-            json["MessageType"] = "";
+            json[ServerMessageTypes.MessageType] = ServerMessageTypes.Error;
             json["Message"] = msg;
             SendAsyncJsonWithTimeStamp(json);
         }
@@ -226,7 +226,7 @@ namespace OpenGSServer
 
             var jobject = new JObject();
 
-            jobject["MessageType"] = "ConnectServerSuccessful";
+            jobject[ServerMessageTypes.MessageType] = ServerMessageTypes.ConnectServerSuccessful;
             jobject["RSAPublicKey"] = EncryptManager.Instance.GetRSAPublicKey();
 
 
@@ -241,7 +241,7 @@ namespace OpenGSServer
             ConsoleWrite.WriteMessage($"TCP session with Id {Id} disconnected!", ConsoleColor.Red);
 
 
-            OldAccountEventHandler.Logout(this);
+            AccountEventHandler.Logout(this);
 
 
             Disconnect();
