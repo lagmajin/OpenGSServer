@@ -271,7 +271,7 @@ using Autofac;
                     }
 
                     // コマンドを CommandParser に委譲
-                    // CommandParser.Parse(input); // TODO: CommandParserを再実装する必要がある
+                    CommandParser.Parse(input);
                 }
                 }
                 catch (Exception ex)

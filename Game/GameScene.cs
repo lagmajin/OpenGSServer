@@ -125,7 +125,7 @@ namespace OpenGSServer
                     // Broadcast grenade state to connected clients (so clients remain authoritative)
                     var json = new Newtonsoft.Json.Linq.JObject
                     {
-                        ["MessageType"] = "GrenadeState",
+                        ["MessageType"] = NetworkingConstants.MessageType.GrenadeState,
                         ["ObjectID"] = grenade.Id,
                         ["Type"] = grenade.GranadeType.ToString(),
                         ["PosX"] = grenade.Posx,

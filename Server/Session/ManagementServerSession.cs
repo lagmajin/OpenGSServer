@@ -21,6 +21,7 @@ namespace OpenGSServer
         private string _adminId = "";
         private bool _isAuthenticated = false;
         private DateTime _sessionStartTime = DateTime.UtcNow;
+        private readonly StringBuilder _receiveBuffer = new();
 
         private const string UTF_FORMAT = "yyyy-MM-dd HH:mm:ss.ffff";
         private readonly char _unitSeparatorChar = (char)0x1F;
@@ -74,7 +75,7 @@ namespace OpenGSServer
         {
             var json = new JObject
             {
-                ["MessageType"] = "Ping",
+                ["MessageType"] = NetworkingConstants.MessageType.Ping,
                 ["ServerTimeStamp"] = DateTime.UtcNow.ToString(UTF_FORMAT)
             };
 
@@ -118,7 +119,7 @@ namespace OpenGSServer
             // 接続成功メッセージを送信
             var responseJson = new JObject
             {
-                ["MessageType"] = "ConnectManagementServerSucceeded",
+                ["MessageType"] = NetworkingConstants.MessageType.ConnectManagementServerSucceeded,
                 ["SessionID"] = Id.ToString(),
                 ["ClientIP"] = _clientIp
             };
@@ -149,43 +150,11 @@ namespace OpenGSServer
         /// </summary>
         protected override void OnReceived(byte[] buffer, long offset, long size)
         {
-            string message = Encoding.UTF8.GetString(buffer, (int)offset, (int)size);
+            var chunk = Encoding.UTF8.GetString(buffer, (int)offset, (int)size);
+            ConsoleWrite.WriteMessage($"[Management] 受信チャンク: {chunk} (長さ: {chunk.Length})", ConsoleColor.Magenta);
 
-            ConsoleWrite.WriteMessage(
-                $"[Management] 受信: {message} (長さ: {message.Length})", 
-                ConsoleColor.Magenta);
-
-            // JSONを抽出
-            var begin = message.IndexOf("{");
-            var end = message.LastIndexOf("}");
-
-            if (begin < 0 || end < 0 || begin > end)
-            {
-                SendErrorResponse("Invalid JSON format");
-                return;
-            }
-
-            string jsonStr = message.Substring(begin, end - begin + 1);
-
-            JObject? json;
-            try
-            {
-                json = JObject.Parse(jsonStr);
-            }
-            catch (JsonReaderException ex)
-            {
-                ConsoleWrite.WriteMessage($"[Management] JSON解析エラー: {ex.Message}", ConsoleColor.Red);
-                SendErrorResponse($"JSON parse error: {ex.Message}");
-                return;
-            }
-
-            ParseMessageFromClient(json);
-
-            // 特殊コマンド（切断要求）
-            if (message.Trim() == "!")
-            {
-                Disconnect();
-            }
+            _receiveBuffer.Append(chunk);
+            ProcessBufferedMessages();
         }
 
         /// <summary>
@@ -234,31 +203,31 @@ namespace OpenGSServer
             // メッセージタイプごとの処理
             switch (messageType)
             {
-                case "AdminLoginRequest":
+                case NetworkingConstants.MessageType.AdminLoginRequest:
                     HandleAdminLogin(json);
                     break;
 
-                case "AdminLogoutRequest":
+                case NetworkingConstants.MessageType.AdminLogoutRequest:
                     HandleAdminLogout(json);
                     break;
 
-                case "ServerStatusRequest":
+                case NetworkingConstants.MessageType.ServerStatusRequest:
                     HandleServerStatusRequest(json);
                     break;
 
-                case "GetConnectedUsersRequest":
+                case NetworkingConstants.MessageType.GetConnectedUsersRequest:
                     HandleGetConnectedUsers(json);
                     break;
 
-                case "KickPlayerRequest":
+                case NetworkingConstants.MessageType.KickPlayerRequest:
                     HandleKickPlayer(json);
                     break;
 
-                case "BroadcastMessageRequest":
+                case NetworkingConstants.MessageType.BroadcastMessageRequest:
                     HandleBroadcastMessage(json);
                     break;
 
-                case "ShutdownServerRequest":
+                case NetworkingConstants.MessageType.ShutdownServerRequest:
                     HandleShutdownRequest(json);
                     break;
 
@@ -266,6 +235,63 @@ namespace OpenGSServer
                     SendErrorResponse($"Unknown message type: {messageType}");
                     break;
             }
+        }
+
+        /// <summary>
+        /// 受信バッファからメッセージ境界単位で取り出して処理する
+        /// </summary>
+        private void ProcessBufferedMessages()
+        {
+            while (true)
+            {
+                var nextDelimiterIndex = FindNextMessageDelimiter(_receiveBuffer);
+                if (nextDelimiterIndex < 0)
+                {
+                    break;
+                }
+
+                var rawMessage = _receiveBuffer.ToString(0, nextDelimiterIndex).Trim();
+                _receiveBuffer.Remove(0, nextDelimiterIndex + 1);
+
+                if (string.IsNullOrWhiteSpace(rawMessage))
+                {
+                    continue;
+                }
+
+                // 特殊コマンド（切断要求）
+                if (rawMessage == "!")
+                {
+                    Disconnect();
+                    return;
+                }
+
+                try
+                {
+                    var json = JObject.Parse(rawMessage);
+                    ParseMessageFromClient(json);
+                }
+                catch (JsonReaderException ex)
+                {
+                    ConsoleWrite.WriteMessage($"[Management] JSON解析エラー: {ex.Message}", ConsoleColor.Red);
+                    SendErrorResponse($"JSON parse error: {ex.Message}");
+                }
+            }
+        }
+
+        /// <summary>
+        /// メッセージ区切り（LF または Unit Separator）を検索
+        /// </summary>
+        private int FindNextMessageDelimiter(StringBuilder source)
+        {
+            for (var i = 0; i < source.Length; i++)
+            {
+                if (source[i] == '\n' || source[i] == _unitSeparatorChar)
+                {
+                    return i;
+                }
+            }
+
+            return -1;
         }
 
         /// <summary>
@@ -293,7 +319,7 @@ namespace OpenGSServer
 
                 var response = new JObject
                 {
-                    ["MessageType"] = "AdminLoginResponse",
+                    ["MessageType"] = NetworkingConstants.MessageType.AdminLoginResponse,
                     ["Success"] = true,
                     ["Message"] = "Admin login succeeded"
                 };
@@ -305,7 +331,7 @@ namespace OpenGSServer
             {
                 var response = new JObject
                 {
-                    ["MessageType"] = "AdminLoginResponse",
+                    ["MessageType"] = NetworkingConstants.MessageType.AdminLoginResponse,
                     ["Success"] = false,
                     ["Message"] = "Invalid credentials"
                 };
@@ -332,7 +358,7 @@ namespace OpenGSServer
 
             var response = new JObject
             {
-                ["MessageType"] = "AdminLogoutResponse",
+                ["MessageType"] = NetworkingConstants.MessageType.AdminLogoutResponse,
                 ["Success"] = true,
                 ["Message"] = "Logout succeeded"
             };
@@ -355,7 +381,7 @@ namespace OpenGSServer
             var accountManager = AccountManager.GetInstance();
             var response = new JObject
             {
-                ["MessageType"] = "ServerStatusResponse",
+                ["MessageType"] = NetworkingConstants.MessageType.ServerStatusResponse,
                 ["ServerUptime"] = (DateTime.UtcNow - _sessionStartTime).TotalSeconds,
                 ["LoggedInUsers"] = accountManager.GetLoggedInUserCount(),
                 ["ServerTime"] = DateTime.UtcNow.ToString(UTF_FORMAT)
@@ -380,7 +406,7 @@ namespace OpenGSServer
 
             var response = new JObject
             {
-                ["MessageType"] = "ConnectedUsersResponse",
+                ["MessageType"] = NetworkingConstants.MessageType.ConnectedUsersResponse,
                 ["UserCount"] = userIds.Count,
                 ["Users"] = new JArray(userIds)
             };
@@ -414,7 +440,7 @@ namespace OpenGSServer
                 
                 var response = new JObject
                 {
-                    ["MessageType"] = "KickPlayerResponse",
+                    ["MessageType"] = NetworkingConstants.MessageType.KickPlayerResponse,
                     ["Success"] = true,
                     ["Message"] = $"Player {playerId} kicked"
                 };
@@ -426,7 +452,7 @@ namespace OpenGSServer
             {
                 var response = new JObject
                 {
-                    ["MessageType"] = "KickPlayerResponse",
+                    ["MessageType"] = NetworkingConstants.MessageType.KickPlayerResponse,
                     ["Success"] = false,
                     ["Message"] = $"Player {playerId} not found"
                 };
@@ -457,7 +483,7 @@ namespace OpenGSServer
             // すべてのクライアントにブロードキャスト
             var broadcastJson = new JObject
             {
-                ["MessageType"] = "BroadcastMessage",
+                ["MessageType"] = NetworkingConstants.MessageType.BroadcastMessage,
                 ["AdminID"] = _adminId,
                 ["Message"] = message,
                 ["Timestamp"] = DateTime.UtcNow.ToString(UTF_FORMAT)
@@ -467,7 +493,7 @@ namespace OpenGSServer
             
             var response = new JObject
             {
-                ["MessageType"] = "BroadcastMessageResponse",
+                ["MessageType"] = NetworkingConstants.MessageType.BroadcastMessageResponse,
                 ["Success"] = true,
                 ["Message"] = "Broadcast message sent"
             };
@@ -489,7 +515,7 @@ namespace OpenGSServer
 
             var response = new JObject
             {
-                ["MessageType"] = "ShutdownResponse",
+                ["MessageType"] = NetworkingConstants.MessageType.ShutdownResponse,
                 ["Success"] = true,
                 ["Message"] = "Shutdown initiated"
             };
@@ -512,7 +538,7 @@ namespace OpenGSServer
         {
             var response = new JObject
             {
-                ["MessageType"] = "ErrorResponse",
+                ["MessageType"] = NetworkingConstants.MessageType.ErrorResponse,
                 ["Error"] = errorMessage
             };
 

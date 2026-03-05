@@ -26,9 +26,7 @@
     <Compile Remove="Script\**" />
     <Compile Remove="Server\TCP\**" />
     <Compile Remove="Game\FieldItem.cs" />
-    <Compile Remove="Database\GuildDatabaseManager.cs" />
-    <Compile Remove="Guild\GuildManager.cs" />
-    <Compile Remove="Command\ServerCommand.cs" />
+
     <Compile Remove="Game\GameScene.cs" />
     <Compile Remove="Server\Event\LobbyEventHandlerV2.cs" />
     <EmbeddedResource Remove="Build\**" />
@@ -40,7 +38,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Remove="Constants\Tickrate.cs" />
     <Compile Remove="Constants\ItemConstants.cs" />
+
     <Compile Remove="Room\OldWaitRoom.cs" />
   </ItemGroup>
 

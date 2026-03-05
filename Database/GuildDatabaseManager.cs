@@ -67,7 +67,7 @@ namespace OpenGSServer
             }
         }
 
-        public bool ExistGuild(in string guildName)
+        public bool ExistGuild(string guildName)
         {
             if (string.IsNullOrWhiteSpace(guildName))
             {
@@ -80,7 +80,7 @@ namespace OpenGSServer
 
         }
 
-        public bool CreateNewGuild(in string guildName, string guildShortName = null)
+        public bool CreateNewGuild(string guildName, string guildShortName = null)
         {
             if (string.IsNullOrWhiteSpace(guildName))
             {
@@ -101,7 +101,7 @@ namespace OpenGSServer
             return true;
         }
 
-        public bool RemoveGuild(in string guildName)
+        public bool RemoveGuild(string guildName)
         {
             if (string.IsNullOrWhiteSpace(guildName))
             {
@@ -127,7 +127,7 @@ namespace OpenGSServer
             GuildMemberCollection().DeleteAll();
         }
 
-        public bool AddGuildMember(in string id,in string guild)
+        public bool AddGuildMember(string id, string guild)
         {
             if (string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(guild))
             {
@@ -191,7 +191,7 @@ namespace OpenGSServer
             return result;
         }
 
-        public DBGuild? FindGuildByName(in string guildName)
+        public DBGuild? FindGuildByName(string guildName)
         {
             if (string.IsNullOrWhiteSpace(guildName))
             {

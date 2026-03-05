@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using OpenGSCore;
 
 namespace OpenGSServer
@@ -15,7 +15,7 @@ namespace OpenGSServer
                     return new DeathMatchMode();
                 case EGameMode.TeamDeathMatch:
                     return new TeamDeathMatchMode();
-                case EGameMode.CTF:
+                case EGameMode.CaptureTheFlag:
                     return new CaptureTheFlagMode();
                 case EGameMode.OneShotKill:
                     return new OneShotKillMode();

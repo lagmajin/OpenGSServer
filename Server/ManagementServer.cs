@@ -281,7 +281,7 @@ namespace OpenGSServer
         {
             var stats = new JObject
             {
-                ["MessageType"] = "ServerStats",
+                ["MessageType"] = NetworkingConstants.MessageType.ServerStats,
                 ["Timestamp"] = DateTime.UtcNow.ToString("O"),
                 ["ConnectedSessions"] = _tcpServer?.GetConnectedSessionCount() ?? 0,
                 ["LoggedInUsers"] = AccountManager.GetInstance().GetLoggedInUserCount()

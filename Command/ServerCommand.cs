@@ -5,6 +5,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using CommandLine;
 using Newtonsoft.Json.Linq;
 using OpenGSCore;
@@ -38,7 +39,7 @@ namespace OpenGSServer
                 return;
             }
 
-            var tokens = args.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            var tokens = Tokenize(args);
             if (tokens.Length == 0)
             {
                 return;
@@ -48,6 +49,76 @@ namespace OpenGSServer
             var parameters = tokens.Skip(1).ToList();
 
             ExecuteCommand(command, parameters);
+        }
+
+        /// <summary>
+        /// 引用符付き引数を考慮してトークン化
+        /// 例: addplayer u1 p1 "Player One"
+        /// </summary>
+        private static string[] Tokenize(string input)
+        {
+            var tokens = new List<string>();
+            var current = new StringBuilder();
+            var inQuotes = false;
+            var quoteChar = '\0';
+
+            for (var i = 0; i < input.Length; i++)
+            {
+                var ch = input[i];
+
+                if (inQuotes)
+                {
+                    if (ch == '\\' && i + 1 < input.Length)
+                    {
+                        var next = input[i + 1];
+                        if (next == quoteChar || next == '\\')
+                        {
+                            current.Append(next);
+                            i++;
+                            continue;
+                        }
+                    }
+
+                    if (ch == quoteChar)
+                    {
+                        inQuotes = false;
+                        quoteChar = '\0';
+                    }
+                    else
+                    {
+                        current.Append(ch);
+                    }
+
+                    continue;
+                }
+
+                if (char.IsWhiteSpace(ch))
+                {
+                    if (current.Length > 0)
+                    {
+                        tokens.Add(current.ToString());
+                        current.Clear();
+                    }
+
+                    continue;
+                }
+
+                if (ch == '"' || ch == '\'')
+                {
+                    inQuotes = true;
+                    quoteChar = ch;
+                    continue;
+                }
+
+                current.Append(ch);
+            }
+
+            if (current.Length > 0)
+            {
+                tokens.Add(current.ToString());
+            }
+
+            return tokens.ToArray();
         }
 
         /// <summary>
@@ -159,6 +230,10 @@ namespace OpenGSServer
                     CommandExecutor.ListBannedIps();
                     break;
 
+                case "status":
+                    CommandExecutor.ServerStatus();
+                    break;
+
                 default:
                     ConsoleWrite.WriteMessage($"[ERR] Unknown command: {command}", ConsoleColor.Red);
                     break;
@@ -189,6 +264,7 @@ namespace OpenGSServer
             ConsoleWrite.WriteMessage("banip <ipAddress> - Block incoming connections from the IP", ConsoleColor.White);
             ConsoleWrite.WriteMessage("unbanip <ipAddress> - Remove the IP from blacklist", ConsoleColor.White);
             ConsoleWrite.WriteMessage("listban - Display currently banned IP addresses", ConsoleColor.White);
+            ConsoleWrite.WriteMessage("status - Show quick server runtime summary", ConsoleColor.White);
             ConsoleWrite.WriteMessage("help, ? - Show this help message", ConsoleColor.White);
             ConsoleWrite.WriteMessage("====================================", ConsoleColor.Cyan);
         }
@@ -413,6 +489,32 @@ namespace OpenGSServer
             catch (Exception ex)
             {
                 ConsoleWrite.WriteMessage($"[ERR] Failed to list players: {ex.Message}", ConsoleColor.Red);
+            }
+        }
+
+        /// <summary>
+        /// サーバー稼働状態のサマリーを表示
+        /// </summary>
+        public static void ServerStatus()
+        {
+            try
+            {
+                var lobby = LobbyServerManager.Instance;
+                var management = ManagementServer.Instance;
+                var loggedInUserCount = AccountManager.GetInstance().GetLoggedInUserCount();
+
+                ConsoleWrite.WriteMessage("[INFO] === Server Status ===", ConsoleColor.Cyan);
+                ConsoleWrite.WriteMessage(
+                    $"[INFO] Lobby TCP: {(lobby.IsTcpServerRunning ? "Running" : "Stopped")} Port={lobby.TcpPort?.ToString() ?? "N/A"}",
+                    ConsoleColor.White);
+                ConsoleWrite.WriteMessage(
+                    $"[INFO] Management Sessions: {management.GetConnectedClientCount()}",
+                    ConsoleColor.White);
+                ConsoleWrite.WriteMessage($"[INFO] Logged-in Users: {loggedInUserCount}", ConsoleColor.White);
+            }
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage($"[ERR] Failed to get server status: {ex.Message}", ConsoleColor.Red);
             }
         }
     }

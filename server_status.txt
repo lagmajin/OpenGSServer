@@ -1,0 +1,9 @@
+OpenGS Server が正常に起動しました。サーバーは以下のコンポーネントを正常に初期化しました：
+
+- Lobby Server: TCP ポート 60000 で待機中
+- UDP Game Server: ポート 63000 で待機中
+- Management Server: ポート 50020 で待機中
+- Batch Service: 毎時および毎日のタスクを実行
+- Match Server: ゲームループが 25Hz で初期化
+
+サーバーは正常に動作しているので、クライアントからの接続や機能のテストを進めることができます。
