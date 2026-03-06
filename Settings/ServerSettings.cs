@@ -8,25 +8,25 @@ namespace OpenGSServer
 {
     public class ServerSettings
     {
-        private readonly List<eGameMode> _allowGameModes = new();
+        private readonly List<EGameMode> _allowGameModes = new();
 
         public int MaxRoom { get; private set; } = 32;
         public int MaxUser { get; private set; } = 200;
         public int TickRate { get; private set; } = 60;
         public bool CanRegisterAccounts { get; private set; } = true;
 
-        public IReadOnlyList<eGameMode> AllowGameModes => _allowGameModes;
+        public IReadOnlyList<EGameMode> AllowGameModes => _allowGameModes;
 
         public ServerSettings()
         {
             // allow the most common modes by default
             _allowGameModes.AddRange(new[]
             {
-                eGameMode.DeathMatch,
-                eGameMode.TeamDeathMatch,
-                eGameMode.Survival,
-                eGameMode.TeamSurvival,
-                eGameMode.CTF
+                EGameMode.DeathMatch,
+                EGameMode.TeamDeathMatch,
+                EGameMode.Survival,
+                EGameMode.TeamSurvival,
+                EGameMode.CaptureTheFlag
             });
         }
 
@@ -38,7 +38,7 @@ namespace OpenGSServer
 
         public void SetCanRegisterAccounts(bool value) => CanRegisterAccounts = value;
 
-        public void SetAllowedGameModes(IEnumerable<eGameMode> modes)
+        public void SetAllowedGameModes(IEnumerable<EGameMode> modes)
         {
             if (modes == null)
             {
@@ -47,7 +47,7 @@ namespace OpenGSServer
 
             _allowGameModes.Clear();
 
-            foreach (var mode in modes.Where(m => m != eGameMode.Unknown))
+            foreach (var mode in modes.Where(m => m != EGameMode.Unknown))
             {
                 if (!_allowGameModes.Contains(mode))
                 {
@@ -130,13 +130,13 @@ namespace OpenGSServer
             return bool.TryParse(token.ToString(), out var value) ? value : fallback;
         }
 
-        private static List<eGameMode> ParseModes(JToken token)
+        private static List<EGameMode> ParseModes(JToken token)
         {
-            var result = new List<eGameMode>();
+            var result = new List<EGameMode>();
 
             void TryAdd(string value)
             {
-                if (Enum.TryParse(value, true, out eGameMode mode) && mode != eGameMode.Unknown)
+                if (Enum.TryParse(value, true, out EGameMode mode) && mode != EGameMode.Unknown)
                 {
                     result.Add(mode);
                 }

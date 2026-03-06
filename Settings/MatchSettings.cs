@@ -10,7 +10,7 @@ namespace OpenGSServer
 
     public class MatchSettings
     {
-        private eGameMode gameMode = eGameMode.Unknown;
+        private EGameMode gameMode = EGameMode.Unknown;
 
         public bool TimeLimit { get; set; } = false;
         public int MatchTime { get; set; } = 30000;

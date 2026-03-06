@@ -1,6 +1,7 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Text;
+using System.Linq;
 using Newtonsoft.Json.Linq;
 using OpenGSCore;
 
@@ -8,196 +9,109 @@ namespace OpenGSServer
 {
     public class WaitRoomManager
     {
-        private static WaitRoomManager _singleInstance = new WaitRoomManager();
+        private static readonly WaitRoomManager _instance = new();
+        public static WaitRoomManager Instance() => _instance;
+        public CreateNewWaitRoomResult CreateNewWaitRoom(string roomName) => CreateWaitRoom(roomName);
 
-        private SortedDictionary<string, WaitRoom> rooms = new();
+        private readonly ConcurrentDictionary<string, WaitRoom> _rooms = new();
+        private readonly object _lockObj = new();
 
-        private WaitRoomDatabase allRoom=new ();
+        public int RoomLimit { get; private set; } = 32;
 
-        private int RoomLimit { get; set; } = 20;
-
-        private List<string> defaultRoomNames { get; set; } = new List<string>() { "One Shot One Kill", "" };
-
-        private readonly object _lockObj = new object();
-
-        private JObject RoomInfoCache { get; set; } = new();
-
-        //public readonly List<string> defaultRoomName = new();
-
-        private List<WaitRoom> waitRooms = new();
-
-        private string CreateRoomId()
+        private WaitRoomManager()
         {
-            var id = Guid.NewGuid().ToString("N");
-
-
-            return id;
-        }
-        public static WaitRoomManager Instance()
-        {
-            return _singleInstance;
         }
 
-        public CreateNewWaitRoomResult CreateWaitRoom(string roomName,int capacity=8)
+        public void SetRoomLimit(int limit)
         {
-            CreateNewWaitRoomResult result;
+            RoomLimit = Math.Max(1, limit);
+        }
 
-            //roomNameが空ならRandomRoomNameでうめる
-            if (roomName == "")
+        public CreateNewWaitRoomResult CreateWaitRoom(string roomName, int capacity = 8, EGameMode mode = EGameMode.DeathMatch)
+        {
+            if (string.IsNullOrWhiteSpace(roomName))
             {
                 roomName = Template.RandomRoomName();
             }
 
-            if (RoomLimit > waitRooms.Count)
+            if (_rooms.Count >= RoomLimit)
             {
-                var id = CreateRoomId();
-                var room = new WaitRoom(roomName);
-                lock (_lockObj)
-                {
-                    //waitRooms.Add(room.RoomId, room);
-                }
-                result = new CreateNewWaitRoomResult("Successful", room);
-            }
-            else
-            {
-                result = new CreateNewWaitRoomResult("Fail", null);
+                return new CreateNewWaitRoomResult("Server RoomLimit Over", null);
             }
 
+            var room = new WaitRoom(roomName, capacity);
+            room.ChangeGameMode(mode);
 
+            if (_rooms.TryAdd(room.RoomId, room))
+            {
+                ConsoleWrite.WriteMessage($"[WAITROOM] Created room: {room.RoomName} ({room.RoomId}) Mode: {mode}", ConsoleColor.Green);
+                return new CreateNewWaitRoomResult("Successful", room);
+            }
 
-            
-            return result;
+            return new CreateNewWaitRoomResult("Fail (Duplicate ID)", null);
         }
 
-        public CreateNewWaitRoomResult CreateNewWaitRoom(in string roomName)
+        public WaitRoom? FindWaitRoom(string roomId)
         {
-            CreateNewWaitRoomResult result;
-
-            if (RoomLimit > waitRooms.Count)
-            {
-                var id = CreateRoomId();
-                var room = new WaitRoom(roomName);
-                lock (_lockObj)
-                {
-                   //waitRooms.Add(room.RoomId, room);
-                }
-                result = new CreateNewWaitRoomResult("Successful", room);
-            }
-            else
-            {
-                result = new CreateNewWaitRoomResult("Server RoomLimit Over", null);
-                
-                
-            }
-
-
-
-            return result;
+            if (string.IsNullOrWhiteSpace(roomId)) return null;
+            return _rooms.TryGetValue(roomId, out var room) ? room : null;
         }
 
-        public WaitRoom? CreateNewWaitRoom(string roomName, int capacity = 8)
+        public List<WaitRoom> GetAllRooms()
         {
-            if (roomName=="")
-            {
-                roomName = Template.RandomRoomName();
-            }
-
-
-            if (RoomLimit > waitRooms.Count)
-            {
-
-
-            }
-
-
-            var id = CreateRoomId();
-
-
-            var room = new WaitRoom(roomName);
-
-            lock (_lockObj)
-            {
-
-                rooms.Add(room.RoomId, room);
-            }
-
-            return room;
-
+            return _rooms.Values.ToList();
         }
 
-        public WaitRoom? FindWaitRoom(in string roomId)
+        public List<WaitRoom> FindWaitRoomsByGameMode(EGameMode mode)
         {
-            foreach(var room in waitRooms)
-            {
-                if(room.RoomId == roomId)
-                {
-                    return room;
-                }
-
-            }
-
-
-            return null;
+            return _rooms.Values.Where(r => r.setting != null && r.setting.Mode == mode).ToList();
         }
 
-        public List<WaitRoom> FindWaitRoomsByGameMode()
+        public bool CloseRoom(string roomId)
         {
-            foreach (var room in waitRooms)
+            if (_rooms.TryRemove(roomId, out var room))
             {
-
+                ConsoleWrite.WriteMessage($"[WAITROOM] Closed room: {room.RoomName} ({roomId})", ConsoleColor.Yellow);
+                return true;
             }
-
-            return null;
+            return false;
         }
-
-        public void CreateRoomCache()
-        {
-
-        }
-
 
         public JObject RoomInfo()
         {
-            var result = new JObject();
-            result["WaitRoomCount"] = rooms.Count;
-            result["RoomCapacity"] = rooms.Count.ToString() + "/" + RoomLimit.ToString();
+            var result = new JObject
+            {
+                ["WaitRoomCount"] = _rooms.Count,
+                ["RoomCapacity"] = $"{_rooms.Count}/{RoomLimit}"
+            };
 
             var array = new JArray();
-
-            foreach (var room in rooms)
+            foreach (var room in _rooms.Values)
             {
-                var roomJson = new JObject();
+                var roomJson = new JObject
+                {
+                    ["RoomID"] = room.RoomId,
+                    ["RoomName"] = room.RoomName,
+                    ["Capacity"] = room.Capacity,
+                    ["PlayerCount"] = room.Players.Count,
+                    ["NowPlaying"] = room.NowPlaying
+                };
 
-                var value = room.Value;
-
-                roomJson["RoomNumber"] = 0;
-                roomJson["RoomID"] = value.RoomId.ToString();
-                roomJson["RoomName"] = value.RoomName.ToString();
-                roomJson["Capacity"] = value.Capacity.ToString();
-                roomJson["NowPlaying"] = value.NowPlaying.ToString();
-                //roomJson["CanEnter"] = value.CanEnter.ToString();
-
-                var gameModeJson = new JObject();
-
-                gameModeJson["GameMode"] = "";
-                gameModeJson["Rule"] = "";
-                gameModeJson["aaa"] = "";
-
-
-                roomJson["GameMode"] = gameModeJson;
-
+                if (room.setting != null)
+                {
+                    var gameModeJson = new JObject
+                    {
+                        ["Mode"] = room.setting.Mode.ToString(),
+                        ["MaxPlayers"] = room.setting.MaxPlayerCount
+                    };
+                    roomJson["GameMode"] = gameModeJson;
+                }
 
                 array.Add(roomJson);
-
             }
 
             result["WaitRooms"] = array;
-
-            RoomInfoCache = result;
-
-
             return result;
         }
-
     }
 }

@@ -492,6 +492,7 @@ namespace OpenGSServer
             };
 
             ManagementServer.Instance.BroadcastStatus(broadcastJson);
+            ManagementServer.Instance.SystemAnnouncement(message);
             
             var response = new JObject
             {

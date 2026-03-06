@@ -7,16 +7,19 @@ using LiteDB;
 
 namespace OpenGSServer
 {
-
     public class DBGuild
     {
-
         [BsonId] public string id { get; set; }
 
         public string GuildShortName { get; set; }
         public string GuildName { get; set; }
 
         public string CreationTime { get; set; }
+        public string LeaderId { get; set; } = "";
+        public int Level { get; set; } = 1;
+        public long Experience { get; set; } = 0;
+
+        public DBGuild() { }
 
         public DBGuild(in string guildName) : this(guildName, guildName)
         {
@@ -36,9 +39,9 @@ namespace OpenGSServer
             GuildName = guild.GuildName;
             GuildShortName = guild.GuildShortName;
             CreationTime = guild.CreationTime;
+            LeaderId = guild.LeaderId;
+            Level = guild.Level;
+            Experience = guild.Experience;
         }
-
-        
-
     }
 }

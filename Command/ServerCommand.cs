@@ -286,15 +286,12 @@ namespace OpenGSServer
             }
         }
 
-        /// <summary>
-        /// ギルドを作成
-        /// </summary>
         public static void CreateGuild(string guildName)
         {
             try
             {
                 var manager = GuildManager.Instance;
-                if (manager.CreateNewGuild(guildName))
+                if (manager.CreateNewGuild(guildName, "System"))
                 {
                     ConsoleWrite.WriteMessage($"[OK] Guild '{guildName}' created successfully", ConsoleColor.Green);
                 }

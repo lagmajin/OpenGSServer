@@ -97,6 +97,30 @@ namespace OpenGSServer
             var dbGuild = string.IsNullOrWhiteSpace(guildShortName) ? new DBGuild(guildName) : new DBGuild(guildName, guildShortName);
 
             col.Insert(dbGuild);
+            return true;
+        }
+
+        public bool CreateNewGuild(string guildName, string leaderId, string guildShortName = null)
+        {
+            if (string.IsNullOrWhiteSpace(guildName) || string.IsNullOrWhiteSpace(leaderId))
+            {
+                return false;
+            }
+
+            var col = GuildCollection();
+
+            if (col.Exists(g => g.GuildName == guildName))
+            {
+                return false;
+            }
+
+            var dbGuild = string.IsNullOrWhiteSpace(guildShortName) ? new DBGuild(guildName) : new DBGuild(guildName, guildShortName);
+            dbGuild.LeaderId = leaderId;
+
+            col.Insert(dbGuild);
+
+            // リーダーをメンバーとして追加
+            AddGuildMember(leaderId, guildName, "Leader");
 
             return true;
         }
@@ -127,7 +151,7 @@ namespace OpenGSServer
             GuildMemberCollection().DeleteAll();
         }
 
-        public bool AddGuildMember(string id, string guild)
+        public bool AddGuildMember(string id, string guild, string role = "Member")
         {
             if (string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(guild))
             {
@@ -148,7 +172,7 @@ namespace OpenGSServer
                 return false;
             }
 
-            memberCollection.Insert(new DBGuildMember(guildData.id, id));
+            memberCollection.Insert(new DBGuildMember(guildData.id, id, role));
 
             return true;
         }

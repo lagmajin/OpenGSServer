@@ -2,25 +2,19 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
-using Autofac;
-using static System.Net.Mime.MediaTypeNames;
+using Newtonsoft.Json.Linq;
 
 namespace OpenGSServer
 {
     interface IServerManager
     {
-
     }
 
     sealed class ServerManager
     {
-
         public static ServerManager Instance { get; private set; } = new();
 
-        ServerSettings settings = new ServerSettings();
-
-
-
+        private ServerSettings settings = new ServerSettings();
 
         private static MatchServer matchServer_ = new MatchServer();
         private static GeneralServer generalServer_ = new GeneralServer();
@@ -30,7 +24,6 @@ namespace OpenGSServer
         private readonly AdminManager adminManager = AdminManager.CreateDefault();
         private readonly object _adminInitLock = new();
         private bool _adminInitialized;
-
 
         internal ServerSettings Settings { get => settings; set => settings = value; }
 
@@ -85,32 +78,20 @@ namespace OpenGSServer
             return adminManager.ListAdminIds().Count > 0;
         }
 
+        public MatchServer GetMatchServer() => matchServer_;
+        public GeneralServer GetGeneralServer() => generalServer_;
+        public ManagementServer GetManagementServer() => managementServer;
 
-
-
-        public MatchServer GetMatchServer()
-        {
-
-            return matchServer_;
-        }
-
-        public GeneralServer GetGeneralServer()
-        {
-
-            return generalServer_;
-        }
-
-        public ManagementServer GetManagementServer()
-        {
-            return managementServer;
-        }
-
-        void AddRegisterAdminAccount(string id, string pass)
+        public void AddRegisterAdminAccount(string id, string pass)
         {
             try
             {
                 var added = adminManager.AddAdmin(id, pass);
-                if (!added)
+                if (added)
+                {
+                    adminManager.Save();
+                }
+                else
                 {
                     ConsoleWrite.WriteMessage($"[SERVER] Admin '{id}' already exists", ConsoleColor.Yellow);
                 }
@@ -121,12 +102,16 @@ namespace OpenGSServer
             }
         }
 
-        void RemoveAdminAccount(String id, String pass)
+        public void RemoveAdminAccount(string id)
         {
             try
             {
                 var removed = adminManager.RemoveAdmin(id);
-                if (!removed)
+                if (removed)
+                {
+                    adminManager.Save();
+                }
+                else
                 {
                     ConsoleWrite.WriteMessage($"[SERVER] Admin '{id}' not found", ConsoleColor.Yellow);
                 }
@@ -139,51 +124,51 @@ namespace OpenGSServer
 
         public void LoadSetting()
         {
-
-            
             string path = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            string openGSServerDirectory = Path.Combine(path, "OpenGSServer");
+            string absolutePath = Path.Combine(openGSServerDirectory, "OpenGSServerSetting.json");
 
-            string openGSServerDirectory=System.IO.Path.Combine(path, "OpenGSServer");
+            if (!File.Exists(absolutePath))
+            {
+                ConsoleWrite.WriteMessage($"[SERVER] Settings file not found at {absolutePath}. Using defaults.", ConsoleColor.Yellow);
+                return;
+            }
 
-
-            string absolutePath = System.IO.Path.Combine(openGSServerDirectory, "OpenGSServerSetting.json");
-
+            try
+            {
+                string jsonStr = File.ReadAllText(absolutePath, Encoding.UTF8);
+                var json = JObject.Parse(jsonStr);
+                settings.SetFromJson(json);
+                ConsoleWrite.WriteMessage($"[SERVER] Settings loaded from {absolutePath}.", ConsoleColor.Green);
+            }
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage($"[SERVER] LoadSetting failed: {ex.Message}", ConsoleColor.Red);
+            }
         }
 
         public void SaveSetting()
         {
-            var json=settings.ToJson();
-
+            var json = settings.ToJson();
             var st = json.ToString();
 
             string path = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-
-            string openGSServerDirectory=System.IO.Path.Combine(path, "OpenGSServer");
-
-            
-            Directory.CreateDirectory(openGSServerDirectory);
-
-
-            string absolutePath = System.IO.Path.Combine(openGSServerDirectory, "OpenGSServerSetting.json");
+            string openGSServerDirectory = Path.Combine(path, "OpenGSServer");
 
             try
             {
-                //ファイルをオープンする
+                Directory.CreateDirectory(openGSServerDirectory);
+                string absolutePath = Path.Combine(openGSServerDirectory, "OpenGSServerSetting.json");
+
                 using (StreamWriter sw = new StreamWriter(absolutePath, false, Encoding.UTF8))
                 {
                     sw.Write(st);
-
-                    sw.Close();
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.ToString());
-
+                ConsoleWrite.WriteMessage($"[SERVER] SaveSetting failed: {ex.Message}", ConsoleColor.Red);
             }
-
-
         }
-
     }
 }

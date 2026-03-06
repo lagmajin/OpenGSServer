@@ -30,7 +30,8 @@ namespace OpenGSServer
 
 
 
-            if (dic.TryGetValue("PlayerID", out JToken? playerIDToken) && !string.IsNullOrEmpty(playerID = playerIDToken?.ToString()))
+            if ((dic.TryGetValue("PlayerID", out JToken? playerIDToken) || dic.TryGetValue("PlayerId", out playerIDToken)) 
+                && !string.IsNullOrEmpty(playerID = playerIDToken?.ToString()))
             {
                 // PlayerID は有効
                 Console.WriteLine($"[CreateWaitRoom] PlayerID: {playerID}");

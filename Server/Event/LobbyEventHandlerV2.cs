@@ -6,14 +6,14 @@ using OpenGSCore;
 namespace OpenGSServer
 {
     /// <summary>
-    /// ƒƒr[ƒCƒxƒ“ƒgƒnƒ“ƒhƒ‰[ - ƒNƒ‰ƒCƒAƒ“ƒg‚©‚ç‚Ìƒƒr[ŠÖ˜AƒŠƒNƒGƒXƒgˆ—
+    /// ãƒ­ãƒ“ãƒ¼ã‚¤ãƒ™ãƒ³ãƒˆãƒãƒ³ãƒ‰ãƒ©ãƒ¼ - ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆã‹ã‚‰ã®ãƒ­ãƒ“ãƒ¼é–¢é€£ãƒªã‚¯ã‚¨ã‚¹ãƒˆå‡¦ç†
     /// </summary>
     public class LobbyEventHandlerV2
     {
         private readonly LobbyServerManager lobbyManager = LobbyServerManager.Instance;
 
         /// <summary>
-        /// ƒƒr[ƒCƒxƒ“ƒg‚ðˆ—
+        /// ãƒ­ãƒ“ãƒ¼ã‚¤ãƒ™ãƒ³ãƒˆã‚’å‡¦ç†
         /// </summary>
         public JObject ProcessLobbyEvent(JObject request)
         {
@@ -67,18 +67,19 @@ namespace OpenGSServer
             }
         }
 
-        #region ƒCƒxƒ“ƒgƒnƒ“ƒhƒ‰[ŽÀ‘•
+        #region ã‚¤ãƒ™ãƒ³ãƒˆãƒãƒ³ãƒ‰ãƒ©ãƒ¼å®Ÿè£…
 
         private JObject HandleJoinLobby(JObject request, string playerId)
         {
             var playerName = request.GetStringOrNull("PlayerName") ?? $"Player_{playerId}";
 
-            var success = lobbyManager.PlayerJoinLobby(playerId, playerName);
+            var result = lobbyManager.PlayerJoinLobby(playerId, playerName);
 
             return new JObject
             {
                 ["Action"] = "JoinLobbyResponse",
-                ["Success"] = success,
+                ["Success"] = result.IsSuccess,
+                ["ErrorMessage"] = result.ErrorMessage,
                 ["PlayerID"] = playerId,
                 ["PlayerName"] = playerName,
                 ["Timestamp"] = DateTime.UtcNow.ToString("o")
@@ -87,12 +88,13 @@ namespace OpenGSServer
 
         private JObject HandleLeaveLobby(string playerId)
         {
-            var success = lobbyManager.PlayerLeaveLobby(playerId);
+            var result = lobbyManager.PlayerLeaveLobby(playerId);
 
             return new JObject
             {
                 ["Action"] = "LeaveLobbyResponse",
-                ["Success"] = success,
+                ["Success"] = result.IsSuccess,
+                ["ErrorMessage"] = result.ErrorMessage,
                 ["PlayerID"] = playerId,
                 ["Timestamp"] = DateTime.UtcNow.ToString("o")
             };
@@ -113,15 +115,26 @@ namespace OpenGSServer
                 return CreateErrorResponse("Invalid GameMode");
             }
 
-            var room = lobbyManager.CreateRoom(roomName, playerId, gameMode);
+            var result = lobbyManager.CreateRoom(roomName, playerId, gameMode);
 
-            return new JObject
+            var response = new JObject
             {
                 ["Action"] = "CreateRoomResponse",
-                ["Success"] = room != null,
-                ["Room"] = room != null ? JObject.FromObject(room) : null,
+                ["Success"] = result.IsSuccess,
+                ["ErrorMessage"] = result.ErrorMessage,
                 ["Timestamp"] = DateTime.UtcNow.ToString("o")
             };
+
+            if (result.IsSuccess && result.Value != null)
+            {
+                response["Room"] = JObject.FromObject(result.Value);
+            }
+            else
+            {
+                response["Room"] = null;
+            }
+
+            return response;
         }
 
         private JObject HandleJoinRoom(JObject request, string playerId)
@@ -133,12 +146,13 @@ namespace OpenGSServer
                 return CreateErrorResponse("RoomID is required");
             }
 
-            var success = lobbyManager.JoinRoom(roomId, playerId);
+            var result = lobbyManager.JoinRoom(roomId, playerId);
 
             return new JObject
             {
                 ["Action"] = "JoinRoomResponse",
-                ["Success"] = success,
+                ["Success"] = result.IsSuccess,
+                ["ErrorMessage"] = result.ErrorMessage,
                 ["RoomID"] = roomId,
                 ["PlayerID"] = playerId,
                 ["Timestamp"] = DateTime.UtcNow.ToString("o")
@@ -147,12 +161,13 @@ namespace OpenGSServer
 
         private JObject HandleLeaveRoom(string playerId)
         {
-            var success = lobbyManager.LeaveRoom(playerId);
+            var result = lobbyManager.LeaveRoom(playerId);
 
             return new JObject
             {
                 ["Action"] = "LeaveRoomResponse",
-                ["Success"] = success,
+                ["Success"] = result.IsSuccess,
+                ["ErrorMessage"] = result.ErrorMessage,
                 ["PlayerID"] = playerId,
                 ["Timestamp"] = DateTime.UtcNow.ToString("o")
             };
@@ -160,26 +175,50 @@ namespace OpenGSServer
 
         private JObject HandleGetAvailableRooms()
         {
-            var rooms = lobbyManager.GetAvailableRooms();
+            var result = lobbyManager.GetAvailableRooms();
 
-            return new JObject
+            var response = new JObject
             {
                 ["Action"] = "GetAvailableRoomsResponse",
-                ["Rooms"] = JArray.FromObject(rooms),
+                ["Success"] = result.IsSuccess,
+                ["ErrorMessage"] = result.ErrorMessage,
                 ["Timestamp"] = DateTime.UtcNow.ToString("o")
             };
+
+            if (result.IsSuccess && result.Value != null)
+            {
+                response["Rooms"] = JArray.FromObject(result.Value);
+            }
+            else
+            {
+                response["Rooms"] = new JArray();
+            }
+
+            return response;
         }
 
         private JObject HandleGetLobbyStats()
         {
-            var stats = lobbyManager.GetLobbyStats();
+            var result = lobbyManager.GetLobbyStats();
 
-            return new JObject
+            var response = new JObject
             {
                 ["Action"] = "GetLobbyStatsResponse",
-                ["Stats"] = JObject.FromObject(stats),
+                ["Success"] = result.IsSuccess,
+                ["ErrorMessage"] = result.ErrorMessage,
                 ["Timestamp"] = DateTime.UtcNow.ToString("o")
             };
+
+            if (result.IsSuccess && result.Value != null)
+            {
+                response["Stats"] = JObject.FromObject(result.Value);
+            }
+            else
+            {
+                response["Stats"] = null;
+            }
+
+            return response;
         }
 
         private JObject HandleQuickMatch(JObject request, string playerId)
@@ -196,13 +235,14 @@ namespace OpenGSServer
                 return CreateErrorResponse("Invalid GameMode");
             }
 
-            var roomId = lobbyManager.QuickMatch(playerId, gameMode);
+            var result = lobbyManager.QuickMatch(playerId, gameMode);
 
             return new JObject
             {
                 ["Action"] = "QuickMatchResponse",
-                ["Success"] = roomId != null,
-                ["RoomID"] = roomId,
+                ["Success"] = result.IsSuccess,
+                ["ErrorMessage"] = result.ErrorMessage,
+                ["RoomID"] = result.Value,
                 ["PlayerID"] = playerId,
                 ["Timestamp"] = DateTime.UtcNow.ToString("o")
             };
@@ -218,21 +258,23 @@ namespace OpenGSServer
                 return CreateErrorResponse("Message is required");
             }
 
+            LobbyResult<bool> result;
             if (!string.IsNullOrEmpty(roomId))
             {
-                // ƒ‹[ƒ€ƒ`ƒƒƒbƒg
-                lobbyManager.AddRoomChat(roomId, playerId, message);
+                // ãƒ«ãƒ¼ãƒ ãƒãƒ£ãƒƒãƒˆ
+                result = lobbyManager.AddRoomChat(roomId, playerId, message);
             }
             else
             {
-                // ƒƒr[ƒ`ƒƒƒbƒg
-                lobbyManager.AddLobbyChat(playerId, message);
+                // ãƒ­ãƒ“ãƒ¼ãƒãƒ£ãƒƒãƒˆ
+                result = lobbyManager.AddLobbyChat(playerId, message);
             }
 
             return new JObject
             {
                 ["Action"] = "SendChatResponse",
-                ["Success"] = true,
+                ["Success"] = result.IsSuccess,
+                ["ErrorMessage"] = result.ErrorMessage,
                 ["PlayerID"] = playerId,
                 ["Message"] = message,
                 ["Timestamp"] = DateTime.UtcNow.ToString("o")
@@ -241,7 +283,7 @@ namespace OpenGSServer
 
         #endregion
 
-        #region ƒ†[ƒeƒBƒŠƒeƒBƒƒ\ƒbƒh
+        #region ãƒ¦ãƒ¼ãƒ†ã‚£ãƒªãƒ†ã‚£ãƒ¡ã‚½ãƒƒãƒ‰
 
         private JObject CreateErrorResponse(string errorMessage)
         {

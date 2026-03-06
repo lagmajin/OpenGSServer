@@ -12,20 +12,19 @@ namespace OpenGSServer
 
         public string Id { get; set; }
 
-        //public string Name { get; set; }
-
         public string TimeStamp { get; set; }
 
+        public string Role { get; set; } = "Member"; // Leader, Officer, Member
 
         public DBGuildMember()
         {
-
         }
 
-        public DBGuildMember(string guildId, string memberId)
+        public DBGuildMember(string guildId, string memberId, string role = "Member")
         {
             this.guildId = guildId;
             Id = memberId;
+            Role = role;
             TimeStamp = DateTime.UtcNow.ToString("o");
         }
 
@@ -34,9 +33,7 @@ namespace OpenGSServer
             this.guildId = member.guildId;
             this.Id = member.Id;
             this.TimeStamp = member.TimeStamp;
-
-
+            this.Role = member.Role;
         }
-
     }
 }
