@@ -121,6 +121,13 @@ namespace OpenGSServer
                         session?.Send(json);
                     }
                 };
+                bus.OnGameEndedWithResult += (result) => {
+                    foreach (var p in matchRoom.Players)
+                    {
+                        var session = LobbyServerManager.Instance().GetSession(p.Id);
+                        session?.Send(result);
+                    }
+                };
 
                 waitRoom.LinkMatchRoom(matchRoom);
                 matchRooms.Add(matchRoom.Id, matchRoom);
