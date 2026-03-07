@@ -174,10 +174,23 @@ namespace OpenGSServer
             {
                 // ゲームシーン更新（OpenGSCore.MatchRoom使用）
                 room.GameUpdate();
-
-                // ゲーム状態をクライアントに送信（必要に応じて）
-                // BroadcastRoomState(room);
             }
+        }
+
+        /// <summary>
+        /// 特定のルームにUDPメッセージをブロードキャストする
+        /// </summary>
+        public void BroadcastToRoom(int senderIdForRoom, string messageType, Action<LiteNetLib.Utils.NetDataWriter> writeData)
+        {
+            _udpServer?.BroadcastToRoom(senderIdForRoom, messageType, writeData);
+        }
+
+        /// <summary>
+        /// 全プレイヤーにUDPメッセージをブロードキャストする
+        /// </summary>
+        public void BroadcastToAll(string messageType, Action<LiteNetLib.Utils.NetDataWriter> writeData)
+        {
+            // TODO: 必要であれば実装
         }
 
         /// <summary>

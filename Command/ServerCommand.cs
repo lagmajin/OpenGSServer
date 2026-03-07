@@ -1,5 +1,3 @@
-﻿
-
 
 
 using System;
@@ -68,10 +66,10 @@ namespace OpenGSServer
 
                 if (inQuotes)
                 {
-                    if (ch == '\\' && i + 1 < input.Length)
+                    if (ch == '' && i + 1 < input.Length)
                     {
                         var next = input[i + 1];
-                        if (next == quoteChar || next == '\\')
+                        if (next == quoteChar || next == '')
                         {
                             current.Append(next);
                             i++;
@@ -103,7 +101,7 @@ namespace OpenGSServer
                     continue;
                 }
 
-                if (ch == '"' || ch == '\'')
+                if (ch == '"' || ch == ''')
                 {
                     inQuotes = true;
                     quoteChar = ch;
@@ -166,6 +164,39 @@ namespace OpenGSServer
                     }
                     break;
 
+                case "creatematch":
+                    if (parameters.Count >= 1)
+                    {
+                        CommandExecutor.CreateMatchRoom(parameters[0]);
+                    }
+                    else
+                    {
+                        ConsoleWrite.WriteMessage("[ERR] Usage: creatematch <roomName>", ConsoleColor.Red);
+                    }
+                    break;
+                
+                case "addplayertomatch":
+                    if (parameters.Count >= 2)
+                    {
+                        CommandExecutor.AddPlayerToMatch(parameters[0], parameters[1]);
+                    }
+                    else
+                    {
+                        ConsoleWrite.WriteMessage("[ERR] Usage: addplayertomatch <matchId> <playerId>", ConsoleColor.Red);
+                    }
+                    break;
+
+                case "startmatch":
+                    if (parameters.Count >= 1)
+                    {
+                        CommandExecutor.StartMatch(parameters[0]);
+                    }
+                    else
+                    {
+                        ConsoleWrite.WriteMessage("[ERR] Usage: startmatch <matchId>", ConsoleColor.Red);
+                    }
+                    break;
+
                 case "playerinfo":
                     if (parameters.Count >= 1)
                     {
@@ -198,6 +229,10 @@ namespace OpenGSServer
 
                 case "listrooms":
                     CommandExecutor.ListWaitRooms();
+                    break;
+                
+                case "listmatches":
+                    CommandExecutor.ListMatches();
                     break;
 
                 case "listplayers":
@@ -255,11 +290,15 @@ namespace OpenGSServer
             ConsoleWrite.WriteMessage("addplayer <id> <password> <displayName> - Create new player account", ConsoleColor.White);
             ConsoleWrite.WriteMessage("addguild <guildName> - Create new guild", ConsoleColor.White);
             ConsoleWrite.WriteMessage("addwaitroom <roomName> - Create new wait room", ConsoleColor.White);
+            ConsoleWrite.WriteMessage("creatematch <roomName> - Create a new match room", ConsoleColor.White);
+            ConsoleWrite.WriteMessage("addplayertomatch <matchId> <playerId> - Add a player to a specific match", ConsoleColor.White);
+            ConsoleWrite.WriteMessage("startmatch <matchId> - Start a match", ConsoleColor.White);
             ConsoleWrite.WriteMessage("playerinfo <playerId> - Show player information", ConsoleColor.White);
             ConsoleWrite.WriteMessage("guildinfo <guildName> - Show guild information", ConsoleColor.White);
             ConsoleWrite.WriteMessage("lobbyinfo - Show lobby information", ConsoleColor.White);
             ConsoleWrite.WriteMessage("matchserverinfo - Show match server information", ConsoleColor.White);
             ConsoleWrite.WriteMessage("listrooms - List all wait rooms", ConsoleColor.White);
+            ConsoleWrite.WriteMessage("listmatches - List all active match rooms", ConsoleColor.White);
             ConsoleWrite.WriteMessage("listplayers - List all connected players", ConsoleColor.White);
             ConsoleWrite.WriteMessage("banip <ipAddress> - Block incoming connections from the IP", ConsoleColor.White);
             ConsoleWrite.WriteMessage("unbanip <ipAddress> - Remove the IP from blacklist", ConsoleColor.White);
@@ -365,6 +404,84 @@ namespace OpenGSServer
         }
 
         /// <summary>
+        /// 新しいマッチルームを作成
+        /// </summary>
+        public static void CreateMatchRoom(string roomName)
+        {
+            try
+            {
+                var matchRoomManager = MatchRoomManager.Instance;
+                // ダミーの設定とイベントバスを使用
+                var dummySetting = new DeathMatchSetting(); // または他の適切な設定
+                var dummyBus = new MatchRoomEventBus();
+                var newMatchRoom = new OpenGSCore.MatchRoom(
+                    roomNumber: 0, // 仮のルームナンバー
+                    roomName: roomName,
+                    roomOwnerId: "ServerAdmin", // 仮のオーナーID
+                    setting: dummySetting,
+                    bus: dummyBus
+                );
+                matchRoomManager.AddRoom(newMatchRoom);
+                ConsoleWrite.WriteMessage($"[OK] Match room '{roomName}' (ID: {newMatchRoom.Id}) created successfully", ConsoleColor.Green);
+            }
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage($"[ERR] Failed to create match room: {ex.Message}", ConsoleColor.Red);
+            }
+        }
+
+        /// <summary>
+        /// マッチルームにプレイヤーを追加
+        /// </summary>
+        public static void AddPlayerToMatch(string matchId, string playerId)
+        {
+            try
+            {
+                var matchRoomManager = MatchRoomManager.Instance;
+                var room = matchRoomManager.FindRoom(matchId) as OpenGSCore.MatchRoom;
+                if (room == null)
+                {
+                    ConsoleWrite.WriteMessage($"[ERR] Match room with ID '{matchId}' not found.", ConsoleColor.Red);
+                    return;
+                }
+
+                // ダミーのPlayerInfoを作成
+                var playerInfo = new PlayerInfo(id: playerId, name: $"Player_{playerId}");
+                room.AddNewPlayer(playerInfo);
+                ConsoleWrite.WriteMessage($"[OK] Player '{playerId}' added to match '{room.RoomName}' (ID: {room.Id})", ConsoleColor.Green);
+            }
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage($"[ERR] Failed to add player '{playerId}' to match '{matchId}': {ex.Message}", ConsoleColor.Red);
+            }
+        }
+
+        /// <summary>
+        /// マッチを開始
+        /// </summary>
+        public static void StartMatch(string matchId)
+        {
+            try
+            {
+                var matchRoomManager = MatchRoomManager.Instance;
+                var room = matchRoomManager.FindRoom(matchId) as OpenGSCore.MatchRoom;
+                if (room == null)
+                {
+                    ConsoleWrite.WriteMessage($"[ERR] Match room with ID '{matchId}' not found.", ConsoleColor.Red);
+                    return;
+                }
+
+                room.GameStart();
+                ConsoleWrite.WriteMessage($"[OK] Match '{room.RoomName}' (ID: {room.Id}) started!", ConsoleColor.Green);
+            }
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage($"[ERR] Failed to start match '{matchId}': {ex.Message}", ConsoleColor.Red);
+            }
+        }
+
+
+        /// <summary>
         /// プレイヤー情報を表示
         /// </summary>
         public static void PlayerInfo(string playerId)
@@ -444,9 +561,15 @@ namespace OpenGSServer
         {
             try
             {
+                var matchServer = MatchServerV2.Instance;
+                var stats = matchServer.GetStats();
+
                 ConsoleWrite.WriteMessage("[INFO] === Match Server Information ===", ConsoleColor.Cyan);
-                ConsoleWrite.WriteMessage("[INFO] Status: Running", ConsoleColor.Cyan);
-                ConsoleWrite.WriteMessage("[INFO] Active Matches: 0", ConsoleColor.Cyan);
+                ConsoleWrite.WriteMessage($"[INFO] Status: {(stats.IsRunning ? "Running" : "Stopped")}", ConsoleColor.White);
+                ConsoleWrite.WriteMessage($"[INFO] Active Rooms: {stats.ActiveRooms}", ConsoleColor.White);
+                ConsoleWrite.WriteMessage($"[INFO] Playing Rooms: {stats.PlayingRooms}", ConsoleColor.White);
+                ConsoleWrite.WriteMessage($"[INFO] Total Players: {stats.TotalPlayers}", ConsoleColor.White);
+                ConsoleWrite.WriteMessage($"[INFO] Average Frame Time: {stats.AverageFrameTime:F2}ms", ConsoleColor.White);
             }
             catch (Exception ex)
             {
@@ -474,6 +597,35 @@ namespace OpenGSServer
         }
 
         /// <summary>
+        /// 全マッチルームを列挙
+        /// </summary>
+        public static void ListMatches()
+        {
+            try
+            {
+                var matchRoomManager = MatchRoomManager.Instance;
+                var rooms = matchRoomManager.AllRooms().OfType<OpenGSCore.MatchRoom>().ToList();
+
+                ConsoleWrite.WriteMessage("[INFO] === Match Rooms ===", ConsoleColor.Cyan);
+                if (rooms.Any())
+                {
+                    foreach (var room in rooms)
+                    {
+                        ConsoleWrite.WriteMessage($" - Name: {room.RoomName}, ID: {room.Id}, Players: {room.PlayerCount}/{room.Capacity}, Status: {(room.Playing ? "Playing" : "Waiting")}", ConsoleColor.White);
+                    }
+                }
+                else
+                {
+                    ConsoleWrite.WriteMessage("[INFO] No active match rooms.", ConsoleColor.White);
+                }
+            }
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage($"[ERR] Failed to list matches: {ex.Message}", ConsoleColor.Red);
+            }
+        }
+
+        /// <summary>
         /// 接続中のプレイヤーを列挙
         /// </summary>
         public static void ListPlayers()
@@ -497,12 +649,17 @@ namespace OpenGSServer
             try
             {
                 var lobby = LobbyServerManager.Instance;
+                var match = MatchServerV2.Instance;
                 var management = ManagementServer.Instance;
                 var loggedInUserCount = AccountManager.GetInstance().GetLoggedInUserCount();
+                var matchStats = match.GetStats();
 
                 ConsoleWrite.WriteMessage("[INFO] === Server Status ===", ConsoleColor.Cyan);
                 ConsoleWrite.WriteMessage(
                     $"[INFO] Lobby TCP: {(lobby.IsTcpServerRunning ? "Running" : "Stopped")} Port={lobby.TcpPort?.ToString() ?? "N/A"}",
+                    ConsoleColor.White);
+                ConsoleWrite.WriteMessage(
+                    $"[INFO] Match Server: {(matchStats.IsRunning ? "Running" : "Stopped")} ActiveRooms={matchStats.ActiveRooms} PlayingRooms={matchStats.PlayingRooms}",
                     ConsoleColor.White);
                 ConsoleWrite.WriteMessage(
                     $"[INFO] Management Sessions: {management.GetConnectedClientCount()}",

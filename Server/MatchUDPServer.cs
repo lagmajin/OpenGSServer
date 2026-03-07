@@ -162,23 +162,22 @@ namespace OpenGSServer
             var velocityX = reader.GetFloat();
             var velocityY = reader.GetFloat();
 
-            // MatchRoomに転送
+            // MatchRoomに転送（同時処理バッファへ）
             var matchRoom = GetMatchRoomForPlayer(peer.Id);
             if (matchRoom != null)
             {
-                // OpenGSCore.MatchRoomのGameSceneに移動情報を転送
-                // matchRoom.GameScene.UpdatePlayerPosition(peer.Id, posX, posY);
+                var input = new JObject
+                {
+                    ["MessageType"] = "PlayerMove",
+                    ["PlayerID"] = peer.Id.ToString(),
+                    ["PosX"] = posX,
+                    ["PosY"] = posY,
+                    ["VelX"] = velocityX,
+                    ["VelY"] = velocityY,
+                    ["Timestamp"] = DateTime.UtcNow.Ticks
+                };
+                matchRoom.PushInput(input);
             }
-
-            // 他のプレイヤーにブロードキャスト
-            BroadcastToRoom(peer.Id, "PlayerMoved", writer =>
-            {
-                writer.Put(peer.Id);
-                writer.Put(posX);
-                writer.Put(posY);
-                writer.Put(velocityX);
-                writer.Put(velocityY);
-            });
         }
 
         /// <summary>
@@ -191,15 +190,23 @@ namespace OpenGSServer
             var posY = reader.GetFloat();
             var angle = reader.GetFloat();
 
-            // 他のプレイヤーにブロードキャスト
-            BroadcastToRoom(peer.Id, "PlayerShot", writer =>
+            // MatchRoomに転送（同時処理バッファへ）
+            var matchRoom = GetMatchRoomForPlayer(peer.Id);
+            if (matchRoom != null)
             {
-                writer.Put(peer.Id);
-                writer.Put(weaponType);
-                writer.Put(posX);
-                writer.Put(posY);
-                writer.Put(angle);
-            });
+                var input = new JObject
+                {
+                    ["MessageType"] = "PlayerAction",
+                    ["ActionType"] = "Shoot",
+                    ["PlayerID"] = peer.Id.ToString(),
+                    ["WeaponType"] = weaponType,
+                    ["PosX"] = posX,
+                    ["PosY"] = posY,
+                    ["Angle"] = angle,
+                    ["Timestamp"] = DateTime.UtcNow.Ticks
+                };
+                matchRoom.PushInput(input);
+            }
         }
 
         /// <summary>
@@ -328,12 +335,13 @@ namespace OpenGSServer
                 {
                     if (abstractRoom is MatchRoom room)
                     {
-                        var snap = room.GameScene.GetSnapshot();
+                        // ISyncable インターフェースを使用してルーム全体の同期状態を取得
+                        var syncState = room.ToJSon();
 
-                        // send snapshot to all players in room
+                        // 全プレイヤーにスナップショットを送信
                         var writer = new NetDataWriter();
                         writer.Put("Snapshot");
-                        writer.Put(snap.ToString());
+                        writer.Put(syncState.ToString(Formatting.None));
 
                         foreach (var player in room.Players)
                         {

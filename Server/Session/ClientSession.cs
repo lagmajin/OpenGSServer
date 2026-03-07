@@ -377,7 +377,7 @@ namespace OpenGSServer
             Console.WriteLine($"Chat TCP session caught an error with code {error}");
         }
 
-        //#networkcore
+        // #networkcore
         private void ParseMessageFromClient(in JObject json)
         {
             string messageType = json["MessageType"]?.ToString();
@@ -385,7 +385,62 @@ namespace OpenGSServer
 
             // LobbyServerManager に委譲
             var lobbyManager = (Server as LobbyTcpServer)?.Manager;
-            lobbyManager?.HandleMessage(messageType, json, this);
+            if (lobbyManager != null)
+            {
+                lobbyManager.HandleMessage(messageType, json, this);
+            }
+
+            // ClientSession自身で処理するメッセージ
+            switch (messageType)
+            {
+                case MessageType.PlayerInfoRequest:
+                    HandlePlayerInfoRequest(json);
+                    break;
+                // 他のClientSession固有のメッセージがあればここに追加
+            }
+        }
+
+        private void HandlePlayerInfoRequest(JObject requestJson)
+        {
+            string targetPlayerId = requestJson["TargetPlayerID"]?.ToString();
+            if (string.IsNullOrEmpty(targetPlayerId))
+            {
+                // エラー応答を送信
+                SendErrorMessage("InvalidRequest", "TargetPlayerID is missing.");
+                return;
+            }
+
+            // AccountDatabaseManager からプレイヤー情報を取得
+            var accountDbManager = AccountDatabaseManager.GetInstance();
+            var account = accountDbManager.GetAccount(targetPlayerId); // 適切なメソッドに置き換える必要あり
+
+            if (account != null)
+            {
+                // プレイヤー情報が見つかった場合
+                var responseJson = new JObject
+                {
+                    [ServerMessageTypes.MessageType] = MessageType.PlayerInfoResponse,
+                    ["Success"] = true,
+                    ["PlayerID"] = account.Id,
+                    ["DisplayName"] = account.DisplayName,
+                    ["Level"] = account.Level, // 仮のデータ
+                    ["XP"] = account.Exp // 仮のデータ
+                    // 他にも必要な情報を追加
+                };
+                SendAsyncJsonWithTimeStamp(responseJson);
+            }
+            else
+            {
+                // プレイヤー情報が見つからなかった場合
+                var responseJson = new JObject
+                {
+                    [ServerMessageTypes.MessageType] = MessageType.PlayerInfoResponse,
+                    ["Success"] = false,
+                    ["Error"] = "PlayerNotFound",
+                    ["TargetPlayerID"] = targetPlayerId
+                };
+                SendAsyncJsonWithTimeStamp(responseJson);
+            }
         }
 
         protected override void OnSent(long sent, long pending)

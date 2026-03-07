@@ -18,8 +18,7 @@ using Autofac;
         private static bool IsEnd { get; set; } = false;
         private static bool MonitorTaskFlag { get; set; } = false;
 
-        // UDPサーバーマネージャー
-        private static MatchRUdpServerManager? udpServerManager;
+        // UDPサーバーマネージャーは MatchServerV2 の内部で管理されます
 
 
         static void CurrentDomain_ProcessExit(object sender, EventArgs e)
@@ -189,8 +188,6 @@ using Autofac;
                     var builder = new ContainerBuilder();
                     builder.RegisterInstance(LobbyServerManager.Instance).AsSelf().SingleInstance();
                     builder.RegisterInstance(batchService).AsSelf().SingleInstance(); // BatchServiceを登録
-
-                    builder.RegisterType<MatchRUdpServerManager>().AsSelf().SingleInstance();
                     builder.RegisterType<ManagementServer>().AsSelf().SingleInstance();
                     builder.RegisterType<AccountEventHandler>().As<IAccountEventHandler>().SingleInstance();
                     //builder.RegisterType<AccountManager>().AsSelf().SingleInstance();
@@ -202,16 +199,14 @@ using Autofac;
 
 
                     var lobbyServer = container.Resolve<LobbyServerManager>();
-
                     lobbyServer.StartTcpServer(60000);
 
-                    var matchRUdpServer = container.Resolve<MatchRUdpServerManager>();
-                    // Ensure the static reference is assigned from the DI-resolved instance
-                    udpServerManager = matchRUdpServer;
-
+                    // 新しい MatchServerV2 (同時処理/マルチコア対応) を使用
+                    var matchServer = MatchServerV2.Instance;
+                    matchServer.Listen(60001, 63000); // UDP port 63000
+                    matchServer.EnableMultiCore();
 
                     var managementServer = ManagementServer.Instance;
-
                     managementServer.Listen(50020);
 
                     if(lobbyServer.IsTcpServerRunning)
@@ -222,34 +217,14 @@ using Autofac;
                     // バッチサービス起動
                     batchService.Start();
 
-
-                    int workMin;
-                    int ioMin;
-                    ThreadPool.GetMinThreads(out workMin, out ioMin);
-
-                    Console.WriteLine("MinThreads work={0}, i/o={1}", workMin, ioMin);
                     ConsoleWrite.WriteMessage("System all green...", ConsoleColor.Green);
-
-                    ThreadPool.SetMinThreads(26, ioMin);
-
-                    // UDPゲームサーバーの初期化 (already assigned from DI)
-                    ConsoleWrite.WriteMessage("[UDP]Game Server initialized", ConsoleColor.Cyan);
-
-                    // ロビーサーバーの初期化
-                    var lobbyServerManager = LobbyServerManager.Instance;
-                    ConsoleWrite.WriteMessage("[LOBBY] Lobby Server initialized", ConsoleColor.Cyan);
-
-                    //var monitorTask = Task.Run(() => MonitorTask(cts.Token), cts.Token).ConfigureAwait(false);
-
-
-
 
                     while (!IsEnd)
                     {
-                        // UDPサーバーの更新
-                        udpServerManager.Update();
-
+                        // UDPサーバーの更新は MatchServerV2 の内部ループで自動実行されます
+                        
                         var input = Console.ReadLine();
+
 
                         if (string.IsNullOrWhiteSpace(input))
                         {
@@ -291,16 +266,6 @@ using Autofac;
                     ServerManager.Instance.SaveSetting();
                     batchService.Stop();
                     batchService.Dispose();
-
-                    // UDPサーバーのシャットダウン（ヌルチェック）
-                    if (udpServerManager != null)
-                    {
-                        udpServerManager.Shutdown();
-                    }
-                    else
-                    {
-                        ConsoleWrite.WriteMessage("[WARN] udpServerManager is null, skipping shutdown.", ConsoleColor.Yellow);
-                    }
                 }
             }
             else

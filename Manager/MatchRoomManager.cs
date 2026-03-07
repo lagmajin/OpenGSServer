@@ -94,7 +94,7 @@ namespace OpenGSServer
                 var setting = waitRoom.GetOrCreateSetting();
                 var ownerId = waitRoom.GetFirstPlayerId();
                 var bus = new MatchRoomEventBus();
-                var matchRoom = MatchRoomFactory.CreateMatchRoom(roomNumberCount, waitRoom.RoomName, ownerId, setting, this);
+                var matchRoom = MatchRoomFactory.CreateMatchRoom(roomNumberCount, waitRoom.RoomName, ownerId, setting, bus);
                 matchRoom.AddNewPlayers(waitRoom.AllPlayers());
                 
                 // アイテムイベントの購読
@@ -125,7 +125,23 @@ namespace OpenGSServer
                     foreach (var p in matchRoom.Players)
                     {
                         var session = LobbyServerManager.Instance().GetSession(p.Id);
-                        session?.Send(result);
+                        if (session != null)
+                        {
+                            var perPlayerResult = new JObject(result);
+                            perPlayerResult["MyTeam"] = p.Team.ToString();
+                            session.Send(perPlayerResult);
+                        }
+                    }
+                };
+                bus.OnGameEnded += () => {
+                    // UDPで全プレイヤーにMatchEndedを通知（クライアント側でリザルト画面への遷移を促す）
+                    var firstPlayer = matchRoom.Players.Find(p => !string.IsNullOrEmpty(p.Id));
+                    if (firstPlayer != null && int.TryParse(firstPlayer.Id, out var peerId))
+                    {
+                        MatchServerV2.Instance.BroadcastToRoom(peerId, "MatchEnded", writer => {
+                            // 追加データが必要な場合はここに書く
+                        });
+                        ConsoleWrite.WriteMessage($"[Match] Broadcasted MatchEnded via UDP to Room: {matchRoom.RoomName}", ConsoleColor.Cyan);
                     }
                 };
 
