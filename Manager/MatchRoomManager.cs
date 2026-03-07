@@ -96,6 +96,32 @@ namespace OpenGSServer
                 var bus = new MatchRoomEventBus();
                 var matchRoom = MatchRoomFactory.CreateMatchRoom(roomNumberCount, waitRoom.RoomName, ownerId, setting, this);
                 matchRoom.AddNewPlayers(waitRoom.AllPlayers());
+                
+                // アイテムイベントの購読
+                bus.OnItemSpawned += (type, id) => {
+                    var json = new JObject();
+                    json["MessageType"] = MessageType.ItemSpawnNotification;
+                    json["ItemType"] = type.ToString();
+                    json["SpawnPointId"] = id;
+                    
+                    // ルーム内の全プレイヤーに通知
+                    foreach (var p in matchRoom.Players)
+                    {
+                        var session = LobbyServerManager.Instance().GetSession(p.Id);
+                        session?.Send(json);
+                    }
+                };
+                bus.OnItemDespawned += () => {
+                    var json = new JObject();
+                    json["MessageType"] = MessageType.ItemDespawnNotification;
+                    
+                    foreach (var p in matchRoom.Players)
+                    {
+                        var session = LobbyServerManager.Instance().GetSession(p.Id);
+                        session?.Send(json);
+                    }
+                };
+
                 waitRoom.LinkMatchRoom(matchRoom);
                 matchRooms.Add(matchRoom.Id, matchRoom);
                 roomEventBuses[matchRoom.Id] = bus;
