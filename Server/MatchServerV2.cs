@@ -1,4 +1,4 @@
-﻿using NetCoreServer;
+using NetCoreServer;
 using System;
 using System.Diagnostics;
 using System.Linq;
@@ -7,6 +7,7 @@ using System.Net.Sockets;
 using System.Threading.Tasks;
 using System.Timers;
 using OpenGSCore; // OpenGSCoreのMatchRoom使用
+using OpenGSServer.Network; // ServerLagCompensationManagerを使用
 
 namespace OpenGSServer
 {
@@ -67,6 +68,9 @@ namespace OpenGSServer
         private readonly Stopwatch _performanceTimer = new();
         private bool _disposed;
 
+        // ラグ補償マネージャー
+        private ServerLagCompensationManager _serverLagCompensationManager;
+
         // パフォーマンス統計
         private int _totalFrames;
         private double _averageFrameTime;
@@ -79,6 +83,7 @@ namespace OpenGSServer
         private MatchServerV2()
         {
             ConsoleWrite.WriteMessage("[Match] Server initializing...", ConsoleColor.Cyan);
+            _serverLagCompensationManager = new ServerLagCompensationManager(); // ラグ補償マネージャーを初期化
             InitializeGameLoop();
         }
 
@@ -146,6 +151,7 @@ namespace OpenGSServer
                     if (room is MatchRoom matchRoom)
                     {
                         UpdateMatchRoom(matchRoom);
+                        _serverLagCompensationManager.Update(Time.deltaTime); // ラグ補償システムを更新
                     }
                 }
 
@@ -174,6 +180,12 @@ namespace OpenGSServer
             {
                 // ゲームシーン更新（OpenGSCore.MatchRoom使用）
                 room.GameUpdate();
+
+                // ラグ補償システムにルーム内のプレイヤーを登録（一時的な場所、本来はプレイヤー参加時に行う）
+                foreach(var player in room.Players)
+                {
+                    _serverLagCompensationManager.AddPlayer(player.Id);
+                }
             }
         }
 
@@ -216,6 +228,7 @@ namespace OpenGSServer
                     if (room is MatchRoom matchRoom)
                     {
                         UpdateMatchRoom(matchRoom);
+                        _serverLagCompensationManager.Update(_gameLoopTimer.IntervalMs / 1000.0f); // ラグ補償システムを更新
                     }
                 });
 
@@ -229,7 +242,7 @@ namespace OpenGSServer
             }
 
             _performanceTimer.Stop();
-            UpdatePerformanceStats(_performanceTimer.Elapsed.TotalMilliseconds);
+            UpdatePerformanceStats(_gameLoopTimer.IntervalMs / 1000.0); // Time.deltaTime はfloatなので変換
         }
 
         /// <summary>
@@ -332,7 +345,7 @@ namespace OpenGSServer
     }
 
     /// <summary>
-    /// サーバー統計情報
+    /// 統計情報
     /// </summary>
     public readonly record struct ServerStats
     {

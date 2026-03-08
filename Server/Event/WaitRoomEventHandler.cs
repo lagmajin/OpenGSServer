@@ -154,7 +154,35 @@ namespace OpenGSServer
             WaitRoomManager.Instance().FindWaitRoom(roomId);
 
 
-        }
+        public static void ReadyRequest(in ClientSession session, IDictionary<string, JToken> dic)
+        {
+            string? roomId = dic.GetStringOrNull("RoomId") ?? dic.GetStringOrNull("RoomID");
+            string? playerId = dic.GetStringOrNull("PlayerId") ?? dic.GetStringOrNull("PlayerID");
+            string? type = dic.GetStringOrNull("MessageType");
 
+            if (roomId == null || playerId == null) return;
+
+            var waitRoom = WaitRoomManager.Instance().FindWaitRoom(roomId);
+            if (waitRoom == null) return;
+
+            lock (waitRoom)
+            {
+                if (waitRoom.Players.TryGetValue(playerId, out var player))
+                {
+                    player.IsReady = (type == "WaitRoomPlayerReady");
+                    
+                    // 部屋の全プレイヤーに通知
+                    var updateJson = new JObject();
+                    updateJson["MessageType"] = "WaitRoomUpdateNotification";
+                    updateJson["RoomInfo"] = waitRoom.ToJson();
+
+                    foreach (var p in waitRoom.Players.Values)
+                    {
+                        var targetSession = LobbyServerManager.Instance().FindSessionByPlayerId(p.Id);
+                        targetSession?.SendAsyncJsonWithTimeStamp(updateJson);
+                    }
+                }
+            }
+        }
     }
 }

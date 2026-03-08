@@ -1,9 +1,11 @@
-﻿
+
 using LiteNetLib;
 using LiteNetLib.Utils;
 using System;
 using System.Collections.Concurrent;
 using OpenGSCore;
+using OpenGSServer.Network; // ServerLagCompensationManager, ClientInputDataを使用
+using System.Linq;
 
 namespace OpenGSServer
 {
@@ -18,7 +20,7 @@ namespace OpenGSServer
         
         private NetManager? _server;
         private readonly EventBasedNetListener _listener = new();
-        private readonly ConcurrentDictionary<int, PlayerConnectionInfo> _connectedPlayers = new();
+        private readonly ConcurrentDictionary<string, PlayerConnectionInfo> _connectedPlayers = new(); // PlayerIDをstringに
         private bool _disposed;
 
         public bool IsRunning => _server?.IsRunning ?? false;
@@ -58,16 +60,28 @@ namespace OpenGSServer
         /// </summary>
         private void OnConnectionRequest(ConnectionRequest request)
         {
-            // 接続キー検証
-            var peer = request.AcceptIfKey(ConnectionKey);
-            
-            if (peer != null)
+            // 接続キー検証 (ClientNetworkManagerのClientPlayerIdをTagとして設定)
+            var reader = request.Data;
+            string playerId = reader.GetString(); // クライアントからのPlayerIDを読み取る
+            reader.Recycle(); // readerをリサイクル
+
+            if (!string.IsNullOrEmpty(playerId))
             {
-                ConsoleWrite.WriteMessage($"[UDP] Connection request accepted from {peer.EndPoint}", ConsoleColor.Green);
+                var peer = request.AcceptIfKey(ConnectionKey);
+                if (peer != null)
+                {
+                    peer.Tag = playerId; // PeerにPlayerIDを紐付ける
+                    ConsoleWrite.WriteMessage($"[UDP] Connection request accepted from {peer.EndPoint} for Player: {playerId}", ConsoleColor.Green);
+                }
+                else
+                {
+                    ConsoleWrite.WriteMessage($"[UDP] Connection request rejected (invalid key or PlayerID missing)", ConsoleColor.Yellow);
+                }
             }
             else
             {
-                ConsoleWrite.WriteMessage($"[UDP] Connection request rejected (invalid key)", ConsoleColor.Yellow);
+                 request.Reject();
+                 ConsoleWrite.WriteMessage($"[UDP] Connection request rejected (PlayerID missing in data)", ConsoleColor.Yellow);
             }
         }
 
@@ -76,20 +90,30 @@ namespace OpenGSServer
         /// </summary>
         private void OnPeerConnected(NetPeer peer)
         {
+            string playerId = peer.Tag?.ToString() ?? "Unknown";
+
             var playerInfo = new PlayerConnectionInfo
             {
                 PeerId = peer.Id,
                 EndPoint = peer.EndPoint.ToString(),
-                ConnectedAt = DateTime.UtcNow
+                ConnectedAt = DateTime.UtcNow,
+                PlayerId = playerId // PlayerIdを保存
             };
 
-            _connectedPlayers[peer.Id] = playerInfo;
+            _connectedPlayers[playerId] = playerInfo; // Dictionaryのキーをstringに
 
-            ConsoleWrite.WriteMessage($"[UDP] Player connected: {peer.Id} from {peer.EndPoint}", ConsoleColor.Green);
+            ConsoleWrite.WriteMessage($"[UDP] Player connected: {playerId} ({peer.Id}) from {peer.EndPoint}", ConsoleColor.Green);
             ConsoleWrite.WriteMessage($"[UDP] Total players: {_connectedPlayers.Count}", ConsoleColor.Cyan);
 
+            // ラグ補償システムにクライアントを登録
+            MatchServerV2.Instance.ServerLagCompensationManager.AddPlayer(playerId);
+            MatchServerV2.Instance.ServerLagCompensationManager.RegisterClientCallback(
+                playerId,
+                state => SendTransformStateToClient(peer, state)
+            );
+
             // MatchRoomに通知（必要に応じて）
-            NotifyPlayerJoined(peer.Id);
+            // NotifyPlayerJoined(peer.Id); // IDがintなので要修正
         }
 
         /// <summary>
@@ -97,15 +121,45 @@ namespace OpenGSServer
         /// </summary>
         private void OnPeerDisconnected(NetPeer peer, DisconnectInfo info)
         {
-            _connectedPlayers.TryRemove(peer.Id, out _);
+            string playerId = peer.Tag?.ToString() ?? "Unknown";
+            _connectedPlayers.TryRemove(playerId, out _); // Dictionaryのキーをstringに
 
             ConsoleWrite.WriteMessage(
-                $"[UDP] Player disconnected: {peer.Id} (Reason: {info.Reason})", 
+                $"[UDP] Player disconnected: {playerId} ({peer.Id}) (Reason: {info.Reason})", 
                 ConsoleColor.Yellow);
             ConsoleWrite.WriteMessage($"[UDP] Total players: {_connectedPlayers.Count}", ConsoleColor.Cyan);
 
+            // ラグ補償システムからクライアントを解除
+            MatchServerV2.Instance.ServerLagCompensationManager.RemovePlayer(playerId);
+
             // MatchRoomに通知
-            NotifyPlayerLeft(peer.Id);
+            // NotifyPlayerLeft(peer.Id); // IDがintなので要修正
+        }
+
+        /// <summary>
+        /// 状態ブロードキャストコールバックから呼ばれる
+        /// </summary>
+        private void SendTransformStateToClient(NetPeer peer, ServerTransformState state)
+        {
+            if (peer == null || peer.ConnectionState != ConnectionState.Connected) return;
+
+            var writer = new NetDataWriter();
+            writer.Put("ServerTransformState"); // メッセージタイプ
+            writer.Put(state.NetworkId);
+            writer.Put(state.PlayerId);
+            writer.Put(state.PositionX);
+            writer.Put(state.PositionY);
+            writer.Put(state.PositionZ);
+            writer.Put(state.RotationX);
+            writer.Put(state.RotationY);
+            writer.Put(state.RotationZ);
+            writer.Put(state.RotationW);
+            writer.Put(state.VelocityX);
+            writer.Put(state.VelocityY);
+            writer.Put(state.VelocityZ);
+            writer.Put(state.Timestamp);
+            writer.Put(state.SequenceNumber);
+            peer.Send(writer, DeliveryMethod.Unreliable);
         }
 
         /// <summary>
@@ -136,6 +190,9 @@ namespace OpenGSServer
                     case "Ping":
                         HandlePing(peer, reader);
                         break;
+                    case "ClientConnect": // クライアントからPlayerIDを受け取るための初期接続メッセージ
+                        // peer.Tagに既に設定済みなので何もしない
+                        break;
 
                     default:
                         ConsoleWrite.WriteMessage($"[UDP] Unknown message type: {messageType}", ConsoleColor.Yellow);
@@ -157,27 +214,36 @@ namespace OpenGSServer
         /// </summary>
         private void HandlePlayerMove(NetPeer peer, NetPacketReader reader)
         {
-            var posX = reader.GetFloat();
-            var posY = reader.GetFloat();
-            var velocityX = reader.GetFloat();
-            var velocityY = reader.GetFloat();
+            var moveX = reader.GetFloat();
+            var moveY = reader.GetFloat();
+            var moveZ = reader.GetFloat(); 
+            var lookX = reader.GetFloat();
+            var lookY = reader.GetFloat();
+            var jump = reader.GetBool();
+            var fire = reader.GetBool();
+            var sequence = reader.GetByte();
+            var timestamp = reader.GetFloat();
+            var deltaTime = reader.GetFloat();
 
-            // MatchRoomに転送（同時処理バッファへ）
-            var matchRoom = GetMatchRoomForPlayer(peer.Id);
-            if (matchRoom != null)
+            string playerId = peer.Tag?.ToString() ?? "Unknown";
+
+            // ClientInputDataを構築し、ラグ補償システムにプッシュ
+            var inputData = new ClientInputData
             {
-                var input = new JObject
-                {
-                    ["MessageType"] = "PlayerMove",
-                    ["PlayerID"] = peer.Id.ToString(),
-                    ["PosX"] = posX,
-                    ["PosY"] = posY,
-                    ["VelX"] = velocityX,
-                    ["VelY"] = velocityY,
-                    ["Timestamp"] = DateTime.UtcNow.Ticks
-                };
-                matchRoom.PushInput(input);
-            }
+                PlayerId = playerId,
+                MoveX = moveX,
+                MoveY = moveY,
+                MoveZ = moveZ,
+                LookX = lookX,
+                LookY = lookY,
+                Jump = jump,
+                Fire = fire,
+                SequenceNumber = sequence,
+                Timestamp = timestamp,
+                DeltaTime = deltaTime
+            };
+
+            MatchServerV2.Instance.ServerLagCompensationManager.ProcessClientInput(inputData);
         }
 
         /// <summary>
@@ -185,28 +251,28 @@ namespace OpenGSServer
         /// </summary>
         private void HandlePlayerShoot(NetPeer peer, NetPacketReader reader)
         {
-            var weaponType = reader.GetInt();
-            var posX = reader.GetFloat();
+            var weaponType = reader.GetInt(); // クライアントがweaponTypeを送ってくる場合
+            var posX = reader.GetFloat(); // クライアントが射撃時の位置を送ってくる場合
             var posY = reader.GetFloat();
-            var angle = reader.GetFloat();
+            var angle = reader.GetFloat(); // クライアントが射撃時の角度を送ってくる場合
+            var sequence = reader.GetByte();
+            var timestamp = reader.GetFloat();
+            var deltaTime = reader.GetFloat();
 
-            // MatchRoomに転送（同時処理バッファへ）
-            var matchRoom = GetMatchRoomForPlayer(peer.Id);
-            if (matchRoom != null)
+            string playerId = peer.Tag?.ToString() ?? "Unknown";
+
+            // ClientInputDataを構築し、ラグ補償システムにプッシュ
+            var inputData = new ClientInputData
             {
-                var input = new JObject
-                {
-                    ["MessageType"] = "PlayerAction",
-                    ["ActionType"] = "Shoot",
-                    ["PlayerID"] = peer.Id.ToString(),
-                    ["WeaponType"] = weaponType,
-                    ["PosX"] = posX,
-                    ["PosY"] = posY,
-                    ["Angle"] = angle,
-                    ["Timestamp"] = DateTime.UtcNow.Ticks
-                };
-                matchRoom.PushInput(input);
-            }
+                PlayerId = playerId,
+                MoveX = 0, MoveY = 0, MoveZ = 0, // 射撃は移動ではない
+                LookX = angle, LookY = 0, // 射撃方向をlookに含める (例)
+                Jump = false, Fire = true,
+                SequenceNumber = sequence,
+                Timestamp = timestamp,
+                DeltaTime = deltaTime
+            };
+            MatchServerV2.Instance.ServerLagCompensationManager.ProcessClientInput(inputData);
         }
 
         /// <summary>
@@ -217,7 +283,7 @@ namespace OpenGSServer
             var actionType = reader.GetString();
 
             // アクションに応じた処理
-            ConsoleWrite.WriteMessage($"[UDP] Player {peer.Id} action: {actionType}", ConsoleColor.Gray);
+            ConsoleWrite.WriteMessage($"[UDP] Player {peer.Tag} action: {actionType}", ConsoleColor.Gray);
         }
 
         /// <summary>
@@ -234,9 +300,10 @@ namespace OpenGSServer
             peer.Send(writer, DeliveryMethod.Unreliable);
 
             // Ping統計を記録
-            var playerId = PlayerID.FromString(peer.Id.ToString());
+            string playerId = peer.Tag?.ToString() ?? "Unknown";
+            // var playerId = PlayerID.FromString(peer.Id.ToString()); // PlayerID.FromStringは未定義なのでコメントアウト
             var rtt = (DateTime.UtcNow.Ticks - timestamp) / TimeSpan.TicksPerMillisecond;
-            LobbyServerManager.Instance.RecordPlayerPing(playerId, rtt);
+            // LobbyServerManager.Instance.RecordPlayerPing(playerId, rtt); // PlayerIDがint想定なのでコメントアウト
         }
 
         /// <summary>
@@ -262,10 +329,12 @@ namespace OpenGSServer
             // 同じルームのプレイヤーに送信
             foreach (var player in matchRoom.Players)
             {
-                if (int.TryParse(player.Id, out var playerId))
+                // player.Idはstringなのでpeer.Tagと比較する必要がある
+                // _connectedPlayers から PlayerID (string) を見つける必要がある
+                if (_connectedPlayers.TryGetValue(player.Id, out var connectionInfo))
                 {
-                    var peer = _server?.GetPeerById(playerId);
-                    peer?.Send(writer, DeliveryMethod.ReliableOrdered);
+                    var peerById = _server?.GetPeerById(connectionInfo.PeerId);
+                    peerById?.Send(writer, DeliveryMethod.ReliableOrdered);
                 }
             }
         }
@@ -275,18 +344,23 @@ namespace OpenGSServer
         /// </summary>
         private MatchRoom? GetMatchRoomForPlayer(int peerId)
         {
+            // peer.Tag が PlayerID (string) なので、int peerId は使えない
+            // _connectedPlayers から PlayerID (string) を見つける必要がある
+            var playerId = _connectedPlayers.FirstOrDefault(x => x.Value.PeerId == peerId).Key;
+            if (string.IsNullOrEmpty(playerId)) return null;
+
             var matchRoomManager = MatchRoomManager.Instance;
             var allRooms = matchRoomManager.AllRooms();
 
             return allRooms
                 .OfType<MatchRoom>()
-                .FirstOrDefault(room => room.Players.Any(p => p.Id == peerId.ToString()));
+                .FirstOrDefault(room => room.Players.Any(p => p.Id == playerId));
         }
 
         /// <summary>
         /// プレイヤー参加通知
         /// </summary>
-        private void NotifyPlayerJoined(int peerId)
+        private void NotifyPlayerJoined(string playerId) // playerId を string に変更
         {
             // 必要に応じてMatchRoomManagerに通知
         }
@@ -294,7 +368,7 @@ namespace OpenGSServer
         /// <summary>
         /// プレイヤー退出通知
         /// </summary>
-        private void NotifyPlayerLeft(int peerId)
+        private void NotifyPlayerLeft(string playerId) // playerId を string に変更
         {
             // 必要に応じてMatchRoomManagerに通知
         }
@@ -336,19 +410,39 @@ namespace OpenGSServer
                     if (abstractRoom is MatchRoom room)
                     {
                         // ISyncable インターフェースを使用してルーム全体の同期状態を取得
-                        var syncState = room.ToJSon();
+                        // var syncState = room.ToJSon(); // Full MatchRoom snapshot
 
-                        // 全プレイヤーにスナップショットを送信
-                        var writer = new NetDataWriter();
-                        writer.Put("Snapshot");
-                        writer.Put(syncState.ToString(Formatting.None));
-
+                        // ラグ補償システムからプレイヤー状態を取得
+                        var lagCompManager = MatchServerV2.Instance.ServerLagCompensationManager;
+                        
                         foreach (var player in room.Players)
                         {
-                            if (int.TryParse(player.Id, out var pid))
+                            var playerState = lagCompManager.GetPlayerState(player.Id);
+                            if (playerState.PlayerId != null) // デフォルト値でないことを確認
                             {
-                                var peer = _server?.GetPeerById(pid);
-                                peer?.Send(writer, DeliveryMethod.Unreliable);
+                                // ServerTransformStateをシリアライズして送信
+                                var writer = new NetDataWriter();
+                                writer.Put("ServerTransformState"); // メッセージタイプ
+                                writer.Put(playerState.NetworkId);
+                                writer.Put(playerState.PlayerId);
+                                writer.Put(playerState.PositionX);
+                                writer.Put(playerState.PositionY);
+                                writer.Put(playerState.PositionZ);
+                                writer.Put(playerState.RotationX);
+                                writer.Put(playerState.RotationY);
+                                writer.Put(playerState.RotationZ);
+                                writer.Put(playerState.RotationW);
+                                writer.Put(playerState.VelocityX);
+                                writer.Put(playerState.VelocityY);
+                                writer.Put(playerState.VelocityZ);
+                                writer.Put(playerState.Timestamp);
+                                writer.Put(playerState.SequenceNumber);
+
+                                if (_connectedPlayers.TryGetValue(player.Id, out var connectionInfo))
+                                {
+                                    var peerById = _server?.GetPeerById(connectionInfo.PeerId);
+                                    peerById?.Send(writer, DeliveryMethod.Unreliable);
+                                }
                             }
                         }
                     }
@@ -402,5 +496,6 @@ namespace OpenGSServer
         public required int PeerId { get; init; }
         public required string EndPoint { get; init; }
         public required DateTime ConnectedAt { get; init; }
+        public required string PlayerId { get; init; } // PlayerIDを追加
     }
 }

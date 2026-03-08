@@ -134,14 +134,26 @@ namespace OpenGSServer
                     }
                 };
                 bus.OnGameEnded += () => {
-                    // UDPで全プレイヤーにMatchEndedを通知（クライアント側でリザルト画面への遷移を促す）
+                    // UDPで全プレイヤーにMatchEndedを通知
                     var firstPlayer = matchRoom.Players.Find(p => !string.IsNullOrEmpty(p.Id));
                     if (firstPlayer != null && int.TryParse(firstPlayer.Id, out var peerId))
                     {
-                        MatchServerV2.Instance.BroadcastToRoom(peerId, "MatchEnded", writer => {
-                            // 追加データが必要な場合はここに書く
-                        });
+                        MatchServerV2.Instance.BroadcastToRoom(peerId, "MatchEnded", writer => { });
                         ConsoleWrite.WriteMessage($"[Match] Broadcasted MatchEnded via UDP to Room: {matchRoom.RoomName}", ConsoleColor.Cyan);
+                    }
+
+                    // 待機室の状態を更新して全プレイヤーに通知
+                    if (waitRoom != null)
+                    {
+                        var roomInfo = new JObject();
+                        roomInfo["MessageType"] = "WaitRoomUpdateNotification";
+                        roomInfo["RoomInfo"] = waitRoom.ToJson();
+
+                        foreach (var p in waitRoom.Players.Values)
+                        {
+                            var session = LobbyServerManager.Instance.FindSessionByPlayerId(p.Id);
+                            session?.SendAsyncJsonWithTimeStamp(roomInfo);
+                        }
                     }
                 };
 

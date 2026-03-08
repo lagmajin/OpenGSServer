@@ -875,6 +875,11 @@ namespace OpenGSServer
             return false;
         }
 
+        public ClientSession? FindSessionByPlayerId(string playerId)
+        {
+            return _tcpServer?.FindSessionByPlayerId(playerId);
+        }
+
         /// <summary>
         /// クライアントからのメッセージを処理（TCP専用）
         /// </summary>
@@ -905,6 +910,10 @@ namespace OpenGSServer
                     break;
                 case MessageType.LeaveRoomRequest:
                     WaitRoomEventHandler.ExitRoomRequest(clientSession, data);
+                    break;
+                case "WaitRoomPlayerReady":
+                case "WaitRoomPlayerUnready":
+                    WaitRoomEventHandler.ReadyRequest(clientSession, data);
                     break;
                 case MessageType.LobbyChatRequest:
                     // チャット処理
