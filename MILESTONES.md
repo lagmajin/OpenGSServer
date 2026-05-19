@@ -2,6 +2,7 @@
 
 This repository owns the authoritative backend work. The next milestones should
 keep the server runnable while tightening the real lobby and match paths.
+The server should remain fully usable without any Unity client dependency.
 
 ## S0. Startup, Shutdown, And Configuration Cleanup
 
@@ -102,6 +103,28 @@ Done when:
 - there is a repeatable login -> lobby -> room -> match smoke path
 - protocol changes fail fast in scripted validation or a small test harness
 
+## S5. Core-Only Runtime Harness
+
+Goal: keep the backend runnable as a pure C# system even if the Unity client is
+replaced.
+
+Scope:
+- `Core/*`
+- `Network/*`
+- `Server/*`
+- `test_client.py`
+- repeatable headless validation scripts
+
+Why this matters:
+- the server should not depend on Unity scene behavior to validate gameplay
+- a pure core/server loop is the best hedge against future client changes
+- headless tests are easier to automate and maintain than scene-based checks
+
+Done when:
+- core gameplay and room flow can be exercised without Unity assets
+- server smoke tests only rely on core/server code and a lightweight client
+- Unity-specific assumptions are no longer required for backend validation
+
 ## Suggested Order
 
 1. `S0`
@@ -109,3 +132,4 @@ Done when:
 3. `S2`
 4. `S3`
 5. `S4`
+6. `S5`
