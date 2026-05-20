@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
+using OpenGSCore;
 
 namespace OpenGSServer
 {
@@ -19,7 +20,7 @@ namespace OpenGSServer
         {
             var result = new JsonObject();
 
-            result["MessageType"] = "RoomSettingChanged";
+            result["MessageType"] = MessageType.RoomSettingChanged;
             result["GameMode"] = "";
             result[""] = "";
 

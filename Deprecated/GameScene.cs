@@ -7,12 +7,12 @@ using OpenGSCore;
 
 namespace OpenGSServer
 {
-    class GameSceneUpdateInfo
+    public class GameSceneUpdateInfo
     {
-        public Time BeforeTime { get; }
-        public Time CurrentTime { get; }
+        public DateTime BeforeTime { get; }
+        public DateTime CurrentTime { get; }
 
-        public GameSceneUpdateInfo(Time beforeTime, Time currentTime)
+        public GameSceneUpdateInfo(DateTime beforeTime, DateTime currentTime)
         {
             BeforeTime = beforeTime;
             CurrentTime = currentTime;
@@ -28,7 +28,7 @@ namespace OpenGSServer
         private readonly List<AbstractGameObject> _objects = new();
         private readonly Dictionary<string, AbstractGameObject> _objectIndex = new(StringComparer.Ordinal);
         private readonly object _syncRoot = new();
-        private Time _lastUpdateTime;
+        private DateTime _lastUpdateTime;
         private bool _initialized;
 
         public int ObjectCount
@@ -94,7 +94,7 @@ namespace OpenGSServer
             }
         }
 
-        public void UpdateFrame(Time currentTime)
+        public void UpdateFrame(DateTime currentTime)
         {
             if (!_initialized)
             {
@@ -109,7 +109,7 @@ namespace OpenGSServer
 
         public void UpdateFrame(GameSceneUpdateInfo updateInfo)
         {
-            var dt = (updateInfo.CurrentTime - updateInfo.BeforeTime).TotalSeconds();
+            var dt = (updateInfo.CurrentTime - updateInfo.BeforeTime).TotalSeconds;
 
             foreach (var obj in Snapshot())
             {

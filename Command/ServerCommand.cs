@@ -66,10 +66,10 @@ namespace OpenGSServer
 
                 if (inQuotes)
                 {
-                    if (ch == '' && i + 1 < input.Length)
+                    if (ch == '\\' && i + 1 < input.Length)
                     {
                         var next = input[i + 1];
-                        if (next == quoteChar || next == '')
+                        if (next == quoteChar || next == '\\')
                         {
                             current.Append(next);
                             i++;
@@ -101,7 +101,7 @@ namespace OpenGSServer
                     continue;
                 }
 
-                if (ch == '"' || ch == ''')
+                if (ch == '"' || ch == '\'')
                 {
                     inQuotes = true;
                     quoteChar = ch;

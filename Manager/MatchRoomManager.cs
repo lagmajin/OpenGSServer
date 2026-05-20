@@ -107,7 +107,7 @@ namespace OpenGSServer
                     // ルーム内の全プレイヤーに通知
                     foreach (var p in matchRoom.Players)
                     {
-                        var session = LobbyServerManager.Instance().GetSession(p.Id);
+                        var session = LobbyServerManager.Instance.GetSession(p.Id);
                         session?.Send(json);
                     }
                 };
@@ -117,14 +117,14 @@ namespace OpenGSServer
                     
                     foreach (var p in matchRoom.Players)
                     {
-                        var session = LobbyServerManager.Instance().GetSession(p.Id);
+                        var session = LobbyServerManager.Instance.GetSession(p.Id);
                         session?.Send(json);
                     }
                 };
                 bus.OnGameEndedWithResult += (result) => {
                     foreach (var p in matchRoom.Players)
                     {
-                        var session = LobbyServerManager.Instance().GetSession(p.Id);
+                        var session = LobbyServerManager.Instance.GetSession(p.Id);
                         if (session != null)
                         {
                             var perPlayerResult = new JObject(result);
@@ -146,7 +146,7 @@ namespace OpenGSServer
                     if (waitRoom != null)
                     {
                         var roomInfo = new JObject();
-                        roomInfo["MessageType"] = "WaitRoomUpdateNotification";
+                        roomInfo["MessageType"] = MessageType.WaitRoomUpdateNotification;
                         roomInfo["RoomInfo"] = waitRoom.ToJson();
 
                         foreach (var p in waitRoom.Players.Values)

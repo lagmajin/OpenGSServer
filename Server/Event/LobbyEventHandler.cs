@@ -158,7 +158,7 @@ namespace OpenGSServer
 
 
                 var json = new JObject();
-                json["MessageType"] = "CreateNewWaitRoomSuccess";
+                json["MessageType"] = MessageType.CreateNewWaitRoomSuccess;
                 json["RoomInfo"]=roomInfoJson;
 
                 session.SendAsyncJsonWithTimeStamp(json);
@@ -334,7 +334,7 @@ namespace OpenGSServer
 
             var result = new JObject();
 
-            result["MessageType"] = "UpdateRoomResult";
+            result["MessageType"] = MessageType.UpdateRoomResult;
             //result["LobbyUserCount"] = "";
             result["RoomCount"] = rooms.Count;
 

@@ -1,5 +1,6 @@
 ﻿
 using Newtonsoft.Json.Linq;
+using OpenGSCore;
 
 namespace OpenGSServer
 {
@@ -17,7 +18,7 @@ namespace OpenGSServer
         {
             var result = new JObject();
 
-            result["MessageType"] = "LobbyInfo";
+            result["MessageType"] = MessageType.LobbyInfo;
             result["UserOnLobby"] = userCount.ToString();
             result[""] = "";
 

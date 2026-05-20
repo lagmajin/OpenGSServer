@@ -911,8 +911,8 @@ namespace OpenGSServer
                 case MessageType.LeaveRoomRequest:
                     WaitRoomEventHandler.ExitRoomRequest(clientSession, data);
                     break;
-                case "WaitRoomPlayerReady":
-                case "WaitRoomPlayerUnready":
+                case MessageType.WaitRoomPlayerReady:
+                case MessageType.WaitRoomPlayerUnready:
                     WaitRoomEventHandler.ReadyRequest(clientSession, data);
                     break;
                 case MessageType.LobbyChatRequest:
