@@ -79,6 +79,7 @@ namespace OpenGSServer
         public bool IsRunning { get; private set; }
         public int? TcpPort => _tcpServer?.Endpoint.Port;
         public double AverageFrameTime => _averageFrameTime;
+        public ServerLagCompensationManager ServerLagCompensationManager => _serverLagCompensationManager;
 
         private MatchServerV2()
         {
@@ -151,7 +152,7 @@ namespace OpenGSServer
                     if (room is MatchRoom matchRoom)
                     {
                         UpdateMatchRoom(matchRoom);
-                        _serverLagCompensationManager.Update(Time.deltaTime); // ラグ補償システムを更新
+                        _serverLagCompensationManager.Update((_gameLoopTimer?.IntervalMs ?? 40) / 1000.0f);
                     }
                 }
 
@@ -228,7 +229,7 @@ namespace OpenGSServer
                     if (room is MatchRoom matchRoom)
                     {
                         UpdateMatchRoom(matchRoom);
-                        _serverLagCompensationManager.Update(_gameLoopTimer.IntervalMs / 1000.0f); // ラグ補償システムを更新
+                        _serverLagCompensationManager.Update((_gameLoopTimer?.IntervalMs ?? 40) / 1000.0f);
                     }
                 });
 
@@ -242,7 +243,7 @@ namespace OpenGSServer
             }
 
             _performanceTimer.Stop();
-            UpdatePerformanceStats(_gameLoopTimer.IntervalMs / 1000.0); // Time.deltaTime はfloatなので変換
+            UpdatePerformanceStats(_gameLoopTimer?.IntervalMs ?? 40);
         }
 
         /// <summary>

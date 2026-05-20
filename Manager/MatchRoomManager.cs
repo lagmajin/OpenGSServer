@@ -108,7 +108,7 @@ namespace OpenGSServer
                     foreach (var p in matchRoom.Players)
                     {
                         var session = LobbyServerManager.Instance.GetSession(p.Id);
-                        session?.Send(json);
+                        session?.SendAsyncJsonWithTimeStamp(json);
                     }
                 };
                 bus.OnItemDespawned += () => {
@@ -118,7 +118,7 @@ namespace OpenGSServer
                     foreach (var p in matchRoom.Players)
                     {
                         var session = LobbyServerManager.Instance.GetSession(p.Id);
-                        session?.Send(json);
+                        session?.SendAsyncJsonWithTimeStamp(json);
                     }
                 };
                 bus.OnGameEndedWithResult += (result) => {
@@ -129,7 +129,7 @@ namespace OpenGSServer
                         {
                             var perPlayerResult = new JObject(result);
                             perPlayerResult["MyTeam"] = p.Team.ToString();
-                            session.Send(perPlayerResult);
+                            session.SendAsyncJsonWithTimeStamp(perPlayerResult);
                         }
                     }
                 };
@@ -182,6 +182,28 @@ namespace OpenGSServer
             {
                 return new List<AbstractGameRoom>(matchRooms.Values);
             }
+        }
+
+        public void AddRoom(OpenGSCore.MatchRoom room)
+        {
+            if (room == null)
+            {
+                return;
+            }
+
+            lock (matchRoomsLock)
+            {
+                matchRooms[room.Id] = room;
+                if (!roomEventBuses.ContainsKey(room.Id))
+                {
+                    roomEventBuses[room.Id] = new MatchRoomEventBus();
+                }
+            }
+        }
+
+        public AbstractGameRoom? FindRoom(string roomId)
+        {
+            return GetRoomById(roomId);
         }
 
         public CreateNewRoomResult CreateNewRoom(in string roomName, in string ownerID, AbstractMatchSetting setting)

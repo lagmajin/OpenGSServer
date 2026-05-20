@@ -159,7 +159,7 @@ namespace OpenGSServer.Network
 
             float dx = state.PosX - clientX;
             float dy = state.PosY - clientY;
-            dz = state.PosZ - clientZ;
+            float dz = state.PosZ - clientZ;
             float distance = (float)Math.Sqrt(dx * dx + dy * dy + dz * dz);
 
             return distance <= MaxPositionTolerance;

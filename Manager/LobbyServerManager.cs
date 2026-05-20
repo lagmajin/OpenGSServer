@@ -880,6 +880,11 @@ namespace OpenGSServer
             return _tcpServer?.FindSessionByPlayerId(playerId);
         }
 
+        public ClientSession? GetSession(string playerId)
+        {
+            return FindSessionByPlayerId(playerId);
+        }
+
         /// <summary>
         /// クライアントからのメッセージを処理（TCP専用）
         /// </summary>

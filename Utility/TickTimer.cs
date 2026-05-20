@@ -21,6 +21,8 @@ namespace OpenGSServer
         bool _loop = true;
         Thread _task;
 
+        public int IntervalMs => _period;
+
         public TickTimer(TimerCallback callback, object state, int dueTime, int period)
         {
             _cb = callback;

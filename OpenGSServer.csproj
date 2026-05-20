@@ -29,6 +29,7 @@
 
     <Compile Remove="Game\GameScene.cs" />
     <Compile Remove="Server\Event\LobbyEventHandlerV2.cs" />
+    <Compile Remove="Deprecated\**" />
     <EmbeddedResource Remove="Build\**" />
     <EmbeddedResource Remove="Script\**" />
     <EmbeddedResource Remove="Server\TCP\**" />

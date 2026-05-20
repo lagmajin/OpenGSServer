@@ -41,6 +41,8 @@ namespace OpenGSServer
         public string LastLoginTimeUtc { get; set; }
         public string LastUpdatedUtc { get; set; }
         public EAccountStatus Status { get; set; } = EAccountStatus.Active;
+        public int Level { get; set; } = 1;
+        public long Exp { get; set; } = 0;
         public PlayerLifeTimeScore LifeTimeScore { get; set; } = new();
         public List<string> ProfileTags { get; set; } = new();
 

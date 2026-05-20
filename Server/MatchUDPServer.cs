@@ -317,7 +317,7 @@ namespace OpenGSServer
         /// <summary>
         /// ルーム内のプレイヤーにブロードキャスト
         /// </summary>
-        private void BroadcastToRoom(int senderId, string messageType, Action<NetDataWriter> writeData)
+        public void BroadcastToRoom(int senderId, string messageType, Action<NetDataWriter> writeData)
         {
             var matchRoom = GetMatchRoomForPlayer(senderId);
             if (matchRoom == null) return;

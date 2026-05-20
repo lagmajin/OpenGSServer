@@ -99,6 +99,29 @@ namespace OpenGSServer
             return data;
         }
 
+        public DBAccount? GetAccount(string accountId)
+        {
+            if (string.IsNullOrWhiteSpace(accountId))
+            {
+                return null;
+            }
+
+            if (db == null)
+            {
+                Connect();
+            }
+
+            var col = db?.GetCollection<DBAccount>(accountTableName);
+            if (col == null)
+            {
+                return null;
+            }
+
+            return col.FindOne(Query.EQ("AccountID", accountId))
+                ?? col.FindOne(Query.EQ("AccountId", accountId))
+                ?? col.FindOne(Query.EQ("Id", accountId));
+        }
+
         public void GetPlayerInfo(in string account)
         {
             var col = db?.GetCollection<DBAccount>(accountTableName);

@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Antlr4.Runtime.Tree.Pattern;
 using OpenGSCore;
+using Newtonsoft.Json.Linq;
 
 namespace OpenGSServer
 {
@@ -25,47 +26,8 @@ namespace OpenGSServer
     {
     }
 
-    public class MatchRoomEventBus : AbstractEventBus
+    public class MatchRoomEventBus : OpenGSCore.MatchRoomEventBus
     {
-        private OpenGSCore.MatchRoom room;
-        private MatchRoomManager roomManager;
-        private List<IMatchSubscriber> subscribers = new List<IMatchSubscriber>();
-
-        public MatchRoomEventBus()
-        {
-            Console.WriteLine("Match RoomEventBus");
-        }
-
-        public void setMatchRoom(OpenGSCore.MatchRoom room)
-        {
-            this.room = room;
-        }
-
-        public void setMatchRoomManager(MatchRoomManager manager)
-        {
-            this.roomManager = manager;
-        }
-
-        public void setNetworkManager()
-        {
-        }
-
-        public void AddSubscriber(IMatchSubscriber subscriber)
-        {
-            if (subscriber != null && !subscribers.Contains(subscriber))
-            {
-                subscribers.Add(subscriber);
-            }
-        }
-
-        public void RemoveSubscriber(IMatchSubscriber subscriber)
-        {
-            if (subscriber != null && subscribers.Contains(subscriber))
-            {
-                subscribers.Remove(subscriber);
-            }
-        }
-
         public void PublishLoadingStart()
         {
             Console.WriteLine("LoadingStart");
@@ -74,31 +36,16 @@ namespace OpenGSServer
         public void PublishGameStart()
         {
             Console.WriteLine("GameStart");
-            foreach (var subscriber in subscribers)
-            {
-                subscriber.OnMatchEnd(); // 必要に応じて適切なイベントメソッドに変更
-            }
         }
 
         public void PublishGameEnd()
         {
-            Console.WriteLine("GameEnd");
-            foreach (var subscriber in subscribers)
-            {
-                subscriber.OnMatchEnd();
-            }
+            base.PublishGameEnd();
         }
 
-        public void PublishMatchResult(MatchResult result)
+        public void PublishGameEndWithResult(JObject result)
         {
-            foreach (var subscriber in subscribers)
-            {
-                subscriber.OnReceiveMatchResult(result);
-            }
-        }
-
-        public void PublishGameUpdateFromClient()
-        {
+            base.PublishGameEndWithResult(result);
         }
 
         public void PublishMatchStarted(OpenGSCore.MatchRoom room)
@@ -119,6 +66,16 @@ namespace OpenGSServer
         public void PublishPlayerLeft(OpenGSCore.MatchRoom room, PlayerAccount player)
         {
             Console.WriteLine($"Player left: {player.Name} from {room.RoomName}");
+        }
+
+        public void PublishItemSpawn(EFieldItemType type, int spawnPointId)
+        {
+            base.PublishItemSpawn(type, spawnPointId);
+        }
+
+        public void PublishItemDespawn()
+        {
+            base.PublishItemDespawn();
         }
     }
 }
