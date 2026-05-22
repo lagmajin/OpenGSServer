@@ -35,6 +35,109 @@ namespace OpenGSServer
             }
         }
 
+        private static WaitRoom? FindWaitRoomByPlayerId(string playerId)
+        {
+            if (string.IsNullOrWhiteSpace(playerId))
+            {
+                return null;
+            }
+
+            foreach (var room in WaitRoomManager.Instance().GetAllRooms())
+            {
+                if (room.Players.ContainsKey(playerId))
+                {
+                    return room;
+                }
+            }
+
+            return null;
+        }
+
+        private static bool TryResolveWaitRoom(IDictionary<string, JToken> dic, string playerId, out WaitRoom? waitRoom)
+        {
+            var roomId = dic.GetStringOrNull("RoomId") ?? dic.GetStringOrNull("RoomID");
+            waitRoom = null;
+
+            if (!string.IsNullOrWhiteSpace(roomId))
+            {
+                waitRoom = WaitRoomManager.Instance().FindWaitRoom(roomId);
+            }
+
+            if (waitRoom != null && !string.IsNullOrWhiteSpace(playerId) && !waitRoom.Players.ContainsKey(playerId))
+            {
+                waitRoom = null;
+            }
+
+            if (waitRoom == null)
+            {
+                waitRoom = FindWaitRoomByPlayerId(playerId);
+            }
+
+            return waitRoom != null;
+        }
+
+        private static bool TryParsePlayerCharacter(JToken token, out EPlayerCharacter playerCharacter)
+        {
+            playerCharacter = default;
+            if (token == null)
+            {
+                return false;
+            }
+
+            var raw = token.ToString();
+            if (Enum.TryParse(raw, true, out EPlayerCharacter parsed))
+            {
+                playerCharacter = parsed;
+                return true;
+            }
+
+            if (int.TryParse(raw, out var numeric) && Enum.IsDefined(typeof(EPlayerCharacter), numeric))
+            {
+                playerCharacter = (EPlayerCharacter)numeric;
+                return true;
+            }
+
+            return false;
+        }
+
+        private static List<EInstantItemType> ParseInstantItems(JToken token)
+        {
+            var instantItems = new List<EInstantItemType>();
+
+            if (token?.Type != JTokenType.Array)
+            {
+                return instantItems;
+            }
+
+            foreach (var itemToken in token.Children())
+            {
+                if (itemToken == null)
+                {
+                    continue;
+                }
+
+                var raw = itemToken.ToString();
+                if (string.IsNullOrWhiteSpace(raw))
+                {
+                    continue;
+                }
+
+                if (Enum.TryParse(raw, true, out EInstantItemType parsed))
+                {
+                    instantItems.Add(parsed);
+                    continue;
+                }
+
+                if (int.TryParse(raw, out var numeric) &&
+                    Enum.IsDefined(typeof(EInstantItemType), numeric))
+                {
+                    instantItems.Add((EInstantItemType)numeric);
+                }
+            }
+
+            return instantItems;
+        }
+
         public static void ChangePlayerSettting(in ClientSession session, IDictionary<string, JToken> dic)
         {
             var playerId = dic.GetStringOrNull("PlayerId");
@@ -43,16 +146,111 @@ namespace OpenGSServer
                 return;
             }
 
-            if (dic.TryGetValue("PlayerCharacter", out var playerCharacterToken))
+            if (!TryResolveWaitRoom(dic, playerId, out var waitRoom) || waitRoom == null)
             {
-                _ = playerCharacterToken?.ToString();
+                return;
             }
 
-            if (dic.TryGetValue("EquipInstantItems", out var instantItemToken) &&
-                instantItemToken.Type == JTokenType.Array)
+            bool changed = false;
+            lock (waitRoom)
             {
-                // TODO: core 側の PlayerInfo / WaitRoomPlayerInfo に揃える
+                if (!waitRoom.Players.TryGetValue(playerId, out var player))
+                {
+                    return;
+                }
+
+                if (dic.TryGetValue("PlayerCharacter", out var playerCharacterToken) &&
+                    TryParsePlayerCharacter(playerCharacterToken, out var playerCharacter))
+                {
+                    player.playerCharacter = playerCharacter;
+                    changed = true;
+                }
+
+                if (dic.TryGetValue("EquipInstantItems", out var instantItemToken))
+                {
+                    player.EquipInstantItems = ParseInstantItems(instantItemToken);
+                    changed = true;
+                }
             }
+
+            if (changed)
+            {
+                BroadcastRoomUpdate(waitRoom, MessageType.WaitRoomUpdateNotification);
+            }
+        }
+
+        public static void LoadingStartedRequest(in ClientSession session, IDictionary<string, JToken> dic)
+        {
+            var playerId = dic.GetStringOrNull("PlayerId") ?? dic.GetStringOrNull("PlayerID");
+            if (string.IsNullOrWhiteSpace(playerId))
+            {
+                return;
+            }
+
+            if (!TryResolveWaitRoom(dic, playerId, out var waitRoom) || waitRoom == null)
+            {
+                return;
+            }
+
+            bool changed = false;
+            lock (waitRoom)
+            {
+                if (waitRoom.Players.TryGetValue(playerId, out var player))
+                {
+                    player.IsReady = false;
+                    changed = true;
+                }
+            }
+
+            if (!changed)
+            {
+                return;
+            }
+
+            session.SendAsyncJsonWithTimeStamp(new JObject
+            {
+                ["MessageType"] = MessageType.LoadingStartedNotification,
+                ["RoomInfo"] = waitRoom.ToJson()
+            });
+
+            BroadcastRoomUpdate(waitRoom, MessageType.WaitRoomUpdateNotification);
+        }
+
+        public static void LoadingCompletedRequest(in ClientSession session, IDictionary<string, JToken> dic)
+        {
+            var playerId = dic.GetStringOrNull("PlayerId") ?? dic.GetStringOrNull("PlayerID");
+            if (string.IsNullOrWhiteSpace(playerId))
+            {
+                return;
+            }
+
+            if (!TryResolveWaitRoom(dic, playerId, out var waitRoom) || waitRoom == null)
+            {
+                return;
+            }
+
+            bool changed = false;
+            lock (waitRoom)
+            {
+                if (waitRoom.Players.TryGetValue(playerId, out var player))
+                {
+                    player.IsReady = true;
+                    changed = true;
+                }
+            }
+
+            if (!changed)
+            {
+                return;
+            }
+
+            session.SendAsyncJsonWithTimeStamp(new JObject
+            {
+                ["MessageType"] = MessageType.LoadingCompletedNotification,
+                ["RoomInfo"] = waitRoom.ToJson()
+            });
+
+            BroadcastRoomUpdate(waitRoom, MessageType.WaitRoomUpdateNotification);
         }
 
         public static void ChangeRoomSetting(in ClientSession session, IDictionary<string, JToken> dic)

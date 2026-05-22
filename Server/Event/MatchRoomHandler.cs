@@ -94,6 +94,16 @@ namespace OpenGSServer
         {
             switch (eventType)
             {
+                case "LoadingStarted":
+                    Console.WriteLine($"Player {playerId} started loading");
+                    break;
+
+                case "LoadingProgress":
+                    var progress = json.GetValue("Progress")?.ToString() ?? json.GetValue("LoadingProgress")?.ToString() ?? "0";
+                    Console.WriteLine($"Player {playerId} loading progress: {progress}");
+                    break;
+
+                case "LoadingCompleted":
                 case "LoadingFinished":
                     room.SetPlayerReady(playerId);
                     break;
