@@ -389,6 +389,21 @@ namespace OpenGSServer
             {
                 lobbyManager.HandleMessage(messageType, json, this);
             }
+            else if (Server is MatchTcpServer)
+            {
+                switch (messageType)
+                {
+                    case MessageType.LoadingStarted:
+                    case MessageType.ClientLoadingSceneEntered:
+                    case MessageType.LoadingProgress:
+                    case MessageType.LoadingCompleted:
+                    case "LoadingFinished":
+                    case "MatchStatusRequest":
+                    case "PlayerRespawn":
+                        InGameMatchEventHandler.HandleTcpSystemEvent(json);
+                        break;
+                }
+            }
 
             // ClientSession自身で処理するメッセージ
             switch (messageType)

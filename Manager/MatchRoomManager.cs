@@ -96,6 +96,36 @@ namespace OpenGSServer
                 var bus = new MatchRoomEventBus();
                 var matchRoom = MatchRoomFactory.CreateMatchRoom(roomNumberCount, waitRoom.RoomName, ownerId, setting, bus);
                 matchRoom.AddNewPlayers(waitRoom.AllPlayers());
+
+                bus.OnLoadingStarted += () =>
+                {
+                    var loadingJson = new JObject
+                    {
+                        ["MessageType"] = MessageType.LoadingStartedNotification,
+                        ["RoomInfo"] = waitRoom.ToJson()
+                    };
+
+                    foreach (var p in waitRoom.Players.Values)
+                    {
+                        var session = LobbyServerManager.Instance.GetSession(p.Id);
+                        session?.SendAsyncJsonWithTimeStamp(loadingJson);
+                    }
+                };
+
+                bus.OnGameStarted += () =>
+                {
+                    var gameStartJson = new JObject
+                    {
+                        ["MessageType"] = MessageType.GameStartNotification,
+                        ["RoomInfo"] = matchRoom.ToJSon()
+                    };
+
+                    foreach (var p in matchRoom.Players)
+                    {
+                        var session = LobbyServerManager.Instance.GetSession(p.Id);
+                        session?.SendAsyncJsonWithTimeStamp(gameStartJson);
+                    }
+                };
                 
                 // アイテムイベントの購読
                 bus.OnItemSpawned += (type, id) => {
@@ -172,7 +202,7 @@ namespace OpenGSServer
         {
             var matchRoom = CreateMatchRoomByWaitRoom(waitRoom);
             if (matchRoom == null) return null;
-            matchRoom.GameStart();
+            matchRoom.StartLoading();
             return matchRoom;
         }
 

@@ -916,9 +916,29 @@ namespace OpenGSServer
                 case MessageType.LeaveRoomRequest:
                     WaitRoomEventHandler.ExitRoomRequest(clientSession, data);
                     break;
+                case MessageType.WaitRoomSettingsChange:
+                    if (data.ContainsKey("RoomName") || data.ContainsKey("Capacity") || data.ContainsKey("GameMode"))
+                    {
+                        WaitRoomEventHandler.ChangeRoomSetting(clientSession, data);
+                    }
+
+                    if (data.ContainsKey("PlayerCharacter") || data.ContainsKey("EquipInstantItems"))
+                    {
+                        WaitRoomEventHandler.ChangePlayerSettting(clientSession, data);
+                    }
+                    break;
                 case MessageType.WaitRoomPlayerReady:
                 case MessageType.WaitRoomPlayerUnready:
                     WaitRoomEventHandler.ReadyRequest(clientSession, data);
+                    break;
+                case MessageType.LoadingStarted:
+                case MessageType.ClientLoadingSceneEntered:
+                    WaitRoomEventHandler.LoadingStartedRequest(clientSession, data);
+                    break;
+                case MessageType.LoadingProgress:
+                    break;
+                case MessageType.LoadingCompleted:
+                    WaitRoomEventHandler.LoadingCompletedRequest(clientSession, data);
                     break;
                 case MessageType.LobbyChatRequest:
                     // チャット処理
