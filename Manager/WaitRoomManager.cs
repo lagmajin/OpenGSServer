@@ -64,7 +64,7 @@ namespace OpenGSServer
 
         public List<WaitRoom> FindWaitRoomsByGameMode(EGameMode mode)
         {
-            return _rooms.Values.Where(r => r.setting != null && r.setting.Mode == mode).ToList();
+            return _rooms.Values.Where(r => r != null && !r.NowPlaying && (mode == EGameMode.Unknown || r.GameMode == mode || (r.setting != null && r.setting.Mode == mode))).ToList();
         }
 
         public bool CloseRoom(string roomId)
@@ -88,24 +88,10 @@ namespace OpenGSServer
             var array = new JArray();
             foreach (var room in _rooms.Values)
             {
-                var roomJson = new JObject
-                {
-                    ["RoomID"] = room.RoomId,
-                    ["RoomName"] = room.RoomName,
-                    ["Capacity"] = room.Capacity,
-                    ["PlayerCount"] = room.Players.Count,
-                    ["NowPlaying"] = room.NowPlaying
-                };
-
-                if (room.setting != null)
-                {
-                    var gameModeJson = new JObject
-                    {
-                        ["Mode"] = room.setting.Mode.ToString(),
-                        ["MaxPlayers"] = room.setting.MaxPlayerCount
-                    };
-                    roomJson["GameMode"] = gameModeJson;
-                }
+                var roomJson = room.ToJson();
+                roomJson["RoomID"] = room.RoomId;
+                roomJson["PlayerCount"] = room.Players.Count;
+                roomJson["RoomCapacity"] = room.Capacity;
 
                 array.Add(roomJson);
             }
