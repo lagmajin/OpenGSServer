@@ -1,19 +1,11 @@
-﻿//global using System;
-
-
-//global using System;
-
 namespace OpenGSServer
 {
-    public class GlobalConstant
+    public static class GlobalConstant
     {
-        static string MessageType = "MessageType";
-        static string PlayerID = "PlayerID";
-        static string InstantItemNum = "InstantItemNum";
+        public const string MessageType = "MessageType";
+        public const string PlayerID = "PlayerID";
+        public const string InstantItemNum = "InstantItemNum";
+        public const string RoomID = "RoomID";
+        public const string TargetPlayerID = "TargetPlayerID";
     }
-
-   
-
-
-
 }

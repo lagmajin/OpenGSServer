@@ -66,6 +66,8 @@
   - ~~`OpenGSServer\Database\MissionScoreManager.cs`~~
   - ~~`OpenGSServer\Game\Grenade.cs`~~
   - ~~`OpenGSServer\DataBase.cs`~~
+  - ~~`OpenGSServer\Constants\GlobalConstants.cs`~~
+  - ~~`OpenGSServer\Constants\RoomConstants.cs`~~
   - ~~`OpenGSServer\Platform\Windows\WindowsAPI.cs`~~
   - ~~`OpenGSServer\Player\WaitRoomPlayerInfo.cs`~~
   - ~~`OpenGSServer\Result\CreateNewMissionRoom.cs`~~
@@ -188,8 +190,8 @@
 | 12 | `~~OpenGSServer\DataBase.cs~~` | **45** | 4/15 | Extremely thin implementation (LOC=4) | なし |
 | 13 | `~~OpenGSServer\Hash.cs~~` | **45** | 1/13 | Extremely thin implementation (LOC=1) | なし |
 | 14 | `~~OpenGSServer\Account\FriendList.cs~~` | **45** | 2/16 | Extremely thin implementation (LOC=2) | なし |
-| 15 | `OpenGSServer\Constants\GlobalConstants.cs` | **45** | 4/19 | Extremely thin implementation (LOC=4) | なし |
-| 16 | `OpenGSServer\Constants\RoomConstants.cs` | **45** | 2/14 | Extremely thin implementation (LOC=2) | なし |
+| 15 | `~~OpenGSServer\Constants\GlobalConstants.cs~~` | **45** | 4/19 | Extremely thin implementation (LOC=4) | なし |
+| 16 | `~~OpenGSServer\Constants\RoomConstants.cs~~` | **45** | 2/14 | Extremely thin implementation (LOC=2) | なし |
 | 17 | `OpenGSServer\Database\AbstractDatabaseManager.cs` | **45** | 1/15 | Extremely thin implementation (LOC=1) | なし |
 | 18 | `~~OpenGSServer\Database\DBAccountDetail.cs~~` | **45** | 1/12 | Extremely thin implementation (LOC=1) | なし |
 | 19 | `~~OpenGSServer\Database\MissionScoreManager.cs~~` | **45** | 1/12 | Extremely thin implementation (LOC=1) | なし |
