@@ -57,6 +57,8 @@
   - ~~`OpenGSServer\Manager\ServerSettingManager.cs`~~
   - ~~`OpenGSServer\Match\MatchRoomNetwork.cs`~~
   - ~~`OpenGSServer\Match\MatchRoomNetworkFunc.cs`~~
+  - ~~`OpenGSServer\Database\AccountDatabaseManager.cs`~~
+  - ~~`OpenGSServer\Database\MatchDatabaseManager.cs`~~
   - ~~`OpenGSServer\Platform\Windows\WindowsAPI.cs`~~
   - ~~`OpenGSServer\Player\WaitRoomPlayerInfo.cs`~~
   - ~~`OpenGSServer\Result\CreateNewMissionRoom.cs`~~
@@ -86,6 +88,7 @@
   - ~~`OpenGSR\Assets\Scripts\UI\CommonCanvas.cs`~~
   - ~~`OpenGSR\Assets\Scripts\UI\LoadingSceneCanvas.cs`~~
   - ~~`OpenGSR\Assets\Scripts\Scene\ExportAssets\ExportAssetScene.cs`~~
+  - ~~`OpenGSR\Assets\Scripts\Player\PlayerAgent.cs`~~
 
 ---
 
@@ -120,8 +123,8 @@
 | 25 | `OpenGSR` | `OpenGSR\Assets\Scripts\Scene\WaitRoom\OnlineWaitRoomSceneEvent.cs` | **85** | 12/52 | Empty methods x 3 (Abstract: False), Thin implementation (LOC=12) |
 | 26 | `OpenGSR` | `OpenGSR\Assets\Scripts\UI\CommonCanvas.cs` | **85** | 4/17 | Empty methods x 2 (Abstract: False), Extremely thin implementation (LOC=4) |
 | 27 | `OpenGSR` | `OpenGSR\Assets\Scripts\UI\LoadingSceneCanvas.cs` | **85** | 4/16 | Empty methods x 2 (Abstract: False), Extremely thin implementation (LOC=4) |
-| 28 | `OpenGSServer` | `OpenGSServer\Database\AccountDatabaseManager.cs` | **80** | 121/396 | Empty methods x 4 (Abstract: False) |
-| 29 | `OpenGSR` | `OpenGSR\Assets\Scripts\Player\PlayerAgent.cs` | **80** | 406/934 | Empty methods x 4 (Abstract: False) |
+| 28 | `OpenGSServer` | `~~OpenGSServer\Database\AccountDatabaseManager.cs~~` | **80** | 121/396 | Empty methods x 4 (Abstract: False) |
+| 29 | `OpenGSR` | `~~OpenGSR\Assets\Scripts\Player\PlayerAgent.cs~~` | **80** | 406/934 | Empty methods x 4 (Abstract: False) |
 | 30 | `OpenGSR` | `OpenGSR\Assets\Scripts\Scene\ExportAssets\ExportAssetScene.cs` | **80** | 203/409 | Unfinished markers x 3, Empty methods x 1 (Abstract: False) |
 
 ---
@@ -170,10 +173,10 @@
 | 3 | `OpenGSServer\Room\WaitRoomEvent.cs` | **85** | 3/25 | Empty methods x 2 (Abstract: False), Extremely thin implementation (LOC=3) | なし |
 | 4 | `OpenGSServer\Server\Event\PlayerEventHandler.cs` | **85** | 3/23 | Empty methods x 2 (Abstract: False), Extremely thin implementation (LOC=3) | なし |
 | 5 | `OpenGSServer\Server\RUDP\MatchRUDPClientSession.cs` | **85** | 15/50 | Empty methods x 3 (Abstract: False), Thin implementation (LOC=15) | なし |
-| 6 | `OpenGSServer\Database\AccountDatabaseManager.cs` | **80** | 121/396 | Empty methods x 4 (Abstract: False) | なし |
+| 6 | `~~OpenGSServer\Database\AccountDatabaseManager.cs~~` | **80** | 121/396 | Empty methods x 4 (Abstract: False) | なし |
 | 7 | `OpenGSServer\Match\MatchRoomNetworkFunc.cs` | **65** | 2/19 | Empty methods x 1 (Abstract: False), Extremely thin implementation (LOC=2) | なし |
 | 8 | `OpenGSServer\Server\MissionServer.cs` | **65** | 2/16 | Empty methods x 1 (Abstract: False), Extremely thin implementation (LOC=2) | なし |
-| 9 | `OpenGSServer\Database\MatchDatabaseManager.cs` | **60** | 26/101 | Empty methods x 3 (Abstract: False) | なし |
+| 9 | `~~OpenGSServer\Database\MatchDatabaseManager.cs~~` | **60** | 26/101 | Empty methods x 3 (Abstract: False) | なし |
 | 10 | `OpenGSServer\Game\Grenade.cs` | **60** | 21/42 | Empty methods x 3 (Abstract: False) | なし |
 | 11 | `OpenGSServer\ゴミ\Socket.cs` | **60** | 0/28 | Empty file / only declarations (LOC=0) | なし |
 | 12 | `OpenGSServer\DataBase.cs` | **45** | 4/15 | Extremely thin implementation (LOC=4) | なし |
@@ -221,7 +224,7 @@
 | 19 | `OpenGSR\Assets\Scripts\Scene\WaitRoom\OnlineWaitRoomSceneEvent.cs` | **85** | 12/52 | Empty methods x 3 (Abstract: False), Thin implementation (LOC=12) | なし |
 | 20 | `OpenGSR\Assets\Scripts\UI\CommonCanvas.cs` | **85** | 4/17 | Empty methods x 2 (Abstract: False), Extremely thin implementation (LOC=4) | なし |
 | 21 | `OpenGSR\Assets\Scripts\UI\LoadingSceneCanvas.cs` | **85** | 4/16 | Empty methods x 2 (Abstract: False), Extremely thin implementation (LOC=4) | なし |
-| 22 | `OpenGSR\Assets\Scripts\Player\PlayerAgent.cs` | **80** | 406/934 | Empty methods x 4 (Abstract: False) | なし |
+| 22 | `~~OpenGSR\Assets\Scripts\Player\PlayerAgent.cs~~` | **80** | 406/934 | Empty methods x 4 (Abstract: False) | なし |
 | 23 | `OpenGSR\Assets\Scripts\Scene\ExportAssets\ExportAssetScene.cs` | **80** | 203/409 | Unfinished markers x 3, Empty methods x 1 (Abstract: False) | 未実装 (L54): `noop for now - placeholder for editor...` |
 | 24 | `OpenGSR\Assets\Scripts\Scene\AbstractScene.cs` | **75** | 251/511 | Empty methods x 15 (Abstract: True) | なし |
 | 25 | `OpenGSR\Assets\Scripts\Match\AbstractMatchMainScript.cs` | **70** | 273/666 | Empty methods x 14 (Abstract: True) | なし |
