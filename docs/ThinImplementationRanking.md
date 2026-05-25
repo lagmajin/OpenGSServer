@@ -106,15 +106,18 @@
   - ~~`OpenGSR\Assets\Scripts\Core\MultipleTags.cs`~~
   - ~~`OpenGSR\Assets\Scripts\Core\StageList.cs`~~
   - ~~`OpenGSR\Assets\Scripts\Match\GodModeMainScript.cs`~~
+  - ~~`OpenGSR\Assets\Scripts\Match\AsmExport\ArmMainScript.cs`~~
   - ~~`OpenGSR\Assets\Scripts\Scene\MatchNetworkManagerMainScript.cs`~~
   - ~~`OpenGSR\Assets\Scripts\Match\MatchEventProvider.cs`~~
   - ~~`OpenGSR\Assets\Scripts\Match\TSUVMainScript.cs`~~
   - ~~`OpenGSR\Assets\Scripts\Mission\MissionMainScript.cs`~~
   - ~~`OpenGSR\Assets\Scripts\Network\ConnectToLobbyNetworkManager.cs`~~
   - ~~`OpenGSR\Assets\Scripts\Player\AsmExport\PlayerDataLinker.cs`~~
+  - ~~`OpenGSR\Assets\Scripts\Player\Character.cs`~~
   - ~~`OpenGSR\Assets\Scripts\Player\AsmExport\MyScore.cs`~~
   - ~~`OpenGSR\Assets\Scripts\Resource\StageList.cs`~~
   - ~~`OpenGSR\Assets\Scripts\Scene\WaitRoom\OnlineWaitRoomSceneEvent.cs`~~
+  - ~~`OpenGSR\Assets\Scripts\Scene\OfflineLoadingScene.cs`~~
   - ~~`OpenGSR\Assets\Scripts\UI\CommonCanvas.cs`~~
   - ~~`OpenGSR\Assets\Scripts\UI\LoadingSceneCanvas.cs`~~
   - ~~`OpenGSR\Assets\Scripts\Scene\ExportAssets\ExportAssetScene.cs`~~
@@ -133,7 +136,7 @@
 | 1 | `OpenGSR` | `~~OpenGSR\Assets\Scripts\Core\SceneInput.cs~~` | **65** | 4/35 | Empty methods x 1 (Abstract: False), Extremely thin implementation (LOC=4) |
 | 2 | `OpenGSR` | `~~OpenGSR\Assets\Scripts\Core\SpriteRendererExtension.cs~~` | **65** | 3/19 | Empty methods x 1 (Abstract: False), Extremely thin implementation (LOC=3) |
 | 3 | `OpenGSR` | `~~OpenGSR\Assets\Scripts\Core\Base\GameStartup.cs~~` | **65** | 3/15 | Empty methods x 1 (Abstract: False), Extremely thin implementation (LOC=3) |
-| 4 | `OpenGSR` | `OpenGSR\Assets\Scripts\Match\AsmExport\ArmMainScript.cs` | **65** | 2/11 | Empty methods x 1 (Abstract: False), Extremely thin implementation (LOC=2) |
+| 4 | `OpenGSR` | `~~OpenGSR\Assets\Scripts\Match\AsmExport\ArmMainScript.cs~~` | **65** | 2/11 | Empty methods x 1 (Abstract: False), Extremely thin implementation (LOC=2) |
 | 5 | `OpenGSR` | `~~OpenGSR\Assets\Scripts\Mission\MissionMainScript.cs~~` | **65** | 15/66 | Empty methods x 2 (Abstract: False), Thin implementation (LOC=15) |
 | 6 | `OpenGSR` | `~~OpenGSR\Assets\Scripts\Network\ConnectToLobbyNetworkManager.cs~~` | **65** | 3/12 | Empty methods x 1 (Abstract: False), Extremely thin implementation (LOC=3) |
 | 7 | `OpenGSR` | `~~OpenGSR\Assets\Scripts\Player\AsmExport\MyScore.cs~~` | **65** | 15/32 | Empty methods x 2 (Abstract: False), Thin implementation (LOC=15) |
@@ -145,8 +148,8 @@
 | 13 | `OpenGSR` | `OpenGSR\Assets\Scripts\Interface\IMetalBreakerMainScript.cs` | **60** | 1/13 | TODO comments x 1, Extremely thin implementation (LOC=1) |
 | 14 | `OpenGSR` | `OpenGSR\Assets\Scripts\Mission\MetalBreakerMainScript.cs` | **60** | 21/89 | Empty methods x 3 (Abstract: False) |
 | 15 | `OpenGSR` | `OpenGSR\Assets\Scripts\NetworkTest\LocalTestMatchRUDPServer.cs` | **60** | 317/562 | Unfinished markers x 3 |
-| 16 | `OpenGSR` | `OpenGSR\Assets\Scripts\Player\Character.cs` | **60** | 128/226 | Empty methods x 3 (Abstract: False) |
-| 17 | `OpenGSR` | `OpenGSR\Assets\Scripts\Scene\OfflineLoadingScene.cs` | **60** | 67/155 | Empty methods x 3 (Abstract: False) |
+| 16 | `OpenGSR` | `~~OpenGSR\Assets\Scripts\Player\Character.cs~~` | **60** | 128/226 | Empty methods x 3 (Abstract: False) |
+| 17 | `OpenGSR` | `~~OpenGSR\Assets\Scripts\Scene\OfflineLoadingScene.cs~~` | **60** | 67/155 | Empty methods x 3 (Abstract: False) |
 | 18 | `OpenGSR` | `OpenGSR\Assets\Scripts\Scene\OfflineWaitRoomScene.cs` | **60** | 455/858 | Empty methods x 3 (Abstract: False) |
 | 19 | `OpenGSR` | `OpenGSR\Assets\Scripts\Scene\OnlineLoadingScene.cs` | **60** | 170/348 | Empty methods x 3 (Abstract: False) |
 | 20 | `OpenGSR` | `OpenGSR\Assets\Scripts\Scene\OnlineLobbyScene.cs` | **60** | 450/848 | Empty methods x 3 (Abstract: False) |
@@ -240,7 +243,7 @@
 | 1 | `~~OpenGSR\Assets\Scripts\Core\SceneInput.cs~~` | **65** | 4/35 | Empty methods x 1 (Abstract: False), Extremely thin implementation (LOC=4) | なし |
 | 2 | `~~OpenGSR\Assets\Scripts\Core\SpriteRendererExtension.cs~~` | **65** | 3/19 | Empty methods x 1 (Abstract: False), Extremely thin implementation (LOC=3) | なし |
 | 3 | `~~OpenGSR\Assets\Scripts\Core\Base\GameStartup.cs~~` | **65** | 3/15 | Empty methods x 1 (Abstract: False), Extremely thin implementation (LOC=3) | なし |
-| 4 | `OpenGSR\Assets\Scripts\Match\AsmExport\ArmMainScript.cs` | **65** | 2/11 | Empty methods x 1 (Abstract: False), Extremely thin implementation (LOC=2) | なし |
+| 4 | `~~OpenGSR\Assets\Scripts\Match\AsmExport\ArmMainScript.cs~~` | **65** | 2/11 | Empty methods x 1 (Abstract: False), Extremely thin implementation (LOC=2) | なし |
 | 5 | `~~OpenGSR\Assets\Scripts\Mission\MissionMainScript.cs~~` | **65** | 15/66 | Empty methods x 2 (Abstract: False), Thin implementation (LOC=15) | なし |
 | 6 | `~~OpenGSR\Assets\Scripts\Network\ConnectToLobbyNetworkManager.cs~~` | **65** | 3/12 | Empty methods x 1 (Abstract: False), Extremely thin implementation (LOC=3) | なし |
 | 7 | `~~OpenGSR\Assets\Scripts\Player\AsmExport\MyScore.cs~~` | **65** | 15/32 | Empty methods x 2 (Abstract: False), Thin implementation (LOC=15) | なし |
@@ -252,8 +255,8 @@
 | 13 | `OpenGSR\Assets\Scripts\Interface\IMetalBreakerMainScript.cs` | **60** | 1/13 | TODO comments x 1, Extremely thin implementation (LOC=1) | TODO (L11): `TODO: MetalBreaker 固有のメソッドを追加する` |
 | 14 | `OpenGSR\Assets\Scripts\Mission\MetalBreakerMainScript.cs` | **60** | 21/89 | Empty methods x 3 (Abstract: False) | なし |
 | 15 | `OpenGSR\Assets\Scripts\NetworkTest\LocalTestMatchRUDPServer.cs` | **60** | 317/562 | Unfinished markers x 3 | 未実装 (L33): `テスト用：ダミープレイヤーの状態` |
-| 16 | `OpenGSR\Assets\Scripts\Player\Character.cs` | **60** | 128/226 | Empty methods x 3 (Abstract: False) | なし |
-| 17 | `OpenGSR\Assets\Scripts\Scene\OfflineLoadingScene.cs` | **60** | 67/155 | Empty methods x 3 (Abstract: False) | なし |
+| 16 | `~~OpenGSR\Assets\Scripts\Player\Character.cs~~` | **60** | 128/226 | Empty methods x 3 (Abstract: False) | なし |
+| 17 | `~~OpenGSR\Assets\Scripts\Scene\OfflineLoadingScene.cs~~` | **60** | 67/155 | Empty methods x 3 (Abstract: False) | なし |
 | 18 | `OpenGSR\Assets\Scripts\Scene\OfflineWaitRoomScene.cs` | **60** | 455/858 | Empty methods x 3 (Abstract: False) | なし |
 | 19 | `OpenGSR\Assets\Scripts\Scene\OnlineLoadingScene.cs` | **60** | 170/348 | Empty methods x 3 (Abstract: False) | なし |
 | 20 | `OpenGSR\Assets\Scripts\Scene\OnlineLobbyScene.cs` | **60** | 450/848 | Empty methods x 3 (Abstract: False) | なし |
@@ -292,9 +295,9 @@
 - **主な検出理由**: Empty methods x 1 (Abstract: False), Extremely thin implementation (LOC=3)
 - **分析と影響**: このモジュールはクラス宣言やインターフェースの整合性は保たれていますが、実際の動作に必要なロジックが不足しているか、ダミーデータ・例外を返す仮の状態になっています。本番環境の機能連携に支障をきたすため、優先的に本実装を行う必要があります。
 
-### 🚨 4位：`ArmMainScript.cs` (OpenGSR) — 実装補強が必要な箇所
+### 🚨 4位：`~~ArmMainScript.cs~~` (OpenGSR) — 実装補強が必要な箇所
 - **現状スコア**: **65** (LOC: 2 / Total: 11)
-- **ファイルパス**: `OpenGSR\Assets\Scripts\Match\AsmExport\ArmMainScript.cs`
+- **ファイルパス**: `~~OpenGSR\Assets\Scripts\Match\AsmExport\ArmMainScript.cs~~`
 - **主な検出理由**: Empty methods x 1 (Abstract: False), Extremely thin implementation (LOC=2)
 - **分析と影響**: このモジュールはクラス宣言やインターフェースの整合性は保たれていますが、実際の動作に必要なロジックが不足しているか、ダミーデータ・例外を返す仮の状態になっています。本番環境の機能連携に支障をきたすため、優先的に本実装を行う必要があります。
 
