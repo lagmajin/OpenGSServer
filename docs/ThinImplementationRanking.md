@@ -164,10 +164,10 @@
 | 24 | `OpenGSR` | `OpenGSR\Assets\Scripts\Core\TeamBalanceButton.cs` | **55** | 5/32 | Empty methods x 2 (Abstract: True), Extremely thin implementation (LOC=5) |
 | 25 | `OpenGSR` | `OpenGSR\Assets\Scripts\BaseLib\Map\JumpStand.cs` | **50** | 11/45 | Empty methods x 5 (Abstract: True), Thin implementation (LOC=11) |
 | 26 | `OpenGSCore` | `OpenGSCore\Item\AbstractItemEffect.cs` | **45** | 5/15 | Extremely thin implementation (LOC=5) |
-| 27 | `OpenGSCore` | `OpenGSCore\Match\Situation\CaptureTheFlagMatchSituation.cs` | **45** | 4/12 | Extremely thin implementation (LOC=4) |
-| 28 | `OpenGSCore` | `OpenGSCore\Match\Situation\DeathMatchMatchSituation.cs` | **45** | 2/10 | Extremely thin implementation (LOC=2) |
-| 29 | `OpenGSCore` | `OpenGSCore\Match\Situation\SurvivalMatchSituation.cs` | **45** | 2/10 | Extremely thin implementation (LOC=2) |
-| 30 | `OpenGSCore` | `OpenGSCore\Match\Situation\TeamSurvivalMatchSituation.cs` | **45** | 5/16 | Extremely thin implementation (LOC=5) |
+| 27 | `OpenGSCore` | `~~OpenGSCore\Match\Situation\CaptureTheFlagMatchSituation.cs~~` | **45** | 4/12 | Extremely thin implementation (LOC=4) |
+| 28 | `OpenGSCore` | `~~OpenGSCore\Match\Situation\DeathMatchMatchSituation.cs~~` | **45** | 2/10 | Extremely thin implementation (LOC=2) |
+| 29 | `OpenGSCore` | `~~OpenGSCore\Match\Situation\SurvivalMatchSituation.cs~~` | **45** | 2/10 | Extremely thin implementation (LOC=2) |
+| 30 | `OpenGSCore` | `~~OpenGSCore\Match\Situation\TeamSurvivalMatchSituation.cs~~` | **45** | 5/16 | Extremely thin implementation (LOC=5) |
 
 ---
 
@@ -176,14 +176,13 @@
 | 順位 | ファイルパス | スコア | 評価行数 (LOC/Total) | 主な検出理由 | TODO/未実装箇所の抜粋 |
 | :---: | :--- | :---: | :---: | :--- | :--- |
 | 1 | `OpenGSCore\Item\AbstractItemEffect.cs` | **45** | 5/15 | Extremely thin implementation (LOC=5) | なし |
-| 2 | `OpenGSCore\Match\Situation\CaptureTheFlagMatchSituation.cs` | **45** | 4/12 | Extremely thin implementation (LOC=4) | なし |
-| 3 | `OpenGSCore\Match\Situation\DeathMatchMatchSituation.cs` | **45** | 2/10 | Extremely thin implementation (LOC=2) | なし |
-| 4 | `OpenGSCore\Match\Situation\SurvivalMatchSituation.cs` | **45** | 2/10 | Extremely thin implementation (LOC=2) | なし |
-| 5 | `OpenGSCore\Match\Situation\TeamSurvivalMatchSituation.cs` | **45** | 5/16 | Extremely thin implementation (LOC=5) | なし |
-| 6 | `OpenGSCore\Mission\MissionRule.cs` | **45** | 5/19 | Extremely thin implementation (LOC=5) | なし |
-| 7 | `OpenGSCore\Module\Init.cs` | **45** | 4/10 | Extremely thin implementation (LOC=4) | なし |
-| 8 | `OpenGSCore\Player\PlayerIDList.cs` | **45** | 1/8 | Extremely thin implementation (LOC=1) | なし |
-| 9 | `OpenGSCore\Player\WaitRoomPlayerInfo.cs` | **45** | 2/15 | Extremely thin implementation (LOC=2) | なし |
+| 2 | `~~OpenGSCore\Match\Situation\CaptureTheFlagMatchSituation.cs~~` | **45** | 4/12 | Extremely thin implementation (LOC=4) | なし |
+| 3 | `~~OpenGSCore\Match\Situation\DeathMatchMatchSituation.cs~~` | **45** | 2/10 | Extremely thin implementation (LOC=2) | なし |
+| 4 | `~~OpenGSCore\Match\Situation\SurvivalMatchSituation.cs~~` | **45** | 2/10 | Extremely thin implementation (LOC=2) | なし |
+| 5 | `~~OpenGSCore\Match\Situation\TeamSurvivalMatchSituation.cs~~` | **45** | 5/16 | Extremely thin implementation (LOC=5) | なし |
+| 6 | `~~OpenGSCore\Mission\MissionRule.cs~~` | **45** | 5/19 | Extremely thin implementation (LOC=5) | なし |
+| 8 | `~~OpenGSCore\Module\Init.cs~~` | **45** | 4/10 | Extremely thin implementation (LOC=4) | なし |
+| 9 | `~~OpenGSCore\Player\PlayerIDList.cs~~` | **45** | 1/8 | Extremely thin implementation (LOC=1) | なし |
 | 10 | `OpenGSCore\Request\PingRequest.cs` | **45** | 2/12 | Extremely thin implementation (LOC=2) | なし |
 | 11 | `OpenGSCore\Result\PlayerResult.cs` | **45** | 2/12 | Extremely thin implementation (LOC=2) | なし |
 | 12 | `OpenGSCore\Score\AllPlayerMissionFinalSocre.cs` | **45** | 4/17 | Extremely thin implementation (LOC=4) | なし |
@@ -196,10 +195,10 @@
 | 19 | `OpenGSCore\Utility\MakeGameObject.cs` | **45** | 5/17 | Extremely thin implementation (LOC=5) | なし |
 | 20 | `OpenGSCore\Utility\MakeTimeStamp.cs` | **45** | 2/13 | Extremely thin implementation (LOC=2) | なし |
 | 21 | `OpenGSCore\Utility\TagAttribute.cs` | **45** | 5/14 | Extremely thin implementation (LOC=5) | なし |
-| 22 | `OpenGSCore\WaitRoom\RoomCapacity.cs` | **45** | 3/15 | Extremely thin implementation (LOC=3) | なし |
-| 23 | `OpenGSCore\WaitRoom\WaitRoom(Event).cs` | **45** | 4/17 | Extremely thin implementation (LOC=4) | なし |
-| 24 | `OpenGSCore\WaitRoom\WaitRoom(Network).cs` | **45** | 2/10 | Extremely thin implementation (LOC=2) | なし |
-| 25 | `OpenGSCore\WaitRoom\WaitRoomStatus.cs` | **45** | 5/16 | Extremely thin implementation (LOC=5) | なし |
+| 23 | `~~OpenGSCore\WaitRoom\RoomCapacity.cs~~` | **45** | 3/15 | Extremely thin implementation (LOC=3) | なし |
+| 24 | `~~OpenGSCore\WaitRoom\WaitRoom(Event).cs~~` | **45** | 4/17 | Extremely thin implementation (LOC=4) | なし |
+| 25 | `~~OpenGSCore\WaitRoom\WaitRoom(Network).cs~~` | **45** | 2/10 | Extremely thin implementation (LOC=2) | なし |
+| 26 | `~~OpenGSCore\WaitRoom\WaitRoomStatus.cs~~` | **45** | 5/16 | Extremely thin implementation (LOC=5) | なし |
 | 26 | `OpenGSCore\WaitRoom\OfflineWaitRoom.cs` | **40** | 7/36 | Empty methods x 3 (Abstract: True), Thin implementation (LOC=7) | なし |
 | 27 | `OpenGSCore\Chat\ChatMacro.cs` | **25** | 7/33 | Thin implementation (LOC=7) | なし |
 | 28 | `OpenGSCore\Constants\Tickrate.cs` | **25** | 9/19 | Thin implementation (LOC=9) | なし |
