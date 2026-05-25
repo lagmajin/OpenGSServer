@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Newtonsoft.Json.Linq;
 
 namespace OpenGSServer
 {
@@ -29,6 +30,30 @@ namespace OpenGSServer
             return !string.IsNullOrWhiteSpace(playerId) && scores.TryGetValue(playerId, out var score)
                 ? score
                 : 0;
+        }
+
+        public void RemovePlayer(string playerId)
+        {
+            if (!string.IsNullOrWhiteSpace(playerId))
+            {
+                scores.Remove(playerId);
+            }
+        }
+
+        public void Clear()
+        {
+            scores.Clear();
+        }
+
+        public JObject ToJson()
+        {
+            var result = new JObject();
+            foreach (var pair in scores)
+            {
+                result[pair.Key] = pair.Value;
+            }
+
+            return result;
         }
     }
 }

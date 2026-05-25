@@ -1,5 +1,6 @@
 using Newtonsoft.Json.Linq;
 using OpenGSCore;
+using System;
 
 namespace OpenGSServer
 {
@@ -19,6 +20,21 @@ namespace OpenGSServer
             }
 
             ConsoleWrite.WriteMessage($"[MatchRoomExtensions] Broadcast => {json["MessageType"] ?? "Unknown"}");
+        }
+
+        public static JObject CreateRoomStateMessage(this OpenGSCore.MatchRoom room)
+        {
+            if (room == null)
+            {
+                return new JObject();
+            }
+
+            return new JObject
+            {
+                ["RoomId"] = room.Id,
+                ["RoomName"] = room.RoomName,
+                ["PlayerCount"] = room.PlayerCount
+            };
         }
     }
 }

@@ -1,5 +1,5 @@
 using System.Collections.Generic;
-using System.Linq;
+using Newtonsoft.Json.Linq;
 
 namespace OpenGSServer
 {
@@ -14,10 +14,16 @@ namespace OpenGSServer
 
         public IReadOnlyList<string> ChatLog => chatLog;
         public IReadOnlyCollection<string> Users => users;
+        public int UserCount => users.Count;
 
         public void ClearChat()
         {
             chatLog.Clear();
+        }
+
+        public void ClearUsers()
+        {
+            users.Clear();
         }
 
         public void AddNewUser(string playerId)
@@ -46,6 +52,21 @@ namespace OpenGSServer
             {
                 chatLog.Add(message.Trim());
             }
+        }
+
+        public bool HasUser(string playerId)
+        {
+            return !string.IsNullOrWhiteSpace(playerId) && users.Contains(playerId);
+        }
+
+        public JObject ToJson()
+        {
+            return new JObject
+            {
+                ["UserCount"] = UserCount,
+                ["Users"] = new JArray(users),
+                ["ChatLog"] = new JArray(chatLog)
+            };
         }
     }
 }
