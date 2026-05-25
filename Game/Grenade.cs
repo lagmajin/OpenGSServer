@@ -1,4 +1,4 @@
-﻿namespace OpenGSServer
+namespace OpenGSServer
 {
     public class PowerGrenade : AbstractGrenade
     {
@@ -11,7 +11,11 @@
             StoppingPower = 85;
         }
 
-        public override void Hit() { }
+        public override void Hit()
+        {
+            ConsoleWrite.WriteMessage("[Grenade] PowerGrenade exploded");
+            DisposeGrenade();
+        }
     }
 
     public class ClusterGrenade : AbstractGrenade
@@ -24,7 +28,11 @@
             ExplosionRadius = 3.0f;
         }
 
-        public override void Hit() { }
+        public override void Hit()
+        {
+            ConsoleWrite.WriteMessage("[Grenade] ClusterGrenade exploded");
+            DisposeGrenade();
+        }
     }
 
     public class ChildClusterGrenade : AbstractGrenade
@@ -37,6 +45,10 @@
             FuseTime = 1.0f;
         }
 
-        public override void Hit() { }
+        public override void Hit()
+        {
+            ConsoleWrite.WriteMessage("[Grenade] ChildClusterGrenade exploded");
+            DisposeGrenade();
+        }
     }
 }
