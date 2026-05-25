@@ -3,6 +3,7 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Reflection;
+using Newtonsoft.Json.Linq;
 
 namespace OpenGSServer
 {
@@ -82,6 +83,23 @@ namespace OpenGSServer
             db.DropCollection(ServerInfoCollectionName);
         }
 
+        public JObject? GetCurrentRecord()
+        {
+            if (db == null)
+            {
+                Connect();
+            }
+
+            if (db == null)
+            {
+                return null;
+            }
+
+            var record = db.GetCollection<ServerInfoRecord>(ServerInfoCollectionName)
+                .FindById("current");
+            return record == null ? null : JObject.FromObject(record);
+        }
+
         public void RemoveDatabase()
         {
             db?.Dispose();
@@ -94,7 +112,18 @@ namespace OpenGSServer
             }
         }
 
-        private sealed class ServerInfoRecord
+        public void Disconnect()
+        {
+            db?.Dispose();
+            db = null;
+        }
+
+        public void Dispose()
+        {
+            Disconnect();
+        }
+
+        public sealed class ServerInfoRecord
         {
             [BsonId]
             public string Id { get; set; } = "current";

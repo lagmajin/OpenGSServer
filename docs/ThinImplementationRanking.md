@@ -177,7 +177,7 @@
 | 順位 | ファイルパス | スコア | 評価行数 (LOC/Total) | 主な検出理由 | TODO/未実装箇所の抜粋 |
 | :---: | :--- | :---: | :---: | :--- | :--- |
 | 1 | `~~OpenGSServer\Server\Event\ManagementServerEvent.cs~~` | **105** | 4/27 | Empty methods x 3 (Abstract: False), Extremely thin implementation (LOC=4) | なし |
-| 2 | `OpenGSServer\Database\ServerInfoDatabaseManager.cs` | **85** | 11/45 | Empty methods x 3 (Abstract: False), Thin implementation (LOC=11) | なし |
+| 2 | `~~OpenGSServer\Database\ServerInfoDatabaseManager.cs~~` | **85** | 11/45 | Empty methods x 3 (Abstract: False), Thin implementation (LOC=11) | なし |
 | 3 | `~~OpenGSServer\Room\WaitRoomEvent.cs~~` | **85** | 3/25 | Empty methods x 2 (Abstract: False), Extremely thin implementation (LOC=3) | なし |
 | 4 | `OpenGSServer\Server\Event\PlayerEventHandler.cs` | **85** | 3/23 | Empty methods x 2 (Abstract: False), Extremely thin implementation (LOC=3) | なし |
 | 5 | `OpenGSServer\Server\RUDP\MatchRUDPClientSession.cs` | **85** | 15/50 | Empty methods x 3 (Abstract: False), Thin implementation (LOC=15) | なし |
@@ -223,8 +223,8 @@
 | 10 | `OpenGSR\Assets\Scripts\BaseLib\Audio.cs` | **85** | 3/14 | Empty methods x 2 (Abstract: False), Extremely thin implementation (LOC=3) | なし |
 | 11 | `OpenGSR\Assets\Scripts\Core\FireEffect.cs` | **85** | 9/43 | Empty methods x 3 (Abstract: False), Thin implementation (LOC=9) | なし |
 | 12 | `OpenGSR\Assets\Scripts\Core\Rigidbody2DExtension.cs` | **85** | 8/34 | Empty methods x 3 (Abstract: False), Thin implementation (LOC=8) | なし |
-| 13 | `OpenGSR\Assets\Scripts\Core\Base\EventManager.cs` | **85** | 13/58 | Empty methods x 3 (Abstract: False), Thin implementation (LOC=13) | なし |
-| 14 | `OpenGSR\Assets\Scripts\Core\Base\MissionManager.cs` | **85** | 5/29 | Empty methods x 2 (Abstract: False), Extremely thin implementation (LOC=5) | なし |
+| 13 | `~~OpenGSR\Assets\Scripts\Core\Base\EventManager.cs~~` | **85** | 13/58 | Empty methods x 3 (Abstract: False), Thin implementation (LOC=13) | なし |
+| 14 | `~~OpenGSR\Assets\Scripts\Core\Base\MissionManager.cs~~` | **85** | 5/29 | Empty methods x 2 (Abstract: False), Extremely thin implementation (LOC=5) | なし |
 | 15 | `OpenGSR\Assets\Scripts\Match\GodModeMainScript.cs` | **85** | 4/25 | Empty methods x 2 (Abstract: False), Extremely thin implementation (LOC=4) | なし |
 | 16 | `OpenGSR\Assets\Scripts\Match\TSUVMainScript.cs` | **85** | 14/68 | Empty methods x 3 (Abstract: False), Thin implementation (LOC=14) | なし |
 | 17 | `OpenGSR\Assets\Scripts\Player\AsmExport\PlayerDataLinker.cs` | **85** | 4/26 | Empty methods x 2 (Abstract: False), Extremely thin implementation (LOC=4) | なし |
