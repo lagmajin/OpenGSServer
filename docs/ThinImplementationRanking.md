@@ -59,13 +59,17 @@
   - ~~`OpenGSServer\Match\MatchRoomNetworkFunc.cs`~~
   - ~~`OpenGSServer\Database\AccountDatabaseManager.cs`~~
   - ~~`OpenGSServer\Database\MatchDatabaseManager.cs`~~
+  - ~~`OpenGSServer\Server\MissionServer.cs`~~
+  - ~~`OpenGSServer\Hash.cs`~~
+  - ~~`OpenGSServer\Account\FriendList.cs`~~
+  - ~~`OpenGSServer\Database\DBAccountDetail.cs`~~
+  - ~~`OpenGSServer\Database\MissionScoreManager.cs`~~
   - ~~`OpenGSServer\Platform\Windows\WindowsAPI.cs`~~
   - ~~`OpenGSServer\Player\WaitRoomPlayerInfo.cs`~~
   - ~~`OpenGSServer\Result\CreateNewMissionRoom.cs`~~
   - ~~`OpenGSServer\Result\UserInfoResult.cs`~~
   - ~~`OpenGSServer\Result\WaitRoomInfo.cs`~~
   - ~~`OpenGSServer\Room\MissionRoom.cs`~~
-  - ~~`OpenGSServer\Server\MissionServer.cs`~~
   - ~~`OpenGSServer\Settings\DefaultServerSetting.cs`~~
 - `OpenGSR`
   - ~~`OpenGSR\Assets\Scripts\Core\Base\EventManager.cs`~~
@@ -175,18 +179,18 @@
 | 5 | `OpenGSServer\Server\RUDP\MatchRUDPClientSession.cs` | **85** | 15/50 | Empty methods x 3 (Abstract: False), Thin implementation (LOC=15) | なし |
 | 6 | `~~OpenGSServer\Database\AccountDatabaseManager.cs~~` | **80** | 121/396 | Empty methods x 4 (Abstract: False) | なし |
 | 7 | `OpenGSServer\Match\MatchRoomNetworkFunc.cs` | **65** | 2/19 | Empty methods x 1 (Abstract: False), Extremely thin implementation (LOC=2) | なし |
-| 8 | `OpenGSServer\Server\MissionServer.cs` | **65** | 2/16 | Empty methods x 1 (Abstract: False), Extremely thin implementation (LOC=2) | なし |
+| 8 | `~~OpenGSServer\Server\MissionServer.cs~~` | **65** | 2/16 | Empty methods x 1 (Abstract: False), Extremely thin implementation (LOC=2) | なし |
 | 9 | `~~OpenGSServer\Database\MatchDatabaseManager.cs~~` | **60** | 26/101 | Empty methods x 3 (Abstract: False) | なし |
 | 10 | `OpenGSServer\Game\Grenade.cs` | **60** | 21/42 | Empty methods x 3 (Abstract: False) | なし |
 | 11 | `OpenGSServer\ゴミ\Socket.cs` | **60** | 0/28 | Empty file / only declarations (LOC=0) | なし |
 | 12 | `OpenGSServer\DataBase.cs` | **45** | 4/15 | Extremely thin implementation (LOC=4) | なし |
-| 13 | `OpenGSServer\Hash.cs` | **45** | 1/13 | Extremely thin implementation (LOC=1) | なし |
-| 14 | `OpenGSServer\Account\FriendList.cs` | **45** | 2/16 | Extremely thin implementation (LOC=2) | なし |
+| 13 | `~~OpenGSServer\Hash.cs~~` | **45** | 1/13 | Extremely thin implementation (LOC=1) | なし |
+| 14 | `~~OpenGSServer\Account\FriendList.cs~~` | **45** | 2/16 | Extremely thin implementation (LOC=2) | なし |
 | 15 | `OpenGSServer\Constants\GlobalConstants.cs` | **45** | 4/19 | Extremely thin implementation (LOC=4) | なし |
 | 16 | `OpenGSServer\Constants\RoomConstants.cs` | **45** | 2/14 | Extremely thin implementation (LOC=2) | なし |
 | 17 | `OpenGSServer\Database\AbstractDatabaseManager.cs` | **45** | 1/15 | Extremely thin implementation (LOC=1) | なし |
-| 18 | `OpenGSServer\Database\DBAccountDetail.cs` | **45** | 1/12 | Extremely thin implementation (LOC=1) | なし |
-| 19 | `OpenGSServer\Database\MissionScoreManager.cs` | **45** | 1/12 | Extremely thin implementation (LOC=1) | なし |
+| 18 | `~~OpenGSServer\Database\DBAccountDetail.cs~~` | **45** | 1/12 | Extremely thin implementation (LOC=1) | なし |
+| 19 | `~~OpenGSServer\Database\MissionScoreManager.cs~~` | **45** | 1/12 | Extremely thin implementation (LOC=1) | なし |
 | 20 | `OpenGSServer\Extentions\DictionaryExtention.cs` | **45** | 2/13 | Extremely thin implementation (LOC=2) | なし |
 | 21 | `OpenGSServer\Lobby\MissionLobby.cs` | **45** | 4/30 | Extremely thin implementation (LOC=4) | なし |
 | 22 | `OpenGSServer\Manager\PlayerScoreManager.cs` | **45** | 3/20 | Extremely thin implementation (LOC=3) | なし |
