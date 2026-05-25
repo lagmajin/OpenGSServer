@@ -56,6 +56,8 @@
   - ~~`OpenGSCore\Match\Setting\Team\TeamSurvival.cs`~~
   - ~~`OpenGSCore\Extention\DictionaryExtension.cs`~~
   - ~~`OpenGSCore\Match\Rule\IMatchResultEvaluator.cs`~~
+  - ~~`OpenGSCore\Request\PingRequest.cs`~~
+  - ~~`OpenGSCore\Result\PlayerResult.cs`~~
 - `OpenGSServer`
   - ~~`OpenGSServer\Server\Event\ManagementServerEvent.cs`~~
   - ~~`OpenGSServer\Database\ServerInfoDatabaseManager.cs`~~
@@ -122,6 +124,9 @@
   - ~~`OpenGSR\Assets\Scripts\Resource\StageList.cs`~~
   - ~~`OpenGSR\Assets\Scripts\Scene\WaitRoom\OnlineWaitRoomSceneEvent.cs`~~
   - ~~`OpenGSR\Assets\Scripts\Scene\OfflineLoadingScene.cs`~~
+  - ~~`OpenGSR\Assets\Scripts\Scene\OfflineWaitRoomScene.cs`~~
+  - ~~`OpenGSR\Assets\Scripts\Scene\OnlineLoadingScene.cs`~~
+  - ~~`OpenGSR\Assets\Scripts\Scene\OnlineLobbyScene.cs`~~
   - ~~`OpenGSR\Assets\Scripts\NetworkTest\LocalTestMatchRUDPServer.cs`~~
   - ~~`OpenGSR\Assets\Scripts\UI\CommonCanvas.cs`~~
   - ~~`OpenGSR\Assets\Scripts\UI\LoadingSceneCanvas.cs`~~
@@ -158,9 +163,9 @@
 | 15 | `OpenGSR` | `~~OpenGSR\Assets\Scripts\NetworkTest\LocalTestMatchRUDPServer.cs~~` | **60** | 317/562 | Unfinished markers x 3 |
 | 16 | `OpenGSR` | `~~OpenGSR\Assets\Scripts\Player\Character.cs~~` | **60** | 128/226 | Empty methods x 3 (Abstract: False) |
 | 17 | `OpenGSR` | `~~OpenGSR\Assets\Scripts\Scene\OfflineLoadingScene.cs~~` | **60** | 67/155 | Empty methods x 3 (Abstract: False) |
-| 18 | `OpenGSR` | `OpenGSR\Assets\Scripts\Scene\OfflineWaitRoomScene.cs` | **60** | 455/858 | Empty methods x 3 (Abstract: False) |
-| 19 | `OpenGSR` | `OpenGSR\Assets\Scripts\Scene\OnlineLoadingScene.cs` | **60** | 170/348 | Empty methods x 3 (Abstract: False) |
-| 20 | `OpenGSR` | `OpenGSR\Assets\Scripts\Scene\OnlineLobbyScene.cs` | **60** | 450/848 | Empty methods x 3 (Abstract: False) |
+| 18 | `~~OpenGSR\Assets\Scripts\Scene\OfflineWaitRoomScene.cs~~` | **60** | 455/858 | Empty methods x 3 (Abstract: False) |
+| 19 | `~~OpenGSR\Assets\Scripts\Scene\OnlineLoadingScene.cs~~` | **60** | 170/348 | Empty methods x 3 (Abstract: False) |
+| 20 | `~~OpenGSR\Assets\Scripts\Scene\OnlineLobbyScene.cs~~` | **60** | 450/848 | Empty methods x 3 (Abstract: False) |
 | 21 | `OpenGSR` | `OpenGSR\Assets\Scripts\Scene\OnlineWaitRoomScene.cs` | **60** | 399/815 | Empty methods x 3 (Abstract: False) |
 | 22 | `OpenGSR` | `~~OpenGSR\Assets\Scripts\Stages\AsmExport\FlagStand.cs~~` | **60** | 74/201 | Empty methods x 3 (Abstract: False) |
 | 23 | `OpenGSR` | `~~OpenGSR\Assets\Scripts\Weapon\FieldWeaponController.cs~~` | **60** | 44/183 | Empty methods x 3 (Abstract: False) |
@@ -186,8 +191,8 @@
 | 6 | `~~OpenGSCore\Mission\MissionRule.cs~~` | **45** | 5/19 | Extremely thin implementation (LOC=5) | なし |
 | 8 | `~~OpenGSCore\Module\Init.cs~~` | **45** | 4/10 | Extremely thin implementation (LOC=4) | なし |
 | 9 | `~~OpenGSCore\Player\PlayerIDList.cs~~` | **45** | 1/8 | Extremely thin implementation (LOC=1) | なし |
-| 10 | `OpenGSCore\Request\PingRequest.cs` | **45** | 2/12 | Extremely thin implementation (LOC=2) | なし |
-| 11 | `OpenGSCore\Result\PlayerResult.cs` | **45** | 2/12 | Extremely thin implementation (LOC=2) | なし |
+| 10 | `~~OpenGSCore\Request\PingRequest.cs~~` | **45** | 2/12 | Extremely thin implementation (LOC=2) | なし |
+| 11 | `~~OpenGSCore\Result\PlayerResult.cs~~` | **45** | 2/12 | Extremely thin implementation (LOC=2) | なし |
 | 12 | `OpenGSCore\Score\AllPlayerMissionFinalSocre.cs` | **45** | 4/17 | Extremely thin implementation (LOC=4) | なし |
 | 13 | `OpenGSCore\Score\MissionFinalScore.cs` | **45** | 3/17 | Extremely thin implementation (LOC=3) | なし |
 | 14 | `OpenGSCore\Score\MissionResultScore.cs` | **45** | 2/10 | Extremely thin implementation (LOC=2) | なし |
@@ -264,9 +269,9 @@
 | 15 | `~~OpenGSR\Assets\Scripts\NetworkTest\LocalTestMatchRUDPServer.cs~~` | **60** | 317/562 | Unfinished markers x 3 | なし |
 | 16 | `~~OpenGSR\Assets\Scripts\Player\Character.cs~~` | **60** | 128/226 | Empty methods x 3 (Abstract: False) | なし |
 | 17 | `~~OpenGSR\Assets\Scripts\Scene\OfflineLoadingScene.cs~~` | **60** | 67/155 | Empty methods x 3 (Abstract: False) | なし |
-| 18 | `OpenGSR\Assets\Scripts\Scene\OfflineWaitRoomScene.cs` | **60** | 455/858 | Empty methods x 3 (Abstract: False) | なし |
-| 19 | `OpenGSR\Assets\Scripts\Scene\OnlineLoadingScene.cs` | **60** | 170/348 | Empty methods x 3 (Abstract: False) | なし |
-| 20 | `OpenGSR\Assets\Scripts\Scene\OnlineLobbyScene.cs` | **60** | 450/848 | Empty methods x 3 (Abstract: False) | なし |
+| 18 | `~~OpenGSR\Assets\Scripts\Scene\OfflineWaitRoomScene.cs~~` | **60** | 455/858 | Empty methods x 3 (Abstract: False) | なし |
+| 19 | `~~OpenGSR\Assets\Scripts\Scene\OnlineLoadingScene.cs~~` | **60** | 170/348 | Empty methods x 3 (Abstract: False) | なし |
+| 20 | `~~OpenGSR\Assets\Scripts\Scene\OnlineLobbyScene.cs~~` | **60** | 450/848 | Empty methods x 3 (Abstract: False) | なし |
 | 21 | `OpenGSR\Assets\Scripts\Scene\OnlineWaitRoomScene.cs` | **60** | 399/815 | Empty methods x 3 (Abstract: False) | なし |
 | 22 | `~~OpenGSR\Assets\Scripts\Stages\AsmExport\FlagStand.cs~~` | **60** | 74/201 | Empty methods x 3 (Abstract: False) | なし |
 | 23 | `~~OpenGSR\Assets\Scripts\Weapon\FieldWeaponController.cs~~` | **60** | 44/183 | Empty methods x 3 (Abstract: False) | なし |
