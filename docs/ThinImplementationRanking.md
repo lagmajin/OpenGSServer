@@ -115,15 +115,15 @@
 | 9 | `OpenGSR` | `OpenGSR\Assets\Scripts\Scene\MatchNetworkManagerMainScript.cs` | **105** | 7/34 | Empty methods x 4 (Abstract: False), Thin implementation (LOC=7) |
 | 10 | `OpenGSR` | `OpenGSR\Assets\Scripts\Core\CustomRenderer.cs` | **100** | 0/24 | Empty methods x 2 (Abstract: False), Empty file / only declarations (LOC=0) |
 | 11 | `OpenGSR` | `OpenGSR\Assets\Scripts\Player\AsmExport\AbstractPlayer.cs` | **90** | 276/608 | Empty methods x 18 (Abstract: True) |
-| 12 | `OpenGSServer` | `OpenGSServer\Database\ServerInfoDatabaseManager.cs` | **85** | 11/45 | Empty methods x 3 (Abstract: False), Thin implementation (LOC=11) |
+| 12 | `OpenGSServer` | `~~OpenGSServer\Database\ServerInfoDatabaseManager.cs~~` | **85** | 11/45 | Empty methods x 3 (Abstract: False), Thin implementation (LOC=11) |
 | 13 | `OpenGSServer` | `~~OpenGSServer\Room\WaitRoomEvent.cs~~` | **85** | 3/25 | Empty methods x 2 (Abstract: False), Extremely thin implementation (LOC=3) |
 | 14 | `OpenGSServer` | `OpenGSServer\Server\Event\PlayerEventHandler.cs` | **85** | 3/23 | Empty methods x 2 (Abstract: False), Extremely thin implementation (LOC=3) |
-| 15 | `OpenGSServer` | `OpenGSServer\Server\RUDP\MatchRUDPClientSession.cs` | **85** | 15/50 | Empty methods x 3 (Abstract: False), Thin implementation (LOC=15) |
+| 15 | `OpenGSServer` | `~~OpenGSServer\Server\RUDP\MatchRUDPClientSession.cs~~` | **85** | 15/50 | Empty methods x 3 (Abstract: False), Thin implementation (LOC=15) |
 | 16 | `OpenGSR` | `OpenGSR\Assets\Scripts\BaseLib\Audio.cs` | **85** | 3/14 | Empty methods x 2 (Abstract: False), Extremely thin implementation (LOC=3) |
 | 17 | `OpenGSR` | `OpenGSR\Assets\Scripts\Core\FireEffect.cs` | **85** | 9/43 | Empty methods x 3 (Abstract: False), Thin implementation (LOC=9) |
 | 18 | `OpenGSR` | `OpenGSR\Assets\Scripts\Core\Rigidbody2DExtension.cs` | **85** | 8/34 | Empty methods x 3 (Abstract: False), Thin implementation (LOC=8) |
-| 19 | `OpenGSR` | `OpenGSR\Assets\Scripts\Core\Base\EventManager.cs` | **85** | 13/58 | Empty methods x 3 (Abstract: False), Thin implementation (LOC=13) |
-| 20 | `OpenGSR` | `OpenGSR\Assets\Scripts\Core\Base\MissionManager.cs` | **85** | 5/29 | Empty methods x 2 (Abstract: False), Extremely thin implementation (LOC=5) |
+| 19 | `OpenGSR` | `~~OpenGSR\Assets\Scripts\Core\Base\EventManager.cs~~` | **85** | 13/58 | Empty methods x 3 (Abstract: False), Thin implementation (LOC=13) |
+| 20 | `OpenGSR` | `~~OpenGSR\Assets\Scripts\Core\Base\MissionManager.cs~~` | **85** | 5/29 | Empty methods x 2 (Abstract: False), Extremely thin implementation (LOC=5) |
 | 21 | `OpenGSR` | `OpenGSR\Assets\Scripts\Match\GodModeMainScript.cs` | **85** | 4/25 | Empty methods x 2 (Abstract: False), Extremely thin implementation (LOC=4) |
 | 22 | `OpenGSR` | `OpenGSR\Assets\Scripts\Match\TSUVMainScript.cs` | **85** | 14/68 | Empty methods x 3 (Abstract: False), Thin implementation (LOC=14) |
 | 23 | `OpenGSR` | `OpenGSR\Assets\Scripts\Player\AsmExport\PlayerDataLinker.cs` | **85** | 4/26 | Empty methods x 2 (Abstract: False), Extremely thin implementation (LOC=4) |
@@ -180,7 +180,7 @@
 | 2 | `~~OpenGSServer\Database\ServerInfoDatabaseManager.cs~~` | **85** | 11/45 | Empty methods x 3 (Abstract: False), Thin implementation (LOC=11) | なし |
 | 3 | `~~OpenGSServer\Room\WaitRoomEvent.cs~~` | **85** | 3/25 | Empty methods x 2 (Abstract: False), Extremely thin implementation (LOC=3) | なし |
 | 4 | `OpenGSServer\Server\Event\PlayerEventHandler.cs` | **85** | 3/23 | Empty methods x 2 (Abstract: False), Extremely thin implementation (LOC=3) | なし |
-| 5 | `OpenGSServer\Server\RUDP\MatchRUDPClientSession.cs` | **85** | 15/50 | Empty methods x 3 (Abstract: False), Thin implementation (LOC=15) | なし |
+| 5 | `~~OpenGSServer\Server\RUDP\MatchRUDPClientSession.cs~~` | **85** | 15/50 | Empty methods x 3 (Abstract: False), Thin implementation (LOC=15) | なし |
 | 6 | `~~OpenGSServer\Database\AccountDatabaseManager.cs~~` | **80** | 121/396 | Empty methods x 4 (Abstract: False) | なし |
 | 7 | `OpenGSServer\Match\MatchRoomNetworkFunc.cs` | **65** | 2/19 | Empty methods x 1 (Abstract: False), Extremely thin implementation (LOC=2) | なし |
 | 8 | `~~OpenGSServer\Server\MissionServer.cs~~` | **65** | 2/16 | Empty methods x 1 (Abstract: False), Extremely thin implementation (LOC=2) | なし |
