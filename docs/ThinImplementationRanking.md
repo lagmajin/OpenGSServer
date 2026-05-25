@@ -50,6 +50,7 @@
   - ~~`OpenGSCore\Map\RobotFactory.cs`~~
   - ~~`OpenGSCore\Map\Ruin.cs`~~
   - ~~`OpenGSCore\Item\InstantItemEffect.cs`~~
+  - ~~`OpenGSCore\Item\AbstractItemEffect.cs`~~
   - ~~`OpenGSCore\Match\Setting\SuvMatchSetting.cs`~~
   - ~~`OpenGSCore\Match\Setting\Team\CaptureTheFlagMatchSetting.cs`~~
   - ~~`OpenGSCore\Match\Setting\Team\TDMMatchSetting.cs`~~
@@ -58,6 +59,7 @@
   - ~~`OpenGSCore\Match\Rule\IMatchResultEvaluator.cs`~~
   - ~~`OpenGSCore\Request\PingRequest.cs`~~
   - ~~`OpenGSCore\Result\PlayerResult.cs`~~
+  - ~~`OpenGSR\Assets\Scripts\Scene\OnlineWaitRoomScene.cs`~~
 - `OpenGSServer`
   - ~~`OpenGSServer\Server\Event\ManagementServerEvent.cs`~~
   - ~~`OpenGSServer\Database\ServerInfoDatabaseManager.cs`~~
@@ -166,12 +168,12 @@
 | 18 | `~~OpenGSR\Assets\Scripts\Scene\OfflineWaitRoomScene.cs~~` | **60** | 455/858 | Empty methods x 3 (Abstract: False) |
 | 19 | `~~OpenGSR\Assets\Scripts\Scene\OnlineLoadingScene.cs~~` | **60** | 170/348 | Empty methods x 3 (Abstract: False) |
 | 20 | `~~OpenGSR\Assets\Scripts\Scene\OnlineLobbyScene.cs~~` | **60** | 450/848 | Empty methods x 3 (Abstract: False) |
-| 21 | `OpenGSR` | `OpenGSR\Assets\Scripts\Scene\OnlineWaitRoomScene.cs` | **60** | 399/815 | Empty methods x 3 (Abstract: False) |
+| 21 | `~~OpenGSR\Assets\Scripts\Scene\OnlineWaitRoomScene.cs~~` | **60** | 399/815 | Empty methods x 3 (Abstract: False) |
 | 22 | `OpenGSR` | `~~OpenGSR\Assets\Scripts\Stages\AsmExport\FlagStand.cs~~` | **60** | 74/201 | Empty methods x 3 (Abstract: False) |
 | 23 | `OpenGSR` | `~~OpenGSR\Assets\Scripts\Weapon\FieldWeaponController.cs~~` | **60** | 44/183 | Empty methods x 3 (Abstract: False) |
 | 24 | `~~OpenGSR\Assets\Scripts\Core\TeamBalanceButton.cs~~` | **55** | 5/32 | Empty methods x 2 (Abstract: True), Extremely thin implementation (LOC=5) |
 | 25 | `~~OpenGSR\Assets\Scripts\BaseLib\Map\JumpStand.cs~~` | **50** | 11/45 | Empty methods x 5 (Abstract: True), Thin implementation (LOC=11) |
-| 26 | `OpenGSCore` | `OpenGSCore\Item\AbstractItemEffect.cs` | **45** | 5/15 | Extremely thin implementation (LOC=5) |
+| 26 | `~~OpenGSCore\Item\AbstractItemEffect.cs~~` | **45** | 5/15 | Extremely thin implementation (LOC=5) |
 | 27 | `OpenGSCore` | `~~OpenGSCore\Match\Situation\CaptureTheFlagMatchSituation.cs~~` | **45** | 4/12 | Extremely thin implementation (LOC=4) |
 | 28 | `OpenGSCore` | `~~OpenGSCore\Match\Situation\DeathMatchMatchSituation.cs~~` | **45** | 2/10 | Extremely thin implementation (LOC=2) |
 | 29 | `OpenGSCore` | `~~OpenGSCore\Match\Situation\SurvivalMatchSituation.cs~~` | **45** | 2/10 | Extremely thin implementation (LOC=2) |
@@ -272,7 +274,7 @@
 | 18 | `~~OpenGSR\Assets\Scripts\Scene\OfflineWaitRoomScene.cs~~` | **60** | 455/858 | Empty methods x 3 (Abstract: False) | なし |
 | 19 | `~~OpenGSR\Assets\Scripts\Scene\OnlineLoadingScene.cs~~` | **60** | 170/348 | Empty methods x 3 (Abstract: False) | なし |
 | 20 | `~~OpenGSR\Assets\Scripts\Scene\OnlineLobbyScene.cs~~` | **60** | 450/848 | Empty methods x 3 (Abstract: False) | なし |
-| 21 | `OpenGSR\Assets\Scripts\Scene\OnlineWaitRoomScene.cs` | **60** | 399/815 | Empty methods x 3 (Abstract: False) | なし |
+| 21 | `~~OpenGSR\Assets\Scripts\Scene\OnlineWaitRoomScene.cs~~` | **60** | 399/815 | Empty methods x 3 (Abstract: False) | なし |
 | 22 | `~~OpenGSR\Assets\Scripts\Stages\AsmExport\FlagStand.cs~~` | **60** | 74/201 | Empty methods x 3 (Abstract: False) | なし |
 | 23 | `~~OpenGSR\Assets\Scripts\Weapon\FieldWeaponController.cs~~` | **60** | 44/183 | Empty methods x 3 (Abstract: False) | なし |
 | 24 | `~~OpenGSR\Assets\Scripts\Core\TeamBalanceButton.cs~~` | **55** | 5/32 | Empty methods x 2 (Abstract: True), Extremely thin implementation (LOC=5) | なし |
