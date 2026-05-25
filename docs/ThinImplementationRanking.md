@@ -113,27 +113,27 @@
 | 7 | `OpenGSServer` | `~~OpenGSServer\Server\Event\ManagementServerEvent.cs~~` | **105** | 4/27 | Empty methods x 3 (Abstract: False), Extremely thin implementation (LOC=4) |
 | 8 | `OpenGSR` | `OpenGSR\Assets\Scripts\Core\StageList.cs` | **105** | 12/50 | Empty methods x 4 (Abstract: False), Thin implementation (LOC=12) |
 | 9 | `OpenGSR` | `OpenGSR\Assets\Scripts\Scene\MatchNetworkManagerMainScript.cs` | **105** | 7/34 | Empty methods x 4 (Abstract: False), Thin implementation (LOC=7) |
-| 10 | `OpenGSR` | `OpenGSR\Assets\Scripts\Core\CustomRenderer.cs` | **100** | 0/24 | Empty methods x 2 (Abstract: False), Empty file / only declarations (LOC=0) |
+| 10 | `OpenGSR` | `~~OpenGSR\Assets\Scripts\Core\CustomRenderer.cs~~` | **100** | 0/24 | Empty methods x 2 (Abstract: False), Empty file / only declarations (LOC=0) |
 | 11 | `OpenGSR` | `OpenGSR\Assets\Scripts\Player\AsmExport\AbstractPlayer.cs` | **90** | 276/608 | Empty methods x 18 (Abstract: True) |
 | 12 | `OpenGSServer` | `~~OpenGSServer\Database\ServerInfoDatabaseManager.cs~~` | **85** | 11/45 | Empty methods x 3 (Abstract: False), Thin implementation (LOC=11) |
 | 13 | `OpenGSServer` | `~~OpenGSServer\Room\WaitRoomEvent.cs~~` | **85** | 3/25 | Empty methods x 2 (Abstract: False), Extremely thin implementation (LOC=3) |
 | 14 | `OpenGSServer` | `OpenGSServer\Server\Event\PlayerEventHandler.cs` | **85** | 3/23 | Empty methods x 2 (Abstract: False), Extremely thin implementation (LOC=3) |
 | 15 | `OpenGSServer` | `~~OpenGSServer\Server\RUDP\MatchRUDPClientSession.cs~~` | **85** | 15/50 | Empty methods x 3 (Abstract: False), Thin implementation (LOC=15) |
-| 16 | `OpenGSR` | `OpenGSR\Assets\Scripts\BaseLib\Audio.cs` | **85** | 3/14 | Empty methods x 2 (Abstract: False), Extremely thin implementation (LOC=3) |
+| 16 | `OpenGSR` | `~~OpenGSR\Assets\Scripts\BaseLib\Audio.cs~~` | **85** | 3/14 | Empty methods x 2 (Abstract: False), Extremely thin implementation (LOC=3) |
 | 17 | `OpenGSR` | `OpenGSR\Assets\Scripts\Core\FireEffect.cs` | **85** | 9/43 | Empty methods x 3 (Abstract: False), Thin implementation (LOC=9) |
-| 18 | `OpenGSR` | `OpenGSR\Assets\Scripts\Core\Rigidbody2DExtension.cs` | **85** | 8/34 | Empty methods x 3 (Abstract: False), Thin implementation (LOC=8) |
+| 18 | `OpenGSR` | `~~OpenGSR\Assets\Scripts\Core\Rigidbody2DExtension.cs~~` | **85** | 8/34 | Empty methods x 3 (Abstract: False), Thin implementation (LOC=8) |
 | 19 | `OpenGSR` | `~~OpenGSR\Assets\Scripts\Core\Base\EventManager.cs~~` | **85** | 13/58 | Empty methods x 3 (Abstract: False), Thin implementation (LOC=13) |
 | 20 | `OpenGSR` | `~~OpenGSR\Assets\Scripts\Core\Base\MissionManager.cs~~` | **85** | 5/29 | Empty methods x 2 (Abstract: False), Extremely thin implementation (LOC=5) |
 | 21 | `OpenGSR` | `OpenGSR\Assets\Scripts\Match\GodModeMainScript.cs` | **85** | 4/25 | Empty methods x 2 (Abstract: False), Extremely thin implementation (LOC=4) |
 | 22 | `OpenGSR` | `OpenGSR\Assets\Scripts\Match\TSUVMainScript.cs` | **85** | 14/68 | Empty methods x 3 (Abstract: False), Thin implementation (LOC=14) |
-| 23 | `OpenGSR` | `OpenGSR\Assets\Scripts\Player\AsmExport\PlayerDataLinker.cs` | **85** | 4/26 | Empty methods x 2 (Abstract: False), Extremely thin implementation (LOC=4) |
+| 23 | `OpenGSR` | `~~OpenGSR\Assets\Scripts\Player\AsmExport\PlayerDataLinker.cs~~` | **85** | 4/26 | Empty methods x 2 (Abstract: False), Extremely thin implementation (LOC=4) |
 | 24 | `OpenGSR` | `OpenGSR\Assets\Scripts\Resource\StageList.cs` | **85** | 11/34 | Empty methods x 3 (Abstract: False), Thin implementation (LOC=11) |
 | 25 | `OpenGSR` | `OpenGSR\Assets\Scripts\Scene\WaitRoom\OnlineWaitRoomSceneEvent.cs` | **85** | 12/52 | Empty methods x 3 (Abstract: False), Thin implementation (LOC=12) |
-| 26 | `OpenGSR` | `OpenGSR\Assets\Scripts\UI\CommonCanvas.cs` | **85** | 4/17 | Empty methods x 2 (Abstract: False), Extremely thin implementation (LOC=4) |
-| 27 | `OpenGSR` | `OpenGSR\Assets\Scripts\UI\LoadingSceneCanvas.cs` | **85** | 4/16 | Empty methods x 2 (Abstract: False), Extremely thin implementation (LOC=4) |
+| 26 | `OpenGSR` | `~~OpenGSR\Assets\Scripts\UI\CommonCanvas.cs~~` | **85** | 4/17 | Empty methods x 2 (Abstract: False), Extremely thin implementation (LOC=4) |
+| 27 | `OpenGSR` | `~~OpenGSR\Assets\Scripts\UI\LoadingSceneCanvas.cs~~` | **85** | 4/16 | Empty methods x 2 (Abstract: False), Extremely thin implementation (LOC=4) |
 | 28 | `OpenGSServer` | `~~OpenGSServer\Database\AccountDatabaseManager.cs~~` | **80** | 121/396 | Empty methods x 4 (Abstract: False) |
 | 29 | `OpenGSR` | `~~OpenGSR\Assets\Scripts\Player\PlayerAgent.cs~~` | **80** | 406/934 | Empty methods x 4 (Abstract: False) |
-| 30 | `OpenGSR` | `OpenGSR\Assets\Scripts\Scene\ExportAssets\ExportAssetScene.cs` | **80** | 203/409 | Unfinished markers x 3, Empty methods x 1 (Abstract: False) |
+| 30 | `OpenGSR` | `~~OpenGSR\Assets\Scripts\Scene\ExportAssets\ExportAssetScene.cs~~` | **80** | 203/409 | Unfinished markers x 3, Empty methods x 1 (Abstract: False) |
 
 ---
 
@@ -218,22 +218,22 @@
 | 5 | `OpenGSR\Assets\Scripts\Mission\SkyFighterMainScript.cs` | **120** | 18/87 | Empty methods x 6 (Abstract: False) | なし |
 | 6 | `OpenGSR\Assets\Scripts\Core\StageList.cs` | **105** | 12/50 | Empty methods x 4 (Abstract: False), Thin implementation (LOC=12) | なし |
 | 7 | `OpenGSR\Assets\Scripts\Scene\MatchNetworkManagerMainScript.cs` | **105** | 7/34 | Empty methods x 4 (Abstract: False), Thin implementation (LOC=7) | なし |
-| 8 | `OpenGSR\Assets\Scripts\Core\CustomRenderer.cs` | **100** | 0/24 | Empty methods x 2 (Abstract: False), Empty file / only declarations (LOC=0) | なし |
+| 8 | `~~OpenGSR\Assets\Scripts\Core\CustomRenderer.cs~~` | **100** | 0/24 | Empty methods x 2 (Abstract: False), Empty file / only declarations (LOC=0) | なし |
 | 9 | `OpenGSR\Assets\Scripts\Player\AsmExport\AbstractPlayer.cs` | **90** | 276/608 | Empty methods x 18 (Abstract: True) | なし |
-| 10 | `OpenGSR\Assets\Scripts\BaseLib\Audio.cs` | **85** | 3/14 | Empty methods x 2 (Abstract: False), Extremely thin implementation (LOC=3) | なし |
+| 10 | `~~OpenGSR\Assets\Scripts\BaseLib\Audio.cs~~` | **85** | 3/14 | Empty methods x 2 (Abstract: False), Extremely thin implementation (LOC=3) | なし |
 | 11 | `OpenGSR\Assets\Scripts\Core\FireEffect.cs` | **85** | 9/43 | Empty methods x 3 (Abstract: False), Thin implementation (LOC=9) | なし |
-| 12 | `OpenGSR\Assets\Scripts\Core\Rigidbody2DExtension.cs` | **85** | 8/34 | Empty methods x 3 (Abstract: False), Thin implementation (LOC=8) | なし |
+| 12 | `~~OpenGSR\Assets\Scripts\Core\Rigidbody2DExtension.cs~~` | **85** | 8/34 | Empty methods x 3 (Abstract: False), Thin implementation (LOC=8) | なし |
 | 13 | `~~OpenGSR\Assets\Scripts\Core\Base\EventManager.cs~~` | **85** | 13/58 | Empty methods x 3 (Abstract: False), Thin implementation (LOC=13) | なし |
 | 14 | `~~OpenGSR\Assets\Scripts\Core\Base\MissionManager.cs~~` | **85** | 5/29 | Empty methods x 2 (Abstract: False), Extremely thin implementation (LOC=5) | なし |
 | 15 | `OpenGSR\Assets\Scripts\Match\GodModeMainScript.cs` | **85** | 4/25 | Empty methods x 2 (Abstract: False), Extremely thin implementation (LOC=4) | なし |
 | 16 | `OpenGSR\Assets\Scripts\Match\TSUVMainScript.cs` | **85** | 14/68 | Empty methods x 3 (Abstract: False), Thin implementation (LOC=14) | なし |
-| 17 | `OpenGSR\Assets\Scripts\Player\AsmExport\PlayerDataLinker.cs` | **85** | 4/26 | Empty methods x 2 (Abstract: False), Extremely thin implementation (LOC=4) | なし |
+| 17 | `~~OpenGSR\Assets\Scripts\Player\AsmExport\PlayerDataLinker.cs~~` | **85** | 4/26 | Empty methods x 2 (Abstract: False), Extremely thin implementation (LOC=4) | なし |
 | 18 | `OpenGSR\Assets\Scripts\Resource\StageList.cs` | **85** | 11/34 | Empty methods x 3 (Abstract: False), Thin implementation (LOC=11) | なし |
 | 19 | `OpenGSR\Assets\Scripts\Scene\WaitRoom\OnlineWaitRoomSceneEvent.cs` | **85** | 12/52 | Empty methods x 3 (Abstract: False), Thin implementation (LOC=12) | なし |
-| 20 | `OpenGSR\Assets\Scripts\UI\CommonCanvas.cs` | **85** | 4/17 | Empty methods x 2 (Abstract: False), Extremely thin implementation (LOC=4) | なし |
-| 21 | `OpenGSR\Assets\Scripts\UI\LoadingSceneCanvas.cs` | **85** | 4/16 | Empty methods x 2 (Abstract: False), Extremely thin implementation (LOC=4) | なし |
+| 20 | `~~OpenGSR\Assets\Scripts\UI\CommonCanvas.cs~~` | **85** | 4/17 | Empty methods x 2 (Abstract: False), Extremely thin implementation (LOC=4) | なし |
+| 21 | `~~OpenGSR\Assets\Scripts\UI\LoadingSceneCanvas.cs~~` | **85** | 4/16 | Empty methods x 2 (Abstract: False), Extremely thin implementation (LOC=4) | なし |
 | 22 | `~~OpenGSR\Assets\Scripts\Player\PlayerAgent.cs~~` | **80** | 406/934 | Empty methods x 4 (Abstract: False) | なし |
-| 23 | `OpenGSR\Assets\Scripts\Scene\ExportAssets\ExportAssetScene.cs` | **80** | 203/409 | Unfinished markers x 3, Empty methods x 1 (Abstract: False) | 未実装 (L54): `noop for now - placeholder for editor...` |
+| 23 | `~~OpenGSR\Assets\Scripts\Scene\ExportAssets\ExportAssetScene.cs~~` | **80** | 203/409 | Unfinished markers x 3, Empty methods x 1 (Abstract: False) | 未実装 (L54): `noop for now - placeholder for editor...` |
 | 24 | `OpenGSR\Assets\Scripts\Scene\AbstractScene.cs` | **75** | 251/511 | Empty methods x 15 (Abstract: True) | なし |
 | 25 | `OpenGSR\Assets\Scripts\Match\AbstractMatchMainScript.cs` | **70** | 273/666 | Empty methods x 14 (Abstract: True) | なし |
 | 26 | `OpenGSR\Assets\Scripts\SandBag.cs` | **65** | 10/40 | Empty methods x 2 (Abstract: False), Thin implementation (LOC=10) | なし |
