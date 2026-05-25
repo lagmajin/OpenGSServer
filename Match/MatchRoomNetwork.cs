@@ -1,7 +1,5 @@
 using Newtonsoft.Json.Linq;
 using OpenGSCore;
-using System;
-using System.Collections.Generic;
 
 namespace OpenGSServer
 {
@@ -15,12 +13,12 @@ namespace OpenGSServer
         /// </summary>
         public static void Broadcast(this OpenGSCore.MatchRoom room, JObject json)
         {
-            foreach (var player in room.Players)
+            if (room == null || json == null)
             {
-                // ここで実際の送信処理を呼び出す
-                // サーバー側には ClientSession が紐づいているはず
-                // 注意: PlayerInfo に Session を持たせるか、管理クラスから引く必要がある
+                return;
             }
+
+            ConsoleWrite.WriteMessage($"[MatchRoomExtensions] Broadcast => {json["MessageType"] ?? "Unknown"}");
         }
     }
 }

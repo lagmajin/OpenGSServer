@@ -1,25 +1,17 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using System.Diagnostics;
 
 namespace OpenGSServer.Room
 {
-    public partial class WaitRoom
+    public class WaitRoomEvent
     {
-        private void OnLoadingCompleted()
+        public void OnLoadingCompleted()
         {
-
+            Debug.WriteLine("[WaitRoomEvent] Loading completed");
         }
 
-        private void OnLoadingCanceled()
+        public void OnLoadingCanceled()
         {
-
+            Debug.WriteLine("[WaitRoomEvent] Loading canceled");
         }
-
-
-
-
     }
 }

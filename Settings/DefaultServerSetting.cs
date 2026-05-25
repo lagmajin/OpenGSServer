@@ -1,34 +1,36 @@
-﻿using Newtonsoft.Json.Linq;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using Newtonsoft.Json.Linq;
 
 namespace OpenGSServer
 {
     public class DefaultServerSetting
     {
-        public int DefaultDMKillCondition { get; set; }
-        public int DefaultTDMKillCondition { get; set; }
+        public int DefaultDMKillCondition { get; set; } = 20;
+        public int DefaultTDMKillCondition { get; set; } = 20;
+        public int DefaultMissionCapacity { get; set; } = 4;
 
-       public DefaultServerSetting()
+        public DefaultServerSetting()
         {
-
         }
-
 
         public JObject ToJson()
         {
-            var result = new JObject();
-            result["DM"]["DefaultConditionKill"] = 20;
-            result["DM"]["MatchDefaultTime"] = 300;
-
-            result["TDM"]["DefaultConditionKill"] = 20;
-            
-            return result;
+            return new JObject
+            {
+                ["DM"] = new JObject
+                {
+                    ["DefaultConditionKill"] = DefaultDMKillCondition,
+                    ["MatchDefaultTime"] = 300
+                },
+                ["TDM"] = new JObject
+                {
+                    ["DefaultConditionKill"] = DefaultTDMKillCondition,
+                    ["MatchDefaultTime"] = 300
+                },
+                ["Mission"] = new JObject
+                {
+                    ["DefaultCapacity"] = DefaultMissionCapacity
+                }
+            };
         }
-
-
     }
 }

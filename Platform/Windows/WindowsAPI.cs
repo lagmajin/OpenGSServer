@@ -1,7 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
+using System;
 using System.Runtime.InteropServices;
-using System.Text;
 
 namespace OpenGSServer.Platform.Windows
 {
@@ -13,6 +11,18 @@ namespace OpenGSServer.Platform.Windows
         [DllImport("kernel32.dll")]
         extern static int QueryPerformanceFrequency(ref long x);
 
+        public static long PerformanceCounter()
+        {
+            long result = 0;
+            QueryPerformanceCounter(ref result);
+            return result;
+        }
 
+        public static long PerformanceFrequency()
+        {
+            long result = 0;
+            QueryPerformanceFrequency(ref result);
+            return result;
+        }
     }
 }
