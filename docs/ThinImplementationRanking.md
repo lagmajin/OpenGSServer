@@ -112,6 +112,7 @@
   - ~~`OpenGSR\Assets\Scripts\Match\TSUVMainScript.cs`~~
   - ~~`OpenGSR\Assets\Scripts\Mission\MissionMainScript.cs`~~
   - ~~`OpenGSR\Assets\Scripts\Core\NewBehaviourScript.cs`~~
+  - ~~`OpenGSR\Assets\Scripts\Stages\AsmExport\FlagStand.cs`~~
   - ~~`OpenGSR\Assets\Scripts\Interface\IMetalBreakerMainScript.cs`~~
   - ~~`OpenGSR\Assets\Scripts\Mission\MetalBreakerMainScript.cs`~~
   - ~~`OpenGSR\Assets\Scripts\Network\ConnectToLobbyNetworkManager.cs`~~
@@ -128,6 +129,8 @@
   - ~~`OpenGSR\Assets\Scripts\Player\PlayerAgent.cs`~~
   - ~~`OpenGSR\Assets\Scripts\Weapon\FieldWeaponAgent.cs`~~
   - ~~`OpenGSR\Assets\Scripts\Weapon\FieldWeaponController.cs`~~
+  - ~~`OpenGSR\Assets\Scripts\Core\TeamBalanceButton.cs`~~
+  - ~~`OpenGSR\Assets\Scripts\BaseLib\Map\JumpStand.cs`~~
   - ~~`OpenGSR\Assets\Scripts\SandBag.cs`~~
   - ~~`OpenGSR\Assets\Scripts\BaseLib\GameFlagManagerControlPanel.cs`~~
   - ~~`OpenGSR\Assets\Scripts\BaseLib\HUDPlayerNameCanvas.cs`~~
@@ -159,10 +162,10 @@
 | 19 | `OpenGSR` | `OpenGSR\Assets\Scripts\Scene\OnlineLoadingScene.cs` | **60** | 170/348 | Empty methods x 3 (Abstract: False) |
 | 20 | `OpenGSR` | `OpenGSR\Assets\Scripts\Scene\OnlineLobbyScene.cs` | **60** | 450/848 | Empty methods x 3 (Abstract: False) |
 | 21 | `OpenGSR` | `OpenGSR\Assets\Scripts\Scene\OnlineWaitRoomScene.cs` | **60** | 399/815 | Empty methods x 3 (Abstract: False) |
-| 22 | `OpenGSR` | `OpenGSR\Assets\Scripts\Stages\AsmExport\FlagStand.cs` | **60** | 74/201 | Empty methods x 3 (Abstract: False) |
+| 22 | `OpenGSR` | `~~OpenGSR\Assets\Scripts\Stages\AsmExport\FlagStand.cs~~` | **60** | 74/201 | Empty methods x 3 (Abstract: False) |
 | 23 | `OpenGSR` | `~~OpenGSR\Assets\Scripts\Weapon\FieldWeaponController.cs~~` | **60** | 44/183 | Empty methods x 3 (Abstract: False) |
-| 24 | `OpenGSR` | `OpenGSR\Assets\Scripts\Core\TeamBalanceButton.cs` | **55** | 5/32 | Empty methods x 2 (Abstract: True), Extremely thin implementation (LOC=5) |
-| 25 | `OpenGSR` | `OpenGSR\Assets\Scripts\BaseLib\Map\JumpStand.cs` | **50** | 11/45 | Empty methods x 5 (Abstract: True), Thin implementation (LOC=11) |
+| 24 | `~~OpenGSR\Assets\Scripts\Core\TeamBalanceButton.cs~~` | **55** | 5/32 | Empty methods x 2 (Abstract: True), Extremely thin implementation (LOC=5) |
+| 25 | `~~OpenGSR\Assets\Scripts\BaseLib\Map\JumpStand.cs~~` | **50** | 11/45 | Empty methods x 5 (Abstract: True), Thin implementation (LOC=11) |
 | 26 | `OpenGSCore` | `OpenGSCore\Item\AbstractItemEffect.cs` | **45** | 5/15 | Extremely thin implementation (LOC=5) |
 | 27 | `OpenGSCore` | `~~OpenGSCore\Match\Situation\CaptureTheFlagMatchSituation.cs~~` | **45** | 4/12 | Extremely thin implementation (LOC=4) |
 | 28 | `OpenGSCore` | `~~OpenGSCore\Match\Situation\DeathMatchMatchSituation.cs~~` | **45** | 2/10 | Extremely thin implementation (LOC=2) |
@@ -265,10 +268,10 @@
 | 19 | `OpenGSR\Assets\Scripts\Scene\OnlineLoadingScene.cs` | **60** | 170/348 | Empty methods x 3 (Abstract: False) | なし |
 | 20 | `OpenGSR\Assets\Scripts\Scene\OnlineLobbyScene.cs` | **60** | 450/848 | Empty methods x 3 (Abstract: False) | なし |
 | 21 | `OpenGSR\Assets\Scripts\Scene\OnlineWaitRoomScene.cs` | **60** | 399/815 | Empty methods x 3 (Abstract: False) | なし |
-| 22 | `OpenGSR\Assets\Scripts\Stages\AsmExport\FlagStand.cs` | **60** | 74/201 | Empty methods x 3 (Abstract: False) | なし |
+| 22 | `~~OpenGSR\Assets\Scripts\Stages\AsmExport\FlagStand.cs~~` | **60** | 74/201 | Empty methods x 3 (Abstract: False) | なし |
 | 23 | `~~OpenGSR\Assets\Scripts\Weapon\FieldWeaponController.cs~~` | **60** | 44/183 | Empty methods x 3 (Abstract: False) | なし |
-| 24 | `OpenGSR\Assets\Scripts\Core\TeamBalanceButton.cs` | **55** | 5/32 | Empty methods x 2 (Abstract: True), Extremely thin implementation (LOC=5) | なし |
-| 25 | `OpenGSR\Assets\Scripts\BaseLib\Map\JumpStand.cs` | **50** | 11/45 | Empty methods x 5 (Abstract: True), Thin implementation (LOC=11) | なし |
+| 24 | `~~OpenGSR\Assets\Scripts\Core\TeamBalanceButton.cs~~` | **55** | 5/32 | Empty methods x 2 (Abstract: True), Extremely thin implementation (LOC=5) | なし |
+| 25 | `~~OpenGSR\Assets\Scripts\BaseLib\Map\JumpStand.cs~~` | **50** | 11/45 | Empty methods x 5 (Abstract: True), Thin implementation (LOC=11) | なし |
 | 26 | `OpenGSR\Assets\Scripts\BulletImpactEffect.cs` | **45** | 5/24 | Extremely thin implementation (LOC=5) | なし |
 | 27 | `OpenGSR\Assets\Scripts\PlayerWeaponAttachment.cs` | **45** | 3/24 | Extremely thin implementation (LOC=3) | なし |
 | 28 | `OpenGSR\Assets\Scripts\BaseLib\Controller2D.cs` | **45** | 4/18 | Extremely thin implementation (LOC=4) | なし |
