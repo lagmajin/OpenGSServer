@@ -27,6 +27,7 @@
   - ~~`OpenGSCore\Event\MissionGameEvent.cs`~~
   - ~~`OpenGSCore\Event\SuvGameEvent.cs`~~
   - ~~`OpenGSCore\Guild\Guild.cs`~~
+  - ~~`OpenGSCore\FlagState.cs`~~
   - ~~`OpenGSCore\Loading\LoadingFailReason.cs`~~
   - ~~`OpenGSCore\Map\AbstractStage.cs`~~
   - ~~`OpenGSCore\Map\ArchloadGunster.cs`~~
@@ -43,6 +44,8 @@
   - ~~`OpenGSCore\Match\Setting\Team\CaptureTheFlagMatchSetting.cs`~~
   - ~~`OpenGSCore\Match\Setting\Team\TDMMatchSetting.cs`~~
   - ~~`OpenGSCore\Match\Setting\Team\TeamSurvival.cs`~~
+  - ~~`OpenGSCore\Extention\DictionaryExtension.cs`~~
+  - ~~`OpenGSCore\Match\Rule\IMatchResultEvaluator.cs`~~
 - `OpenGSServer`
   - ~~`OpenGSServer\Server\Event\ManagementServerEvent.cs`~~
   - ~~`OpenGSServer\Database\ServerInfoDatabaseManager.cs`~~
