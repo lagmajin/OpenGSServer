@@ -121,11 +121,13 @@
   - ~~`OpenGSR\Assets\Scripts\Resource\StageList.cs`~~
   - ~~`OpenGSR\Assets\Scripts\Scene\WaitRoom\OnlineWaitRoomSceneEvent.cs`~~
   - ~~`OpenGSR\Assets\Scripts\Scene\OfflineLoadingScene.cs`~~
+  - ~~`OpenGSR\Assets\Scripts\NetworkTest\LocalTestMatchRUDPServer.cs`~~
   - ~~`OpenGSR\Assets\Scripts\UI\CommonCanvas.cs`~~
   - ~~`OpenGSR\Assets\Scripts\UI\LoadingSceneCanvas.cs`~~
   - ~~`OpenGSR\Assets\Scripts\Scene\ExportAssets\ExportAssetScene.cs`~~
   - ~~`OpenGSR\Assets\Scripts\Player\PlayerAgent.cs`~~
   - ~~`OpenGSR\Assets\Scripts\Weapon\FieldWeaponAgent.cs`~~
+  - ~~`OpenGSR\Assets\Scripts\Weapon\FieldWeaponController.cs`~~
   - ~~`OpenGSR\Assets\Scripts\SandBag.cs`~~
   - ~~`OpenGSR\Assets\Scripts\BaseLib\GameFlagManagerControlPanel.cs`~~
   - ~~`OpenGSR\Assets\Scripts\BaseLib\HUDPlayerNameCanvas.cs`~~
@@ -150,7 +152,7 @@
 | 12 | `OpenGSR` | `~~OpenGSR\Assets\Scripts\Core\TransformExtension.cs~~` | **60** | 17/56 | Empty methods x 3 (Abstract: False) |
 | 13 | `OpenGSR` | `~~OpenGSR\Assets\Scripts\Interface\IMetalBreakerMainScript.cs~~` | **60** | 1/13 | TODO comments x 1, Extremely thin implementation (LOC=1) |
 | 14 | `OpenGSR` | `~~OpenGSR\Assets\Scripts\Mission\MetalBreakerMainScript.cs~~` | **60** | 21/89 | Empty methods x 3 (Abstract: False) |
-| 15 | `OpenGSR` | `OpenGSR\Assets\Scripts\NetworkTest\LocalTestMatchRUDPServer.cs` | **60** | 317/562 | Unfinished markers x 3 |
+| 15 | `OpenGSR` | `~~OpenGSR\Assets\Scripts\NetworkTest\LocalTestMatchRUDPServer.cs~~` | **60** | 317/562 | Unfinished markers x 3 |
 | 16 | `OpenGSR` | `~~OpenGSR\Assets\Scripts\Player\Character.cs~~` | **60** | 128/226 | Empty methods x 3 (Abstract: False) |
 | 17 | `OpenGSR` | `~~OpenGSR\Assets\Scripts\Scene\OfflineLoadingScene.cs~~` | **60** | 67/155 | Empty methods x 3 (Abstract: False) |
 | 18 | `OpenGSR` | `OpenGSR\Assets\Scripts\Scene\OfflineWaitRoomScene.cs` | **60** | 455/858 | Empty methods x 3 (Abstract: False) |
@@ -158,7 +160,7 @@
 | 20 | `OpenGSR` | `OpenGSR\Assets\Scripts\Scene\OnlineLobbyScene.cs` | **60** | 450/848 | Empty methods x 3 (Abstract: False) |
 | 21 | `OpenGSR` | `OpenGSR\Assets\Scripts\Scene\OnlineWaitRoomScene.cs` | **60** | 399/815 | Empty methods x 3 (Abstract: False) |
 | 22 | `OpenGSR` | `OpenGSR\Assets\Scripts\Stages\AsmExport\FlagStand.cs` | **60** | 74/201 | Empty methods x 3 (Abstract: False) |
-| 23 | `OpenGSR` | `OpenGSR\Assets\Scripts\Weapon\FieldWeaponController.cs` | **60** | 44/183 | Empty methods x 3 (Abstract: False) |
+| 23 | `OpenGSR` | `~~OpenGSR\Assets\Scripts\Weapon\FieldWeaponController.cs~~` | **60** | 44/183 | Empty methods x 3 (Abstract: False) |
 | 24 | `OpenGSR` | `OpenGSR\Assets\Scripts\Core\TeamBalanceButton.cs` | **55** | 5/32 | Empty methods x 2 (Abstract: True), Extremely thin implementation (LOC=5) |
 | 25 | `OpenGSR` | `OpenGSR\Assets\Scripts\BaseLib\Map\JumpStand.cs` | **50** | 11/45 | Empty methods x 5 (Abstract: True), Thin implementation (LOC=11) |
 | 26 | `OpenGSCore` | `OpenGSCore\Item\AbstractItemEffect.cs` | **45** | 5/15 | Extremely thin implementation (LOC=5) |
@@ -257,7 +259,7 @@
 | 12 | `~~OpenGSR\Assets\Scripts\Core\TransformExtension.cs~~` | **60** | 17/56 | Empty methods x 3 (Abstract: False) | なし |
 | 13 | `~~OpenGSR\Assets\Scripts\Interface\IMetalBreakerMainScript.cs~~` | **60** | 1/13 | TODO comments x 1, Extremely thin implementation (LOC=1) | なし |
 | 14 | `~~OpenGSR\Assets\Scripts\Mission\MetalBreakerMainScript.cs~~` | **60** | 21/89 | Empty methods x 3 (Abstract: False) | なし |
-| 15 | `OpenGSR\Assets\Scripts\NetworkTest\LocalTestMatchRUDPServer.cs` | **60** | 317/562 | Unfinished markers x 3 | 未実装 (L33): `テスト用：ダミープレイヤーの状態` |
+| 15 | `~~OpenGSR\Assets\Scripts\NetworkTest\LocalTestMatchRUDPServer.cs~~` | **60** | 317/562 | Unfinished markers x 3 | なし |
 | 16 | `~~OpenGSR\Assets\Scripts\Player\Character.cs~~` | **60** | 128/226 | Empty methods x 3 (Abstract: False) | なし |
 | 17 | `~~OpenGSR\Assets\Scripts\Scene\OfflineLoadingScene.cs~~` | **60** | 67/155 | Empty methods x 3 (Abstract: False) | なし |
 | 18 | `OpenGSR\Assets\Scripts\Scene\OfflineWaitRoomScene.cs` | **60** | 455/858 | Empty methods x 3 (Abstract: False) | なし |
@@ -265,7 +267,7 @@
 | 20 | `OpenGSR\Assets\Scripts\Scene\OnlineLobbyScene.cs` | **60** | 450/848 | Empty methods x 3 (Abstract: False) | なし |
 | 21 | `OpenGSR\Assets\Scripts\Scene\OnlineWaitRoomScene.cs` | **60** | 399/815 | Empty methods x 3 (Abstract: False) | なし |
 | 22 | `OpenGSR\Assets\Scripts\Stages\AsmExport\FlagStand.cs` | **60** | 74/201 | Empty methods x 3 (Abstract: False) | なし |
-| 23 | `OpenGSR\Assets\Scripts\Weapon\FieldWeaponController.cs` | **60** | 44/183 | Empty methods x 3 (Abstract: False) | なし |
+| 23 | `~~OpenGSR\Assets\Scripts\Weapon\FieldWeaponController.cs~~` | **60** | 44/183 | Empty methods x 3 (Abstract: False) | なし |
 | 24 | `OpenGSR\Assets\Scripts\Core\TeamBalanceButton.cs` | **55** | 5/32 | Empty methods x 2 (Abstract: True), Extremely thin implementation (LOC=5) | なし |
 | 25 | `OpenGSR\Assets\Scripts\BaseLib\Map\JumpStand.cs` | **50** | 11/45 | Empty methods x 5 (Abstract: True), Thin implementation (LOC=11) | なし |
 | 26 | `OpenGSR\Assets\Scripts\BulletImpactEffect.cs` | **45** | 5/24 | Extremely thin implementation (LOC=5) | なし |
