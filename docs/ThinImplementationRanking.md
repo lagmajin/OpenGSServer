@@ -111,6 +111,9 @@
   - ~~`OpenGSR\Assets\Scripts\Match\MatchEventProvider.cs`~~
   - ~~`OpenGSR\Assets\Scripts\Match\TSUVMainScript.cs`~~
   - ~~`OpenGSR\Assets\Scripts\Mission\MissionMainScript.cs`~~
+  - ~~`OpenGSR\Assets\Scripts\Core\NewBehaviourScript.cs`~~
+  - ~~`OpenGSR\Assets\Scripts\Interface\IMetalBreakerMainScript.cs`~~
+  - ~~`OpenGSR\Assets\Scripts\Mission\MetalBreakerMainScript.cs`~~
   - ~~`OpenGSR\Assets\Scripts\Network\ConnectToLobbyNetworkManager.cs`~~
   - ~~`OpenGSR\Assets\Scripts\Player\AsmExport\PlayerDataLinker.cs`~~
   - ~~`OpenGSR\Assets\Scripts\Player\Character.cs`~~
@@ -143,10 +146,10 @@
 | 8 | `OpenGSR` | `~~OpenGSR\Assets\Scripts\Weapon\FieldWeaponAgent.cs~~` | **65** | 5/27 | Empty methods x 1 (Abstract: False), Extremely thin implementation (LOC=5) |
 | 9 | `OpenGSR` | `~~OpenGSR\Assets\Scripts\DamageCanvas.cs~~` | **60** | 24/90 | Empty methods x 3 (Abstract: False) |
 | 10 | `OpenGSR` | `~~OpenGSR\Assets\Scripts\Core\MultipleTags.cs~~` | **60** | 88/224 | Empty methods x 3 (Abstract: False) |
-| 11 | `OpenGSR` | `OpenGSR\Assets\Scripts\Core\NewBehaviourScript.cs` | **60** | 0/22 | Empty file / only declarations (LOC=0) |
+| 11 | `OpenGSR` | `~~OpenGSR\Assets\Scripts\Core\NewBehaviourScript.cs~~` | **60** | 0/22 | Empty file / only declarations (LOC=0) |
 | 12 | `OpenGSR` | `~~OpenGSR\Assets\Scripts\Core\TransformExtension.cs~~` | **60** | 17/56 | Empty methods x 3 (Abstract: False) |
-| 13 | `OpenGSR` | `OpenGSR\Assets\Scripts\Interface\IMetalBreakerMainScript.cs` | **60** | 1/13 | TODO comments x 1, Extremely thin implementation (LOC=1) |
-| 14 | `OpenGSR` | `OpenGSR\Assets\Scripts\Mission\MetalBreakerMainScript.cs` | **60** | 21/89 | Empty methods x 3 (Abstract: False) |
+| 13 | `OpenGSR` | `~~OpenGSR\Assets\Scripts\Interface\IMetalBreakerMainScript.cs~~` | **60** | 1/13 | TODO comments x 1, Extremely thin implementation (LOC=1) |
+| 14 | `OpenGSR` | `~~OpenGSR\Assets\Scripts\Mission\MetalBreakerMainScript.cs~~` | **60** | 21/89 | Empty methods x 3 (Abstract: False) |
 | 15 | `OpenGSR` | `OpenGSR\Assets\Scripts\NetworkTest\LocalTestMatchRUDPServer.cs` | **60** | 317/562 | Unfinished markers x 3 |
 | 16 | `OpenGSR` | `~~OpenGSR\Assets\Scripts\Player\Character.cs~~` | **60** | 128/226 | Empty methods x 3 (Abstract: False) |
 | 17 | `OpenGSR` | `~~OpenGSR\Assets\Scripts\Scene\OfflineLoadingScene.cs~~` | **60** | 67/155 | Empty methods x 3 (Abstract: False) |
@@ -250,10 +253,10 @@
 | 8 | `~~OpenGSR\Assets\Scripts\Weapon\FieldWeaponAgent.cs~~` | **65** | 5/27 | Empty methods x 1 (Abstract: False), Extremely thin implementation (LOC=5) | なし |
 | 9 | `~~OpenGSR\Assets\Scripts\DamageCanvas.cs~~` | **60** | 24/90 | Empty methods x 3 (Abstract: False) | なし |
 | 10 | `~~OpenGSR\Assets\Scripts\Core\MultipleTags.cs~~` | **60** | 88/224 | Empty methods x 3 (Abstract: False) | なし |
-| 11 | `OpenGSR\Assets\Scripts\Core\NewBehaviourScript.cs` | **60** | 0/22 | Empty file / only declarations (LOC=0) | なし |
+| 11 | `~~OpenGSR\Assets\Scripts\Core\NewBehaviourScript.cs~~` | **60** | 0/22 | Empty file / only declarations (LOC=0) | なし |
 | 12 | `~~OpenGSR\Assets\Scripts\Core\TransformExtension.cs~~` | **60** | 17/56 | Empty methods x 3 (Abstract: False) | なし |
-| 13 | `OpenGSR\Assets\Scripts\Interface\IMetalBreakerMainScript.cs` | **60** | 1/13 | TODO comments x 1, Extremely thin implementation (LOC=1) | TODO (L11): `TODO: MetalBreaker 固有のメソッドを追加する` |
-| 14 | `OpenGSR\Assets\Scripts\Mission\MetalBreakerMainScript.cs` | **60** | 21/89 | Empty methods x 3 (Abstract: False) | なし |
+| 13 | `~~OpenGSR\Assets\Scripts\Interface\IMetalBreakerMainScript.cs~~` | **60** | 1/13 | TODO comments x 1, Extremely thin implementation (LOC=1) | なし |
+| 14 | `~~OpenGSR\Assets\Scripts\Mission\MetalBreakerMainScript.cs~~` | **60** | 21/89 | Empty methods x 3 (Abstract: False) | なし |
 | 15 | `OpenGSR\Assets\Scripts\NetworkTest\LocalTestMatchRUDPServer.cs` | **60** | 317/562 | Unfinished markers x 3 | 未実装 (L33): `テスト用：ダミープレイヤーの状態` |
 | 16 | `~~OpenGSR\Assets\Scripts\Player\Character.cs~~` | **60** | 128/226 | Empty methods x 3 (Abstract: False) | なし |
 | 17 | `~~OpenGSR\Assets\Scripts\Scene\OfflineLoadingScene.cs~~` | **60** | 67/155 | Empty methods x 3 (Abstract: False) | なし |
