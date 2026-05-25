@@ -1,15 +1,13 @@
-﻿
 using LiteNetLib;
 using LiteNetLib.Utils;
 using Newtonsoft.Json.Linq;
-using OpenGSServer;
 using System.Threading.Tasks;
 
 namespace OpenGSServer
 {
     public class MatchRUdpSession
     {
-        private NetPeer peer_;
+        private readonly NetPeer peer_;
         public string IP { get; set; }
 
         public MatchRUdpSession(NetPeer peer)
@@ -22,29 +20,35 @@ namespace OpenGSServer
 
         public void SendJson(JObject json)
         {
-            var str = json.ToString();
+            if (peer_ == null || json == null)
+            {
+                return;
+            }
 
             var writer = new NetDataWriter();
-
-            writer.Put(str);
+            writer.Put(json.ToString());
             peer_.Send(writer, DeliveryMethod.ReliableOrdered);
-
         }
 
-        public async Task SendJsonAsync(JObject json)
+        public Task SendJsonAsync(JObject json)
         {
-
-
+            SendJson(json);
+            return Task.CompletedTask;
         }
 
         public void SendErrorMessage(string errorMsg)
         {
-
+            SendJson(new JObject
+            {
+                ["MessageType"] = ServerMessageTypes.Error,
+                ["ErrorMessage"] = errorMsg ?? string.Empty
+            });
         }
 
-        public void SendErrorMessageAsync()
+        public Task SendErrorMessageAsync(string errorMsg)
         {
-
+            SendErrorMessage(errorMsg);
+            return Task.CompletedTask;
         }
     }
 }

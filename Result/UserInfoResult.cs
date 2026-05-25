@@ -1,27 +1,41 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Security.Cryptography.X509Certificates;
-using System.Text;
-using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
+using OpenGSCore;
 
 namespace OpenGSServer
 {
-    public class UserInfoResult:AbstractResult
+    public class UserInfoResult : AbstractResult
     {
+        public PlayerAccount? Account { get; set; }
+        public PlayerServerInformation? ServerInformation { get; set; }
+
         public UserInfoResult()
         {
-
-
-            
         }
 
+        public UserInfoResult(PlayerAccount? account, PlayerServerInformation? serverInformation)
+        {
+            Account = account;
+            ServerInformation = serverInformation;
+        }
 
         public JObject ToJson()
         {
-            return null;
-        }
+            var result = new JObject
+            {
+                ["MessageType"] = MessageType.PlayerInfoResponse
+            };
 
+            if (Account != null)
+            {
+                result["Account"] = Account.ToJson();
+            }
+
+            if (ServerInformation != null)
+            {
+                result["ServerInformation"] = ServerInformation.ToJson();
+            }
+
+            return result;
+        }
     }
 }

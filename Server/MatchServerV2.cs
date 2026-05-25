@@ -203,7 +203,25 @@ namespace OpenGSServer
         /// </summary>
         public void BroadcastToAll(string messageType, Action<LiteNetLib.Utils.NetDataWriter> writeData)
         {
-            // TODO: 必要であれば実装
+            var matchRoomManager = MatchRoomManager.Instance;
+            if (matchRoomManager == null)
+            {
+                return;
+            }
+
+            foreach (var room in matchRoomManager.AllRooms().OfType<MatchRoom>())
+            {
+                var firstPlayer = room.Players.FirstOrDefault(player => !string.IsNullOrWhiteSpace(player.Id));
+                if (firstPlayer == null)
+                {
+                    continue;
+                }
+
+                if (int.TryParse(firstPlayer.Id, out var peerId))
+                {
+                    _udpServer?.BroadcastToRoom(peerId, messageType, writeData);
+                }
+            }
         }
 
         /// <summary>

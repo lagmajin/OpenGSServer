@@ -1,36 +1,28 @@
-﻿using Newtonsoft.Json.Linq;
+using Newtonsoft.Json.Linq;
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using System.Reflection;
 
 namespace OpenGSServer
 {
     public class ServerInfoManager
     {
-        private string serverAssemblyVersion;
+        public string ServerAssemblyVersion { get; private set; } = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? string.Empty;
+        public string ServerAssemblyName { get; private set; } = Assembly.GetExecutingAssembly().GetName().Name ?? string.Empty;
+        public string ServerTimeZone { get; private set; } = TimeZoneInfo.Local.Id;
 
         private ServerInfoManager()
         {
-            var asm=System.Reflection.Assembly.GetExecutingAssembly();
-
-            //asm.get
-
-            Console.WriteLine(asm.GetName());
-
-
         }
 
         public JObject ToJson()
         {
-            var result=new JObject();
-
-
-            return result;
+            return new JObject
+            {
+                ["ServerAssemblyName"] = ServerAssemblyName,
+                ["ServerAssemblyVersion"] = ServerAssemblyVersion,
+                ["ServerTimeZone"] = ServerTimeZone,
+                ["TimestampUtc"] = DateTime.UtcNow.ToString("O")
+            };
         }
-
-
     }
 }
-
