@@ -82,6 +82,7 @@
   - ~~`OpenGSR\Assets\Scripts\Scene\WaitRoom\OnlineWaitRoomSceneEvent.cs`~~
   - ~~`OpenGSR\Assets\Scripts\UI\CommonCanvas.cs`~~
   - ~~`OpenGSR\Assets\Scripts\UI\LoadingSceneCanvas.cs`~~
+  - ~~`OpenGSR\Assets\Scripts\Scene\ExportAssets\ExportAssetScene.cs`~~
 
 ---
 
