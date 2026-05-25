@@ -68,10 +68,13 @@
   - ~~`OpenGSR\Assets\Scripts\Core\Base\OpenGSBaseClass.cs`~~
   - ~~`OpenGSR\Assets\Scripts\Core\BurstArea.cs`~~
   - ~~`OpenGSR\Assets\Scripts\Core\CustomRenderer.cs`~~
+  - ~~`OpenGSR\Assets\Scripts\BaseLib\Audio.cs`~~
   - ~~`OpenGSR\Assets\Scripts\Core\ExpEffect.cs`~~
   - ~~`OpenGSR\Assets\Scripts\Core\FireEffect.cs`~~
+  - ~~`OpenGSR\Assets\Scripts\Core\Rigidbody2DExtension.cs`~~
   - ~~`OpenGSR\Assets\Scripts\Core\StageList.cs`~~
   - ~~`OpenGSR\Assets\Scripts\Match\GodModeMainScript.cs`~~
+  - ~~`OpenGSR\Assets\Scripts\Scene\MatchNetworkManagerMainScript.cs`~~
   - ~~`OpenGSR\Assets\Scripts\Match\MatchEventProvider.cs`~~
   - ~~`OpenGSR\Assets\Scripts\Match\TSUVMainScript.cs`~~
   - ~~`OpenGSR\Assets\Scripts\Player\AsmExport\PlayerDataLinker.cs`~~
