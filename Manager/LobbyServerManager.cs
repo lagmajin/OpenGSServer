@@ -1078,11 +1078,11 @@ namespace OpenGSServer
 
             var accountId = ResolveGuildPlayerId(session, data, "PlayerID", "PlayerId", "AccountID", "AccountId");
             var itemId = data?["ItemId"]?.ToString() ?? string.Empty;
-            var price = data?["Price"]?.ToObject<long>() ?? 0;
+            var price = GetShopPurchasePrice(itemId);
             var db = AccountDatabaseManager.GetInstance();
             var account = db.GetAccount(accountId);
 
-            if (account == null || string.IsNullOrWhiteSpace(itemId))
+            if (account == null || string.IsNullOrWhiteSpace(itemId) || price < 0)
             {
                 session.SendAsyncJsonWithTimeStamp(new JObject
                 {
@@ -1090,7 +1090,7 @@ namespace OpenGSServer
                     ["Success"] = false,
                     ["ItemId"] = itemId,
                     ["Credits"] = account?.Credits ?? 0,
-                    ["ErrorMessage"] = "Account or item is invalid"
+                    ["ErrorMessage"] = price < 0 ? "Item is invalid" : "Account or item is invalid"
                 });
                 return;
             }
@@ -1647,6 +1647,11 @@ namespace OpenGSServer
 
         private static string ResolveGuildPlayerId(ClientSession? session, JObject? data, params string[] candidateKeys)
         {
+            if (session != null && !string.IsNullOrWhiteSpace(session.PlayerID))
+            {
+                return session.PlayerID;
+            }
+
             if (data != null)
             {
                 foreach (var key in candidateKeys)
@@ -1659,12 +1664,34 @@ namespace OpenGSServer
                 }
             }
 
-            if (session != null && !string.IsNullOrWhiteSpace(session.PlayerID))
+            return string.Empty;
+        }
+
+        private static long GetShopPurchasePrice(string itemId)
+        {
+            if (string.IsNullOrWhiteSpace(itemId))
             {
-                return session.PlayerID;
+                return 0;
             }
 
-            return string.Empty;
+            return itemId switch
+            {
+                "Glock" or "MP5" => 250,
+                "DesertEagle" or "Scorpion" or "Uzi" => 350,
+                "AK47" or "M16" or "FAMAS" or "F2000" or "SteyrAug" => 500,
+                "Scout" or "Dragunov" or "PSG1" or "AWP" => 650,
+                "MG42" or "M60" or "FNMinimiSaw" => 800,
+                "LaserGun" or "BubbleGun" or "ChristmasGun" => 900,
+                "Ami" or "Yumi" or "Misty" => 0,
+                "Jack" or "Jackle" or "LittleJ" => 250,
+                "Liu" or "Mary" or "Seoul" => 350,
+                "Wolf" or "Wyvern" or "Shue" or "Swaltz" => 500,
+                "BoostRed" or "BoostBlue" or "BoostGreen" => 400,
+                "HealthKit" => 120,
+                "FireBullet" or "PoisonBullet" => 180,
+                "PowerGrenadePack" or "ClusterGrenadePack" or "MagnetGrenadePack" or "MineGrenadePack" => 220,
+                _ => -1
+            };
         }
 
         private static JObject BuildGuildSummaryJson(DBGuild guild, IEnumerable<DBGuildMember> members)

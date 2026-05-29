@@ -1,5 +1,6 @@
 using System;
 using Newtonsoft.Json.Linq;
+using OpenGSCore;
 using OpenGSServer.Network;
 
 namespace OpenGSServer.Network
@@ -93,7 +94,7 @@ namespace OpenGSServer.Network
             // 全クライアントにスポーンを通知
             var spawnMessage = new JObject
             {
-                ["MessageType"] = "FieldItemSpawn",
+                ["MessageType"] = MessageType.ItemSpawnNotification,
                 ["ItemId"] = itemId,
                 ["ItemType"] = itemType,
                 ["PositionX"] = x,
@@ -126,7 +127,7 @@ namespace OpenGSServer.Network
 
             var spawnMessage = new JObject
             {
-                ["MessageType"] = "FieldItemSpawn",
+                ["MessageType"] = MessageType.ItemSpawnNotification,
                 ["ItemId"] = itemId,
                 ["ItemType"] = itemType,
                 ["SpawnPointId"] = item.SpawnPointId,
@@ -155,7 +156,7 @@ namespace OpenGSServer.Network
 
             var despawnMessage = new JObject
             {
-                ["MessageType"] = "FieldItemDespawn",
+                ["MessageType"] = MessageType.ItemDespawnNotification,
                 ["ItemId"] = itemId
             };
 
@@ -175,7 +176,7 @@ namespace OpenGSServer.Network
 
             var despawnMessage = new JObject
             {
-                ["MessageType"] = "FieldItemDespawn"
+                ["MessageType"] = MessageType.ItemDespawnNotification
             };
 
             broadcast(despawnMessage);
