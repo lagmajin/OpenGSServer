@@ -109,6 +109,41 @@ namespace OpenGSServer.Network
         }
 
         /// <summary>
+        /// スポーン地点ベースでアイテムをスポーンさせる
+        /// </summary>
+        public static string SpawnItem(
+            ServerFieldItemManager itemManager,
+            string itemType,
+            int spawnPointId,
+            Action<JObject> broadcast)
+        {
+            string itemId = itemManager.SpawnItem(itemType, spawnPointId);
+
+            if (!itemManager.TryGetItem(itemId, out var item))
+            {
+                return itemId;
+            }
+
+            var spawnMessage = new JObject
+            {
+                ["MessageType"] = "FieldItemSpawn",
+                ["ItemId"] = itemId,
+                ["ItemType"] = itemType,
+                ["SpawnPointId"] = item.SpawnPointId,
+                ["SpawnPointName"] = item.SpawnPointName,
+                ["PositionX"] = item.PosX,
+                ["PositionY"] = item.PosY,
+                ["PositionZ"] = item.PosZ
+            };
+
+            broadcast(spawnMessage);
+
+            Console.WriteLine($"[FieldItem] Spawned: {itemId} ({itemType}) at spawn point {item.SpawnPointId}");
+
+            return itemId;
+        }
+
+        /// <summary>
         /// アイテムを消す（管理用）
         /// </summary>
         public static void DespawnItem(
@@ -127,6 +162,25 @@ namespace OpenGSServer.Network
             broadcast(despawnMessage);
 
             Console.WriteLine($"[FieldItem] Despawned: {itemId}");
+        }
+
+        /// <summary>
+        /// 全スポーン中アイテムを消す
+        /// </summary>
+        public static void DespawnAllItems(
+            ServerFieldItemManager itemManager,
+            Action<JObject> broadcast)
+        {
+            itemManager.DespawnAllItems();
+
+            var despawnMessage = new JObject
+            {
+                ["MessageType"] = "FieldItemDespawn"
+            };
+
+            broadcast(despawnMessage);
+
+            Console.WriteLine("[FieldItem] Despawned all active items");
         }
     }
 }

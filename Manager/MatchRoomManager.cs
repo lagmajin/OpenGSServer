@@ -35,6 +35,36 @@ namespace OpenGSServer
         {
         }
 
+        private readonly Dictionary<string, OpenGSServer.Network.ServerFieldItemManager> roomFieldItemManagers
+            = new Dictionary<string, OpenGSServer.Network.ServerFieldItemManager>();
+
+        private OpenGSServer.Network.ServerFieldItemManager CreateFieldItemManager(string roomId)
+        {
+            var itemManager = new OpenGSServer.Network.ServerFieldItemManager();
+            itemManager.StartMatch(roomId);
+            itemManager.RegisterSpawnPoint(0, 0f, 0f, 0f, "Center");
+            itemManager.RegisterSpawnPoint(1, 8f, 0f, 0f, "East");
+            itemManager.RegisterSpawnPoint(2, -8f, 0f, 0f, "West");
+            itemManager.RegisterSpawnPoint(3, 0f, 0f, 8f, "North");
+            itemManager.RegisterSpawnPoint(4, 0f, 0f, -8f, "South");
+            itemManager.RegisterSpawnPoint(5, 6f, 0f, 6f, "Corner");
+            itemManager.ConfigureDefaultSpawnRules();
+            itemManager.ConfigureSpawnRule("GranadeLauncher", 1, 45.0f, 5);
+            itemManager.ConfigureSpawnRule("FlameThrower", 1, 45.0f, 5);
+            itemManager.ConfigureSpawnRule("HealItem", 2, 25.0f, 1, 2, 3, 4);
+            roomFieldItemManagers[roomId] = itemManager;
+            return itemManager;
+        }
+
+        private void BroadcastToRoom(OpenGSCore.MatchRoom room, Newtonsoft.Json.Linq.JObject json)
+        {
+            foreach (var p in room.Players)
+            {
+                var session = LobbyServerManager.Instance.GetSession(p.Id);
+                session?.SendAsyncJsonWithTimeStamp(json);
+            }
+        }
+
         /// <summary>
         /// IMatchSubscriber インターフェース実装: マッチ開始通知
         /// </summary>
@@ -96,6 +126,7 @@ namespace OpenGSServer
                 var bus = new MatchRoomEventBus();
                 var matchRoom = MatchRoomFactory.CreateMatchRoom(roomNumberCount, waitRoom.RoomName, ownerId, setting, bus);
                 matchRoom.AddNewPlayers(waitRoom.AllPlayers());
+                var itemManager = CreateFieldItemManager(matchRoom.Id);
 
                 bus.OnLoadingStarted += () =>
                 {
@@ -128,28 +159,19 @@ namespace OpenGSServer
                 };
                 
                 // アイテムイベントの購読
-                bus.OnItemSpawned += (type, id) => {
-                    var json = new JObject();
-                    json["MessageType"] = MessageType.ItemSpawnNotification;
-                    json["ItemType"] = type.ToString();
-                    json["SpawnPointId"] = id;
-                    
-                    // ルーム内の全プレイヤーに通知
-                    foreach (var p in matchRoom.Players)
-                    {
-                        var session = LobbyServerManager.Instance.GetSession(p.Id);
-                        session?.SendAsyncJsonWithTimeStamp(json);
-                    }
+                bus.OnItemSpawned += (type, id) =>
+                {
+                    OpenGSServer.Network.FieldItemEventHandler.SpawnItem(
+                        itemManager,
+                        type.ToString(),
+                        id,
+                        json => BroadcastToRoom(matchRoom, json));
                 };
-                bus.OnItemDespawned += () => {
-                    var json = new JObject();
-                    json["MessageType"] = MessageType.ItemDespawnNotification;
-                    
-                    foreach (var p in matchRoom.Players)
-                    {
-                        var session = LobbyServerManager.Instance.GetSession(p.Id);
-                        session?.SendAsyncJsonWithTimeStamp(json);
-                    }
+                bus.OnItemDespawned += () =>
+                {
+                    OpenGSServer.Network.FieldItemEventHandler.DespawnAllItems(
+                        itemManager,
+                        json => BroadcastToRoom(matchRoom, json));
                 };
                 bus.OnGameEndedWithResult += (result) => {
                     foreach (var p in matchRoom.Players)
@@ -164,6 +186,7 @@ namespace OpenGSServer
                     }
                 };
                 bus.OnGameEnded += () => {
+                    itemManager.EndMatch();
                     // UDPで全プレイヤーにMatchEndedを通知
                     var firstPlayer = matchRoom.Players.Find(p => !string.IsNullOrEmpty(p.Id));
                     if (firstPlayer != null && int.TryParse(firstPlayer.Id, out var peerId))
@@ -228,6 +251,10 @@ namespace OpenGSServer
                 {
                     roomEventBuses[room.Id] = new MatchRoomEventBus();
                 }
+                if (!roomFieldItemManagers.ContainsKey(room.Id))
+                {
+                    CreateFieldItemManager(room.Id);
+                }
             }
         }
 
@@ -244,6 +271,7 @@ namespace OpenGSServer
             {
                 matchRooms.Add(room.Id, room);
                 roomEventBuses[room.Id] = new MatchRoomEventBus();
+                CreateFieldItemManager(room.Id);
                 IncreaseRoomCounter();
             }
 
@@ -390,6 +418,7 @@ namespace OpenGSServer
                     {
                         matchRooms.Remove(room.Id);
                         roomEventBuses.Remove(room.Id);
+                        roomFieldItemManagers.Remove(room.Id);
                     }
                     break;
                 }
