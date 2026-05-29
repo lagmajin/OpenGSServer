@@ -25,7 +25,17 @@ namespace OpenGSServer
             }
 
             var result = AccountManager.GetInstance().CreateNewAccount(accountId, password, displayName);
-            session.SendAsyncJsonWithTimeStamp(result.ToJson());
+            var response = result.ToJson();
+            var account = AccountDatabaseManager.GetInstance().GetAccount(accountId);
+            if (account != null)
+            {
+                response["DisplayName"] = account.DisplayName;
+                response["Credits"] = account.Credits;
+                response["Level"] = account.Level;
+                response["Exp"] = account.Exp;
+            }
+
+            session.SendAsyncJsonWithTimeStamp(response);
         }
 
         public static string? Login(in IClientSession session, in IDictionary<string, JToken> dic)
@@ -38,6 +48,14 @@ namespace OpenGSServer
             var result = AccountManager.GetInstance().Login(id, pass);
             var json = result.ToJson();
             json["YourIPAddress"] = session.ClientIpAddress();
+            var account = AccountDatabaseManager.GetInstance().GetAccount(id);
+            if (account != null)
+            {
+                json["DisplayName"] = account.DisplayName;
+                json["Credits"] = account.Credits;
+                json["Level"] = account.Level;
+                json["Exp"] = account.Exp;
+            }
             session.SendAsyncJsonWithTimeStamp(json);
 
             var encryptManager = EncryptManager.Instance;

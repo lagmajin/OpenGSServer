@@ -1,6 +1,7 @@
 ﻿
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using LiteDB;
 using NUlid;
 using OpenGSCore;
@@ -43,6 +44,10 @@ namespace OpenGSServer
         public EAccountStatus Status { get; set; } = EAccountStatus.Active;
         public int Level { get; set; } = 1;
         public long Exp { get; set; } = 0;
+        public long Credits { get; set; } = 1000;
+        public List<string> PurchasedItems { get; set; } = new();
+        public List<DBEquippedItem> EquippedItems { get; set; } = new();
+        public List<DBInstantEquippedItem> EquippedInstantItems { get; set; } = new();
         public PlayerLifeTimeScore LifeTimeScore { get; set; } = new();
         public List<string> ProfileTags { get; set; } = new();
 
@@ -58,6 +63,12 @@ namespace OpenGSServer
             this.AccountId = player.AccountId;
             this.Password = player.Password;
             this.Salt = player.Salt;
+            this.HashedPassword = player.HashedPassword;
+            this.DisplayName = player.DisplayName;
+            this.Credits = player.Credits;
+            this.PurchasedItems = new List<string>(player.PurchasedItems ?? new List<string>());
+            this.EquippedItems = new List<DBEquippedItem>((player.EquippedItems ?? new List<DBEquippedItem>()).Select(item => new DBEquippedItem(item)));
+            this.EquippedInstantItems = new List<DBInstantEquippedItem>((player.EquippedInstantItems ?? new List<DBInstantEquippedItem>()).Select(item => new DBInstantEquippedItem(item)));
 
             FirstAccessIPAddress = player.FirstAccessIPAddress;
         }
@@ -114,6 +125,38 @@ namespace OpenGSServer
         }
 
 
+    }
+
+    public class DBEquippedItem
+    {
+        public string Category { get; set; } = string.Empty;
+        public string ItemId { get; set; } = string.Empty;
+
+        public DBEquippedItem()
+        {
+        }
+
+        public DBEquippedItem(in DBEquippedItem other)
+        {
+            Category = other?.Category ?? string.Empty;
+            ItemId = other?.ItemId ?? string.Empty;
+        }
+    }
+
+    public class DBInstantEquippedItem
+    {
+        public int Slot { get; set; } = 0;
+        public string ItemId { get; set; } = string.Empty;
+
+        public DBInstantEquippedItem()
+        {
+        }
+
+        public DBInstantEquippedItem(in DBInstantEquippedItem other)
+        {
+            Slot = other?.Slot ?? 0;
+            ItemId = other?.ItemId ?? string.Empty;
+        }
     }
 
     public class DBAccountScore

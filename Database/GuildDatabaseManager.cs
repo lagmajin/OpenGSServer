@@ -67,6 +67,16 @@ namespace OpenGSServer
             }
         }
 
+        public List<DBGuild> GetAllGuilds()
+        {
+            var result = new List<DBGuild>();
+
+            var col = GuildCollection();
+            result.AddRange(col.FindAll());
+
+            return result;
+        }
+
         public bool ExistGuild(string guildName)
         {
             if (string.IsNullOrWhiteSpace(guildName))
@@ -125,6 +135,16 @@ namespace OpenGSServer
             return true;
         }
 
+        public bool UpdateGuild(DBGuild guild)
+        {
+            if (guild == null || string.IsNullOrWhiteSpace(guild.id))
+            {
+                return false;
+            }
+
+            return GuildCollection().Update(guild);
+        }
+
         public bool RemoveGuild(string guildName)
         {
             if (string.IsNullOrWhiteSpace(guildName))
@@ -174,7 +194,138 @@ namespace OpenGSServer
 
             memberCollection.Insert(new DBGuildMember(guildData.id, id, role));
 
+            if (string.Equals(role, "Leader", StringComparison.OrdinalIgnoreCase))
+            {
+                guildData.LeaderId = id;
+                GuildCollection().Update(guildData);
+            }
+
             return true;
+        }
+
+        public bool RemoveGuildMember(string guildName, string memberId)
+        {
+            if (string.IsNullOrWhiteSpace(guildName) || string.IsNullOrWhiteSpace(memberId))
+            {
+                return false;
+            }
+
+            var guildData = FindGuildByName(guildName);
+            if (guildData == null)
+            {
+                return false;
+            }
+
+            var memberCollection = GuildMemberCollection();
+            var targetMember = memberCollection.FindOne(m => m.guildId == guildData.id && m.Id == memberId);
+            if (targetMember == null)
+            {
+                return false;
+            }
+
+            if (string.Equals(guildData.LeaderId, memberId, StringComparison.OrdinalIgnoreCase))
+            {
+                memberCollection.DeleteMany(m => m.guildId == guildData.id && m.Id == memberId);
+
+                EnsureGuildLeader(guildData, memberCollection, memberId);
+                return true;
+            }
+
+            return memberCollection.DeleteMany(m => m.guildId == guildData.id && m.Id == memberId) > 0;
+        }
+
+        public bool JoinGuild(string guildName, string memberId, string role = "Member")
+        {
+            return AddGuildMember(memberId, guildName, role);
+        }
+
+        public bool LeaveGuild(string guildName, string memberId)
+        {
+            return RemoveGuildMember(guildName, memberId);
+        }
+
+        public bool UpdateGuildMemberRole(string guildName, string memberId, string role)
+        {
+            if (string.IsNullOrWhiteSpace(guildName) || string.IsNullOrWhiteSpace(memberId) || string.IsNullOrWhiteSpace(role))
+            {
+                return false;
+            }
+
+            var guildData = FindGuildByName(guildName);
+            if (guildData == null)
+            {
+                return false;
+            }
+
+            var memberCollection = GuildMemberCollection();
+            var member = memberCollection.FindOne(m => m.guildId == guildData.id && m.Id == memberId);
+            if (member == null)
+            {
+                return false;
+            }
+
+            if (string.Equals(role, "Leader", StringComparison.OrdinalIgnoreCase))
+            {
+                var currentLeader = memberCollection.FindOne(m => m.guildId == guildData.id && m.Role == "Leader" && m.Id != memberId);
+                if (currentLeader != null)
+                {
+                    currentLeader.Role = "Member";
+                    currentLeader.TimeStamp = DateTime.UtcNow.ToString("o");
+                    memberCollection.Update(currentLeader);
+                }
+
+                guildData.LeaderId = memberId;
+                GuildCollection().Update(guildData);
+            }
+            member.Role = role;
+            member.TimeStamp = DateTime.UtcNow.ToString("o");
+            var updated = memberCollection.Update(member);
+
+            if (!string.Equals(role, "Leader", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(guildData.LeaderId, memberId, StringComparison.OrdinalIgnoreCase))
+            {
+                EnsureGuildLeader(guildData, memberCollection, memberId);
+            }
+
+            return updated;
+        }
+
+        private void EnsureGuildLeader(DBGuild guildData, ILiteCollection<DBGuildMember> memberCollection, string excludedMemberId = "")
+        {
+            if (guildData == null || memberCollection == null)
+            {
+                return;
+            }
+
+            var currentLeader = memberCollection.FindOne(m =>
+                m.guildId == guildData.id &&
+                string.Equals(m.Role, "Leader", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(m.Id, excludedMemberId, StringComparison.OrdinalIgnoreCase));
+
+            if (currentLeader != null)
+            {
+                guildData.LeaderId = currentLeader.Id;
+                GuildCollection().Update(guildData);
+                return;
+            }
+
+            var fallbackMember = memberCollection.FindOne(m =>
+                m.guildId == guildData.id &&
+                !string.Equals(m.Id, excludedMemberId, StringComparison.OrdinalIgnoreCase));
+
+            if (fallbackMember != null)
+            {
+                fallbackMember.Role = "Leader";
+                fallbackMember.TimeStamp = DateTime.UtcNow.ToString("o");
+                memberCollection.Update(fallbackMember);
+                guildData.LeaderId = fallbackMember.Id;
+            }
+            else
+            {
+                guildData.LeaderId = string.Empty;
+            }
+
+            GuildCollection().Update(guildData);
         }
 
         public int AddGuildMembers(IEnumerable<string> ids, in string guild)

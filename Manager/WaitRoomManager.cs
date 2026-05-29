@@ -12,6 +12,7 @@ namespace OpenGSServer
         private static readonly WaitRoomManager _instance = new();
         public static WaitRoomManager Instance() => _instance;
         public CreateNewWaitRoomResult CreateNewWaitRoom(string roomName) => CreateWaitRoom(roomName);
+        public CreateNewWaitRoomResult CreateNewWaitRoom(WaitRoomSetting setting) => CreateWaitRoom(setting);
 
         private readonly ConcurrentDictionary<string, WaitRoom> _rooms = new();
         private readonly object _lockObj = new();
@@ -29,9 +30,17 @@ namespace OpenGSServer
 
         public CreateNewWaitRoomResult CreateWaitRoom(string roomName, int capacity = 8, EGameMode mode = EGameMode.DeathMatch)
         {
-            if (string.IsNullOrWhiteSpace(roomName))
+            return CreateWaitRoom(new WaitRoomSetting(roomName, capacity, mode));
+        }
+
+        public CreateNewWaitRoomResult CreateWaitRoom(WaitRoomSetting setting)
+        {
+            setting ??= new WaitRoomSetting();
+            setting.Normalize();
+
+            if (string.IsNullOrWhiteSpace(setting.RoomName))
             {
-                roomName = Template.RandomRoomName();
+                setting.RoomName = Template.RandomRoomName();
             }
 
             if (_rooms.Count >= RoomLimit)
@@ -39,12 +48,12 @@ namespace OpenGSServer
                 return new CreateNewWaitRoomResult("Server RoomLimit Over", null);
             }
 
-            var room = new WaitRoom(roomName, capacity);
-            room.ChangeGameMode(mode);
+            var room = new WaitRoom(setting.RoomName, setting.Capacity);
+            setting.ApplyTo(room);
 
             if (_rooms.TryAdd(room.RoomId, room))
             {
-                ConsoleWrite.WriteMessage($"[WAITROOM] Created room: {room.RoomName} ({room.RoomId}) Mode: {mode}", ConsoleColor.Green);
+                ConsoleWrite.WriteMessage($"[WAITROOM] Created room: {room.RoomName} ({room.RoomId}) Mode: {setting.GameMode} Map: {room.Map}", ConsoleColor.Green);
                 return new CreateNewWaitRoomResult("Successful", room);
             }
 
@@ -88,10 +97,12 @@ namespace OpenGSServer
             var array = new JArray();
             foreach (var room in _rooms.Values)
             {
-                var roomJson = room.ToJson();
+                var roomJson = room.ToSnapshot().ToJson();
+                roomJson["OwnerId"] = room.GetFirstPlayerId();
                 roomJson["RoomID"] = room.RoomId;
                 roomJson["PlayerCount"] = room.Players.Count;
                 roomJson["RoomCapacity"] = room.Capacity;
+                roomJson["HasPassword"] = !string.IsNullOrWhiteSpace(room.Password);
 
                 array.Add(roomJson);
             }

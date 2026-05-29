@@ -9,6 +9,7 @@ using NetCoreServer; // NetCoreServer追加
 using OpenGSCore;
 using OpenGSServer.Utility;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace OpenGSServer
 {
@@ -25,6 +26,7 @@ namespace OpenGSServer
         private readonly ConcurrentDictionary<string, LobbyPlayerInfo> _connectedPlayers = new();
         private readonly ConcurrentDictionary<string, PlayerRateLimiter> _rateLimiters = new();
         private readonly ConcurrentDictionary<PlayerID, string> _playerIdMapping = new();
+        private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, byte>> _pendingFriendRequests = new(StringComparer.OrdinalIgnoreCase);
         private readonly PingManager _pingManager = new();
         private readonly ReaderWriterLockSlim _lobbyLock = new();
         private readonly Timer _cleanupTimer;
@@ -949,6 +951,51 @@ namespace OpenGSServer
                         AddLobbyChat(playerIdChat, message);
                     }
                     break;
+                case MessageType.ShopStateRequest:
+                    HandleShopStateRequest(clientSession, data);
+                    break;
+                case MessageType.ShopPurchaseRequest:
+                    HandleShopPurchaseRequest(clientSession, data);
+                    break;
+                case MessageType.ShopEquipRequest:
+                    HandleShopEquipRequest(clientSession, data);
+                    break;
+                case MessageType.ShopUnequipRequest:
+                    HandleShopUnequipRequest(clientSession, data);
+                    break;
+                case MessageType.FriendRequest:
+                    HandleFriendRequest(clientSession, data);
+                    break;
+                case MessageType.FriendApproveRequest:
+                    HandleFriendApproveRequest(clientSession, data);
+                    break;
+                case MessageType.FriendListRequest:
+                    HandleFriendListRequest(clientSession, data);
+                    break;
+                case MessageType.GuildListRequest:
+                    HandleGuildListRequest(clientSession);
+                    break;
+                case MessageType.GuildInfoRequest:
+                    HandleGuildInfoRequest(clientSession, data);
+                    break;
+                case MessageType.GuildCreateRequest:
+                    HandleGuildCreateRequest(clientSession, data);
+                    break;
+                case MessageType.GuildJoinRequest:
+                    HandleGuildJoinRequest(clientSession, data);
+                    break;
+                case MessageType.GuildLeaveRequest:
+                    HandleGuildLeaveRequest(clientSession, data);
+                    break;
+                case MessageType.GuildInviteRequest:
+                    HandleGuildInviteRequest(clientSession, data);
+                    break;
+                case MessageType.GuildKickRequest:
+                    HandleGuildKickRequest(clientSession, data);
+                    break;
+                case MessageType.GuildChatRequest:
+                    HandleGuildChatRequest(clientSession, data);
+                    break;
                 default:
                     ConsoleWrite.WriteMessage($"[LOBBY] Unknown message type: {messageType}", ConsoleColor.Yellow);
                     break;
@@ -969,6 +1016,701 @@ namespace OpenGSServer
             var str = infoJson.ToString(Formatting.None);
             ConsoleWrite.WriteMessage(str);
             session.SendAsyncJsonWithTimeStamp(infoJson);
+        }
+
+        private void HandleShopStateRequest(ClientSession? session, JObject data)
+        {
+            if (session == null)
+            {
+                return;
+            }
+
+            var accountId = ResolveGuildPlayerId(session, data, "PlayerID", "PlayerId", "AccountID", "AccountId");
+            if (string.IsNullOrWhiteSpace(accountId))
+            {
+                session.SendAsyncJsonWithTimeStamp(new JObject
+                {
+                    ["MessageType"] = MessageType.ShopStateResponse,
+                    ["Success"] = false,
+                    ["ErrorMessage"] = "PlayerID is required"
+                });
+                return;
+            }
+
+            var db = AccountDatabaseManager.GetInstance();
+            var account = db.GetAccount(accountId);
+            if (account == null)
+            {
+                session.SendAsyncJsonWithTimeStamp(new JObject
+                {
+                    ["MessageType"] = MessageType.ShopStateResponse,
+                    ["Success"] = false,
+                    ["ErrorMessage"] = $"Account '{accountId}' was not found"
+                });
+                return;
+            }
+
+            session.SendAsyncJsonWithTimeStamp(new JObject
+            {
+                ["MessageType"] = MessageType.ShopStateResponse,
+                ["Success"] = true,
+                ["Credits"] = account.Credits,
+                ["PurchasedItems"] = new JArray(db.GetPurchasedItems(accountId)),
+                ["EquippedItems"] = new JArray((account.EquippedItems ?? new List<DBEquippedItem>()).Select(item => new JObject
+                {
+                    ["Category"] = item.Category,
+                    ["ItemId"] = item.ItemId
+                })),
+                ["EquippedInstantItems"] = new JArray((account.EquippedInstantItems ?? new List<DBInstantEquippedItem>()).Select(item => new JObject
+                {
+                    ["Slot"] = item.Slot,
+                    ["ItemId"] = item.ItemId
+                }))
+            });
+        }
+
+        private void HandleShopPurchaseRequest(ClientSession? session, JObject data)
+        {
+            if (session == null)
+            {
+                return;
+            }
+
+            var accountId = ResolveGuildPlayerId(session, data, "PlayerID", "PlayerId", "AccountID", "AccountId");
+            var itemId = data?["ItemId"]?.ToString() ?? string.Empty;
+            var price = data?["Price"]?.ToObject<long>() ?? 0;
+            var db = AccountDatabaseManager.GetInstance();
+            var account = db.GetAccount(accountId);
+
+            if (account == null || string.IsNullOrWhiteSpace(itemId))
+            {
+                session.SendAsyncJsonWithTimeStamp(new JObject
+                {
+                    ["MessageType"] = MessageType.ShopPurchaseResponse,
+                    ["Success"] = false,
+                    ["ItemId"] = itemId,
+                    ["Credits"] = account?.Credits ?? 0,
+                    ["ErrorMessage"] = "Account or item is invalid"
+                });
+                return;
+            }
+
+            if (account.Credits < price)
+            {
+                session.SendAsyncJsonWithTimeStamp(new JObject
+                {
+                    ["MessageType"] = MessageType.ShopPurchaseResponse,
+                    ["Success"] = false,
+                    ["ItemId"] = itemId,
+                    ["Credits"] = account.Credits,
+                    ["ErrorMessage"] = "Insufficient credits"
+                });
+                return;
+            }
+
+            account.Credits -= price;
+            db.SetPurchasedItem(accountId, itemId, true);
+            db.UpdateAccountData(account);
+
+            session.SendAsyncJsonWithTimeStamp(new JObject
+            {
+                ["MessageType"] = MessageType.ShopPurchaseResponse,
+                ["Success"] = true,
+                ["ItemId"] = itemId,
+                ["Credits"] = account.Credits
+            });
+        }
+
+        private void HandleShopEquipRequest(ClientSession? session, JObject data)
+        {
+            if (session == null)
+            {
+                return;
+            }
+
+            var accountId = ResolveGuildPlayerId(session, data, "PlayerID", "PlayerId", "AccountID", "AccountId");
+            var itemId = data?["ItemId"]?.ToString() ?? string.Empty;
+            var category = data?["Category"]?.ToString() ?? "Weapon";
+            var slot = data?["Slot"]?.ToObject<int>() ?? 0;
+            var db = AccountDatabaseManager.GetInstance();
+
+            if (string.IsNullOrWhiteSpace(accountId) || string.IsNullOrWhiteSpace(itemId))
+            {
+                session.SendAsyncJsonWithTimeStamp(new JObject
+                {
+                    ["MessageType"] = MessageType.ShopEquipResponse,
+                    ["Success"] = false,
+                    ["ItemId"] = itemId,
+                    ["Category"] = category,
+                    ["Slot"] = slot,
+                    ["ErrorMessage"] = "AccountID and ItemId are required"
+                });
+                return;
+            }
+
+            if (!db.IsPurchased(accountId, itemId))
+            {
+                session.SendAsyncJsonWithTimeStamp(new JObject
+                {
+                    ["MessageType"] = MessageType.ShopEquipResponse,
+                    ["Success"] = false,
+                    ["ItemId"] = itemId,
+                    ["Category"] = category,
+                    ["Slot"] = slot,
+                    ["ErrorMessage"] = "Item has not been purchased"
+                });
+                return;
+            }
+
+            var success = category.Equals("InstantItem", StringComparison.OrdinalIgnoreCase)
+                ? db.SetEquippedInstantItem(accountId, slot, itemId)
+                : db.SetEquippedItem(accountId, category, itemId);
+
+            session.SendAsyncJsonWithTimeStamp(new JObject
+            {
+                ["MessageType"] = MessageType.ShopEquipResponse,
+                ["Success"] = success,
+                ["ItemId"] = itemId,
+                ["Category"] = category,
+                ["Slot"] = slot,
+                ["Credits"] = db.GetCredits(accountId)
+            });
+        }
+
+        private void HandleShopUnequipRequest(ClientSession? session, JObject data)
+        {
+            if (session == null)
+            {
+                return;
+            }
+
+            var accountId = ResolveGuildPlayerId(session, data, "PlayerID", "PlayerId", "AccountID", "AccountId");
+            var category = data?["Category"]?.ToString() ?? "Weapon";
+            var slot = data?["Slot"]?.ToObject<int>() ?? 0;
+            var db = AccountDatabaseManager.GetInstance();
+
+            if (string.IsNullOrWhiteSpace(accountId))
+            {
+                session.SendAsyncJsonWithTimeStamp(new JObject
+                {
+                    ["MessageType"] = MessageType.ShopEquipResponse,
+                    ["Success"] = false,
+                    ["Category"] = category,
+                    ["Slot"] = slot,
+                    ["ErrorMessage"] = "AccountID is required"
+                });
+                return;
+            }
+
+            var success = category.Equals("InstantItem", StringComparison.OrdinalIgnoreCase)
+                ? db.SetEquippedInstantItem(accountId, slot, string.Empty)
+                : db.SetEquippedItem(accountId, category, string.Empty);
+
+            session.SendAsyncJsonWithTimeStamp(new JObject
+            {
+                ["MessageType"] = MessageType.ShopEquipResponse,
+                ["Success"] = success,
+                ["Category"] = category,
+                ["Slot"] = slot
+            });
+        }
+
+        private void HandleFriendRequest(ClientSession? session, JObject data)
+        {
+            if (session == null)
+            {
+                return;
+            }
+
+            var requesterId = ResolveGuildPlayerId(session, data, "PlayerID", "PlayerId", "RequesterId", "RequesterID");
+            var targetPlayerId = ResolveGuildPlayerId(null, data, "TargetPlayerID", "TargetPlayerId", "FriendId", "FriendID");
+            var db = AccountDatabaseManager.GetInstance();
+
+            if (string.IsNullOrWhiteSpace(requesterId) || string.IsNullOrWhiteSpace(targetPlayerId) || string.Equals(requesterId, targetPlayerId, StringComparison.OrdinalIgnoreCase))
+            {
+                session.SendAsyncJsonWithTimeStamp(new JObject
+                {
+                    ["MessageType"] = MessageType.FriendRequestResponse,
+                    ["Success"] = false,
+                    ["Error"] = "Invalid friend request"
+                });
+                return;
+            }
+
+            if (db.GetFriendIds(requesterId).Contains(targetPlayerId, StringComparer.OrdinalIgnoreCase))
+            {
+                session.SendAsyncJsonWithTimeStamp(new JObject
+                {
+                    ["MessageType"] = MessageType.FriendRequestResponse,
+                    ["Success"] = false,
+                    ["Error"] = "Already friends",
+                    ["TargetPlayerID"] = targetPlayerId
+                });
+                return;
+            }
+
+            var pending = _pendingFriendRequests.GetOrAdd(targetPlayerId, _ => new ConcurrentDictionary<string, byte>(StringComparer.OrdinalIgnoreCase));
+            var added = pending.TryAdd(requesterId, 0);
+            var delivered = false;
+
+            if (added)
+            {
+                delivered = SendToPlayer(targetPlayerId, new JObject
+                {
+                    ["MessageType"] = MessageType.FriendRequestNotification,
+                    ["Success"] = true,
+                    ["FromPlayerID"] = requesterId,
+                    ["FromPlayerName"] = ResolvePlayerDisplayName(requesterId)
+                });
+            }
+
+            session.SendAsyncJsonWithTimeStamp(new JObject
+            {
+                ["MessageType"] = MessageType.FriendRequestResponse,
+                ["Success"] = added,
+                ["TargetPlayerID"] = targetPlayerId,
+                ["Delivered"] = delivered,
+                ["Error"] = added ? string.Empty : "Friend request already sent"
+            });
+        }
+
+        private void HandleFriendApproveRequest(ClientSession? session, JObject data)
+        {
+            if (session == null)
+            {
+                return;
+            }
+
+            var approverId = ResolveGuildPlayerId(session, data, "PlayerID", "PlayerId", "ApproverId", "ApproverID");
+            var requestPlayerId = ResolveGuildPlayerId(null, data, "RequestPlayerID", "RequestPlayerId", "FromPlayerID", "FromPlayerId");
+            var approve = data?["Approve"]?.ToObject<bool>() ?? true;
+            var db = AccountDatabaseManager.GetInstance();
+
+            if (string.IsNullOrWhiteSpace(approverId) || string.IsNullOrWhiteSpace(requestPlayerId))
+            {
+                session.SendAsyncJsonWithTimeStamp(new JObject
+                {
+                    ["MessageType"] = MessageType.FriendApproveResponse,
+                    ["Success"] = false,
+                    ["Error"] = "Invalid approve request"
+                });
+                return;
+            }
+
+            if (!_pendingFriendRequests.TryGetValue(approverId, out var pending) || !pending.TryRemove(requestPlayerId, out _))
+            {
+                session.SendAsyncJsonWithTimeStamp(new JObject
+                {
+                    ["MessageType"] = MessageType.FriendApproveResponse,
+                    ["Success"] = false,
+                    ["Error"] = "No pending friend request"
+                });
+                return;
+            }
+
+            if (approve)
+            {
+                db.AddFriend(approverId, requestPlayerId);
+            }
+
+            session.SendAsyncJsonWithTimeStamp(new JObject
+            {
+                ["MessageType"] = MessageType.FriendApproveResponse,
+                ["Success"] = true,
+                ["Approved"] = approve,
+                ["RequestPlayerID"] = requestPlayerId
+            });
+        }
+
+        private void HandleFriendListRequest(ClientSession? session, JObject data)
+        {
+            if (session == null)
+            {
+                return;
+            }
+
+            var playerId = ResolveGuildPlayerId(session, data, "PlayerID", "PlayerId");
+            var db = AccountDatabaseManager.GetInstance();
+            var friendDetails = db.GetFriendDetails(playerId);
+            var friends = new JArray(friendDetails.Select(friend => new JObject
+            {
+                ["PlayerID"] = friend.AccountId,
+                ["PlayerName"] = friend.DisplayName,
+                ["IsOnline"] = FindSessionByPlayerId(friend.AccountId) != null
+            }));
+
+            var pendingRequests = new JArray();
+            if (_pendingFriendRequests.TryGetValue(playerId, out var pending))
+            {
+                foreach (var requesterId in pending.Keys.OrderBy(key => key))
+                {
+                    pendingRequests.Add(new JObject
+                    {
+                        ["FromPlayerID"] = requesterId,
+                        ["FromPlayerName"] = ResolvePlayerDisplayName(requesterId)
+                    });
+                }
+            }
+
+            session.SendAsyncJsonWithTimeStamp(new JObject
+            {
+                ["MessageType"] = MessageType.FriendListResponse,
+                ["Success"] = true,
+                ["PlayerID"] = playerId,
+                ["Friends"] = friends,
+                ["PendingRequests"] = pendingRequests
+            });
+        }
+
+        private string ResolvePlayerDisplayName(string playerId)
+        {
+            if (string.IsNullOrWhiteSpace(playerId))
+            {
+                return string.Empty;
+            }
+
+            var account = AccountDatabaseManager.GetInstance().GetAccount(playerId);
+            if (account != null && !string.IsNullOrWhiteSpace(account.DisplayName))
+            {
+                return account.DisplayName;
+            }
+
+            var lobbyPlayer = _connectedPlayers.TryGetValue(playerId, out var info) ? info : null;
+            return lobbyPlayer?.PlayerName ?? playerId;
+        }
+
+        private void HandleGuildListRequest(ClientSession? session)
+        {
+            if (session == null)
+            {
+                return;
+            }
+
+            var manager = GuildManager.Instance;
+            var guilds = manager.GetAllGuilds();
+            var guildArray = new JArray();
+
+            foreach (var guild in guilds.OrderBy(g => g.GuildName))
+            {
+                guildArray.Add(BuildGuildSummaryJson(guild, manager.GetGuildMembers(guild.GuildName)));
+            }
+
+            session.SendAsyncJsonWithTimeStamp(new JObject
+            {
+                ["MessageType"] = MessageType.GuildListResponse,
+                ["Success"] = true,
+                ["Guilds"] = guildArray
+            });
+        }
+
+        private void HandleGuildInfoRequest(ClientSession? session, JObject data)
+        {
+            if (session == null)
+            {
+                return;
+            }
+
+            var guildName = data?["GuildName"]?.ToString() ?? string.Empty;
+            var manager = GuildManager.Instance;
+            var guild = manager.FindGuild(guildName);
+            if (guild == null)
+            {
+                session.SendAsyncJsonWithTimeStamp(new JObject
+                {
+                    ["MessageType"] = MessageType.GuildInfoResponse,
+                    ["Success"] = false,
+                    ["ErrorMessage"] = $"Guild '{guildName}' was not found",
+                    ["GuildName"] = guildName
+                });
+                return;
+            }
+
+            var members = manager.GetGuildMembers(guild.GuildName);
+            session.SendAsyncJsonWithTimeStamp(new JObject
+            {
+                ["MessageType"] = MessageType.GuildInfoResponse,
+                ["Success"] = true,
+                ["Guild"] = BuildGuildDetailJson(guild, members)
+            });
+        }
+
+        private void HandleGuildCreateRequest(ClientSession? session, JObject data)
+        {
+            if (session == null)
+            {
+                return;
+            }
+
+            var guildName = data?["GuildName"]?.ToString() ?? string.Empty;
+            var shortName = data?["GuildShortName"]?.ToString() ?? string.Empty;
+            var leaderId = ResolveGuildPlayerId(session, data, "LeaderId", "LeaderID", "PlayerID", "PlayerId");
+
+            var manager = GuildManager.Instance;
+            var success = manager.CreateNewGuild(guildName, leaderId, shortName);
+            if (!success)
+            {
+                session.SendAsyncJsonWithTimeStamp(new JObject
+                {
+                    ["MessageType"] = MessageType.GuildCreateResponse,
+                    ["Success"] = false,
+                    ["ErrorMessage"] = $"Guild '{guildName}' could not be created"
+                });
+                return;
+            }
+
+            var guild = manager.FindGuild(guildName);
+            session.SendAsyncJsonWithTimeStamp(new JObject
+            {
+                ["MessageType"] = MessageType.GuildCreateResponse,
+                ["Success"] = true,
+                ["Guild"] = BuildGuildDetailJson(guild, manager.GetGuildMembers(guildName))
+            });
+        }
+
+        private void HandleGuildJoinRequest(ClientSession? session, JObject data)
+        {
+            if (session == null)
+            {
+                return;
+            }
+
+            var guildName = data?["GuildName"]?.ToString() ?? string.Empty;
+            var memberId = ResolveGuildPlayerId(session, data, "MemberId", "MemberID", "PlayerID", "PlayerId");
+            var role = data?["Role"]?.ToString() ?? "Member";
+
+            var manager = GuildManager.Instance;
+            var success = manager.JoinGuild(guildName, memberId, role);
+            session.SendAsyncJsonWithTimeStamp(new JObject
+            {
+                ["MessageType"] = MessageType.GuildJoinResponse,
+                ["Success"] = success,
+                ["GuildName"] = guildName,
+                ["MemberId"] = memberId,
+                ["Role"] = role,
+                ["Guild"] = success ? BuildGuildDetailJson(manager.FindGuild(guildName), manager.GetGuildMembers(guildName)) : null,
+                ["ErrorMessage"] = success ? string.Empty : $"Failed to join guild '{guildName}'"
+            });
+        }
+
+        private void HandleGuildLeaveRequest(ClientSession? session, JObject data)
+        {
+            if (session == null)
+            {
+                return;
+            }
+
+            var guildName = data?["GuildName"]?.ToString() ?? string.Empty;
+            var memberId = ResolveGuildPlayerId(session, data, "MemberId", "MemberID", "PlayerID", "PlayerId");
+
+            var manager = GuildManager.Instance;
+            var success = manager.LeaveGuild(guildName, memberId);
+            session.SendAsyncJsonWithTimeStamp(new JObject
+            {
+                ["MessageType"] = MessageType.GuildLeaveResponse,
+                ["Success"] = success,
+                ["GuildName"] = guildName,
+                ["MemberId"] = memberId,
+                ["ErrorMessage"] = success ? string.Empty : $"Failed to leave guild '{guildName}'"
+            });
+        }
+
+        private void HandleGuildInviteRequest(ClientSession? session, JObject data)
+        {
+            if (session == null)
+            {
+                return;
+            }
+
+            var guildName = data?["GuildName"]?.ToString() ?? string.Empty;
+            var inviterId = ResolveGuildPlayerId(session, data, "InviterId", "InviterID", "PlayerID", "PlayerId");
+            var targetPlayerId = ResolveGuildPlayerId(null, data, "TargetPlayerId", "TargetPlayerID", "MemberId", "MemberID");
+            var message = data?["Message"]?.ToString() ?? string.Empty;
+
+            var manager = GuildManager.Instance;
+            var guild = manager.FindGuild(guildName);
+            var canInvite = guild != null && manager.CanInviteGuildMember(guildName, targetPlayerId);
+            var delivered = false;
+
+            if (canInvite && !string.IsNullOrWhiteSpace(targetPlayerId))
+            {
+                var notification = new JObject
+                {
+                    ["MessageType"] = MessageType.GuildInviteNotification,
+                    ["Success"] = true,
+                    ["GuildName"] = guildName,
+                    ["InviterId"] = inviterId,
+                    ["TargetPlayerId"] = targetPlayerId,
+                    ["Message"] = message,
+                    ["Timestamp"] = DateTime.UtcNow.ToString("o")
+                };
+
+                delivered = SendToPlayer(targetPlayerId, notification);
+            }
+
+            session.SendAsyncJsonWithTimeStamp(new JObject
+            {
+                ["MessageType"] = MessageType.GuildInviteResponse,
+                ["Success"] = canInvite,
+                ["GuildName"] = guildName,
+                ["TargetPlayerId"] = targetPlayerId,
+                ["InviterId"] = inviterId,
+                ["Delivered"] = delivered,
+                ["ErrorMessage"] = canInvite ? string.Empty : $"Failed to invite '{targetPlayerId}' to guild '{guildName}'"
+            });
+        }
+
+        private void HandleGuildKickRequest(ClientSession? session, JObject data)
+        {
+            if (session == null)
+            {
+                return;
+            }
+
+            var guildName = data?["GuildName"]?.ToString() ?? string.Empty;
+            var kickerId = ResolveGuildPlayerId(session, data, "KickerId", "KickerID", "PlayerID", "PlayerId");
+            var memberId = ResolveGuildPlayerId(null, data, "MemberId", "MemberID", "TargetPlayerId", "TargetPlayerID");
+
+            var manager = GuildManager.Instance;
+            var success = manager.KickGuildMember(guildName, memberId);
+            if (success && !string.IsNullOrWhiteSpace(memberId))
+            {
+                SendToPlayer(memberId, new JObject
+                {
+                    ["MessageType"] = MessageType.GuildKickNotification,
+                    ["Success"] = true,
+                    ["GuildName"] = guildName,
+                    ["KickerId"] = kickerId,
+                    ["MemberId"] = memberId,
+                    ["Timestamp"] = DateTime.UtcNow.ToString("o")
+                });
+            }
+
+            session.SendAsyncJsonWithTimeStamp(new JObject
+            {
+                ["MessageType"] = MessageType.GuildKickResponse,
+                ["Success"] = success,
+                ["GuildName"] = guildName,
+                ["MemberId"] = memberId,
+                ["KickerId"] = kickerId,
+                ["ErrorMessage"] = success ? string.Empty : $"Failed to kick '{memberId}' from guild '{guildName}'"
+            });
+        }
+
+        private void HandleGuildChatRequest(ClientSession? session, JObject data)
+        {
+            if (session == null)
+            {
+                return;
+            }
+
+            var guildName = data?["GuildName"]?.ToString() ?? string.Empty;
+            var senderId = ResolveGuildPlayerId(session, data, "SenderId", "SenderID", "PlayerID", "PlayerId");
+            var message = data?["Message"]?.ToString() ?? string.Empty;
+
+            if (string.IsNullOrWhiteSpace(guildName) || string.IsNullOrWhiteSpace(message))
+            {
+                session.SendAsyncJsonWithTimeStamp(new JObject
+                {
+                    ["MessageType"] = MessageType.ErrorNotification,
+                    ["Success"] = false,
+                    ["ErrorMessage"] = "Guild name and message are required"
+                });
+                return;
+            }
+
+            var manager = GuildManager.Instance;
+            if (!manager.Exist(guildName))
+            {
+                session.SendAsyncJsonWithTimeStamp(new JObject
+                {
+                    ["MessageType"] = MessageType.ErrorNotification,
+                    ["Success"] = false,
+                    ["ErrorMessage"] = $"Guild '{guildName}' was not found"
+                });
+                return;
+            }
+
+            var members = manager.GetGuildMembers(guildName);
+            if (!members.Any(member => string.Equals(member.Id, senderId, StringComparison.OrdinalIgnoreCase)))
+            {
+                session.SendAsyncJsonWithTimeStamp(new JObject
+                {
+                    ["MessageType"] = MessageType.ErrorNotification,
+                    ["Success"] = false,
+                    ["ErrorMessage"] = $"Player '{senderId}' is not a member of guild '{guildName}'"
+                });
+                return;
+            }
+
+            manager.BroadcastGuildChat(guildName, senderId, message);
+        }
+
+        private static string ResolveGuildPlayerId(ClientSession? session, JObject? data, params string[] candidateKeys)
+        {
+            if (data != null)
+            {
+                foreach (var key in candidateKeys)
+                {
+                    var value = data[key]?.ToString();
+                    if (!string.IsNullOrWhiteSpace(value))
+                    {
+                        return value;
+                    }
+                }
+            }
+
+            if (session != null && !string.IsNullOrWhiteSpace(session.PlayerID))
+            {
+                return session.PlayerID;
+            }
+
+            return string.Empty;
+        }
+
+        private static JObject BuildGuildSummaryJson(DBGuild guild, IEnumerable<DBGuildMember> members)
+        {
+            var memberList = members?.ToList() ?? new List<DBGuildMember>();
+            return new JObject
+            {
+                ["Id"] = guild.id,
+                ["GuildName"] = guild.GuildName,
+                ["GuildShortName"] = guild.GuildShortName,
+                ["LeaderId"] = guild.LeaderId,
+                ["Level"] = guild.Level,
+                ["Experience"] = guild.Experience,
+                ["CreationTime"] = guild.CreationTime,
+                ["MemberCount"] = memberList.Count
+            };
+        }
+
+        private static JObject BuildGuildDetailJson(DBGuild guild, IEnumerable<DBGuildMember> members)
+        {
+            var memberList = members?.ToList() ?? new List<DBGuildMember>();
+            var memberArray = new JArray();
+
+            foreach (var member in memberList.OrderBy(m => string.Equals(m.Role, "Leader", StringComparison.OrdinalIgnoreCase) ? 0 : 1)
+                                             .ThenBy(m => m.Id))
+            {
+                memberArray.Add(new JObject
+                {
+                    ["MemberId"] = member.Id,
+                    ["Role"] = member.Role,
+                    ["TimeStamp"] = member.TimeStamp
+                });
+            }
+
+            return new JObject
+            {
+                ["Id"] = guild.id,
+                ["GuildName"] = guild.GuildName,
+                ["GuildShortName"] = guild.GuildShortName,
+                ["LeaderId"] = guild.LeaderId,
+                ["Level"] = guild.Level,
+                ["Experience"] = guild.Experience,
+                ["CreationTime"] = guild.CreationTime,
+                ["MemberCount"] = memberList.Count,
+                ["Members"] = memberArray
+            };
         }
 
         #endregion
