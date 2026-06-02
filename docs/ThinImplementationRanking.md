@@ -195,9 +195,6 @@
 | 9 | `~~OpenGSCore\Player\PlayerIDList.cs~~` | **45** | 1/8 | Extremely thin implementation (LOC=1) | なし |
 | 10 | `~~OpenGSCore\Request\PingRequest.cs~~` | **45** | 2/12 | Extremely thin implementation (LOC=2) | なし |
 | 11 | `~~OpenGSCore\Result\PlayerResult.cs~~` | **45** | 2/12 | Extremely thin implementation (LOC=2) | なし |
-| 12 | `OpenGSCore\Score\AllPlayerMissionFinalSocre.cs` | **45** | 4/17 | Extremely thin implementation (LOC=4) | なし |
-| 13 | `OpenGSCore\Score\MissionFinalScore.cs` | **45** | 3/17 | Extremely thin implementation (LOC=3) | なし |
-| 14 | `OpenGSCore\Score\MissionResultScore.cs` | **45** | 2/10 | Extremely thin implementation (LOC=2) | なし |
 | 15 | `OpenGSCore\Time\Time.cs` | **45** | 4/23 | Extremely thin implementation (LOC=4) | なし |
 | 16 | `OpenGSCore\Time\TimeDefines.cs` | **45** | 5/14 | Extremely thin implementation (LOC=5) | なし |
 | 17 | `OpenGSCore\Time\TimeLimit.cs` | **45** | 8/30 | Empty methods x 1 (Abstract: False), Thin implementation (LOC=8) | なし |

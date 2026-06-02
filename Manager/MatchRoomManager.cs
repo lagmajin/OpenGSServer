@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
+using Newtonsoft.Json.Linq;
 using OpenGSCore;
 
 
@@ -173,14 +175,14 @@ namespace OpenGSServer
                         itemManager,
                         json => BroadcastToRoom(matchRoom, json));
                 };
-                bus.OnGameEndedWithResult += (result) => {
+                bus.OnGameEndedWithResult += (result) =>
+                {
                     foreach (var p in matchRoom.Players)
                     {
                         var session = LobbyServerManager.Instance.GetSession(p.Id);
                         if (session != null)
                         {
-                            var perPlayerResult = new JObject(result);
-                            perPlayerResult["MyTeam"] = p.Team.ToString();
+                            var perPlayerResult = BuildMatchResultEnvelope(matchRoom, result, p);
                             session.SendAsyncJsonWithTimeStamp(perPlayerResult);
                         }
                     }
@@ -447,9 +449,9 @@ namespace OpenGSServer
         return null;
     }
 
-    public bool StartMatch(in string id)
-    {
-        string message = "";
+        public bool StartMatch(in string id)
+        {
+            string message = "";
 
         lock (matchRoomsLock)
         {
@@ -569,17 +571,45 @@ namespace OpenGSServer
         }
     }
 
-    public MatchRoom? GetRoomById(string roomId)
-    {
-        lock (matchRoomsLock)
+        public MatchRoom? GetRoomById(string roomId)
         {
-            if (matchRooms.TryGetValue(roomId, out var room))
+            lock (matchRoomsLock)
+            {
+                if (matchRooms.TryGetValue(roomId, out var room))
             {
                 return room;
             }
             return null;
+            }
         }
-    }
+
+        private static JObject BuildMatchResultEnvelope(OpenGSCore.MatchRoom matchRoom, JObject result, PlayerInfo player)
+        {
+            var envelope = result != null ? new JObject(result) : new JObject();
+            envelope["MessageType"] = envelope["MessageType"]?.ToString() ?? MessageType.MatchEndNotification;
+
+            if (matchRoom != null)
+            {
+                envelope["RoomId"] = matchRoom.Id;
+                envelope["RoomName"] = matchRoom.RoomName;
+                envelope["PlayerCount"] = matchRoom.PlayerCount;
+                envelope["RoomInfo"] = matchRoom.ToJSon();
+            }
+
+            if (envelope["Players"] == null && matchRoom != null)
+            {
+                envelope["Players"] = new JArray(matchRoom.Players.Select(p => p.ToJson()));
+            }
+
+            if (player != null)
+            {
+                envelope["MyTeam"] = player.Team.ToString();
+                envelope["MyPlayerId"] = player.Id;
+                envelope["MyPlayerName"] = player.Name;
+            }
+
+            return envelope;
+        }
 
 
    
