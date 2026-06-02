@@ -2,6 +2,7 @@ using LiteDB;
 using OpenGSCore;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace OpenGSServer
 {
@@ -160,6 +161,7 @@ namespace OpenGSServer
             }
 
             player.LastUpdatedUtc = DateTime.UtcNow.ToString("O");
+            player.Credits = Math.Max(0, player.Credits);
             col.Insert(player);
 
             if (scoreCol.FindOne(Query.EQ(nameof(DBAccountScore.accountID), player.AccountId)) == null)
@@ -221,6 +223,10 @@ namespace OpenGSServer
             rec.Salt = player.Salt;
             rec.Level = player.Level;
             rec.Exp = player.Exp;
+            rec.Credits = Math.Max(0, player.Credits);
+            rec.PurchasedItems = ClonePurchasedItems(player.PurchasedItems);
+            rec.EquippedItems = CloneEquippedItems(player.EquippedItems);
+            rec.EquippedInstantItems = CloneEquippedInstantItems(player.EquippedInstantItems);
             rec.Status = player.Status;
             rec.LastUpdatedUtc = DateTime.UtcNow.ToString("O");
 
@@ -271,6 +277,283 @@ namespace OpenGSServer
             {
                 col.Delete(duplicate.Id);
             }
+        }
+
+        public long GetCredits(string accountId)
+        {
+            var account = GetAccount(accountId);
+            return account?.Credits ?? 0;
+        }
+
+        public bool UpdateCredits(string accountId, long credits)
+        {
+            if (string.IsNullOrWhiteSpace(accountId))
+            {
+                return false;
+            }
+
+            var account = GetAccount(accountId);
+            if (account == null)
+            {
+                return false;
+            }
+
+            account.Credits = Math.Max(0, credits);
+            account.LastUpdatedUtc = DateTime.UtcNow.ToString("O");
+            return EnsureDatabase().GetCollection<DBAccount>(accountTableName).Update(account);
+        }
+
+        public IReadOnlyList<string> GetPurchasedItems(string accountId)
+        {
+            var account = GetAccount(accountId);
+            return account?.PurchasedItems ?? new List<string>();
+        }
+
+        public bool SetPurchasedItem(string accountId, string itemId, bool purchased)
+        {
+            if (string.IsNullOrWhiteSpace(accountId) || string.IsNullOrWhiteSpace(itemId))
+            {
+                return false;
+            }
+
+            var account = GetAccount(accountId);
+            if (account == null)
+            {
+                return false;
+            }
+
+            account.PurchasedItems ??= new List<string>();
+            if (purchased)
+            {
+                if (!account.PurchasedItems.Any(existing => string.Equals(existing, itemId, StringComparison.OrdinalIgnoreCase)))
+                {
+                    account.PurchasedItems.Add(itemId);
+                }
+            }
+            else
+            {
+                account.PurchasedItems.RemoveAll(existing => string.Equals(existing, itemId, StringComparison.OrdinalIgnoreCase));
+            }
+
+            account.LastUpdatedUtc = DateTime.UtcNow.ToString("O");
+            return EnsureDatabase().GetCollection<DBAccount>(accountTableName).Update(account);
+        }
+
+        public bool IsPurchased(string accountId, string itemId)
+        {
+            if (string.IsNullOrWhiteSpace(accountId) || string.IsNullOrWhiteSpace(itemId))
+            {
+                return false;
+            }
+
+            return GetPurchasedItems(accountId).Any(existing => string.Equals(existing, itemId, StringComparison.OrdinalIgnoreCase));
+        }
+
+        public string GetEquippedItem(string accountId, string category)
+        {
+            var account = GetAccount(accountId);
+            if (account == null)
+            {
+                return string.Empty;
+            }
+
+            return account.EquippedItems?
+                .FirstOrDefault(item => string.Equals(item.Category, category, StringComparison.OrdinalIgnoreCase))
+                ?.ItemId ?? string.Empty;
+        }
+
+        public string GetEquippedInstantItem(string accountId, int slot)
+        {
+            var account = GetAccount(accountId);
+            if (account == null)
+            {
+                return string.Empty;
+            }
+
+            return account.EquippedInstantItems?
+                .FirstOrDefault(item => item.Slot == slot)
+                ?.ItemId ?? string.Empty;
+        }
+
+        public bool SetEquippedItem(string accountId, string category, string itemId)
+        {
+            if (string.IsNullOrWhiteSpace(accountId) || string.IsNullOrWhiteSpace(category))
+            {
+                return false;
+            }
+
+            var account = GetAccount(accountId);
+            if (account == null)
+            {
+                return false;
+            }
+
+            account.EquippedItems ??= new List<DBEquippedItem>();
+            var existing = account.EquippedItems.FirstOrDefault(item => string.Equals(item.Category, category, StringComparison.OrdinalIgnoreCase));
+            if (existing == null)
+            {
+                account.EquippedItems.Add(new DBEquippedItem
+                {
+                    Category = category,
+                    ItemId = itemId ?? string.Empty
+                });
+            }
+            else
+            {
+                existing.ItemId = itemId ?? string.Empty;
+            }
+
+            account.LastUpdatedUtc = DateTime.UtcNow.ToString("O");
+            return EnsureDatabase().GetCollection<DBAccount>(accountTableName).Update(account);
+        }
+
+        public bool SetEquippedInstantItem(string accountId, int slot, string itemId)
+        {
+            if (string.IsNullOrWhiteSpace(accountId) || slot < 0)
+            {
+                return false;
+            }
+
+            var account = GetAccount(accountId);
+            if (account == null)
+            {
+                return false;
+            }
+
+            account.EquippedInstantItems ??= new List<DBInstantEquippedItem>();
+            var existing = account.EquippedInstantItems.FirstOrDefault(item => item.Slot == slot);
+            if (existing == null)
+            {
+                account.EquippedInstantItems.Add(new DBInstantEquippedItem
+                {
+                    Slot = slot,
+                    ItemId = itemId ?? string.Empty
+                });
+            }
+            else
+            {
+                existing.ItemId = itemId ?? string.Empty;
+            }
+
+            account.LastUpdatedUtc = DateTime.UtcNow.ToString("O");
+            return EnsureDatabase().GetCollection<DBAccount>(accountTableName).Update(account);
+        }
+
+        public bool RemoveFriend(string accountId, string friendId)
+        {
+            if (string.IsNullOrWhiteSpace(accountId) || string.IsNullOrWhiteSpace(friendId))
+            {
+                return false;
+            }
+
+            var database = EnsureDatabase();
+            var col = database.GetCollection<DBFriend>(friendTableName);
+            var removed = false;
+            removed |= col.DeleteMany(Query.And(Query.EQ(nameof(DBFriend.PlayerID), accountId), Query.EQ(nameof(DBFriend.FriendAccountId), friendId))) > 0;
+            removed |= col.DeleteMany(Query.And(Query.EQ(nameof(DBFriend.PlayerID), friendId), Query.EQ(nameof(DBFriend.FriendAccountId), accountId))) > 0;
+            return removed;
+        }
+
+        public bool AddFriend(string accountId, string friendId)
+        {
+            if (string.IsNullOrWhiteSpace(accountId) || string.IsNullOrWhiteSpace(friendId) || string.Equals(accountId, friendId, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            var database = EnsureDatabase();
+            var col = database.GetCollection<DBFriend>(friendTableName);
+
+            var existing = col.Find(Query.EQ(nameof(DBFriend.PlayerID), accountId))
+                .Any(friend => string.Equals(friend.FriendAccountId, friendId, StringComparison.OrdinalIgnoreCase));
+            if (!existing)
+            {
+                col.Insert(new DBFriend
+                {
+                    PlayerID = accountId,
+                    FriendAccountId = friendId,
+                    CreatedTimeUtc = DateTime.UtcNow.ToString("O")
+                });
+            }
+
+            var reverseExisting = col.Find(Query.EQ(nameof(DBFriend.PlayerID), friendId))
+                .Any(friend => string.Equals(friend.FriendAccountId, accountId, StringComparison.OrdinalIgnoreCase));
+            if (!reverseExisting)
+            {
+                col.Insert(new DBFriend
+                {
+                    PlayerID = friendId,
+                    FriendAccountId = accountId,
+                    CreatedTimeUtc = DateTime.UtcNow.ToString("O")
+                });
+            }
+
+            return true;
+        }
+
+        public List<string> GetFriendIds(string accountId)
+        {
+            if (string.IsNullOrWhiteSpace(accountId))
+            {
+                return new List<string>();
+            }
+
+            var database = EnsureDatabase();
+            var col = database.GetCollection<DBFriend>(friendTableName);
+            return col.Find(Query.EQ(nameof(DBFriend.PlayerID), accountId))
+                .Select(friend => friend.FriendAccountId)
+                .Where(friendId => !string.IsNullOrWhiteSpace(friendId))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        public List<DBAccountDetail> GetFriendDetails(string accountId)
+        {
+            var result = new List<DBAccountDetail>();
+            foreach (var friendId in GetFriendIds(accountId))
+            {
+                var account = GetAccount(friendId);
+                if (account == null)
+                {
+                    continue;
+                }
+
+                result.Add(new DBAccountDetail
+                {
+                    AccountId = account.AccountId ?? account.Id,
+                    DisplayName = account.DisplayName ?? string.Empty,
+                    Level = account.Level,
+                    Exp = account.Exp,
+                    TotalKill = 0,
+                    Death = 0
+                });
+            }
+
+            return result;
+        }
+
+        public DBAccount? GetAccountWithInventory(string accountId)
+        {
+            return GetAccount(accountId);
+        }
+
+        private static List<string> ClonePurchasedItems(List<string> items)
+        {
+            return items == null ? new List<string>() : new List<string>(items);
+        }
+
+        private static List<DBEquippedItem> CloneEquippedItems(List<DBEquippedItem> items)
+        {
+            return items == null
+                ? new List<DBEquippedItem>()
+                : items.Select(item => new DBEquippedItem(item)).ToList();
+        }
+
+        private static List<DBInstantEquippedItem> CloneEquippedInstantItems(List<DBInstantEquippedItem> items)
+        {
+            return items == null
+                ? new List<DBInstantEquippedItem>()
+                : items.Select(item => new DBInstantEquippedItem(item)).ToList();
         }
 
         public void RemoveAllFriendFromAccount(in string id)

@@ -1,5 +1,6 @@
 using System;
 using Newtonsoft.Json.Linq;
+using OpenGSCore;
 using OpenGSServer.Network;
 
 namespace OpenGSServer.Network
@@ -93,7 +94,7 @@ namespace OpenGSServer.Network
             // 全クライアントにスポーンを通知
             var spawnMessage = new JObject
             {
-                ["MessageType"] = "FieldItemSpawn",
+                ["MessageType"] = MessageType.ItemSpawnNotification,
                 ["ItemId"] = itemId,
                 ["ItemType"] = itemType,
                 ["PositionX"] = x,
@@ -104,6 +105,41 @@ namespace OpenGSServer.Network
             broadcast(spawnMessage);
 
             Console.WriteLine($"[FieldItem] Spawned: {itemId} ({itemType}) at ({x}, {y}, {z})");
+
+            return itemId;
+        }
+
+        /// <summary>
+        /// スポーン地点ベースでアイテムをスポーンさせる
+        /// </summary>
+        public static string SpawnItem(
+            ServerFieldItemManager itemManager,
+            string itemType,
+            int spawnPointId,
+            Action<JObject> broadcast)
+        {
+            string itemId = itemManager.SpawnItem(itemType, spawnPointId);
+
+            if (!itemManager.TryGetItem(itemId, out var item))
+            {
+                return itemId;
+            }
+
+            var spawnMessage = new JObject
+            {
+                ["MessageType"] = MessageType.ItemSpawnNotification,
+                ["ItemId"] = itemId,
+                ["ItemType"] = itemType,
+                ["SpawnPointId"] = item.SpawnPointId,
+                ["SpawnPointName"] = item.SpawnPointName,
+                ["PositionX"] = item.PosX,
+                ["PositionY"] = item.PosY,
+                ["PositionZ"] = item.PosZ
+            };
+
+            broadcast(spawnMessage);
+
+            Console.WriteLine($"[FieldItem] Spawned: {itemId} ({itemType}) at spawn point {item.SpawnPointId}");
 
             return itemId;
         }
@@ -120,13 +156,32 @@ namespace OpenGSServer.Network
 
             var despawnMessage = new JObject
             {
-                ["MessageType"] = "FieldItemDespawn",
+                ["MessageType"] = MessageType.ItemDespawnNotification,
                 ["ItemId"] = itemId
             };
 
             broadcast(despawnMessage);
 
             Console.WriteLine($"[FieldItem] Despawned: {itemId}");
+        }
+
+        /// <summary>
+        /// 全スポーン中アイテムを消す
+        /// </summary>
+        public static void DespawnAllItems(
+            ServerFieldItemManager itemManager,
+            Action<JObject> broadcast)
+        {
+            itemManager.DespawnAllItems();
+
+            var despawnMessage = new JObject
+            {
+                ["MessageType"] = MessageType.ItemDespawnNotification
+            };
+
+            broadcast(despawnMessage);
+
+            Console.WriteLine("[FieldItem] Despawned all active items");
         }
     }
 }

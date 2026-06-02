@@ -43,12 +43,11 @@ namespace OpenGSServer
                 return new CreateNewWaitRoomResult("Mission Server RoomLimit Over", null);
             }
 
-            // ミッション用の待機室を作成
             var room = new WaitRoom(roomName, capacity);
-            
-            // TODO: EGameMode に PVE 系のモードを追加するか、既存のものを流用
-            // ここでは Practice や Survival をミッションのプレースホルダとして使用可能
-            room.ChangeGameMode(EGameMode.Survival);
+            var mode = ResolveMissionMode(missionId, roomName);
+            room.ChangeGameMode(mode);
+            room.setting = new MissionMatchSetting(capacity, string.IsNullOrWhiteSpace(missionId) ? "Default" : missionId, mode);
+            room.Map = EMap.DryDays;
 
             if (_missionRooms.TryAdd(room.RoomId, room))
             {
@@ -78,6 +77,18 @@ namespace OpenGSServer
                 return true;
             }
             return false;
+        }
+
+        private static EGameMode ResolveMissionMode(string missionId, string roomName)
+        {
+            var text = $"{roomName} {missionId}".Trim();
+            if (text.IndexOf("quest", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                text.IndexOf("team", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return EGameMode.TeamSurvival;
+            }
+
+            return EGameMode.Survival;
         }
     }
 }

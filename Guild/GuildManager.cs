@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
+using OpenGSCore;
 
 namespace OpenGSServer
 {
@@ -67,6 +68,16 @@ namespace OpenGSServer
             }
         }
 
+        public bool JoinGuild(in string guildName, in string memberId, string role = "Member")
+        {
+            return AddGuildMember(memberId, guildName, role);
+        }
+
+        public bool LeaveGuild(in string guildName, in string memberId)
+        {
+            return RemoveGuildMember(guildName, memberId);
+        }
+
         public int AddGuildMembers(IEnumerable<string> memberIds, in string guildName)
         {
             if (memberIds == null)
@@ -90,6 +101,60 @@ namespace OpenGSServer
             return _database.GetGuildMember(guildName);
         }
 
+        public IReadOnlyList<DBGuild> GetAllGuilds()
+        {
+            return _database.GetAllGuilds();
+        }
+
+        public bool RemoveGuildMember(in string guildName, in string memberId)
+        {
+            if (string.IsNullOrWhiteSpace(guildName) || string.IsNullOrWhiteSpace(memberId))
+            {
+                return false;
+            }
+
+            lock (_syncRoot)
+            {
+                return _database.RemoveGuildMember(guildName, memberId);
+            }
+        }
+
+        public bool UpdateGuildMemberRole(in string guildName, in string memberId, in string role)
+        {
+            if (string.IsNullOrWhiteSpace(guildName) || string.IsNullOrWhiteSpace(memberId) || string.IsNullOrWhiteSpace(role))
+            {
+                return false;
+            }
+
+            lock (_syncRoot)
+            {
+                return _database.UpdateGuildMemberRole(guildName, memberId, role);
+            }
+        }
+
+        public bool CanInviteGuildMember(in string guildName, in string memberId)
+        {
+            if (string.IsNullOrWhiteSpace(guildName) || string.IsNullOrWhiteSpace(memberId))
+            {
+                return false;
+            }
+
+            var guild = FindGuild(guildName);
+            if (guild == null)
+            {
+                return false;
+            }
+
+            var members = GetGuildMembers(guildName);
+            var targetMemberId = memberId;
+            return !members.Any(member => string.Equals(member.Id, targetMemberId, StringComparison.OrdinalIgnoreCase));
+        }
+
+        public bool KickGuildMember(in string guildName, in string memberId)
+        {
+            return RemoveGuildMember(guildName, memberId);
+        }
+
         /// <summary>
         /// ギルドチャットを配信
         /// </summary>
@@ -100,7 +165,7 @@ namespace OpenGSServer
 
             var chatJson = new JObject
             {
-                ["MessageType"] = NetworkingConstants.MessageType.Chat,
+                ["MessageType"] = MessageType.GuildChatNotification,
                 ["ChatType"] = "Guild",
                 ["GuildName"] = guildName,
                 ["SenderID"] = senderId,
@@ -123,6 +188,11 @@ namespace OpenGSServer
         /// </summary>
         public void AddGuildExp(string guildName, long exp)
         {
+            if (exp <= 0)
+            {
+                return;
+            }
+
             lock (_syncRoot)
             {
                 var guild = _database.FindGuildByName(guildName);
@@ -140,8 +210,10 @@ namespace OpenGSServer
                     ConsoleWrite.WriteMessage($"[GUILD] {guildName} leveled up to {guild.Level}!", ConsoleColor.Yellow);
                 }
 
-                // 本来はデータベースへの更新が必要
-                // _database.UpdateGuild(guild); // 追加が必要かもしれない
+                if (!_database.UpdateGuild(guild))
+                {
+                    ConsoleWrite.WriteMessage($"[GUILD] Failed to persist guild '{guildName}' after EXP update.", ConsoleColor.Red);
+                }
             }
         }
     }

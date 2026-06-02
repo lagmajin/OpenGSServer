@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
+using Newtonsoft.Json.Linq;
 using OpenGSCore;
 
 
@@ -33,6 +35,36 @@ namespace OpenGSServer
 
         public MatchRoomManager()
         {
+        }
+
+        private readonly Dictionary<string, OpenGSServer.Network.ServerFieldItemManager> roomFieldItemManagers
+            = new Dictionary<string, OpenGSServer.Network.ServerFieldItemManager>();
+
+        private OpenGSServer.Network.ServerFieldItemManager CreateFieldItemManager(string roomId)
+        {
+            var itemManager = new OpenGSServer.Network.ServerFieldItemManager();
+            itemManager.StartMatch(roomId);
+            itemManager.RegisterSpawnPoint(0, 0f, 0f, 0f, "Center");
+            itemManager.RegisterSpawnPoint(1, 8f, 0f, 0f, "East");
+            itemManager.RegisterSpawnPoint(2, -8f, 0f, 0f, "West");
+            itemManager.RegisterSpawnPoint(3, 0f, 0f, 8f, "North");
+            itemManager.RegisterSpawnPoint(4, 0f, 0f, -8f, "South");
+            itemManager.RegisterSpawnPoint(5, 6f, 0f, 6f, "Corner");
+            itemManager.ConfigureDefaultSpawnRules();
+            itemManager.ConfigureSpawnRule("GranadeLauncher", 1, 45.0f, 5);
+            itemManager.ConfigureSpawnRule("FlameThrower", 1, 45.0f, 5);
+            itemManager.ConfigureSpawnRule("HealItem", 2, 25.0f, 1, 2, 3, 4);
+            roomFieldItemManagers[roomId] = itemManager;
+            return itemManager;
+        }
+
+        private void BroadcastToRoom(OpenGSCore.MatchRoom room, Newtonsoft.Json.Linq.JObject json)
+        {
+            foreach (var p in room.Players)
+            {
+                var session = LobbyServerManager.Instance.GetSession(p.Id);
+                session?.SendAsyncJsonWithTimeStamp(json);
+            }
         }
 
         /// <summary>
@@ -95,7 +127,8 @@ namespace OpenGSServer
                 var ownerId = waitRoom.GetFirstPlayerId();
                 var bus = new MatchRoomEventBus();
                 var matchRoom = MatchRoomFactory.CreateMatchRoom(roomNumberCount, waitRoom.RoomName, ownerId, setting, bus);
-                matchRoom.AddNewPlayers(waitRoom.AllPlayers());
+                matchRoom.AddNewPlayers(PreparePlayersForMatch(setting, waitRoom.AllPlayers()));
+                var itemManager = CreateFieldItemManager(matchRoom.Id);
 
                 bus.OnLoadingStarted += () =>
                 {
@@ -128,42 +161,34 @@ namespace OpenGSServer
                 };
                 
                 // アイテムイベントの購読
-                bus.OnItemSpawned += (type, id) => {
-                    var json = new JObject();
-                    json["MessageType"] = MessageType.ItemSpawnNotification;
-                    json["ItemType"] = type.ToString();
-                    json["SpawnPointId"] = id;
-                    
-                    // ルーム内の全プレイヤーに通知
-                    foreach (var p in matchRoom.Players)
-                    {
-                        var session = LobbyServerManager.Instance.GetSession(p.Id);
-                        session?.SendAsyncJsonWithTimeStamp(json);
-                    }
+                bus.OnItemSpawned += (type, id) =>
+                {
+                    OpenGSServer.Network.FieldItemEventHandler.SpawnItem(
+                        itemManager,
+                        type.ToString(),
+                        id,
+                        json => BroadcastToRoom(matchRoom, json));
                 };
-                bus.OnItemDespawned += () => {
-                    var json = new JObject();
-                    json["MessageType"] = MessageType.ItemDespawnNotification;
-                    
-                    foreach (var p in matchRoom.Players)
-                    {
-                        var session = LobbyServerManager.Instance.GetSession(p.Id);
-                        session?.SendAsyncJsonWithTimeStamp(json);
-                    }
+                bus.OnItemDespawned += () =>
+                {
+                    OpenGSServer.Network.FieldItemEventHandler.DespawnAllItems(
+                        itemManager,
+                        json => BroadcastToRoom(matchRoom, json));
                 };
-                bus.OnGameEndedWithResult += (result) => {
+                bus.OnGameEndedWithResult += (result) =>
+                {
                     foreach (var p in matchRoom.Players)
                     {
                         var session = LobbyServerManager.Instance.GetSession(p.Id);
                         if (session != null)
                         {
-                            var perPlayerResult = new JObject(result);
-                            perPlayerResult["MyTeam"] = p.Team.ToString();
+                            var perPlayerResult = BuildMatchResultEnvelope(matchRoom, result, p);
                             session.SendAsyncJsonWithTimeStamp(perPlayerResult);
                         }
                     }
                 };
                 bus.OnGameEnded += () => {
+                    itemManager.EndMatch();
                     // UDPで全プレイヤーにMatchEndedを通知
                     var firstPlayer = matchRoom.Players.Find(p => !string.IsNullOrEmpty(p.Id));
                     if (firstPlayer != null && int.TryParse(firstPlayer.Id, out var peerId))
@@ -228,6 +253,10 @@ namespace OpenGSServer
                 {
                     roomEventBuses[room.Id] = new MatchRoomEventBus();
                 }
+                if (!roomFieldItemManagers.ContainsKey(room.Id))
+                {
+                    CreateFieldItemManager(room.Id);
+                }
             }
         }
 
@@ -244,6 +273,7 @@ namespace OpenGSServer
             {
                 matchRooms.Add(room.Id, room);
                 roomEventBuses[room.Id] = new MatchRoomEventBus();
+                CreateFieldItemManager(room.Id);
                 IncreaseRoomCounter();
             }
 
@@ -390,6 +420,7 @@ namespace OpenGSServer
                     {
                         matchRooms.Remove(room.Id);
                         roomEventBuses.Remove(room.Id);
+                        roomFieldItemManagers.Remove(room.Id);
                     }
                     break;
                 }
@@ -418,9 +449,9 @@ namespace OpenGSServer
         return null;
     }
 
-    public bool StartMatch(in string id)
-    {
-        string message = "";
+        public bool StartMatch(in string id)
+        {
+            string message = "";
 
         lock (matchRoomsLock)
         {
@@ -540,17 +571,103 @@ namespace OpenGSServer
         }
     }
 
-    public MatchRoom? GetRoomById(string roomId)
-    {
-        lock (matchRoomsLock)
+        public MatchRoom? GetRoomById(string roomId)
         {
-            if (matchRooms.TryGetValue(roomId, out var room))
+            lock (matchRoomsLock)
+            {
+                if (matchRooms.TryGetValue(roomId, out var room))
             {
                 return room;
             }
             return null;
+            }
         }
-    }
+
+        private static JObject BuildMatchResultEnvelope(OpenGSCore.MatchRoom matchRoom, JObject result, PlayerInfo player)
+        {
+            var envelope = result != null ? new JObject(result) : new JObject();
+            envelope["MessageType"] = envelope["MessageType"]?.ToString() ?? MessageType.MatchEndNotification;
+
+            if (matchRoom != null)
+            {
+                envelope["RoomId"] = matchRoom.Id;
+                envelope["RoomName"] = matchRoom.RoomName;
+                envelope["PlayerCount"] = matchRoom.PlayerCount;
+                envelope["RoomInfo"] = matchRoom.ToJSon();
+            }
+
+            if (envelope["Players"] == null && matchRoom != null)
+            {
+                envelope["Players"] = new JArray(matchRoom.Players.Select(p => p.ToJson()));
+            }
+
+            if (player != null)
+            {
+                envelope["MyTeam"] = player.Team.ToString();
+                envelope["MyPlayerId"] = player.Id;
+                envelope["MyPlayerName"] = player.Name;
+            }
+
+            return envelope;
+        }
+
+        private static List<PlayerInfo> PreparePlayersForMatch(AbstractMatchSetting setting, IEnumerable<PlayerInfo> players)
+        {
+            var result = new List<PlayerInfo>();
+            if (players == null)
+            {
+                return result;
+            }
+
+            var healthMultiplier = ResolveHealthMultiplier(setting);
+            foreach (var player in players)
+            {
+                result.Add(PreparePlayerForMatch(player, healthMultiplier));
+            }
+
+            return result;
+        }
+
+        private static PlayerInfo PreparePlayerForMatch(PlayerInfo source, float healthMultiplier)
+        {
+            if (source == null)
+            {
+                return new PlayerInfo();
+            }
+
+            var clone = PlayerInfo.FromJson(source.ToJson()) ?? new PlayerInfo(source.Id, source.Name)
+            {
+                playerCharacter = source.playerCharacter,
+                Level = source.Level,
+                Exp = source.Exp,
+                AttackPower = source.AttackPower,
+                DefensePower = source.DefensePower,
+                Team = source.Team,
+                IsReady = source.IsReady,
+                Kills = source.Kills,
+                Deaths = source.Deaths,
+                IsBot = source.IsBot
+            };
+
+            if (healthMultiplier > 1.0f)
+            {
+                var maxHealth = Math.Max(1, (int)Math.Round(clone.MaxHealth * healthMultiplier));
+                clone.MaxHealth = maxHealth;
+                clone.Health = maxHealth;
+            }
+
+            return clone;
+        }
+
+        private static float ResolveHealthMultiplier(AbstractMatchSetting setting)
+        {
+            return setting switch
+            {
+                SuvMatchSetting suvSetting => Math.Max(1.0f, suvSetting.HealthMultiplier),
+                TeamSurvivalMatchSetting teamSetting => Math.Max(1.0f, teamSetting.HealthMultiplier),
+                _ => 1.0f
+            };
+        }
 
 
    

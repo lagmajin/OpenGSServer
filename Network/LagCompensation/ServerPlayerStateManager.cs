@@ -9,6 +9,19 @@ namespace OpenGSServer.Network
     /// </summary>
     public class ServerPlayerStateManager
     {
+        private const float MaxInputDeltaTime = 0.25f;
+        private const float MaxMovementMagnitude = 1.15f;
+        private const float MaxHorizontalSpeed = 10f;
+        private const float MaxVerticalSpeed = 12f;
+        private const float MoveAcceleration = 30f;
+        private const float MoveDrag = 18f;
+        private const float Gravity = 24f;
+        private const float JumpImpulse = 8.5f;
+        private const float GroundHeight = 0f;
+        private const float PositionTolerance = 2.0f;
+        private const float TeleportAllowancePerSecond = 18f;
+        private const float ViolationClampThreshold = 3.0f;
+
         /// <summary>
         /// プレイヤーのサーバー状態を保持する構造体
         /// </summary>
@@ -19,9 +32,12 @@ namespace OpenGSServer.Network
             public float RotX, RotY, RotZ, RotW;
             public float VelX, VelY, VelZ;
             public float LastInputTimestamp;
+            public float LastClientTimestamp;
             public byte LastProcessedSequence;
             public Queue<ClientInputData> InputQueue = new Queue<ClientInputData>();
             public DateTime LastUpdateTime = DateTime.UtcNow;
+            public bool IsGrounded = true;
+            public float ViolationScore = 0f;
             public int PendingInputs => InputQueue.Count;
         }
 
@@ -38,20 +54,23 @@ namespace OpenGSServer.Network
         /// </summary>
         public void RegisterPlayer(string playerId)
         {
-            if (!m_PlayerStates.ContainsKey(playerId))
+            if (string.IsNullOrWhiteSpace(playerId) || m_PlayerStates.ContainsKey(playerId))
             {
-                m_PlayerStates[playerId] = new PlayerServerState
-                {
-                    PlayerId = playerId,
-                    PosX = 0,
-                    PosY = 0,
-                    PosZ = 0,
-                    RotX = 0,
-                    RotY = 0,
-                    RotZ = 0,
-                    RotW = 1
-                };
+                return;
             }
+
+            m_PlayerStates[playerId] = new PlayerServerState
+            {
+                PlayerId = playerId,
+                PosX = 0,
+                PosY = 0,
+                PosZ = GroundHeight,
+                RotX = 0,
+                RotY = 0,
+                RotZ = 0,
+                RotW = 1,
+                IsGrounded = true
+            };
         }
 
         /// <summary>
@@ -65,13 +84,41 @@ namespace OpenGSServer.Network
         /// <summary>
         /// クライアントからの入力をキューに追加する
         /// </summary>
-        public void QueueClientInput(ClientInputData input)
+        public bool QueueClientInput(ClientInputData input, out string rejectionReason)
         {
+            rejectionReason = string.Empty;
+
+            if (string.IsNullOrWhiteSpace(input.PlayerId))
+            {
+                rejectionReason = "PlayerId is missing";
+                return false;
+            }
+
             if (m_PlayerStates.TryGetValue(input.PlayerId, out var state))
             {
+                if (!IsFiniteInput(input))
+                {
+                    rejectionReason = "Input contains invalid numeric values";
+                    RecordViolation(state, rejectionReason);
+                    return false;
+                }
+
+                if (input.DeltaTime < 0f || input.DeltaTime > MaxInputDeltaTime * 2f)
+                {
+                    rejectionReason = $"DeltaTime out of range: {input.DeltaTime:F3}";
+                    RecordViolation(state, rejectionReason);
+                    return false;
+                }
+
                 // シーケンスが古ければスキップ
                 if (IsSequenceNewer(input.SequenceNumber, state.LastProcessedSequence))
                 {
+                    NormalizeClientInput(ref input, out var clampedReason);
+                    if (!string.IsNullOrWhiteSpace(clampedReason))
+                    {
+                        rejectionReason = clampedReason;
+                    }
+
                     state.InputQueue.Enqueue(input);
 
                     // キューサイズ制限
@@ -79,8 +126,16 @@ namespace OpenGSServer.Network
                     {
                         state.InputQueue.Dequeue();
                     }
+
+                    return true;
                 }
+
+                rejectionReason = $"Stale sequence ignored: {input.SequenceNumber} <= {state.LastProcessedSequence}";
+                return false;
             }
+
+            rejectionReason = $"Unknown player '{input.PlayerId}'";
+            return false;
         }
 
         /// <summary>
@@ -119,6 +174,8 @@ namespace OpenGSServer.Network
 
                 state.LastProcessedSequence = input.SequenceNumber;
                 state.LastInputTimestamp = input.Timestamp;
+                state.LastClientTimestamp = input.Timestamp;
+                state.LastUpdateTime = DateTime.UtcNow;
             }
         }
 
@@ -128,20 +185,98 @@ namespace OpenGSServer.Network
         /// </summary>
         private void ApplyServerMovement(PlayerServerState state, ClientInputData input)
         {
-            // TODO: 実際のサーバーサイド移動ロジックを実装
-            // ここでは簡易的な移動のみ
+            var dt = Clamp(input.DeltaTime, 0f, MaxInputDeltaTime);
+            if (dt <= 0f)
+            {
+                return;
+            }
 
-            float moveSpeed = 10f; // 移動速度
-            float newPosX = state.PosX + input.MoveX * moveSpeed * input.DeltaTime;
-            float newPosY = state.PosY + input.MoveY * moveSpeed * input.DeltaTime;
-            float newPosZ = state.PosZ + input.MoveZ * moveSpeed * input.DeltaTime;
+            var startX = state.PosX;
+            var startY = state.PosY;
+            var startZ = state.PosZ;
 
-            state.PosX = newPosX;
-            state.PosY = newPosY;
-            state.PosZ = newPosZ;
+            var moveMagnitude = MathF.Sqrt(input.MoveX * input.MoveX + input.MoveY * input.MoveY + input.MoveZ * input.MoveZ);
+            var normalizedMoveX = input.MoveX;
+            var normalizedMoveY = input.MoveY;
+            var normalizedMoveZ = input.MoveZ;
+            if (moveMagnitude > 1f)
+            {
+                var inv = 1f / moveMagnitude;
+                normalizedMoveX *= inv;
+                normalizedMoveY *= inv;
+                normalizedMoveZ *= inv;
+                RecordViolation(state, "Movement vector was clamped");
+            }
+
+            var targetVelX = normalizedMoveX * MaxHorizontalSpeed;
+            var targetVelY = normalizedMoveY * MaxHorizontalSpeed;
+            var targetVelZ = normalizedMoveZ * MaxVerticalSpeed;
+
+            state.VelX = MoveTowards(state.VelX, targetVelX, MoveAcceleration * dt);
+            state.VelY = MoveTowards(state.VelY, targetVelY, MoveAcceleration * dt);
+
+            if (input.Jump && state.IsGrounded)
+            {
+                state.VelZ = MathF.Max(state.VelZ, JumpImpulse);
+                state.IsGrounded = false;
+            }
+
+            if (!state.IsGrounded)
+            {
+                state.VelZ -= Gravity * dt;
+            }
+
+            state.VelZ = MoveTowards(state.VelZ, targetVelZ, MoveAcceleration * dt);
+
+            if (!input.Jump && state.IsGrounded && MathF.Abs(normalizedMoveZ) < 0.01f)
+            {
+                state.VelZ = MoveTowards(state.VelZ, 0f, MoveDrag * dt);
+            }
+
+            state.PosX += state.VelX * dt;
+            state.PosY += state.VelY * dt;
+            state.PosZ += state.VelZ * dt;
+
+            if (state.PosZ <= GroundHeight)
+            {
+                state.PosZ = GroundHeight;
+                state.VelZ = 0f;
+                state.IsGrounded = true;
+            }
 
             state.RotX = input.LookX;
             state.RotY = input.LookY;
+
+            if (float.IsNaN(state.PosX) || float.IsInfinity(state.PosX) ||
+                float.IsNaN(state.PosY) || float.IsInfinity(state.PosY) ||
+                float.IsNaN(state.PosZ) || float.IsInfinity(state.PosZ))
+            {
+                state.PosX = startX;
+                state.PosY = startY;
+                state.PosZ = startZ;
+                state.VelX = 0f;
+                state.VelY = 0f;
+                state.VelZ = 0f;
+                state.IsGrounded = true;
+                RecordViolation(state, "Invalid transform state detected");
+                return;
+            }
+
+            var movedDistance = MathF.Sqrt(
+                (state.PosX - startX) * (state.PosX - startX) +
+                (state.PosY - startY) * (state.PosY - startY) +
+                (state.PosZ - startZ) * (state.PosZ - startZ));
+
+            var expectedMax = TeleportAllowancePerSecond * dt + PositionTolerance;
+            if (movedDistance > expectedMax)
+            {
+                state.PosX = startX + Clamp(state.PosX - startX, -expectedMax, expectedMax);
+                state.PosY = startY + Clamp(state.PosY - startY, -expectedMax, expectedMax);
+                state.PosZ = startZ + Clamp(state.PosZ - startZ, -expectedMax, expectedMax);
+                RecordViolation(state, $"Movement exceeded expected range: {movedDistance:F2} > {expectedMax:F2}");
+            }
+
+            state.ViolationScore = MathF.Max(0f, state.ViolationScore - (dt * 0.25f));
         }
 
         /// <summary>
@@ -152,6 +287,11 @@ namespace OpenGSServer.Network
         /// <returns>許容範囲内かどうか</returns>
         public bool ValidateClientPosition(string playerId, float clientX, float clientY, float clientZ)
         {
+            return ValidateClientPosition(playerId, clientX, clientY, clientZ, 0f);
+        }
+
+        public bool ValidateClientPosition(string playerId, float clientX, float clientY, float clientZ, float deltaTime)
+        {
             if (!m_PlayerStates.TryGetValue(playerId, out var state))
             {
                 return true; // 未知のプレイヤーは OK
@@ -160,9 +300,16 @@ namespace OpenGSServer.Network
             float dx = state.PosX - clientX;
             float dy = state.PosY - clientY;
             float dz = state.PosZ - clientZ;
-            float distance = (float)Math.Sqrt(dx * dx + dy * dy + dz * dz);
+            float distance = MathF.Sqrt(dx * dx + dy * dy + dz * dz);
+            float allowed = PositionTolerance + TeleportAllowancePerSecond * MathF.Max(0f, deltaTime);
 
-            return distance <= MaxPositionTolerance;
+            if (distance > allowed)
+            {
+                RecordViolation(state, $"Position validation failed: {distance:F2} > {allowed:F2}");
+                return false;
+            }
+
+            return true;
         }
 
         /// <summary>
@@ -203,6 +350,11 @@ namespace OpenGSServer.Network
                 state.PosX = x;
                 state.PosY = y;
                 state.PosZ = z;
+                state.VelX = 0f;
+                state.VelY = 0f;
+                state.VelZ = 0f;
+                state.IsGrounded = MathF.Abs(z - GroundHeight) < 0.01f;
+                state.LastUpdateTime = DateTime.UtcNow;
             }
         }
 
@@ -232,10 +384,80 @@ namespace OpenGSServer.Network
 
             foreach (var kvp in m_PlayerStates)
             {
-                sb.AppendLine($"  Player:{kvp.Key} Seq:{kvp.Value.LastProcessedSequence} Pos:({kvp.Value.PosX:F2},{kvp.Value.PosY:F2},{kvp.Value.PosZ:F2}) Pending:{kvp.Value.PendingInputs}");
+                sb.AppendLine($"  Player:{kvp.Key} Seq:{kvp.Value.LastProcessedSequence} Pos:({kvp.Value.PosX:F2},{kvp.Value.PosY:F2},{kvp.Value.PosZ:F2}) Vel:({kvp.Value.VelX:F2},{kvp.Value.VelY:F2},{kvp.Value.VelZ:F2}) Grounded:{kvp.Value.IsGrounded} Viol:{kvp.Value.ViolationScore:F2} Pending:{kvp.Value.PendingInputs}");
             }
 
             return sb.ToString();
+        }
+
+        private static void NormalizeClientInput(ref ClientInputData input, out string reason)
+        {
+            reason = string.Empty;
+
+            var magnitude = MathF.Sqrt(input.MoveX * input.MoveX + input.MoveY * input.MoveY + input.MoveZ * input.MoveZ);
+            if (magnitude > MaxMovementMagnitude)
+            {
+                var inv = MaxMovementMagnitude / magnitude;
+                input.MoveX *= inv;
+                input.MoveY *= inv;
+                input.MoveZ *= inv;
+                reason = "Movement vector clamped";
+            }
+
+            if (input.DeltaTime < 0f)
+            {
+                input.DeltaTime = 0f;
+            }
+            else if (input.DeltaTime > MaxInputDeltaTime)
+            {
+                input.DeltaTime = MaxInputDeltaTime;
+            }
+        }
+
+        private static bool IsFiniteInput(in ClientInputData input)
+        {
+            return IsFinite(input.MoveX) &&
+                   IsFinite(input.MoveY) &&
+                   IsFinite(input.MoveZ) &&
+                   IsFinite(input.LookX) &&
+                   IsFinite(input.LookY) &&
+                   IsFinite(input.Timestamp) &&
+                   IsFinite(input.DeltaTime);
+        }
+
+        private static bool IsFinite(float value)
+        {
+            return !float.IsNaN(value) && !float.IsInfinity(value);
+        }
+
+        private static float MoveTowards(float current, float target, float maxDelta)
+        {
+            if (current < target)
+            {
+                return MathF.Min(current + maxDelta, target);
+            }
+
+            return MathF.Max(current - maxDelta, target);
+        }
+
+        private static float Clamp(float value, float min, float max)
+        {
+            return MathF.Max(min, MathF.Min(max, value));
+        }
+
+        private static void RecordViolation(PlayerServerState state, string reason)
+        {
+            if (state == null)
+            {
+                return;
+            }
+
+            state.ViolationScore += 1f;
+            if (state.ViolationScore >= ViolationClampThreshold)
+            {
+                ConsoleWrite.WriteMessage($"[LAG] Suspicious movement for {state.PlayerId}: {reason} (score {state.ViolationScore:F2})", ConsoleColor.Yellow);
+                state.ViolationScore *= 0.5f;
+            }
         }
     }
 }

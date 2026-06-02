@@ -25,7 +25,7 @@ namespace OpenGSServer
             var updateJson = new JObject
             {
                 ["MessageType"] = messageType,
-                ["RoomInfo"] = waitRoom.ToJson()
+                ["RoomInfo"] = BuildRoomInfoJson(waitRoom)
             };
 
             foreach (var player in waitRoom.AllPlayers())
@@ -33,6 +33,14 @@ namespace OpenGSServer
                 var targetSession = LobbyServerManager.Instance.FindSessionByPlayerId(player.Id);
                 targetSession?.SendAsyncJsonWithTimeStamp(updateJson);
             }
+        }
+
+        private static JObject BuildRoomInfoJson(WaitRoom waitRoom)
+        {
+            var snapshot = waitRoom.ToSnapshot().ToJson();
+            snapshot["OwnerId"] = waitRoom.GetFirstPlayerId();
+            snapshot["HasPassword"] = !string.IsNullOrWhiteSpace(waitRoom.Password);
+            return snapshot;
         }
 
         private static WaitRoom? FindWaitRoomByPlayerId(string playerId)
@@ -210,7 +218,7 @@ namespace OpenGSServer
             session.SendAsyncJsonWithTimeStamp(new JObject
             {
                 ["MessageType"] = MessageType.LoadingStartedNotification,
-                ["RoomInfo"] = waitRoom.ToJson()
+                ["RoomInfo"] = BuildRoomInfoJson(waitRoom)
             });
 
             BroadcastRoomUpdate(waitRoom, MessageType.WaitRoomUpdateNotification);
@@ -247,7 +255,7 @@ namespace OpenGSServer
             session.SendAsyncJsonWithTimeStamp(new JObject
             {
                 ["MessageType"] = MessageType.LoadingCompletedNotification,
-                ["RoomInfo"] = waitRoom.ToJson()
+                ["RoomInfo"] = BuildRoomInfoJson(waitRoom)
             });
 
             BroadcastRoomUpdate(waitRoom, MessageType.WaitRoomUpdateNotification);
@@ -255,7 +263,11 @@ namespace OpenGSServer
 
         public static void ChangeRoomSetting(in ClientSession session, IDictionary<string, JToken> dic)
         {
-            var roomId = JsonHelper.GetStringOrNull(dic, "RoomId");
+            var roomSetting = WaitRoomSetting.FromDictionary(dic);
+            var roomId = !string.IsNullOrWhiteSpace(roomSetting.RoomId)
+                ? roomSetting.RoomId
+                : JsonHelper.GetStringOrNull(dic, "RoomId");
+
             if (string.IsNullOrWhiteSpace(roomId))
             {
                 session.SendAsyncJsonWithTimeStamp(CreateRoomError(MessageType.InvalidRoomId, string.Empty));
@@ -269,31 +281,26 @@ namespace OpenGSServer
                 return;
             }
 
-            if (dic.TryGetValue("RoomName", out var roomNameToken))
-            {
-                waitRoom.RoomName = roomNameToken?.ToString() ?? waitRoom.RoomName;
-            }
+            roomSetting.ApplyTo(waitRoom);
 
-            if (dic.TryGetValue("Capacity", out var capacityToken) &&
-                int.TryParse(capacityToken?.ToString(), out var capacity))
-            {
-                waitRoom.Capacity = Math.Max(1, capacity);
-            }
-
-            if (dic.TryGetValue("GameMode", out var gameModeToken))
-            {
-                var rawMode = gameModeToken?.ToString() ?? string.Empty;
-                if (Enum.TryParse<EGameMode>(rawMode, true, out var gameMode))
-                {
-                    waitRoom.ChangeGameMode(gameMode);
-                }
-            }
-
-            session.SendAsyncJsonWithTimeStamp(new JObject
+            var roomInfoJson = BuildRoomInfoJson(waitRoom);
+            var responseJson = new JObject
             {
                 ["MessageType"] = MessageType.RoomSettingChanged,
-                ["RoomInfo"] = waitRoom.ToJson()
-            });
+                ["RoomId"] = roomId,
+                ["RoomID"] = roomId,
+                ["RoomInfo"] = roomInfoJson,
+                ["Settings"] = roomSetting.ToJson(),
+                ["RoomName"] = roomInfoJson["RoomName"],
+                ["Capacity"] = roomInfoJson["Capacity"],
+                ["GameMode"] = roomInfoJson["GameMode"],
+                ["TeamBalance"] = roomInfoJson["TeamBalance"],
+                ["OwnerId"] = roomInfoJson["OwnerId"],
+                ["PlayerCount"] = roomInfoJson["PlayerCount"],
+                ["NowPlaying"] = roomInfoJson["NowPlaying"]
+            };
+
+            session.SendAsyncJsonWithTimeStamp(responseJson);
 
             BroadcastRoomUpdate(waitRoom, MessageType.WaitRoomUpdateNotification);
         }
@@ -317,7 +324,7 @@ namespace OpenGSServer
             session.SendAsyncJsonWithTimeStamp(new JObject
             {
                 ["MessageType"] = MessageType.WaitRoomUpdateNotification,
-                ["RoomInfo"] = waitRoom.ToJson()
+                ["RoomInfo"] = BuildRoomInfoJson(waitRoom)
             });
         }
 

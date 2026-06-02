@@ -72,12 +72,24 @@ namespace OpenGSServer.Network
         /// クライアントからの入力を処理する
         /// </summary>
         /// <param name="input">クライアント入力データ</param>
-        public void ProcessClientInput(ClientInputData input)
+        /// <returns>入力が受理された場合は true</returns>
+        public bool ProcessClientInput(ClientInputData input, out string rejectionReason)
         {
-            if (!m_IsEnabled) return;
+            rejectionReason = string.Empty;
+            if (!m_IsEnabled)
+            {
+                rejectionReason = "Lag compensation is disabled";
+                return false;
+            }
 
             // 入力をキューに追加
-            m_PlayerStateManager.QueueClientInput(input);
+            var accepted = m_PlayerStateManager.QueueClientInput(input, out rejectionReason);
+            if (!accepted && !string.IsNullOrWhiteSpace(rejectionReason))
+            {
+                Log.Warning($"[ServerLagCompensation] Rejected input for {input.PlayerId}: {rejectionReason}");
+            }
+
+            return accepted;
         }
 
         /// <summary>
@@ -93,6 +105,26 @@ namespace OpenGSServer.Network
             if (!m_IsEnabled) return true;
 
             return m_PlayerStateManager.ValidateClientPosition(playerId, clientX, clientY, clientZ);
+        }
+
+        /// <summary>
+        /// サーバープレイヤー位置の妥当性を検証する（経過時間込み）
+        /// </summary>
+        public bool ValidatePlayerPosition(string playerId, float clientX, float clientY, float clientZ, float deltaTime, out string rejectionReason)
+        {
+            rejectionReason = string.Empty;
+            if (!m_IsEnabled)
+            {
+                return true;
+            }
+
+            var valid = m_PlayerStateManager.ValidateClientPosition(playerId, clientX, clientY, clientZ, deltaTime);
+            if (!valid)
+            {
+                rejectionReason = $"Position validation failed for {playerId}";
+            }
+
+            return valid;
         }
 
         /// <summary>

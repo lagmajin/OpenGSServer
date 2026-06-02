@@ -243,7 +243,10 @@ namespace OpenGSServer
                 DeltaTime = deltaTime
             };
 
-            MatchServerV2.Instance.ServerLagCompensationManager.ProcessClientInput(inputData);
+            if (!MatchServerV2.Instance.ServerLagCompensationManager.ProcessClientInput(inputData, out var rejectionReason))
+            {
+                ConsoleWrite.WriteMessage($"[UDP] Rejected move input from {playerId}: {rejectionReason}", ConsoleColor.Yellow);
+            }
         }
 
         /// <summary>
@@ -272,7 +275,10 @@ namespace OpenGSServer
                 Timestamp = timestamp,
                 DeltaTime = deltaTime
             };
-            MatchServerV2.Instance.ServerLagCompensationManager.ProcessClientInput(inputData);
+            if (!MatchServerV2.Instance.ServerLagCompensationManager.ProcessClientInput(inputData, out var rejectionReason))
+            {
+                ConsoleWrite.WriteMessage($"[UDP] Rejected shoot input from {playerId}: {rejectionReason}", ConsoleColor.Yellow);
+            }
         }
 
         /// <summary>

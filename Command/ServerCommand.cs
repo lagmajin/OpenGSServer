@@ -153,6 +153,10 @@ namespace OpenGSServer
                     }
                     break;
 
+                case "guildlist":
+                    CommandExecutor.ListGuilds();
+                    break;
+
                 case "addwaitroom":
                     if (parameters.Count >= 1)
                     {
@@ -216,6 +220,120 @@ namespace OpenGSServer
                     else
                     {
                         ConsoleWrite.WriteMessage("[ERR] Usage: guildinfo <guildName>", ConsoleColor.Red);
+                    }
+                    break;
+
+                case "guildremove":
+                    if (parameters.Count >= 1)
+                    {
+                        CommandExecutor.RemoveGuild(parameters[0]);
+                    }
+                    else
+                    {
+                        ConsoleWrite.WriteMessage("[ERR] Usage: guildremove <guildName>", ConsoleColor.Red);
+                    }
+                    break;
+
+                case "guildaddmember":
+                    if (parameters.Count >= 2)
+                    {
+                        var role = parameters.Count >= 3 ? parameters[2] : "Member";
+                        CommandExecutor.AddGuildMember(parameters[0], parameters[1], role);
+                    }
+                    else
+                    {
+                        ConsoleWrite.WriteMessage("[ERR] Usage: guildaddmember <guildName> <memberId> [role]", ConsoleColor.Red);
+                    }
+                    break;
+
+                case "guildjoin":
+                    if (parameters.Count >= 2)
+                    {
+                        var role = parameters.Count >= 3 ? parameters[2] : "Member";
+                        CommandExecutor.JoinGuild(parameters[0], parameters[1], role);
+                    }
+                    else
+                    {
+                        ConsoleWrite.WriteMessage("[ERR] Usage: guildjoin <guildName> <memberId> [role]", ConsoleColor.Red);
+                    }
+                    break;
+
+                case "guildleave":
+                    if (parameters.Count >= 2)
+                    {
+                        CommandExecutor.LeaveGuild(parameters[0], parameters[1]);
+                    }
+                    else
+                    {
+                        ConsoleWrite.WriteMessage("[ERR] Usage: guildleave <guildName> <memberId>", ConsoleColor.Red);
+                    }
+                    break;
+
+                case "guildinvite":
+                    if (parameters.Count >= 2)
+                    {
+                        var inviterId = parameters.Count >= 3 ? parameters[2] : "System";
+                        CommandExecutor.InviteGuildMember(parameters[0], parameters[1], inviterId);
+                    }
+                    else
+                    {
+                        ConsoleWrite.WriteMessage("[ERR] Usage: guildinvite <guildName> <memberId> [inviterId]", ConsoleColor.Red);
+                    }
+                    break;
+
+                case "guildkick":
+                    if (parameters.Count >= 2)
+                    {
+                        var kickerId = parameters.Count >= 3 ? parameters[2] : "System";
+                        CommandExecutor.KickGuildMember(parameters[0], parameters[1], kickerId);
+                    }
+                    else
+                    {
+                        ConsoleWrite.WriteMessage("[ERR] Usage: guildkick <guildName> <memberId> [kickerId]", ConsoleColor.Red);
+                    }
+                    break;
+
+                case "guildremovemember":
+                    if (parameters.Count >= 2)
+                    {
+                        CommandExecutor.RemoveGuildMember(parameters[0], parameters[1]);
+                    }
+                    else
+                    {
+                        ConsoleWrite.WriteMessage("[ERR] Usage: guildremovemember <guildName> <memberId>", ConsoleColor.Red);
+                    }
+                    break;
+
+                case "guildrole":
+                    if (parameters.Count >= 3)
+                    {
+                        CommandExecutor.SetGuildMemberRole(parameters[0], parameters[1], parameters[2]);
+                    }
+                    else
+                    {
+                        ConsoleWrite.WriteMessage("[ERR] Usage: guildrole <guildName> <memberId> <role>", ConsoleColor.Red);
+                    }
+                    break;
+
+                case "guildexp":
+                    if (parameters.Count >= 2 && long.TryParse(parameters[1], out var exp))
+                    {
+                        CommandExecutor.AddGuildExp(parameters[0], exp);
+                    }
+                    else
+                    {
+                        ConsoleWrite.WriteMessage("[ERR] Usage: guildexp <guildName> <exp>", ConsoleColor.Red);
+                    }
+                    break;
+
+                case "guildchat":
+                    if (parameters.Count >= 3)
+                    {
+                        CommandExecutor.BroadcastGuildChat(parameters[0], parameters[1], string.Join(" ", parameters.Skip(2)));
+                    }
+                    else
+                    {
+                        ConsoleWrite.WriteMessage("[ERR] Usage: guildchat <guildName> <senderId> <message>", ConsoleColor.Red);
                     }
                     break;
 
@@ -289,6 +407,17 @@ namespace OpenGSServer
             ConsoleWrite.WriteMessage("=== OpenGS Server Console Commands ===", ConsoleColor.Cyan);
             ConsoleWrite.WriteMessage("addplayer <id> <password> <displayName> - Create new player account", ConsoleColor.White);
             ConsoleWrite.WriteMessage("addguild <guildName> - Create new guild", ConsoleColor.White);
+            ConsoleWrite.WriteMessage("guildlist - List all guilds", ConsoleColor.White);
+            ConsoleWrite.WriteMessage("guildremove <guildName> - Remove a guild", ConsoleColor.White);
+            ConsoleWrite.WriteMessage("guildaddmember <guildName> <memberId> [role] - Add a member to a guild", ConsoleColor.White);
+            ConsoleWrite.WriteMessage("guildjoin <guildName> <memberId> [role] - Join a guild", ConsoleColor.White);
+            ConsoleWrite.WriteMessage("guildleave <guildName> <memberId> - Leave a guild", ConsoleColor.White);
+            ConsoleWrite.WriteMessage("guildinvite <guildName> <memberId> [inviterId] - Invite a player to a guild", ConsoleColor.White);
+            ConsoleWrite.WriteMessage("guildkick <guildName> <memberId> [kickerId] - Kick a member from a guild", ConsoleColor.White);
+            ConsoleWrite.WriteMessage("guildremovemember <guildName> <memberId> - Remove a member from a guild", ConsoleColor.White);
+            ConsoleWrite.WriteMessage("guildrole <guildName> <memberId> <role> - Change a guild member role", ConsoleColor.White);
+            ConsoleWrite.WriteMessage("guildexp <guildName> <exp> - Add guild experience", ConsoleColor.White);
+            ConsoleWrite.WriteMessage("guildchat <guildName> <senderId> <message> - Broadcast guild chat", ConsoleColor.White);
             ConsoleWrite.WriteMessage("addwaitroom <roomName> - Create new wait room", ConsoleColor.White);
             ConsoleWrite.WriteMessage("creatematch <roomName> - Create a new match room", ConsoleColor.White);
             ConsoleWrite.WriteMessage("addplayertomatch <matchId> <playerId> - Add a player to a specific match", ConsoleColor.White);
@@ -342,6 +471,238 @@ namespace OpenGSServer
             catch (Exception ex)
             {
                 ConsoleWrite.WriteMessage($"[ERR] Failed to create guild: {ex.Message}", ConsoleColor.Red);
+            }
+        }
+
+        public static void ListGuilds()
+        {
+            try
+            {
+                var manager = GuildManager.Instance;
+                var guilds = manager.GetAllGuilds();
+
+                ConsoleWrite.WriteMessage("[INFO] === Guilds ===", ConsoleColor.Cyan);
+                if (guilds.Count == 0)
+                {
+                    ConsoleWrite.WriteMessage("[INFO] No guilds found.", ConsoleColor.White);
+                    return;
+                }
+
+                foreach (var guild in guilds.OrderBy(g => g.GuildName))
+                {
+                    var memberCount = manager.GetGuildMembers(guild.GuildName).Count;
+                    ConsoleWrite.WriteMessage($" - {guild.GuildName} [{guild.GuildShortName}] Level {guild.Level}, EXP {guild.Experience}, Members {memberCount}, Leader {guild.LeaderId}", ConsoleColor.White);
+                }
+            }
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage($"[ERR] Failed to list guilds: {ex.Message}", ConsoleColor.Red);
+            }
+        }
+
+        public static void RemoveGuild(string guildName)
+        {
+            try
+            {
+                var manager = GuildManager.Instance;
+                if (manager.RemoveGuild(guildName))
+                {
+                    ConsoleWrite.WriteMessage($"[OK] Guild '{guildName}' removed successfully", ConsoleColor.Green);
+                }
+                else
+                {
+                    ConsoleWrite.WriteMessage($"[ERR] Guild '{guildName}' was not found or could not be removed", ConsoleColor.Red);
+                }
+            }
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage($"[ERR] Failed to remove guild: {ex.Message}", ConsoleColor.Red);
+            }
+        }
+
+        public static void AddGuildMember(string guildName, string memberId, string role = "Member")
+        {
+            try
+            {
+                var manager = GuildManager.Instance;
+                if (manager.AddGuildMember(memberId, guildName, role))
+                {
+                    ConsoleWrite.WriteMessage($"[OK] Player '{memberId}' added to guild '{guildName}' as {role}", ConsoleColor.Green);
+                }
+                else
+                {
+                    ConsoleWrite.WriteMessage($"[ERR] Failed to add member '{memberId}' to guild '{guildName}'", ConsoleColor.Red);
+                }
+            }
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage($"[ERR] Failed to add guild member: {ex.Message}", ConsoleColor.Red);
+            }
+        }
+
+        public static void JoinGuild(string guildName, string memberId, string role = "Member")
+        {
+            try
+            {
+                var manager = GuildManager.Instance;
+                if (manager.JoinGuild(guildName, memberId, role))
+                {
+                    ConsoleWrite.WriteMessage($"[OK] Player '{memberId}' joined guild '{guildName}' as {role}", ConsoleColor.Green);
+                }
+                else
+                {
+                    ConsoleWrite.WriteMessage($"[ERR] Failed to join guild '{guildName}' for player '{memberId}'", ConsoleColor.Red);
+                }
+            }
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage($"[ERR] Failed to join guild: {ex.Message}", ConsoleColor.Red);
+            }
+        }
+
+        public static void LeaveGuild(string guildName, string memberId)
+        {
+            try
+            {
+                var manager = GuildManager.Instance;
+                if (manager.LeaveGuild(guildName, memberId))
+                {
+                    ConsoleWrite.WriteMessage($"[OK] Player '{memberId}' left guild '{guildName}'", ConsoleColor.Green);
+                }
+                else
+                {
+                    ConsoleWrite.WriteMessage($"[ERR] Failed to leave guild '{guildName}' for player '{memberId}'", ConsoleColor.Red);
+                }
+            }
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage($"[ERR] Failed to leave guild: {ex.Message}", ConsoleColor.Red);
+            }
+        }
+
+        public static void RemoveGuildMember(string guildName, string memberId)
+        {
+            try
+            {
+                var manager = GuildManager.Instance;
+                if (manager.RemoveGuildMember(guildName, memberId))
+                {
+                    ConsoleWrite.WriteMessage($"[OK] Player '{memberId}' removed from guild '{guildName}'", ConsoleColor.Green);
+                }
+                else
+                {
+                    ConsoleWrite.WriteMessage($"[ERR] Failed to remove member '{memberId}' from guild '{guildName}'", ConsoleColor.Red);
+                }
+            }
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage($"[ERR] Failed to remove guild member: {ex.Message}", ConsoleColor.Red);
+            }
+        }
+
+        public static void InviteGuildMember(string guildName, string memberId, string inviterId = "System")
+        {
+            try
+            {
+                var manager = GuildManager.Instance;
+                if (!manager.Exist(guildName))
+                {
+                    ConsoleWrite.WriteMessage($"[ERR] Guild '{guildName}' not found", ConsoleColor.Red);
+                    return;
+                }
+
+                if (manager.CanInviteGuildMember(guildName, memberId))
+                {
+                    ConsoleWrite.WriteMessage($"[OK] Invite prepared for player '{memberId}' to guild '{guildName}' by '{inviterId}'", ConsoleColor.Green);
+                }
+                else
+                {
+                    ConsoleWrite.WriteMessage($"[ERR] Player '{memberId}' is already in guild '{guildName}' or cannot be invited", ConsoleColor.Red);
+                }
+            }
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage($"[ERR] Failed to invite guild member: {ex.Message}", ConsoleColor.Red);
+            }
+        }
+
+        public static void KickGuildMember(string guildName, string memberId, string kickerId = "System")
+        {
+            try
+            {
+                var manager = GuildManager.Instance;
+                if (manager.KickGuildMember(guildName, memberId))
+                {
+                    ConsoleWrite.WriteMessage($"[OK] Player '{memberId}' was kicked from guild '{guildName}' by '{kickerId}'", ConsoleColor.Green);
+                }
+                else
+                {
+                    ConsoleWrite.WriteMessage($"[ERR] Failed to kick player '{memberId}' from guild '{guildName}'", ConsoleColor.Red);
+                }
+            }
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage($"[ERR] Failed to kick guild member: {ex.Message}", ConsoleColor.Red);
+            }
+        }
+
+        public static void SetGuildMemberRole(string guildName, string memberId, string role)
+        {
+            try
+            {
+                var manager = GuildManager.Instance;
+                if (manager.UpdateGuildMemberRole(guildName, memberId, role))
+                {
+                    ConsoleWrite.WriteMessage($"[OK] Player '{memberId}' role updated to {role} in guild '{guildName}'", ConsoleColor.Green);
+                }
+                else
+                {
+                    ConsoleWrite.WriteMessage($"[ERR] Failed to update role for '{memberId}' in guild '{guildName}'", ConsoleColor.Red);
+                }
+            }
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage($"[ERR] Failed to update guild member role: {ex.Message}", ConsoleColor.Red);
+            }
+        }
+
+        public static void AddGuildExp(string guildName, long exp)
+        {
+            try
+            {
+                var manager = GuildManager.Instance;
+                if (!manager.Exist(guildName))
+                {
+                    ConsoleWrite.WriteMessage($"[ERR] Guild '{guildName}' not found", ConsoleColor.Red);
+                    return;
+                }
+
+                manager.AddGuildExp(guildName, exp);
+                ConsoleWrite.WriteMessage($"[OK] Added {exp} EXP to guild '{guildName}'", ConsoleColor.Green);
+            }
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage($"[ERR] Failed to add guild EXP: {ex.Message}", ConsoleColor.Red);
+            }
+        }
+
+        public static void BroadcastGuildChat(string guildName, string senderId, string message)
+        {
+            try
+            {
+                var manager = GuildManager.Instance;
+                if (!manager.Exist(guildName))
+                {
+                    ConsoleWrite.WriteMessage($"[ERR] Guild '{guildName}' not found", ConsoleColor.Red);
+                    return;
+                }
+
+                manager.BroadcastGuildChat(guildName, senderId, message);
+                ConsoleWrite.WriteMessage($"[OK] Guild chat sent for '{guildName}'", ConsoleColor.Green);
+            }
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage($"[ERR] Failed to broadcast guild chat: {ex.Message}", ConsoleColor.Red);
             }
         }
 
@@ -526,7 +887,7 @@ namespace OpenGSServer
                 ConsoleWrite.WriteMessage($"[INFO] Members: {members.Count}", ConsoleColor.Cyan);
                 foreach (var member in members)
                 {
-                    ConsoleWrite.WriteMessage($" - {member.Id} (joined {member.TimeStamp})", ConsoleColor.White);
+                    ConsoleWrite.WriteMessage($" - {member.Id} [{member.Role}] (joined {member.TimeStamp})", ConsoleColor.White);
                 }
             }
             catch (Exception ex)

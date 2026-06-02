@@ -1,8 +1,7 @@
-using OpenGSCore;
 using System.Collections.Generic;
 using System.Linq;
 using Newtonsoft.Json.Linq;
-using OpenGSServer.Player;
+using WaitRoomPlayerInfo = OpenGSServer.Player.WaitRoomPlayerInfo;
 
 namespace OpenGSServer
 {

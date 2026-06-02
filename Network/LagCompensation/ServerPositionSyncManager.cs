@@ -25,6 +25,16 @@ namespace OpenGSServer.Network
         private readonly Dictionary<string, Action<byte[]>> m_ClientUdpSenders = new Dictionary<string, Action<byte[]>>();
 
         /// <summary>
+        /// クライアント位置の妥当性検証フック
+        /// </summary>
+        public Func<string, PlayerPositionUpdateEvent, bool>? ClientPositionValidator { get; set; }
+
+        /// <summary>
+        /// 位置更新が拒否されたときの通知フック
+        /// </summary>
+        public Action<string, string>? OnPositionRejected { get; set; }
+
+        /// <summary>
         /// プレイヤー位置データ
         /// </summary>
         private class PlayerPositionData
@@ -123,6 +133,13 @@ namespace OpenGSServer.Network
         {
             if (m_PlayerPositions.TryGetValue(playerId, out var data))
             {
+                if (ClientPositionValidator != null && !ClientPositionValidator(playerId, clientEvent))
+                {
+                    OnPositionRejected?.Invoke(playerId, "Client position rejected by validator");
+                    Log.Warning($"[PositionSync] Rejected client update for {playerId}");
+                    return;
+                }
+
                 // クライアントが送信してきた位置を採用
                 data.PosX = clientEvent.PositionX;
                 data.PosY = clientEvent.PositionY;
