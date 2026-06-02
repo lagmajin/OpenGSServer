@@ -127,7 +127,7 @@ namespace OpenGSServer
                 var ownerId = waitRoom.GetFirstPlayerId();
                 var bus = new MatchRoomEventBus();
                 var matchRoom = MatchRoomFactory.CreateMatchRoom(roomNumberCount, waitRoom.RoomName, ownerId, setting, bus);
-                matchRoom.AddNewPlayers(waitRoom.AllPlayers());
+                matchRoom.AddNewPlayers(PreparePlayersForMatch(setting, waitRoom.AllPlayers()));
                 var itemManager = CreateFieldItemManager(matchRoom.Id);
 
                 bus.OnLoadingStarted += () =>
@@ -609,6 +609,64 @@ namespace OpenGSServer
             }
 
             return envelope;
+        }
+
+        private static List<PlayerInfo> PreparePlayersForMatch(AbstractMatchSetting setting, IEnumerable<PlayerInfo> players)
+        {
+            var result = new List<PlayerInfo>();
+            if (players == null)
+            {
+                return result;
+            }
+
+            var healthMultiplier = ResolveHealthMultiplier(setting);
+            foreach (var player in players)
+            {
+                result.Add(PreparePlayerForMatch(player, healthMultiplier));
+            }
+
+            return result;
+        }
+
+        private static PlayerInfo PreparePlayerForMatch(PlayerInfo source, float healthMultiplier)
+        {
+            if (source == null)
+            {
+                return new PlayerInfo();
+            }
+
+            var clone = PlayerInfo.FromJson(source.ToJson()) ?? new PlayerInfo(source.Id, source.Name)
+            {
+                playerCharacter = source.playerCharacter,
+                Level = source.Level,
+                Exp = source.Exp,
+                AttackPower = source.AttackPower,
+                DefensePower = source.DefensePower,
+                Team = source.Team,
+                IsReady = source.IsReady,
+                Kills = source.Kills,
+                Deaths = source.Deaths,
+                IsBot = source.IsBot
+            };
+
+            if (healthMultiplier > 1.0f)
+            {
+                var maxHealth = Math.Max(1, (int)Math.Round(clone.MaxHealth * healthMultiplier));
+                clone.MaxHealth = maxHealth;
+                clone.Health = maxHealth;
+            }
+
+            return clone;
+        }
+
+        private static float ResolveHealthMultiplier(AbstractMatchSetting setting)
+        {
+            return setting switch
+            {
+                SuvMatchSetting suvSetting => Math.Max(1.0f, suvSetting.HealthMultiplier),
+                TeamSurvivalMatchSetting teamSetting => Math.Max(1.0f, teamSetting.HealthMultiplier),
+                _ => 1.0f
+            };
         }
 
 
