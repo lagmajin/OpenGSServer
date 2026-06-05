@@ -24,7 +24,7 @@ namespace OpenGSServer
             SendAsync(message);
         }
 
-        private bool ValidateGrenadeMessage(JObject json, out string reason)
+        private bool ValidateProjectileMessage(JObject json, out string reason)
         {
             reason = string.Empty;
 
@@ -47,8 +47,10 @@ namespace OpenGSServer
                 return false;
             }
 
-            // require object id
-            if (!json.TryGetValue("ObjectId", out var oid) && !json.TryGetValue("ID", out oid))
+            // require object id for spawned/destroyed objects
+            var messageType = json["MessageType"]?.ToString();
+            if ((messageType == GameMessageTypes.ObjectSpawned || messageType == GameMessageTypes.ObjectDestroyed) &&
+                !json.TryGetValue("ObjectId", out var oid) && !json.TryGetValue("ID", out oid))
             {
                 reason = "ObjectId missing";
                 return false;
@@ -65,17 +67,17 @@ namespace OpenGSServer
         }
 
         // Per-session rate limiters
-        private static readonly double GrenadeSpawnCapacity = 5; // tokens
-        private static readonly double GrenadeSpawnRefillPerSecond = 5; // tokens/sec
+        private static readonly double ProjectileMessageCapacity = 5; // tokens
+        private static readonly double ProjectileMessageRefillPerSecond = 5; // tokens/sec
 
-        private TokenBucket _grenadeSpawnBucket = new TokenBucket(GrenadeSpawnCapacity, GrenadeSpawnRefillPerSecond);
+        private TokenBucket _projectileMessageBucket = new TokenBucket(ProjectileMessageCapacity, ProjectileMessageRefillPerSecond);
 
         private bool CheckGrenadeRateLimit()
         {
             // consume 1 token per spawn/update/explode message
-            if (!_grenadeSpawnBucket.TryConsume(1))
+            if (!_projectileMessageBucket.TryConsume(1))
             {
-                ConsoleWrite.WriteMessage("[RATE] Grenade message rate exceeded", ConsoleColor.Yellow);
+                ConsoleWrite.WriteMessage("[RATE] Projectile message rate exceeded", ConsoleColor.Yellow);
                 return false;
             }
 
@@ -204,15 +206,15 @@ namespace OpenGSServer
 
             }
 
-            // Grenade messages (client-authoritative): forward to room handler which will broadcast to room players
-            if (messageType == "GrenadeSpawn" || messageType == "GrenadeUpdate" || messageType == "GrenadeExplode")
+            // Object spawn/destroy and grenade throw messages are relayed through the match room handler.
+            if (messageType == GameMessageTypes.ObjectSpawned || messageType == GameMessageTypes.ObjectDestroyed || messageType == GameMessageTypes.GrenadeThrow)
             {
                 try
                 {
                     // Basic validation before forwarding
-                    if (!ValidateGrenadeMessage(json, out var reason))
+                    if (!ValidateProjectileMessage(json, out var reason))
                     {
-                        ConsoleWrite.WriteMessage($"[WARN] Invalid grenade message: {reason}", ConsoleWrite.eMessageType.Warning);
+                        ConsoleWrite.WriteMessage($"[WARN] Invalid projectile message: {reason}", ConsoleWrite.eMessageType.Warning);
                         var err = new JObject
                         {
                             ["MessageType"] = "Error",
@@ -240,7 +242,7 @@ namespace OpenGSServer
                 }
                 catch (Exception ex)
                 {
-                    ConsoleWrite.WriteMessage($"[ERROR] Grenade message handling failed: {ex.Message}", ConsoleWrite.eMessageType.Error);
+                    ConsoleWrite.WriteMessage($"[ERROR] Projectile message handling failed: {ex.Message}", ConsoleWrite.eMessageType.Error);
                 }
 
                 return;

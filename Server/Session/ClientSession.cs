@@ -383,7 +383,7 @@ namespace OpenGSServer
             string messageType = json["MessageType"]?.ToString();
             if (string.IsNullOrEmpty(messageType)) return;
 
-            // LobbyServerManager に委譲
+            // Delegate lobby traffic first, then match traffic.
             var lobbyManager = (Server as LobbyTcpServer)?.Manager;
             if (lobbyManager != null)
             {
@@ -397,9 +397,9 @@ namespace OpenGSServer
                     case MessageType.ClientLoadingSceneEntered:
                     case MessageType.LoadingProgress:
                     case MessageType.LoadingCompleted:
-                    case "LoadingFinished":
-                    case "MatchStatusRequest":
-                    case "PlayerRespawn":
+                    case GameMessageTypes.LoadingFinished:
+                    case GameMessageTypes.MatchStatusRequest:
+                    case GameMessageTypes.PlayerRespawn:
                         InGameMatchEventHandler.HandleTcpSystemEvent(json);
                         break;
                 }
@@ -411,7 +411,7 @@ namespace OpenGSServer
                 case MessageType.PlayerInfoRequest:
                     HandlePlayerInfoRequest(json);
                     break;
-                // 他のClientSession固有のメッセージがあればここに追加
+                // Add more session-specific messages here if needed.
             }
         }
 
@@ -420,14 +420,12 @@ namespace OpenGSServer
             string targetPlayerId = requestJson["TargetPlayerID"]?.ToString();
             if (string.IsNullOrEmpty(targetPlayerId))
             {
-                // エラー応答を送信
                 SendErrorMessage("InvalidRequest", "TargetPlayerID is missing.");
                 return;
             }
 
-            // AccountDatabaseManager からプレイヤー情報を取得
             var accountDbManager = AccountDatabaseManager.GetInstance();
-            var account = accountDbManager.GetAccount(targetPlayerId); // 適切なメソッドに置き換える必要あり
+            var account = accountDbManager.GetAccount(targetPlayerId); // Replace with the correct lookup if needed.
 
             if (account != null)
             {

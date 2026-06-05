@@ -5,6 +5,28 @@ using OpenGSCore;
 
 namespace OpenGSServer
 {
+    public static class GameMessageTypes
+    {
+        public const string PlayerKilled = "PlayerKilled";
+        public const string PlayerShot = "PlayerShot";
+        public const string GrenadeThrow = "GrenadeThrow";
+        public const string ObjectSpawned = "ObjectSpawned";
+        public const string ObjectDestroyed = "ObjectDestroyed";
+        public const string FlagCaptured = "FlagCaptured";
+        public const string FlagLost = "FlagLost";
+        public const string FlagPickup = "FlagPickup";
+        public const string FlagReturn = "FlagReturn";
+        public const string FlagScoreUpdate = "FlagScoreUpdate";
+        public const string MatchStatus = "MatchStatus";
+        public const string MatchStatusRequest = "MatchStatusRequest";
+        public const string PlayerRespawn = "PlayerRespawn";
+        public const string LoadingFinished = "LoadingFinished";
+        public const string LoadingStarted = "LoadingStarted";
+        public const string LoadingProgress = "LoadingProgress";
+        public const string LoadingCompleted = "LoadingCompleted";
+        public const string MatchEnd = "MatchEnd";
+    }
+
     public interface IGameMessageSender
     {
         void SendToPlayer(string playerId, JObject message);
@@ -36,12 +58,12 @@ namespace OpenGSServer
             messageSender?.BroadcastToAll(message);
         }
 
-        // ゲームイベント用の便利メソッド
+        // Shared helpers for broadcasting match events.
         public static void SendPlayerKilled(string roomId, string killerId, string killedPlayerId)
         {
             var message = new JObject
             {
-                ["MessageType"] = "PlayerKilled",
+                ["MessageType"] = GameMessageTypes.PlayerKilled,
                 ["RoomID"] = roomId,
                 ["KillerID"] = killerId,
                 ["KilledPlayerID"] = killedPlayerId,
@@ -55,9 +77,78 @@ namespace OpenGSServer
         {
             var message = new JObject
             {
-                ["MessageType"] = "FlagCaptured",
+                ["MessageType"] = GameMessageTypes.FlagCaptured,
                 ["RoomID"] = roomId,
+                ["RoomId"] = roomId,
                 ["CapturingTeam"] = capturingTeam,
+                ["Team"] = capturingTeam,
+                ["Timestamp"] = DateTime.UtcNow.ToString("o")
+            };
+
+            BroadcastToRoom(roomId, message);
+        }
+
+        public static void SendFlagLost(string roomId, string team, string playerId = null)
+        {
+            var message = new JObject
+            {
+                ["MessageType"] = GameMessageTypes.FlagLost,
+                ["RoomID"] = roomId,
+                ["RoomId"] = roomId,
+                ["Team"] = team,
+                ["PlayerID"] = playerId,
+                ["PlayerId"] = playerId,
+                ["Timestamp"] = DateTime.UtcNow.ToString("o")
+            };
+
+            BroadcastToRoom(roomId, message);
+        }
+
+        public static void SendFlagPickup(string roomId, string team, string playerId = null)
+        {
+            var message = new JObject
+            {
+                ["MessageType"] = GameMessageTypes.FlagPickup,
+                ["RoomID"] = roomId,
+                ["RoomId"] = roomId,
+                ["Team"] = team,
+                ["PlayerID"] = playerId,
+                ["PlayerId"] = playerId,
+                ["Timestamp"] = DateTime.UtcNow.ToString("o")
+            };
+
+            BroadcastToRoom(roomId, message);
+        }
+
+        public static void SendFlagReturn(string roomId, string team, string playerId = null)
+        {
+            var message = new JObject
+            {
+                ["MessageType"] = GameMessageTypes.FlagReturn,
+                ["RoomID"] = roomId,
+                ["RoomId"] = roomId,
+                ["Team"] = team,
+                ["ReturnedByPlayerId"] = playerId,
+                ["ReturnedByPlayerID"] = playerId,
+                ["PlayerID"] = playerId,
+                ["PlayerId"] = playerId,
+                ["Timestamp"] = DateTime.UtcNow.ToString("o")
+            };
+
+            BroadcastToRoom(roomId, message);
+        }
+
+        public static void SendFlagScoreUpdate(string roomId, int redTeamScore, int blueTeamScore)
+        {
+            var message = new JObject
+            {
+                ["MessageType"] = GameMessageTypes.FlagScoreUpdate,
+                ["RoomID"] = roomId,
+                ["RoomId"] = roomId,
+                ["RedTeamScore"] = redTeamScore,
+                ["BlueTeamScore"] = blueTeamScore,
+                ["RedTeamFlagScore"] = redTeamScore,
+                ["BlueTeamFlagScore"] = blueTeamScore,
                 ["Timestamp"] = DateTime.UtcNow.ToString("o")
             };
 
@@ -68,7 +159,7 @@ namespace OpenGSServer
         {
             var message = new JObject
             {
-                ["MessageType"] = "MatchStatus",
+                ["MessageType"] = GameMessageTypes.MatchStatus,
                 ["RoomID"] = roomId,
                 ["Status"] = status,
                 ["Timestamp"] = DateTime.UtcNow.ToString("o")
@@ -81,7 +172,7 @@ namespace OpenGSServer
         {
             var message = new JObject
             {
-                ["MessageType"] = "PlayerRespawn",
+                ["MessageType"] = GameMessageTypes.PlayerRespawn,
                 ["RoomID"] = roomId,
                 ["PlayerID"] = playerId,
                 ["SpawnPosition"] = spawnPosition,
@@ -95,7 +186,7 @@ namespace OpenGSServer
         {
             var message = new JObject
             {
-                ["MessageType"] = "MatchEnd",
+                ["MessageType"] = GameMessageTypes.MatchEnd,
                 ["RoomID"] = roomId,
                 ["Winners"] = JArray.FromObject(winners),
                 ["Timestamp"] = DateTime.UtcNow.ToString("o")

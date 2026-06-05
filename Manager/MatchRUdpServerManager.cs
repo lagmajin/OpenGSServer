@@ -1,12 +1,22 @@
 using System;
 using System.Collections.Generic;
+using System.Numerics;
 using LiteNetLib;
 using LiteNetLib.Utils;
 using Newtonsoft.Json.Linq;
 using OpenGSCore;
+using OpenGSServer.Network;
 
 namespace OpenGSServer
 {
+    internal static class MatchMessageTypes
+    {
+        public const string PlayerShot = "PlayerShot";
+        public const string GrenadeThrow = "GrenadeThrow";
+        public const string ObjectSpawned = "ObjectSpawned";
+        public const string ObjectDestroyed = "ObjectDestroyed";
+    }
+
     /// <summary>
     /// UDPベースのリアルタイムゲーム通信マネージャー
     /// </summary>
@@ -16,6 +26,18 @@ namespace OpenGSServer
         private EventBasedNetListener? listener;
         private Dictionary<string, NetPeer> connectedPlayers = new();
         private Dictionary<string, string> playerRoomMapping = new();
+        private readonly ServerPlayerStateManager playerStateManager = new();
+        private readonly Dictionary<string, ServerProjectileState> projectiles = new();
+        private readonly object projectileLock = new();
+        private int projectileSequence = 0;
+        private const float ProjectileTickSeconds = 0.05f;
+        private const float BulletLifetimeSeconds = 3.0f;
+        private const float GrenadeLifetimeSeconds = 4.0f;
+        private const float BulletSpeed = 22f;
+        private const float GrenadeSpeed = 12f;
+        private const float BulletRadius = 0.15f;
+        private const float GrenadeRadius = 0.35f;
+        private const float PlayerHitRadius = 0.6f;
 
         public MatchRUdpServerManager()
         {
@@ -120,6 +142,17 @@ namespace OpenGSServer
             // メッセージタイプに応じて処理
             switch (messageType)
             {
+                case "PlayerShotEvent":
+                case "ShootRequest":
+                case MatchMessageTypes.PlayerShot:
+                    HandlePlayerShot(peer, message, playerId);
+                    break;
+
+                case "GrenadeThrowEvent":
+                case MatchMessageTypes.GrenadeThrow:
+                    HandlePlayerGrenade(peer, message, playerId);
+                    break;
+
                 case NetworkingConstants.MessageType.PlayerPosition:
                     HandlePlayerPosition(peer, message, playerId);
                     break;
@@ -157,6 +190,9 @@ namespace OpenGSServer
             var position = message.GetValue("Position") as JObject;
             if (position != null)
             {
+                var x = position.GetValue("X")?.ToObject<float>() ?? position.GetValue("x")?.ToObject<float>() ?? 0f;
+                var y = position.GetValue("Y")?.ToObject<float>() ?? position.GetValue("y")?.ToObject<float>() ?? 0f;
+                playerStateManager.SetPlayerPosition(playerId, x, y, 0f);
                 // 位置情報をルーム内の全プレイヤーにブロードキャスト
                 BroadcastToRoomExceptSender(playerId, message);
             }
@@ -211,35 +247,76 @@ namespace OpenGSServer
 
         private void HandlePlayerShot(NetPeer peer, JObject message, string playerId)
         {
-            // 射撃イベントを処理し、ヒット判定を行う
-            var targetId = message.GetStringOrNull("TargetID");
-            var weaponType = message.GetStringOrNull("WeaponType");
-
-            if (!string.IsNullOrEmpty(targetId))
+            var roomId = GetRoomId(playerId);
+            var weaponType = message.GetStringOrNull("WeaponType") ?? "Pistol";
+            var position = ReadVector2(message, "Position", "Origin");
+            var direction = ReadVector2(message, "Direction", "AimDirection");
+            if (direction.LengthSquared() < 0.0001f)
             {
-                // ダメージ計算と適用
-                var damage = CalculateWeaponDamage(weaponType);
-                var damageMessage = new JObject
-                {
-                    ["MessageType"] = "PlayerDamaged",
-                    ["PlayerID"] = targetId,
-                    ["Damage"] = damage,
-                    ["AttackerID"] = playerId,
-                    ["Timestamp"] = DateTime.UtcNow.ToString("o")
-                };
-
-                // ターゲットにダメージ通知
-                SendToPlayer(targetId, damageMessage);
+                direction = new Vector2(1f, 0f);
             }
 
-            // 全プレイヤーに射撃イベントをブロードキャスト
-            BroadcastToRoomExceptSender(playerId, message);
+            direction = Vector2.Normalize(direction);
+            var projectileId = CreateProjectileId("bullet");
+            var projectile = new ServerProjectileState
+            {
+                ProjectileId = projectileId,
+                OwnerId = playerId,
+                RoomId = roomId,
+                Kind = ServerProjectileKind.Bullet,
+                Position = position,
+                Velocity = direction * BulletSpeed,
+                Radius = BulletRadius,
+                RemainingLifetime = BulletLifetimeSeconds,
+                WeaponType = weaponType,
+                Damage = CalculateWeaponDamage(weaponType)
+            };
+
+            lock (projectileLock)
+            {
+                projectiles[projectileId] = projectile;
+            }
+
+            BroadcastSpawn(projectile, "Bullet");
+            BroadcastShotEvent(roomId, playerId, message, projectileId);
         }
 
         private void HandlePlayerGrenade(NetPeer peer, JObject message, string playerId)
         {
-            // グレネードイベントをブロードキャスト
-            BroadcastToRoomExceptSender(playerId, message);
+            var roomId = GetRoomId(playerId);
+            var grenadeType = message.GetStringOrNull("GrenadeType") ?? message.GetStringOrNull("WeaponType") ?? "Normal";
+            var position = ReadVector2(message, "Position", "Origin");
+            var direction = ReadVector2(message, "Direction", "AimDirection");
+            if (direction.LengthSquared() < 0.0001f)
+            {
+                direction = new Vector2(1f, 0f);
+            }
+
+            direction = Vector2.Normalize(direction);
+            var projectileId = CreateProjectileId("grenade");
+            var projectile = new ServerProjectileState
+            {
+                ProjectileId = projectileId,
+                OwnerId = playerId,
+                RoomId = roomId,
+                Kind = ServerProjectileKind.Grenade,
+                Position = position,
+                Velocity = direction * GrenadeSpeed,
+                Radius = GrenadeRadius,
+                RemainingLifetime = GrenadeLifetimeSeconds,
+                GrenadeType = grenadeType,
+                ExplosionDamage = CalculateGrenadeDamage(grenadeType),
+                ExplosionRadius = CalculateGrenadeRadius(grenadeType),
+                FuseTime = CalculateGrenadeFuse(grenadeType)
+            };
+
+            lock (projectileLock)
+            {
+                projectiles[projectileId] = projectile;
+            }
+
+            BroadcastSpawn(projectile, $"{NormalizeGrenadeObjectType(grenadeType)}");
+            BroadcastGrenadeEvent(roomId, playerId, message, projectileId);
         }
 
         private void HandlePlayerReload(NetPeer peer, JObject message, string playerId)
@@ -270,6 +347,42 @@ namespace OpenGSServer
         {
             var gunType = EGunTypeExtensions.FromString(weaponType);
             return gunType.GetDamage();
+        }
+
+        private static int CalculateGrenadeDamage(string? grenadeType)
+        {
+            return grenadeType?.ToLowerInvariant() switch
+            {
+                "power" => 160,
+                "cluster" => 90,
+                "fire" => 120,
+                "magnet" => 80,
+                _ => 110
+            };
+        }
+
+        private static float CalculateGrenadeRadius(string? grenadeType)
+        {
+            return grenadeType?.ToLowerInvariant() switch
+            {
+                "power" => 4.5f,
+                "cluster" => 3.0f,
+                "fire" => 3.5f,
+                "magnet" => 2.5f,
+                _ => 3.0f
+            };
+        }
+
+        private static float CalculateGrenadeFuse(string? grenadeType)
+        {
+            return grenadeType?.ToLowerInvariant() switch
+            {
+                "power" => 2.5f,
+                "cluster" => 2.0f,
+                "fire" => 2.2f,
+                "magnet" => 2.0f,
+                _ => 3.0f
+            };
         }
 
         #endregion
@@ -332,12 +445,14 @@ namespace OpenGSServer
         public void RegisterPlayer(string playerId, NetPeer peer)
         {
             connectedPlayers[playerId] = peer;
+            playerStateManager.RegisterPlayer(playerId);
         }
 
         public void UnregisterPlayer(string playerId)
         {
             connectedPlayers.Remove(playerId);
             playerRoomMapping.Remove(playerId);
+            playerStateManager.UnregisterPlayer(playerId);
         }
 
         private void RemovePlayerMapping(NetPeer peer)
@@ -364,6 +479,7 @@ namespace OpenGSServer
         public void Update()
         {
             netManager?.PollEvents();
+            UpdateProjectiles(ProjectileTickSeconds);
         }
 
         public void Shutdown()
@@ -371,8 +487,322 @@ namespace OpenGSServer
             netManager?.Stop();
             connectedPlayers.Clear();
             playerRoomMapping.Clear();
+            lock (projectileLock)
+            {
+                projectiles.Clear();
+            }
+        }
+
+        private void UpdateProjectiles(float deltaSeconds)
+        {
+            if (deltaSeconds <= 0f)
+            {
+                return;
+            }
+
+            List<ServerProjectileState> toRemove = new();
+            List<ServerProjectileState> toDestroy = new();
+
+            lock (projectileLock)
+            {
+                foreach (var projectile in projectiles.Values)
+                {
+                    if (!projectile.IsActive)
+                    {
+                        continue;
+                    }
+
+                    projectile.RemainingLifetime -= deltaSeconds;
+                    projectile.Position += projectile.Velocity * deltaSeconds;
+
+                    if (projectile.Kind == ServerProjectileKind.Bullet)
+                    {
+                        if (TryResolveBulletHit(projectile))
+                        {
+                            projectile.IsActive = false;
+                            toRemove.Add(projectile);
+                            toDestroy.Add(projectile);
+                            continue;
+                        }
+                    }
+                    else
+                    {
+                        projectile.ElapsedFuse += deltaSeconds;
+                        if (projectile.ElapsedFuse >= projectile.FuseTime || projectile.RemainingLifetime <= 0f)
+                        {
+                            projectile.IsActive = false;
+                            SpawnClusterChildrenIfNeeded(projectile);
+                            ApplyGrenadeDamage(projectile);
+                            toRemove.Add(projectile);
+                            toDestroy.Add(projectile);
+                            continue;
+                        }
+                    }
+
+                    if (projectile.RemainingLifetime <= 0f)
+                    {
+                        projectile.IsActive = false;
+                        toRemove.Add(projectile);
+                        toDestroy.Add(projectile);
+                    }
+                }
+
+                foreach (var projectile in toRemove)
+                {
+                    projectiles.Remove(projectile.ProjectileId);
+                }
+            }
+
+            foreach (var projectile in toDestroy)
+            {
+                BroadcastDestroy(projectile);
+            }
+        }
+
+        private bool TryResolveBulletHit(ServerProjectileState projectile)
+        {
+            foreach (var kvp in connectedPlayers)
+            {
+                var targetId = kvp.Key;
+                if (string.Equals(targetId, projectile.OwnerId, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var state = playerStateManager.GetPlayerState(targetId);
+                var targetPos = new Vector2(state.PositionX, state.PositionY);
+                if (Vector2.Distance(projectile.Position, targetPos) <= projectile.Radius + PlayerHitRadius)
+                {
+                    ApplyDamage(targetId, projectile.OwnerId, projectile.Damage, projectile.Position);
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private void ApplyGrenadeDamage(ServerProjectileState grenade)
+        {
+            foreach (var kvp in connectedPlayers)
+            {
+                var targetId = kvp.Key;
+                var state = playerStateManager.GetPlayerState(targetId);
+                var targetPos = new Vector2(state.PositionX, state.PositionY);
+                var distance = Vector2.Distance(grenade.Position, targetPos);
+                if (distance <= grenade.ExplosionRadius)
+                {
+                    var falloff = 1f - Math.Clamp(distance / Math.Max(0.001f, grenade.ExplosionRadius), 0f, 1f);
+                    var damage = Math.Max(1, (int)MathF.Round(grenade.ExplosionDamage * falloff));
+                    ApplyDamage(targetId, grenade.OwnerId, damage, grenade.Position);
+                }
+            }
+        }
+
+        private void SpawnClusterChildrenIfNeeded(ServerProjectileState grenade)
+        {
+            if (!string.Equals(grenade.GrenadeType, "Cluster", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            var childDirections = new[]
+            {
+                new Vector2(1f, 0f),
+                new Vector2(-0.35f, 0.94f),
+                new Vector2(-0.35f, -0.94f)
+            };
+
+            foreach (var dir in childDirections)
+            {
+                var childId = CreateProjectileId("cluster-child");
+                var normalized = Vector2.Normalize(dir);
+                var child = new ServerProjectileState
+                {
+                    ProjectileId = childId,
+                    OwnerId = grenade.OwnerId,
+                    RoomId = grenade.RoomId,
+                    Kind = ServerProjectileKind.Grenade,
+                    Position = grenade.Position,
+                    Velocity = normalized * (GrenadeSpeed * 1.15f),
+                    Radius = 0.25f,
+                    RemainingLifetime = 1.25f,
+                    GrenadeType = "ClusterChild",
+                    ExplosionDamage = 60,
+                    ExplosionRadius = 2.0f,
+                    FuseTime = 1.0f
+                };
+
+                lock (projectileLock)
+                {
+                    projectiles[childId] = child;
+                }
+
+                BroadcastSpawn(child, "ChildClusterGrenade");
+            }
+        }
+
+        private void ApplyDamage(string targetId, string attackerId, int damage, Vector2 hitPosition)
+        {
+            var damageMessage = new JObject
+            {
+                ["MessageType"] = "PlayerDamaged",
+                ["DamagedPlayerID"] = targetId,
+                ["Damage"] = damage,
+                ["AttackerID"] = attackerId,
+                ["HitPosition"] = new JObject
+                {
+                    ["X"] = hitPosition.X,
+                    ["Y"] = hitPosition.Y
+                },
+                ["Timestamp"] = DateTime.UtcNow.ToString("o")
+            };
+
+            SendToPlayer(targetId, damageMessage);
+            if (playerRoomMapping.TryGetValue(attackerId, out var roomId))
+            {
+                BroadcastToRoom(roomId, damageMessage);
+            }
+        }
+
+        private void BroadcastSpawn(ServerProjectileState projectile, string spawnType)
+        {
+            var message = new JObject
+            {
+                ["MessageType"] = MatchMessageTypes.ObjectSpawned,
+                ["ObjectType"] = spawnType,
+                ["ObjectId"] = projectile.ProjectileId,
+                ["PlayerID"] = projectile.OwnerId,
+                ["RoomID"] = projectile.RoomId,
+                ["PosX"] = projectile.Position.X,
+                ["PosY"] = projectile.Position.Y,
+                ["DirX"] = projectile.Velocity.X,
+                ["DirY"] = projectile.Velocity.Y,
+                ["ProjectileType"] = projectile.Kind.ToString(),
+                ["WeaponType"] = projectile.WeaponType,
+                ["GrenadeType"] = projectile.GrenadeType,
+                ["Timestamp"] = DateTime.UtcNow.ToString("o")
+            };
+
+            BroadcastToRoom(projectile.RoomId, message);
+        }
+
+        private void BroadcastDestroy(ServerProjectileState projectile)
+        {
+            var message = new JObject
+            {
+                ["MessageType"] = MatchMessageTypes.ObjectDestroyed,
+                ["ObjectType"] = projectile.Kind == ServerProjectileKind.Bullet ? "Bullet" : NormalizeGrenadeObjectType(projectile.GrenadeType),
+                ["ObjectId"] = projectile.ProjectileId,
+                ["PlayerID"] = projectile.OwnerId,
+                ["RoomID"] = projectile.RoomId,
+                ["PosX"] = projectile.Position.X,
+                ["PosY"] = projectile.Position.Y,
+                ["Timestamp"] = DateTime.UtcNow.ToString("o")
+            };
+
+            BroadcastToRoom(projectile.RoomId, message);
+        }
+
+        private void BroadcastShotEvent(string roomId, string playerId, JObject original, string projectileId)
+        {
+            var message = new JObject
+            {
+                ["MessageType"] = MatchMessageTypes.PlayerShot,
+                ["PlayerID"] = playerId,
+                ["RoomID"] = roomId,
+                ["ObjectId"] = projectileId,
+                ["ShotData"] = original,
+                ["Timestamp"] = DateTime.UtcNow.ToString("o")
+            };
+
+            BroadcastToRoom(roomId, message);
+        }
+
+        private void BroadcastGrenadeEvent(string roomId, string playerId, JObject original, string projectileId)
+        {
+            var message = new JObject
+            {
+                ["MessageType"] = MatchMessageTypes.GrenadeThrow,
+                ["PlayerID"] = playerId,
+                ["RoomID"] = roomId,
+                ["ObjectId"] = projectileId,
+                ["GrenadeData"] = original,
+                ["Timestamp"] = DateTime.UtcNow.ToString("o")
+            };
+
+            BroadcastToRoom(roomId, message);
+        }
+
+        private static Vector2 ReadVector2(JObject json, params string[] keys)
+        {
+            foreach (var key in keys)
+            {
+                var token = json.GetValue(key) as JObject;
+                if (token != null)
+                {
+                    var x = token.GetValue("X")?.ToObject<float>() ?? token.GetValue("x")?.ToObject<float>() ?? 0f;
+                    var y = token.GetValue("Y")?.ToObject<float>() ?? token.GetValue("y")?.ToObject<float>() ?? 0f;
+                    return new Vector2(x, y);
+                }
+            }
+
+            var px = json.GetValue("PosX")?.ToObject<float>() ?? json.GetValue("PositionX")?.ToObject<float>() ?? 0f;
+            var py = json.GetValue("PosY")?.ToObject<float>() ?? json.GetValue("PositionY")?.ToObject<float>() ?? 0f;
+            return new Vector2(px, py);
+        }
+
+        private string GetRoomId(string playerId)
+        {
+            return playerRoomMapping.TryGetValue(playerId, out var roomId) ? roomId : string.Empty;
+        }
+
+        private string CreateProjectileId(string prefix)
+        {
+            return $"{prefix}-{DateTime.UtcNow.Ticks}-{System.Threading.Interlocked.Increment(ref projectileSequence)}";
+        }
+
+        private static string NormalizeGrenadeObjectType(string? grenadeType)
+        {
+            return grenadeType?.ToLowerInvariant() switch
+            {
+                "power" => "PowerGrenade",
+                "magnetic" => "MagneticGrenade",
+                "magnet" => "MagneticGrenade",
+                "mine" => "MineGrenade",
+                "cluster" => "ClusterGrenade",
+                "clusterchild" => "ChildClusterGrenade",
+                "fire" => "FireGrenade",
+                "smoke" => "SmokeGrenade",
+                _ => "NormalGrenade"
+            };
         }
 
         #endregion
+    }
+
+    internal enum ServerProjectileKind
+    {
+        Bullet,
+        Grenade
+    }
+
+    internal sealed class ServerProjectileState
+    {
+        public string ProjectileId { get; set; } = string.Empty;
+        public string OwnerId { get; set; } = string.Empty;
+        public string RoomId { get; set; } = string.Empty;
+        public ServerProjectileKind Kind { get; set; }
+        public Vector2 Position { get; set; }
+        public Vector2 Velocity { get; set; }
+        public float Radius { get; set; }
+        public float RemainingLifetime { get; set; }
+        public bool IsActive { get; set; } = true;
+        public string WeaponType { get; set; } = string.Empty;
+        public string GrenadeType { get; set; } = string.Empty;
+        public int Damage { get; set; }
+        public int ExplosionDamage { get; set; }
+        public float ExplosionRadius { get; set; }
+        public float FuseTime { get; set; }
+        public float ElapsedFuse { get; set; }
     }
 }
