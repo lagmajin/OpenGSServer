@@ -25,7 +25,8 @@ namespace OpenGSServer
         PlayerEliminated,
         MatchStatusRequest,
         PlayerPositionUpdate,
-        PlayerRespawn
+        PlayerRespawn,
+        PlayerPose
     }
 
     public class IInGameMatchRoomHandler
@@ -118,6 +119,10 @@ namespace OpenGSServer
 
                 case GameMessageTypes.PlayerRespawn:
                     HandlePlayerRespawn(room, playerId);
+                    break;
+
+                case GameMessageTypes.PlayerPose:
+                    HandlePlayerPose(room, playerId, json);
                     break;
 
                 case GameMessageTypes.ObjectSpawned:
@@ -309,6 +314,17 @@ namespace OpenGSServer
         private static void HandlePlayerRespawn(MatchRoom room, string playerId)
         {
             Console.WriteLine($"Player {playerId} respawned");
+        }
+
+        private static void HandlePlayerPose(MatchRoom room, string playerId, JObject json)
+        {
+            var poseState = ReadString(json, "PoseState", "Pose", "Posture") ?? "Stand";
+            Console.WriteLine($"Player {playerId} pose changed to {poseState}");
+            if (Enum.TryParse<EPlayerPoseState>(poseState, true, out var pose))
+            {
+                room.SetPlayerPoseState(playerId, pose);
+            }
+            GameMessageDispatcher.SendPlayerPose(room.Id.ToString(), playerId, poseState);
         }
 
         private static void HandlePlayerShot(MatchRoom room, string playerId, JObject shotData)

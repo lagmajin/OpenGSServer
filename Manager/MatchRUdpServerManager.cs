@@ -165,6 +165,10 @@ namespace OpenGSServer
                     HandleGameEvent(peer, message, playerId);
                     break;
 
+                case GameMessageTypes.PlayerPose:
+                    HandlePlayerPose(peer, message, playerId);
+                    break;
+
                 case NetworkingConstants.MessageType.Heartbeat:
                     HandleHeartbeat(peer, playerId);
                     break;
@@ -323,6 +327,11 @@ namespace OpenGSServer
         {
             // リロードイベントをブロードキャスト
             BroadcastToRoomExceptSender(playerId, message);
+        }
+
+        private void HandlePlayerPose(NetPeer peer, JObject message, string playerId)
+        {
+            BroadcastToRoom(GetRoomId(playerId), message);
         }
 
         #endregion
@@ -643,12 +652,17 @@ namespace OpenGSServer
 
         private void ApplyDamage(string targetId, string attackerId, int damage, Vector2 hitPosition)
         {
+            var roomId = GetRoomId(targetId);
+            var poseMultiplier = GetPoseDamageMultiplier(roomId, targetId);
+            var adjustedDamage = Math.Max(1, (int)MathF.Round(damage * poseMultiplier));
+
             var damageMessage = new JObject
             {
                 ["MessageType"] = "PlayerDamaged",
                 ["DamagedPlayerID"] = targetId,
-                ["Damage"] = damage,
+                ["Damage"] = adjustedDamage,
                 ["AttackerID"] = attackerId,
+                ["PoseMultiplier"] = poseMultiplier,
                 ["HitPosition"] = new JObject
                 {
                     ["X"] = hitPosition.X,
@@ -658,10 +672,32 @@ namespace OpenGSServer
             };
 
             SendToPlayer(targetId, damageMessage);
-            if (playerRoomMapping.TryGetValue(attackerId, out var roomId))
+            if (playerRoomMapping.TryGetValue(attackerId, out var attackerRoomId))
             {
-                BroadcastToRoom(roomId, damageMessage);
+                BroadcastToRoom(attackerRoomId, damageMessage);
             }
+        }
+
+        private float GetPoseDamageMultiplier(string roomId, string playerId)
+        {
+            if (string.IsNullOrWhiteSpace(roomId) || string.IsNullOrWhiteSpace(playerId))
+            {
+                return 1f;
+            }
+
+            var room = MatchRoomManager.Instance.SearchRoomByMemberID(playerId);
+            if (room == null)
+            {
+                return 1f;
+            }
+
+            var poseState = room.GetPlayerPoseState(playerId);
+            return poseState switch
+            {
+                EPlayerPoseState.Sit => 0.88f,
+                EPlayerPoseState.LieDown => 0.72f,
+                _ => 1f
+            };
         }
 
         private void BroadcastSpawn(ServerProjectileState projectile, string spawnType)

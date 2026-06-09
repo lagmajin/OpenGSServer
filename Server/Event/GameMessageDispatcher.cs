@@ -20,6 +20,7 @@ namespace OpenGSServer
         public const string MatchStatus = "MatchStatus";
         public const string MatchStatusRequest = "MatchStatusRequest";
         public const string PlayerRespawn = "PlayerRespawn";
+        public const string PlayerPose = "PlayerPose";
         public const string LoadingFinished = "LoadingFinished";
         public const string LoadingStarted = "LoadingStarted";
         public const string LoadingProgress = "LoadingProgress";
@@ -176,6 +177,22 @@ namespace OpenGSServer
                 ["RoomID"] = roomId,
                 ["PlayerID"] = playerId,
                 ["SpawnPosition"] = spawnPosition,
+                ["Timestamp"] = DateTime.UtcNow.ToString("o")
+            };
+
+            BroadcastToRoom(roomId, message);
+        }
+
+        public static void SendPlayerPose(string roomId, string playerId, string poseState)
+        {
+            var message = new JObject
+            {
+                ["MessageType"] = GameMessageTypes.PlayerPose,
+                ["RoomID"] = roomId,
+                ["RoomId"] = roomId,
+                ["PlayerID"] = playerId,
+                ["PlayerId"] = playerId,
+                ["PoseState"] = poseState,
                 ["Timestamp"] = DateTime.UtcNow.ToString("o")
             };
 
