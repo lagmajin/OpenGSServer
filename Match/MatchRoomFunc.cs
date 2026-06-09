@@ -7,17 +7,17 @@ namespace OpenGSServer
 {
     public partial class DeprecatedMatchRoom
     {
-        public bool IsOwner(in string id)
+        public bool IsOwner(string id)
         {
-            if (string.IsNullOrEmpty(id) || string.IsNullOrEmpty(RoomOwnerId))
+            if (string.IsNullOrEmpty(id) || Players.Count == 0)
             {
                 return false;
             }
 
-            return string.Equals(RoomOwnerId, id, StringComparison.Ordinal);
+            return Players.Count > 0 && string.Equals(Players[0].Id, id, StringComparison.Ordinal);
         }
 
-        public bool ChangeOwner(in string newOwnerId)
+        public bool ChangeOwner(string newOwnerId)
         {
             if (Players.Count <= 1 || string.IsNullOrEmpty(newOwnerId))
             {
@@ -29,7 +29,9 @@ namespace OpenGSServer
                 return false;
             }
 
-            RoomOwnerId = newOwnerId;
+            var target = Players.First(p => p.Id == newOwnerId);
+            Players.Remove(target);
+            Players.Insert(0, target);
             return true;
         }
 
@@ -42,22 +44,17 @@ namespace OpenGSServer
         public string? RoomOwnerName()
         {
             var owner = RoomOwnerInfo();
-            return owner?.PlayerName;
+            return owner?.Name;
         }
 
         public PlayerInfo? RoomOwnerInfo()
         {
-            if (string.IsNullOrEmpty(RoomOwnerId))
-            {
-                return Players.Count > 0 ? Players[0] : null;
-            }
-
-            return Players.FirstOrDefault(p => p.Id == RoomOwnerId);
+            return Players.Count > 0 ? Players[0] : null;
         }
 
         public List<string> RoomMembersNameList()
         {
-            return Players.Select(p => p.PlayerName ?? string.Empty).Where(n => !string.IsNullOrEmpty(n)).ToList();
+            return Players.Select(p => p.Name ?? string.Empty).Where(n => !string.IsNullOrEmpty(n)).ToList();
         }
 
         public List<PlayerInfo> RoomMemberList()
@@ -65,7 +62,7 @@ namespace OpenGSServer
             return new List<PlayerInfo>(Players);
         }
 
-        public bool IsMember(in string id)
+        public bool IsMember(string id)
         {
             if (string.IsNullOrEmpty(id) || Players.Count == 0)
             {
