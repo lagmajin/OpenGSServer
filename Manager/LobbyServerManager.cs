@@ -996,12 +996,82 @@ namespace OpenGSServer
                 case MessageType.GuildChatRequest:
                     HandleGuildChatRequest(clientSession, data);
                     break;
+                case MessageType.WaitRoomKickPlayer:
+                    HandleWaitRoomKickPlayer(clientSession, data);
+                    break;
+                case MessageType.WaitRoomOwnerChange:
+                    HandleWaitRoomOwnerChange(clientSession, data);
+                    break;
+                case MessageType.MissionStartRequest:
+                    HandleMissionStartRequest(clientSession, data);
+                    break;
+                case MessageType.MissionCompleteNotification:
+                    HandleMissionCompleteNotification(clientSession, data);
+                    break;
+                case MessageType.MissionFailedNotification:
+                    HandleMissionFailedNotification(clientSession, data);
+                    break;
+                case MessageType.Heartbeat:
+                    break;
                 default:
                     ConsoleWrite.WriteMessage($"[LOBBY] Unknown message type: {messageType}", ConsoleColor.Yellow);
                     break;
             }
         }
 
+
+        private void HandleWaitRoomKickPlayer(ClientSession? session, JObject data)
+        {
+            if (session == null) return;
+            var roomId = data["RoomID"]?.ToString() ?? data["RoomId"]?.ToString();
+            var targetPlayerId = data["TargetPlayerID"]?.ToString() ?? data["TargetPlayerId"]?.ToString();
+            if (string.IsNullOrWhiteSpace(roomId) || string.IsNullOrWhiteSpace(targetPlayerId)) return;
+            var waitRoom = WaitRoomManager.Instance().FindWaitRoom(roomId);
+            if (waitRoom == null) return;
+            waitRoom.RemovePlayer(targetPlayerId);
+            var notify = new JObject { ["MessageType"] = MessageType.WaitRoomKickPlayer, ["RoomID"] = roomId, ["PlayerID"] = targetPlayerId };
+            foreach (var p in waitRoom.AllPlayers())
+            {
+                var ps = FindSessionByPlayerId(p.Id);
+                ps?.SendAsyncJsonWithTimeStamp(notify);
+            }
+        }
+
+        private void HandleWaitRoomOwnerChange(ClientSession? session, JObject data)
+        {
+            if (session == null) return;
+            var roomId = data["RoomID"]?.ToString() ?? data["RoomId"]?.ToString();
+            var newOwnerId = data["NewOwnerID"]?.ToString() ?? data["NewOwnerId"]?.ToString();
+            if (string.IsNullOrWhiteSpace(roomId) || string.IsNullOrWhiteSpace(newOwnerId)) return;
+            var notify = new JObject { ["MessageType"] = MessageType.WaitRoomOwnerChange, ["RoomID"] = roomId, ["NewOwnerId"] = newOwnerId };
+            var waitRoom = WaitRoomManager.Instance().FindWaitRoom(roomId);
+            if (waitRoom != null)
+            {
+                foreach (var p in waitRoom.AllPlayers())
+                {
+                    var ps = FindSessionByPlayerId(p.Id);
+                    ps?.SendAsyncJsonWithTimeStamp(notify);
+                }
+            }
+        }
+
+        private void HandleMissionStartRequest(ClientSession? session, JObject data)
+        {
+            if (session == null) return;
+            session.SendAsyncJsonWithTimeStamp(new JObject { ["MessageType"] = MessageType.MissionStartNotification, ["Success"] = true });
+        }
+
+        private void HandleMissionCompleteNotification(ClientSession? session, JObject data)
+        {
+            if (session == null) return;
+            session.SendAsyncJsonWithTimeStamp(new JObject { ["MessageType"] = MessageType.MissionCompleteNotification, ["Success"] = true });
+        }
+
+        private void HandleMissionFailedNotification(ClientSession? session, JObject data)
+        {
+            if (session == null) return;
+            session.SendAsyncJsonWithTimeStamp(new JObject { ["MessageType"] = MessageType.MissionFailedNotification, ["Success"] = false });
+        }
         private void HandleMatchServerInfoRequest(ClientSession? session, JObject data)
         {
             if (session == null) return;

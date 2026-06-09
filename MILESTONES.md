@@ -66,6 +66,21 @@ Done when:
 - room state and match state stay in sync
 - broadcast paths are implemented instead of stubbed
 
+### S2-A. UDP Payload Format: JSON over LiteNetLib transport
+
+**LiteNetLib transport is kept on the server. Wire payload must be JSON.**
+
+- The Unity client (OpenGSR) cannot use LiteNetLib on its side due to platform
+  constraints. The server may continue using LiteNetLib for transport (socket
+  management, connection handling, delivery modes), but the message payload
+  written to `NetDataWriter` must be a JSON string — not LiteNetLib typed
+  binary (`Put(string)`, `Put(float)`, etc.).
+- `MatchUDPServer` and `MatchRUdpServer` must serialize outgoing data as JSON
+  and deserialize incoming data as JSON, matching the format the client sends
+  and expects.
+- This also means the server reads `reader.GetString()` on a full JSON payload,
+  not per-field `reader.GetFloat()` / `reader.GetInt()`.
+
 ## S3. Loading And Room Transition Handshake
 
 Goal: make the lobby-to-match transition explicit.

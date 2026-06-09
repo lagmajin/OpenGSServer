@@ -226,8 +226,24 @@ namespace OpenGSServer
 
         public static void RemoveRoom(in ClientSession session, in IDictionary<string, JToken> dic)
         {
-            _ = session;
-            _ = dic;
+            var roomId = dic.GetStringOrNull("RoomID") ?? dic.GetStringOrNull("RoomId");
+            var playerId = dic.GetStringOrNull("PlayerID") ?? dic.GetStringOrNull("PlayerId");
+
+            if (string.IsNullOrWhiteSpace(roomId))
+            {
+                session.SendAsyncJsonWithTimeStamp(new JObject { ["MessageType"] = "RemoveRoomResponse", ["Success"] = false, ["ErrorMessage"] = "RoomID required" });
+                return;
+            }
+
+            var removed = WaitRoomManager.Instance().CloseRoom(roomId);
+            session.SendAsyncJsonWithTimeStamp(new JObject
+            {
+                ["MessageType"] = "RemoveRoomResponse",
+                ["Success"] = removed,
+                ["RoomID"] = roomId,
+                ["PlayerID"] = playerId,
+                ["ErrorMessage"] = removed ? null : "Room not found"
+            });
         }
 
         public static void UpdateRoom(in ClientSession session, in IDictionary<string, JToken> dic)

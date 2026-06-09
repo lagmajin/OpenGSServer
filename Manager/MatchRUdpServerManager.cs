@@ -427,10 +427,9 @@ namespace OpenGSServer
         {
             try
             {
-                var jsonString = message.ToString();
-                var writer = new NetDataWriter();
-                writer.Put(jsonString);
-                peer.Send(writer, DeliveryMethod.Unreliable); // UDPなのでUnreliable
+                var jsonString = message.ToString(Newtonsoft.Json.Formatting.None);
+                var bytes = System.Text.Encoding.UTF8.GetBytes(jsonString);
+                peer.Send(bytes);
             }
             catch (Exception ex)
             {

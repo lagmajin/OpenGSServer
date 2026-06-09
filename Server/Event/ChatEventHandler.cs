@@ -1,96 +1,112 @@
-﻿using System.Collections.Generic;
-using System.ComponentModel;
+using System.Collections.Generic;
 using Newtonsoft.Json.Linq;
+using OpenGSCore;
 
 namespace OpenGSServer
 {
     internal class ChatEventHandler
     {
-
         public static void ProcessOneOnOneChat(in ClientSession session, in IDictionary<string, JToken> dic)
         {
-            
+            var senderId = dic.GetStringOrNull("AccountID") ?? dic.GetStringOrNull("PlayerID") ?? dic.GetStringOrNull("PlayerId");
+            var targetId = dic.GetStringOrNull("TargetAccountID") ?? dic.GetStringOrNull("TargetPlayerID");
+            var message = dic.GetStringOrNull("Message");
 
-
-            if (!dic.ContainsKey("AccountID"))
-            {
-
-
+            if (string.IsNullOrWhiteSpace(senderId) || string.IsNullOrWhiteSpace(targetId) || string.IsNullOrWhiteSpace(message))
                 return;
-            }
 
-            if (dic.ContainsKey("TargetAccountID"))
-            {
+            var targetSession = LobbyServerManager.Instance.FindSessionByPlayerId(targetId);
+            if (targetSession == null)
                 return;
-            }
 
-            if (dic.ContainsKey("Message"))
+            targetSession.SendAsyncJsonWithTimeStamp(new JObject
             {
-
-                return;
-            }
-
+                ["MessageType"] = "OneOnOneChat",
+                ["FromPlayerID"] = senderId,
+                ["Message"] = message,
+                ["Timestamp"] = DateTime.UtcNow.ToString("o")
+            });
         }
 
         public static void ProcessLobbyChatRequest(in ClientSession session, in IDictionary<string, JToken> dic)
         {
-            if (!dic.ContainsKey("AccountID"))
-            {
+            var playerId = dic.GetStringOrNull("AccountID") ?? dic.GetStringOrNull("PlayerID") ?? dic.GetStringOrNull("PlayerId");
+            var playerName = dic.GetStringOrNull("PlayerName") ?? "Player";
+            var message = dic.GetStringOrNull("Message");
 
-
+            if (string.IsNullOrWhiteSpace(playerId) || string.IsNullOrWhiteSpace(message))
                 return;
-            }
 
-            if (dic.ContainsKey("Message"))
+            LobbyServerManager.Instance.AddLobbyChat(playerId, message);
+
+            var notifyJson = new JObject
             {
+                ["MessageType"] = MessageType.LobbyChatNotification,
+                ["PlayerID"] = playerId,
+                ["PlayerName"] = playerName,
+                ["Message"] = message
+            };
 
-                return;
+            foreach (var kvp in LobbyServerManager.Instance.GetAllConnectedPlayers())
+            {
+                var ps = LobbyServerManager.Instance.FindSessionByPlayerId(kvp.Key);
+                ps?.SendAsyncJsonWithTimeStamp(notifyJson);
             }
-
-            //var lobbyManager = LobbyServerManagerV2.Instance;
-
-
-            //var chat = Chat("","");
-
-            //LobbyServerManagerV2
-
         }
 
         public static void ProcessWaitRoomChatRequest(in ClientSession session, in IDictionary<string, JToken> dic)
         {
-            if (!dic.ContainsKey("AccountID"))
-            {
+            var playerId = dic.GetStringOrNull("AccountID") ?? dic.GetStringOrNull("PlayerID") ?? dic.GetStringOrNull("PlayerId");
+            var playerName = dic.GetStringOrNull("PlayerName") ?? "Player";
+            var roomId = dic.GetStringOrNull("RoomID") ?? dic.GetStringOrNull("RoomId");
+            var message = dic.GetStringOrNull("Message");
 
-
+            if (string.IsNullOrWhiteSpace(playerId) || string.IsNullOrWhiteSpace(message))
                 return;
-            }
 
-            if (dic.ContainsKey("Message"))
-            {
-
+            var waitRoom = WaitRoomManager.Instance().FindWaitRoom(roomId);
+            if (waitRoom == null)
                 return;
+
+            var notifyJson = new JObject
+            {
+                ["MessageType"] = "WaitRoomChatNotification",
+                ["PlayerID"] = playerId,
+                ["PlayerName"] = playerName,
+                ["RoomID"] = roomId,
+                ["Message"] = message
+            };
+
+            foreach (var player in waitRoom.AllPlayers())
+            {
+                var targetSession = LobbyServerManager.Instance.FindSessionByPlayerId(player.Id);
+                targetSession?.SendAsyncJsonWithTimeStamp(notifyJson);
             }
-
-
-
         }
 
         public static void ProcessMatchRoomChatRequest(in ClientSession session, in IDictionary<string, JToken> dic)
         {
-            if (!dic.ContainsKey("AccountID"))
-            {
+            var playerId = dic.GetStringOrNull("AccountID") ?? dic.GetStringOrNull("PlayerID") ?? dic.GetStringOrNull("PlayerId");
+            var playerName = dic.GetStringOrNull("PlayerName") ?? "Player";
+            var message = dic.GetStringOrNull("Message");
 
-
+            if (string.IsNullOrWhiteSpace(playerId) || string.IsNullOrWhiteSpace(message))
                 return;
-            }
 
-            if (dic.ContainsKey("Message"))
+            var notifyJson = new JObject
             {
+                ["MessageType"] = "MatchRoomChatNotification",
+                ["PlayerID"] = playerId,
+                ["PlayerName"] = playerName,
+                ["Message"] = message
+            };
 
-                return;
+            // Broadcast to all players in the same match room
+            foreach (var kvp in LobbyServerManager.Instance.GetAllConnectedPlayers())
+            {
+                var ps = LobbyServerManager.Instance.FindSessionByPlayerId(kvp.Key);
+                ps?.SendAsyncJsonWithTimeStamp(notifyJson);
             }
-
         }
-
     }
 }
