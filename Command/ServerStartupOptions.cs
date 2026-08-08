@@ -66,8 +66,24 @@ namespace OpenGSServer
             {
                 helpText.Heading = "OpenGS Server";
                 helpText.Copyright = string.Empty;
+                helpText.AutoVersion = false;
                 helpText.AdditionalNewLineAfterOption = false;
                 return HelpText.DefaultParsingErrorsHandler(result, helpText);
+            });
+        }
+
+        public static string BuildHelpText()
+        {
+            var helpResult = CreateParser().ParseArguments<ServerStartupOptions>(new[] { "--help" });
+            return BuildHelpText(helpResult);
+        }
+
+        public static Parser CreateParser()
+        {
+            return new Parser(settings =>
+            {
+                settings.HelpWriter = null;
+                settings.AutoVersion = false;
             });
         }
 

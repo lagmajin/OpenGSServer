@@ -56,10 +56,10 @@ using Autofac;
         static async Task<int> Main(string[] args)
         {
 
-            var parseResult = Parser.Default.ParseArguments<ServerStartupOptions>(args);
+            var parseResult = ServerStartupOptions.CreateParser().ParseArguments<ServerStartupOptions>(args);
             if (parseResult is not Parsed<ServerStartupOptions> parsed)
             {
-                Console.Error.WriteLine(ServerStartupOptions.BuildHelpText(parseResult));
+                Console.Error.WriteLine(ServerStartupOptions.BuildHelpText());
                 return parseResult.Errors.Any(error => error is HelpRequestedError or VersionRequestedError) ? 0 : 2;
             }
 
@@ -73,7 +73,7 @@ using Autofac;
             if (!startupOptions.TryValidate(out var optionError))
             {
                 Console.Error.WriteLine($"[ERR] Invalid command line: {optionError}");
-                Console.Error.WriteLine(ServerStartupOptions.BuildHelpText(parseResult));
+                Console.Error.WriteLine(ServerStartupOptions.BuildHelpText());
                 return 2;
             }
 
