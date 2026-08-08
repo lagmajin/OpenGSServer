@@ -919,14 +919,19 @@ namespace OpenGSServer
                     WaitRoomEventHandler.ExitRoomRequest(clientSession, data);
                     break;
                 case MessageType.WaitRoomSettingsChange:
-                    if (data.ContainsKey("RoomName") || data.ContainsKey("Capacity") || data.ContainsKey("GameMode"))
+                    // Unity's WaitroomNetworkManager wraps changed room values in a
+                    // Settings object. Flatten that envelope while retaining the
+                    // original RoomID/PlayerID fields expected by the core setting
+                    // parser.
+                    var roomSettingsData = FlattenRoomSettings(data);
+                    if (roomSettingsData.ContainsKey("RoomName") || roomSettingsData.ContainsKey("Capacity") || roomSettingsData.ContainsKey("GameMode"))
                     {
-                        WaitRoomEventHandler.ChangeRoomSetting(clientSession, data);
+                        WaitRoomEventHandler.ChangeRoomSetting(clientSession, roomSettingsData);
                     }
 
-                    if (data.ContainsKey("PlayerCharacter") || data.ContainsKey("EquipInstantItems"))
+                    if (roomSettingsData.ContainsKey("PlayerCharacter") || roomSettingsData.ContainsKey("EquipInstantItems"))
                     {
-                        WaitRoomEventHandler.ChangePlayerSettting(clientSession, data);
+                        WaitRoomEventHandler.ChangePlayerSettting(clientSession, roomSettingsData);
                     }
                     break;
                 case MessageType.WaitRoomPlayerReady:
@@ -1000,6 +1005,30 @@ namespace OpenGSServer
                     ConsoleWrite.WriteMessage($"[LOBBY] Unknown message type: {messageType}", ConsoleColor.Yellow);
                     break;
             }
+        }
+
+        private static IDictionary<string, JToken> FlattenRoomSettings(JObject data)
+        {
+            if (data["Settings"] is not JObject settings)
+            {
+                return data;
+            }
+
+            var flattened = new JObject();
+            foreach (var property in data.Properties())
+            {
+                if (!string.Equals(property.Name, "Settings", StringComparison.OrdinalIgnoreCase))
+                {
+                    flattened[property.Name] = property.Value;
+                }
+            }
+
+            foreach (var property in settings.Properties())
+            {
+                flattened[property.Name] = property.Value;
+            }
+
+            return flattened;
         }
 
         private void HandleMatchServerInfoRequest(ClientSession? session, JObject data)
