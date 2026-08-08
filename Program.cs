@@ -4,6 +4,7 @@ using System.Threading;
 
 using System.Diagnostics;
 using System.Threading.Tasks;
+using CommandLine;
 using Newtonsoft.Json.Linq;
 using Microsoft.Extensions.DependencyInjection;
 using Autofac;
@@ -52,8 +53,29 @@ using Autofac;
         }
 
 
-        static async Task Main(string[] args)
+        static async Task<int> Main(string[] args)
         {
+
+            var parseResult = Parser.Default.ParseArguments<ServerStartupOptions>(args);
+            if (parseResult is not Parsed<ServerStartupOptions> parsed)
+            {
+                Console.Error.WriteLine(ServerStartupOptions.BuildHelpText(parseResult));
+                return parseResult.Errors.Any(error => error is HelpRequestedError or VersionRequestedError) ? 0 : 2;
+            }
+
+            var startupOptions = parsed.Value;
+            if (startupOptions.ShowVersion)
+            {
+                Console.WriteLine($"OpenGS Server {typeof(Program).Assembly.GetName().Version}");
+                return 0;
+            }
+
+            if (!startupOptions.TryValidate(out var optionError))
+            {
+                Console.Error.WriteLine($"[ERR] Invalid command line: {optionError}");
+                Console.Error.WriteLine(ServerStartupOptions.BuildHelpText(parseResult));
+                return 2;
+            }
 
             /*
             var room = new JObject();
@@ -110,20 +132,7 @@ using Autofac;
 
             //ServerManager.GetInstance().SaveSetting();
 
-
             var insta=EncryptManager.Instance;
-
-
-            if (args.Length > 0)
-            {
-
-
-            }
-            else
-            {
-
-                //Console.WriteLine("No Commandline aragment");
-            }
 
 
 
@@ -138,6 +147,13 @@ using Autofac;
             {
                 
                 var cts = new CancellationTokenSource();
+                ConsoleCancelEventHandler cancelHandler = (_, eventArgs) =>
+                {
+                    eventArgs.Cancel = true;
+                    IsEnd = true;
+                    cts.Cancel();
+                };
+                Console.CancelKeyPress += cancelHandler;
 
                 try
                 {
@@ -199,15 +215,15 @@ using Autofac;
 
 
                     var lobbyServer = container.Resolve<LobbyServerManager>();
-                    lobbyServer.StartTcpServer(60000);
+                    lobbyServer.StartTcpServer(startupOptions.LobbyPort);
 
                     // 新しい MatchServerV2 (同時処理/マルチコア対応) を使用
                     var matchServer = MatchServerV2.Instance;
-                    matchServer.Listen(60001, 63000); // UDP port 63000
+                    matchServer.Listen(startupOptions.MatchTcpPort, startupOptions.MatchUdpPort);
                     matchServer.EnableMultiCore();
 
                     var managementServer = ManagementServer.Instance;
-                    managementServer.Listen(50020);
+                    managementServer.Listen(startupOptions.ManagementPort);
 
                     if(lobbyServer.IsTcpServerRunning)
                     {
@@ -218,8 +234,22 @@ using Autofac;
                     batchService.Start();
 
                     ConsoleWrite.WriteMessage("System all green...", ConsoleColor.Green);
+                    var interactiveCommandParser = new InteractiveCommandParser();
 
-                    while (!IsEnd)
+                    if (startupOptions.NoConsole)
+                    {
+                        ConsoleWrite.WriteMessage("[INFO] Interactive console input is disabled.", ConsoleColor.Gray);
+                        try
+                        {
+                            await Task.Delay(Timeout.InfiniteTimeSpan, cts.Token);
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            // Ctrl+C requests a normal shutdown through the finally block.
+                        }
+                    }
+
+                    while (!IsEnd && !startupOptions.NoConsole)
                     {
                         // UDPサーバーの更新は MatchServerV2 の内部ループで自動実行されます
                         
@@ -243,11 +273,11 @@ using Autofac;
                                 await Task.Delay(1000);
                             }
                         IsEnd = true;
-                        Environment.Exit(0);
+                        break;
                     }
 
                     // コマンドを CommandParser に委譲
-                    CommandParser.Parse(input);
+                    interactiveCommandParser.Execute(input);
                 }
                 }
                 catch (Exception ex)
@@ -257,6 +287,8 @@ using Autofac;
                 }
                 finally
                 {
+                    Console.CancelKeyPress -= cancelHandler;
+                    cts.Dispose();
                     if (hasHandle)
                     {
                         mutex.ReleaseMutex();
@@ -267,6 +299,8 @@ using Autofac;
                     batchService.Stop();
                     batchService.Dispose();
                 }
+
+                return 0;
             }
             else
             {
@@ -276,6 +310,8 @@ using Autofac;
                     mutex.ReleaseMutex();
                     mutex.Close();
                 }
+
+                return 1;
             }
         }
     }
