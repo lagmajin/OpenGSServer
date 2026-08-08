@@ -348,28 +348,64 @@ namespace OpenGSServer
         public static void ExitRoomRequest(in ClientSession session, IDictionary<string, JToken> dic)
         {
             var roomId = dic.GetStringOrNull("RoomId") ?? dic.GetStringOrNull("RoomID");
-            var playerId = dic.GetStringOrNull("PlayerId") ?? dic.GetStringOrNull("PlayerID");
+            var playerId = dic.GetStringOrNull("PlayerId") ??
+                           dic.GetStringOrNull("PlayerID") ??
+                           session?.PlayerID;
 
-            if (string.IsNullOrWhiteSpace(roomId) || string.IsNullOrWhiteSpace(playerId))
+            if (string.IsNullOrWhiteSpace(playerId))
             {
                 session.SendAsyncJsonWithTimeStamp(CreateRoomError(MessageType.InvalidRoomId, roomId ?? string.Empty));
                 return;
             }
 
-            var waitRoom = WaitRoomManager.Instance().FindWaitRoom(roomId);
+            var waitRoom = string.IsNullOrWhiteSpace(roomId)
+                ? FindWaitRoomByPlayerId(playerId)
+                : WaitRoomManager.Instance().FindWaitRoom(roomId);
             if (waitRoom == null)
             {
                 session.SendAsyncJsonWithTimeStamp(CreateRoomError(MessageType.RoomNotFound, roomId));
                 return;
             }
 
-            waitRoom.RemovePlayer(playerId);
+            roomId = waitRoom.RoomId;
+            var previousOwnerId = waitRoom.GetFirstPlayerId();
+            if (!waitRoom.TryRemovePlayer(playerId, out _))
+            {
+                session.SendAsyncJsonWithTimeStamp(CreateRoomError(MessageType.RoomNotFound, roomId));
+                return;
+            }
+
             session.SendAsyncJsonWithTimeStamp(new JObject
             {
                 ["MessageType"] = MessageType.WaitRoomLeave,
                 ["RoomId"] = roomId,
-                ["PlayerId"] = playerId
+                ["RoomID"] = roomId,
+                ["PlayerId"] = playerId,
+                ["PlayerID"] = playerId,
+                ["Success"] = true
             });
+
+            var newOwnerId = waitRoom.GetFirstPlayerId();
+            if (string.Equals(previousOwnerId, playerId, StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(previousOwnerId, newOwnerId, StringComparison.OrdinalIgnoreCase) &&
+                !string.IsNullOrWhiteSpace(newOwnerId))
+            {
+                var ownerChange = new JObject
+                {
+                    ["MessageType"] = MessageType.WaitRoomOwnerChange,
+                    ["RoomId"] = roomId,
+                    ["RoomID"] = roomId,
+                    ["PreviousOwnerId"] = previousOwnerId,
+                    ["NewOwnerId"] = newOwnerId,
+                    ["OwnerId"] = newOwnerId,
+                    ["RoomInfo"] = BuildRoomInfoJson(waitRoom)
+                };
+
+                foreach (var player in waitRoom.AllPlayers())
+                {
+                    LobbyServerManager.Instance.FindSessionByPlayerId(player.Id)?.SendAsyncJsonWithTimeStamp(ownerChange);
+                }
+            }
 
             BroadcastRoomUpdate(waitRoom, MessageType.WaitRoomUpdateNotification);
         }
