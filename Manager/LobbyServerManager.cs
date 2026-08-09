@@ -38,6 +38,13 @@ namespace OpenGSServer
         private readonly Timer _idleCheckTimer;
         private readonly DailyService _dailyService = new();
 
+        public void RecordMatchDailyProgress(string playerId, bool won)
+        {
+            if (string.IsNullOrWhiteSpace(playerId)) return;
+            _dailyService.AddProgress(playerId, "play_match", 1);
+            if (won) _dailyService.AddProgress(playerId, "win_match", 1);
+        }
+
         private bool _disposed;
 
         public static LobbyServerManager Instance => _instance.Value;

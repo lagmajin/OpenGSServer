@@ -177,8 +177,11 @@ namespace OpenGSServer
                 };
                 bus.OnGameEndedWithResult += (result) =>
                 {
+                    var winners = result?["Winners"]?.Values<string>()?.ToHashSet(StringComparer.OrdinalIgnoreCase)
+                                  ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                     foreach (var p in matchRoom.Players)
                     {
+                        LobbyServerManager.Instance.RecordMatchDailyProgress(p.Id, winners.Contains(p.Id));
                         var session = LobbyServerManager.Instance.GetSession(p.Id);
                         if (session != null)
                         {
