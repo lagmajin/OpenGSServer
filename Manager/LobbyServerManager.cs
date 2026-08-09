@@ -36,6 +36,7 @@ namespace OpenGSServer
         
         // アイドルチェック用
         private readonly Timer _idleCheckTimer;
+        private readonly DailyService _dailyService = new();
 
         private bool _disposed;
 
@@ -998,8 +999,20 @@ namespace OpenGSServer
                 case MessageType.GuildKickRequest:
                     HandleGuildKickRequest(clientSession, data);
                     break;
+                case MessageType.GuildRoleRequest:
+                    HandleGuildRoleRequest(clientSession, data);
+                    break;
                 case MessageType.GuildChatRequest:
                     HandleGuildChatRequest(clientSession, data);
+                    break;
+                case MessageType.DailyListRequest:
+                    HandleDailyListRequest(clientSession, data);
+                    break;
+                case MessageType.DailyProgressRequest:
+                    HandleDailyProgressRequest(clientSession, data);
+                    break;
+                case MessageType.DailyClaimRequest:
+                    HandleDailyClaimRequest(clientSession, data);
                     break;
                 default:
                     ConsoleWrite.WriteMessage($"[LOBBY] Unknown message type: {messageType}", ConsoleColor.Yellow);
@@ -1557,7 +1570,7 @@ namespace OpenGSServer
 
             var manager = GuildManager.Instance;
             var guild = manager.FindGuild(guildName);
-            var canInvite = guild != null && manager.CanInviteGuildMember(guildName, targetPlayerId);
+            var canInvite = guild != null && manager.CanManageMembers(guildName, inviterId) && manager.CanInviteGuildMember(guildName, targetPlayerId);
             var delivered = false;
 
             if (canInvite && !string.IsNullOrWhiteSpace(targetPlayerId))
@@ -1600,7 +1613,9 @@ namespace OpenGSServer
             var memberId = ResolveGuildPlayerId(null, data, "MemberId", "MemberID", "TargetPlayerId", "TargetPlayerID");
 
             var manager = GuildManager.Instance;
-            var success = manager.KickGuildMember(guildName, memberId);
+            var success = manager.CanManageMembers(guildName, kickerId) &&
+                          !manager.IsLeader(guildName, memberId) &&
+                          manager.KickGuildMember(guildName, memberId);
             if (success && !string.IsNullOrWhiteSpace(memberId))
             {
                 SendToPlayer(memberId, new JObject
@@ -1623,6 +1638,39 @@ namespace OpenGSServer
                 ["KickerId"] = kickerId,
                 ["ErrorMessage"] = success ? string.Empty : $"Failed to kick '{memberId}' from guild '{guildName}'"
             });
+        }
+
+        private void HandleGuildRoleRequest(ClientSession? session, JObject data)
+        {
+            if (session == null) return;
+            var guildName = data?["GuildName"]?.ToString() ?? string.Empty;
+            var actorId = ResolveGuildPlayerId(session, data, "PlayerID", "PlayerId", "ActorId", "ActorID");
+            var memberId = ResolveGuildPlayerId(null, data, "MemberId", "MemberID", "TargetPlayerId", "TargetPlayerID");
+            var role = data?["Role"]?.ToString() ?? "Member";
+            var manager = GuildManager.Instance;
+            var validRole = role.Equals("Member", StringComparison.OrdinalIgnoreCase) || role.Equals("Officer", StringComparison.OrdinalIgnoreCase) || role.Equals("Leader", StringComparison.OrdinalIgnoreCase);
+            var success = validRole && manager.IsLeader(guildName, actorId) && manager.IsMember(guildName, memberId) && manager.UpdateGuildMemberRole(guildName, memberId, role);
+            session.SendAsyncJsonWithTimeStamp(new JObject
+            {
+                ["MessageType"] = MessageType.GuildRoleResponse,
+                ["Success"] = success,
+                ["GuildName"] = guildName,
+                ["MemberId"] = memberId,
+                ["Role"] = role,
+                ["ErrorMessage"] = success ? string.Empty : "Only the guild leader can change roles"
+            });
+            if (success)
+            {
+                var notice = new JObject
+                {
+                    ["MessageType"] = MessageType.GuildRoleResponse,
+                    ["Success"] = true,
+                    ["GuildName"] = guildName,
+                    ["MemberId"] = memberId,
+                    ["Role"] = role
+                };
+                SendToPlayer(memberId, notice);
+            }
         }
 
         private void HandleGuildChatRequest(ClientSession? session, JObject data)
@@ -1672,6 +1720,54 @@ namespace OpenGSServer
             }
 
             manager.BroadcastGuildChat(guildName, senderId, message);
+        }
+
+        private void HandleDailyListRequest(ClientSession? session, JObject data)
+        {
+            if (session == null) return;
+            var playerId = ResolveGuildPlayerId(session, data, "PlayerID", "PlayerId", "AccountID", "AccountId");
+            session.SendAsyncJsonWithTimeStamp(new JObject
+            {
+                ["MessageType"] = MessageType.DailyListResponse,
+                ["Success"] = !string.IsNullOrWhiteSpace(playerId),
+                ["PlayerID"] = playerId,
+                ["Dailies"] = _dailyService.GetPlayerDailies(playerId)
+            });
+        }
+
+        private void HandleDailyProgressRequest(ClientSession? session, JObject data)
+        {
+            if (session == null) return;
+            var playerId = ResolveGuildPlayerId(session, data, "PlayerID", "PlayerId", "AccountID", "AccountId");
+            var dailyId = data?["DailyId"]?.ToString() ?? data?["DailyID"]?.ToString() ?? string.Empty;
+            var amount = data?["Amount"]?.ToObject<int>() ?? 0;
+            var success = _dailyService.AddProgress(playerId, dailyId, amount);
+            session.SendAsyncJsonWithTimeStamp(new JObject
+            {
+                ["MessageType"] = MessageType.DailyProgressResponse,
+                ["Success"] = success,
+                ["DailyId"] = dailyId,
+                ["Dailies"] = success ? _dailyService.GetPlayerDailies(playerId) : new JArray(),
+                ["ErrorMessage"] = success ? string.Empty : "Invalid daily progress request"
+            });
+        }
+
+        private void HandleDailyClaimRequest(ClientSession? session, JObject data)
+        {
+            if (session == null) return;
+            var playerId = ResolveGuildPlayerId(session, data, "PlayerID", "PlayerId", "AccountID", "AccountId");
+            var dailyId = data?["DailyId"]?.ToString() ?? data?["DailyID"]?.ToString() ?? string.Empty;
+            var result = _dailyService.Claim(playerId, dailyId);
+            session.SendAsyncJsonWithTimeStamp(new JObject
+            {
+                ["MessageType"] = MessageType.DailyClaimResponse,
+                ["Success"] = result.Success,
+                ["DailyId"] = dailyId,
+                ["RewardCredits"] = result.Reward,
+                ["Credits"] = AccountDatabaseManager.GetInstance().GetCredits(playerId),
+                ["ErrorMessage"] = result.Error,
+                ["Dailies"] = result.Success ? _dailyService.GetPlayerDailies(playerId) : new JArray()
+            });
         }
 
         private static string ResolveGuildPlayerId(ClientSession? session, JObject? data, params string[] candidateKeys)

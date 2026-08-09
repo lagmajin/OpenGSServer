@@ -101,6 +101,27 @@ namespace OpenGSServer
             return _database.GetGuildMember(guildName);
         }
 
+        public DBGuildMember? FindMember(string guildName, string memberId)
+        {
+            if (string.IsNullOrWhiteSpace(guildName) || string.IsNullOrWhiteSpace(memberId)) return null;
+            return GetGuildMembers(guildName).FirstOrDefault(m => string.Equals(m.Id, memberId, StringComparison.OrdinalIgnoreCase));
+        }
+
+        public bool IsMember(string guildName, string memberId) => FindMember(guildName, memberId) != null;
+
+        public bool IsLeader(string guildName, string memberId)
+        {
+            var guild = FindGuild(guildName);
+            return guild != null && string.Equals(guild.LeaderId, memberId, StringComparison.OrdinalIgnoreCase);
+        }
+
+        public bool CanManageMembers(string guildName, string memberId)
+        {
+            var member = FindMember(guildName, memberId);
+            return member != null && (string.Equals(member.Role, "Leader", StringComparison.OrdinalIgnoreCase) ||
+                                      string.Equals(member.Role, "Officer", StringComparison.OrdinalIgnoreCase));
+        }
+
         public IReadOnlyList<DBGuild> GetAllGuilds()
         {
             return _database.GetAllGuilds();
