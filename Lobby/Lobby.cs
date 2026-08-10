@@ -66,6 +66,14 @@ namespace OpenGSServer
 
         public bool RemovePlayer(string playerId)
         {
+            if (!players.TryGetValue(playerId, out var player))
+                return false;
+
+            if (!string.IsNullOrEmpty(player.CurrentRoomId))
+            {
+                LeaveRoom(playerId);
+            }
+
             return players.Remove(playerId);
         }
 
