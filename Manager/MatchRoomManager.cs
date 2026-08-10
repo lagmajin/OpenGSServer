@@ -453,8 +453,6 @@ namespace OpenGSServer
 
         public bool StartMatch(in string id)
         {
-            string message = "";
-
         lock (matchRoomsLock)
         {
             if (matchRooms.TryGetValue(id, out var room))
