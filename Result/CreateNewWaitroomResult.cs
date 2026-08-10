@@ -5,6 +5,8 @@ using System.Text;
 using System.Threading.Tasks;
 using OpenGSCore;
 
+#nullable enable
+
 namespace OpenGSServer
 {
     public class CreateNewWaitRoomResult
