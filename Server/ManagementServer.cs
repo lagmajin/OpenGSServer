@@ -11,6 +11,8 @@ using System.Threading.Tasks;
 using NetCoreServer;
 using Newtonsoft.Json.Linq;
 
+#nullable enable
+
 namespace OpenGSServer
 {
     /// <summary>
