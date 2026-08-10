@@ -203,11 +203,17 @@ namespace OpenGSServer
 
         public static void SendMatchEnd(string roomId, List<string> winners)
         {
+            var winnerArray = new JArray();
+            foreach (var winner in winners)
+            {
+                winnerArray.Add(winner);
+            }
+
             var message = new JObject
             {
                 ["MessageType"] = GameMessageTypes.MatchEnd,
                 ["RoomID"] = roomId,
-                ["Winners"] = JArray.FromObject(winners),
+                ["Winners"] = winnerArray,
                 ["Timestamp"] = DateTime.UtcNow.ToString("o")
             };
 
