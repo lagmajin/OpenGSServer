@@ -24,8 +24,10 @@ namespace OpenGSServer
     {
         private NetManager? netManager;
         private EventBasedNetListener? listener;
-        private Dictionary<string, NetPeer> connectedPlayers = new();
-        private Dictionary<string, string> playerRoomMapping = new();
+        private Dictionary<string, NetPeer> connectedPlayers =
+            new(StringComparer.OrdinalIgnoreCase);
+        private Dictionary<string, string> playerRoomMapping =
+            new(StringComparer.OrdinalIgnoreCase);
         private readonly ServerPlayerStateManager playerStateManager = new();
         private readonly Dictionary<string, ServerProjectileState> projectiles = new();
         private readonly object projectileLock = new();
