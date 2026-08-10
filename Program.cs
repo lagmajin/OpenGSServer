@@ -263,11 +263,13 @@ using Autofac;
                             continue;
                         }
 
+                        var commandInput = input.Trim();
+
                         ConsoleWrite.WriteMessage($"[CMD] {input}", ConsoleColor.Yellow);
 
                         // 終了コマンド処理（特別に分離）
-                        if (input.Equals("exit", StringComparison.OrdinalIgnoreCase) || 
-                            input.Equals("shutdown", StringComparison.OrdinalIgnoreCase))
+                        if (commandInput.Equals("exit", StringComparison.OrdinalIgnoreCase) || 
+                            commandInput.Equals("shutdown", StringComparison.OrdinalIgnoreCase))
                         {
                             for (var i = 0; i < 3; i++)
                             {
@@ -279,7 +281,7 @@ using Autofac;
                     }
 
                     // コマンドを CommandParser に委譲
-                    interactiveCommandParser.Execute(input);
+                    interactiveCommandParser.Execute(commandInput);
                 }
                 }
                 catch (Exception ex)
