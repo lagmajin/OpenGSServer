@@ -1299,13 +1299,13 @@ namespace OpenGSServer
                 return;
             }
 
-            if (db.GetAccount(targetPlayerId) == null)
+            if (db.GetAccount(requesterId) == null || db.GetAccount(targetPlayerId) == null)
             {
                 session.SendAsyncJsonWithTimeStamp(new JObject
                 {
                     ["MessageType"] = MessageType.FriendRequestResponse,
                     ["Success"] = false,
-                    ["Error"] = "Target account not found",
+                    ["Error"] = "Account not found",
                     ["TargetPlayerID"] = targetPlayerId
                 });
                 return;
