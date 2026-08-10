@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using Newtonsoft.Json.Linq;
 
@@ -287,7 +288,7 @@ namespace OpenGSServer.Network
         /// <summary>
         /// 指定アイテムを取得する
         /// </summary>
-        public bool TryGetItem(string itemId, out FieldItem item)
+        public bool TryGetItem(string itemId, [NotNullWhen(true)] out FieldItem? item)
         {
             return _items.TryGetValue(itemId, out item);
         }
