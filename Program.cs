@@ -17,7 +17,6 @@ using Autofac;
     class Program
     {
         private static bool IsEnd { get; set; } = false;
-        private static bool MonitorTaskFlag { get; set; } = false;
 
         // UDPサーバーマネージャーは MatchServerV2 の内部で管理されます
 
@@ -57,30 +56,6 @@ using Autofac;
                 ConsoleWrite.WriteMessage($"[ERR] Management shutdown failed: {ex.Message}", ConsoleColor.Red);
             }
         }
-        static async void MonitorTask(CancellationToken cancelToken = default)
-        {
-            ConsoleWrite.WriteMessage("MonitorTaskRun");
-
-            while (!MonitorTaskFlag)
-            {
-                if (cancelToken.IsCancellationRequested)
-                {
-                    return;
-                }
-
-
-                Task.Yield();
-
-
-            }
-
-
-            ConsoleWrite.WriteMessage("MonitorTaskEnd");
-
-
-        }
-
-
         static async Task<int> Main(string[] args)
         {
 
