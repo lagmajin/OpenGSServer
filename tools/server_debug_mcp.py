@@ -148,8 +148,16 @@ def main() -> None:
     args = parser.parse_args()
     host, port = args.host, args.port
 
-    for raw_line in sys.stdin.buffer:
+    stdin = sys.stdin.buffer
+    while True:
+        raw_line = stdin.readline(MAX_REQUEST_BYTES + 1)
+        if not raw_line:
+            break
         if len(raw_line) > MAX_REQUEST_BYTES:
+            while not raw_line.endswith(b"\n"):
+                raw_line = stdin.readline(MAX_REQUEST_BYTES + 1)
+                if not raw_line:
+                    break
             continue
         try:
             line = raw_line.decode("utf-8")
