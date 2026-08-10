@@ -114,6 +114,9 @@ namespace OpenGSServer
                 return false;
 
             var room = rooms[roomId];
+            if (room.Players.Contains(playerId))
+                return false;
+
             if (room.Players.Count >= room.MaxPlayers)
                 return false;
 
