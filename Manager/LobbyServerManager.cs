@@ -1893,6 +1893,7 @@ namespace OpenGSServer
             _idleCheckTimer?.Dispose();
             _lobbyLock?.Dispose();
             _dailyService.Dispose();
+            GuildDatabaseManager.GetInstance().Disconnect();
 
             foreach (var playerId in _connectedPlayers.Keys.ToList())
             {
