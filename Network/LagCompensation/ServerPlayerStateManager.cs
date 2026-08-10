@@ -184,8 +184,8 @@ namespace OpenGSServer.Network
         }
 
         /// <summary>
-        /// サーバー側の移動を適用（プレースホルダー実装）
-        /// 実際のサーバーサイド物理演算に置き換えること
+        /// サーバー側の簡易移動モデルを適用する
+        /// 速度・重力・接地状態を更新し、クライアント入力の逸脱を制限する
         /// </summary>
         private void ApplyServerMovement(PlayerServerState state, ClientInputData input)
         {
