@@ -17,7 +17,7 @@ namespace OpenGSServer
 
         public bool IsAlive => Hp > 0;
 
-        public PlayerGameObject(string playerId, string displayName, float x = 0f, float y = 0f) : base(x, y)
+        public PlayerGameObject(string playerId, string displayName, float x = 0f, float y = 0f)
         {
             PlayerId = playerId ?? string.Empty;
             DisplayName = displayName ?? string.Empty;
