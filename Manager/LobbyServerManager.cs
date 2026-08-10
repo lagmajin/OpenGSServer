@@ -1892,6 +1892,7 @@ namespace OpenGSServer
             _cleanupTimer?.Dispose();
             _idleCheckTimer?.Dispose();
             _lobbyLock?.Dispose();
+            _dailyService.Dispose();
 
             foreach (var playerId in _connectedPlayers.Keys.ToList())
             {
