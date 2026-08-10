@@ -34,6 +34,7 @@ namespace OpenGSServer.Network
             public float LastInputTimestamp;
             public float LastClientTimestamp;
             public byte LastProcessedSequence;
+            public bool HasProcessedSequence;
             public Queue<ClientInputData> InputQueue = new Queue<ClientInputData>();
             public DateTime LastUpdateTime = DateTime.UtcNow;
             public bool IsGrounded = true;
@@ -111,7 +112,7 @@ namespace OpenGSServer.Network
                 }
 
                 // シーケンスが古ければスキップ
-                if (IsSequenceNewer(input.SequenceNumber, state.LastProcessedSequence))
+                if (!state.HasProcessedSequence || IsSequenceNewer(input.SequenceNumber, state.LastProcessedSequence))
                 {
                     NormalizeClientInput(ref input, out var clampedReason);
                     if (!string.IsNullOrWhiteSpace(clampedReason))
@@ -173,6 +174,7 @@ namespace OpenGSServer.Network
                 ApplyServerMovement(state, input);
 
                 state.LastProcessedSequence = input.SequenceNumber;
+                state.HasProcessedSequence = true;
                 state.LastInputTimestamp = input.Timestamp;
                 state.LastClientTimestamp = input.Timestamp;
                 state.LastUpdateTime = DateTime.UtcNow;
@@ -363,7 +365,8 @@ namespace OpenGSServer.Network
         /// </summary>
         private bool IsSequenceNewer(byte newSeq, byte oldSeq)
         {
-            return (byte)(newSeq - oldSeq) < 128;
+            var distance = (byte)(newSeq - oldSeq);
+            return distance != 0 && distance < 128;
         }
 
         /// <summary>
