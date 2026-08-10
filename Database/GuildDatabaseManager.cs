@@ -187,7 +187,8 @@ namespace OpenGSServer
 
             var memberCollection = GuildMemberCollection();
 
-            if (memberCollection.Exists(m => m.guildId == guildData.id && m.Id == id))
+            if (memberCollection.FindAll().Any(m => m.guildId == guildData.id &&
+                                                   string.Equals(m.Id, id, StringComparison.OrdinalIgnoreCase)))
             {
                 return false;
             }
@@ -217,7 +218,8 @@ namespace OpenGSServer
             }
 
             var memberCollection = GuildMemberCollection();
-            var targetMember = memberCollection.FindOne(m => m.guildId == guildData.id && m.Id == memberId);
+            var targetMember = memberCollection.FindAll().FirstOrDefault(m => m.guildId == guildData.id &&
+                                                                               string.Equals(m.Id, memberId, StringComparison.OrdinalIgnoreCase));
             if (targetMember == null)
             {
                 return false;
