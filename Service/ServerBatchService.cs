@@ -140,6 +140,8 @@ public sealed class ServerBatchService : IDisposable
         {
             var lobby = LobbyServerManager.Instance;
             var match = MatchServerV2.Instance;
+            using var process = Process.GetCurrentProcess();
+            var serverStartedUtc = process.StartTime.ToUniversalTime();
 
             var lobbyStatsResult = lobby.GetLobbyStats();
             var matchStats = match.GetStats();
@@ -161,6 +163,9 @@ public sealed class ServerBatchService : IDisposable
             var stats = new
             {
                 Timestamp = DateTime.UtcNow,
+                ServerStartedUtc = serverStartedUtc,
+                ServerUptimeSeconds = Math.Max(0, (DateTime.UtcNow - serverStartedUtc).TotalSeconds),
+                ProcessId = process.Id,
                 Lobby = lobbyData,
                 Match = new
                 {
