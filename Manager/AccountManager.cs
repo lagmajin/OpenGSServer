@@ -9,6 +9,8 @@ using Newtonsoft.Json.Linq;
 using OpenGSCore;
 
 
+#nullable enable
+
 namespace OpenGSServer
 {
     enum EDealWithDuplicateLogin
