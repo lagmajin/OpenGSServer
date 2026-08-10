@@ -58,8 +58,9 @@ namespace OpenGSServer
             if (string.IsNullOrWhiteSpace(playerId)) return new JArray();
             lock (_sync)
             {
-                var date = DateTime.UtcNow.ToString("yyyy-MM-dd");
-                var today = DateTime.UtcNow.Date;
+                var now = DateTime.UtcNow;
+                var date = now.ToString("yyyy-MM-dd");
+                var today = now.Date;
                 if (_lastCleanupDate != today)
                 {
                     CleanupExpiredRecords(today.AddDays(-60));
