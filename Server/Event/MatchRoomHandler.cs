@@ -406,6 +406,13 @@ namespace OpenGSServer
 
         private static void HandleShotHit(MatchRoom room, string shooterId, string targetId, string? weaponType, JObject? hitPosition)
         {
+            if (string.IsNullOrWhiteSpace(targetId) ||
+                !room.Players.Any(player => string.Equals(player.Id, targetId, StringComparison.OrdinalIgnoreCase)))
+            {
+                Console.WriteLine($"[Match] Ignored shot against non-member '{targetId}' in room '{room.Id}'");
+                return;
+            }
+
             // ダメージ計算（武器タイプによる）
             int damage = CalculateWeaponDamage(weaponType);
             LobbyServerManager.Instance.RecordDamageDailyProgress(shooterId, damage);
