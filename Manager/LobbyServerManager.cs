@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Net;
@@ -913,6 +914,30 @@ namespace OpenGSServer
             return FindSessionByPlayerId(playerId);
         }
 
+        private static int ReadInt(JToken? token)
+        {
+            return token != null && int.TryParse(token.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)
+                ? value
+                : 0;
+        }
+
+        private static bool ReadBool(JToken? token, bool fallback)
+        {
+            if (token == null)
+            {
+                return fallback;
+            }
+
+            if (bool.TryParse(token.ToString(), out var value))
+            {
+                return value;
+            }
+
+            return int.TryParse(token.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var numeric)
+                ? numeric != 0
+                : fallback;
+        }
+
         /// <summary>
         /// クライアントからのメッセージを処理（TCP専用）
         /// </summary>
@@ -1205,7 +1230,7 @@ namespace OpenGSServer
             var accountId = ResolveGuildPlayerId(session, data, "PlayerID", "PlayerId", "AccountID", "AccountId");
             var itemId = data?["ItemId"]?.ToString() ?? string.Empty;
             var category = data?["Category"]?.ToString() ?? "Weapon";
-            var slot = data?["Slot"]?.ToObject<int>() ?? 0;
+            var slot = ReadInt(data?["Slot"]);
             var db = AccountDatabaseManager.GetInstance();
 
             if (string.IsNullOrWhiteSpace(accountId) || string.IsNullOrWhiteSpace(itemId))
@@ -1260,7 +1285,7 @@ namespace OpenGSServer
 
             var accountId = ResolveGuildPlayerId(session, data, "PlayerID", "PlayerId", "AccountID", "AccountId");
             var category = data?["Category"]?.ToString() ?? "Weapon";
-            var slot = data?["Slot"]?.ToObject<int>() ?? 0;
+            var slot = ReadInt(data?["Slot"]);
             var db = AccountDatabaseManager.GetInstance();
 
             if (string.IsNullOrWhiteSpace(accountId))
@@ -1369,7 +1394,7 @@ namespace OpenGSServer
 
             var approverId = ResolveGuildPlayerId(session, data, "PlayerID", "PlayerId", "ApproverId", "ApproverID");
             var requestPlayerId = ResolveGuildPlayerId(null, data, "RequestPlayerID", "RequestPlayerId", "FromPlayerID", "FromPlayerId");
-            var approve = data?["Approve"]?.ToObject<bool>() ?? true;
+            var approve = ReadBool(data?["Approve"], true);
             var db = AccountDatabaseManager.GetInstance();
 
             if (string.IsNullOrWhiteSpace(approverId) || string.IsNullOrWhiteSpace(requestPlayerId))
@@ -2015,6 +2040,30 @@ namespace OpenGSServer
                 }
             }
             return null;
+        }
+
+        private static int ReadInt(JToken? token)
+        {
+            return token != null && int.TryParse(token.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)
+                ? value
+                : 0;
+        }
+
+        private static bool ReadBool(JToken? token, bool fallback)
+        {
+            if (token == null)
+            {
+                return fallback;
+            }
+
+            if (bool.TryParse(token.ToString(), out var value))
+            {
+                return value;
+            }
+
+            return int.TryParse(token.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var numeric)
+                ? numeric != 0
+                : fallback;
         }
     }
 }
