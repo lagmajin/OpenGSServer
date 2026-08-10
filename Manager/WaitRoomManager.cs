@@ -5,6 +5,8 @@ using System.Linq;
 using Newtonsoft.Json.Linq;
 using OpenGSCore;
 
+#nullable enable
+
 namespace OpenGSServer
 {
     public class WaitRoomManager
