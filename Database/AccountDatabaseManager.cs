@@ -10,7 +10,7 @@ namespace OpenGSServer
 {
     public class AccountDatabaseManager : IDisposable
     {
-        private LiteDatabase db;
+        private LiteDatabase? db;
 
         public static AccountDatabaseManager Instance { get; set; } = new();
 
@@ -34,7 +34,7 @@ namespace OpenGSServer
                 Connect();
             }
 
-            return db;
+            return db!;
         }
 
         public void Connect()
