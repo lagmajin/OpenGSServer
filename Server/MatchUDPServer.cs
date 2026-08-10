@@ -20,7 +20,8 @@ namespace OpenGSServer
         
         private NetManager? _server;
         private readonly EventBasedNetListener _listener = new();
-        private readonly ConcurrentDictionary<string, PlayerConnectionInfo> _connectedPlayers = new(); // PlayerIDをstringに
+        private readonly ConcurrentDictionary<string, PlayerConnectionInfo> _connectedPlayers =
+            new(StringComparer.OrdinalIgnoreCase); // PlayerIDをstringに
         private bool _disposed;
 
         public bool IsRunning => _server?.IsRunning ?? false;
