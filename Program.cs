@@ -10,6 +10,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Autofac;
 
 
+#nullable enable
+
  namespace OpenGSServer
 {
 
