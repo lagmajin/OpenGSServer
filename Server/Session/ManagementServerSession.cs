@@ -393,6 +393,7 @@ namespace OpenGSServer
                 ["ServerStartedUtc"] = serverStartedUtc.ToString(UTF_FORMAT),
                 ["ProcessId"] = process.Id,
                 ["MemoryUsageMB"] = process.WorkingSet64 / (1024 * 1024),
+                ["CpuThreads"] = process.Threads.Count,
                 ["LoggedInUsers"] = accountManager.GetLoggedInUserCount(),
                 ["ActiveRooms"] = WaitRoomManager.Instance().GetAllRooms().Count,
                 ["ConnectedMasters"] = ManagementServer.Instance.GetConnectedClientCount(),
