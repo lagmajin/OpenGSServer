@@ -910,12 +910,19 @@ namespace OpenGSServer
             switch (messageType)
             {
                 case MessageType.LoginRequest:
-                    // ログイン処理（既存の OldAccountEventHandler を移行）
-                    var playerId = OldAccountEventHandler.Login(clientSession, data);
-                    if (clientSession != null && playerId != null) clientSession.SetPlayerID(playerId);
+                    if (clientSession is null)
+                    {
+                        break;
+                    }
+
+                    var playerId = AccountEventHandler.Login(clientSession, data);
+                    if (playerId != null) clientSession.SetPlayerID(playerId);
                     break;
                 case MessageType.LogoutRequest:
-                    OldAccountEventHandler.Logout(clientSession);
+                    if (clientSession is not null)
+                    {
+                        AccountEventHandler.Logout(clientSession);
+                    }
                     break;
                 case MessageType.CreateRoomRequest:
                     LobbyEventHandler.CreateNewWaitRoom(clientSession, data);
