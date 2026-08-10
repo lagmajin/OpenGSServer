@@ -7,6 +7,8 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using OpenGSServer.Utility;
 
 #nullable enable
 
@@ -209,7 +211,7 @@ public sealed class ServerBatchService : IDisposable
                 onSuccess: stats =>
                 {
                     var pingFile = Path.Combine(_dataPath, $"ping_stats_{DateTime.UtcNow:yyyyMMdd_HHmmss}.json");
-                    var json = JsonConvert.SerializeObject(stats, Formatting.Indented);
+                    var json = SerializePingStats(stats);
                     File.WriteAllText(pingFile, json);
 
                     ConsoleWrite.WriteMessage($"[Batch] Ping stats saved ({stats.Count} players)", ConsoleColor.Gray);
@@ -224,6 +226,27 @@ public sealed class ServerBatchService : IDisposable
         {
             ConsoleWrite.WriteMessage($"[Batch] Error saving ping stats: {ex.Message}", ConsoleColor.Red);
         }
+        }
+
+    private static string SerializePingStats(Dictionary<string, PingStats> stats)
+    {
+        var root = new JObject();
+        foreach (var (playerId, ping) in stats)
+        {
+            root[playerId] = new JObject
+            {
+                ["AveragePing"] = ping.AveragePing,
+                ["MinPing"] = ping.MinPing,
+                ["MaxPing"] = ping.MaxPing,
+                ["Jitter"] = ping.Jitter,
+                ["SampleCount"] = ping.SampleCount,
+                ["PacketLoss"] = ping.PacketLoss,
+                ["Quality"] = ping.Quality.ToString(),
+                ["LatencyCompensation"] = ping.LatencyCompensation
+            };
+        }
+
+        return root.ToString(Formatting.Indented);
     }
 
     /// <summary>
