@@ -17,8 +17,6 @@ namespace OpenGSServer
     {
         public readonly bool succeeded = false;
 
-        readonly string reason = "";
-
         private readonly string id_ = "";
 
         eLoginResultType type_ = eLoginResultType.Unknown;
