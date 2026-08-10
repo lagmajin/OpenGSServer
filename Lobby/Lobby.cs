@@ -84,7 +84,8 @@ namespace OpenGSServer
 
         public LobbyRoomInfo? CreateRoom(string roomName, string ownerId, EGameMode gameMode)
         {
-            if (string.IsNullOrWhiteSpace(roomName) || string.IsNullOrWhiteSpace(ownerId) || !players.ContainsKey(ownerId))
+            if (string.IsNullOrWhiteSpace(roomName) || string.IsNullOrWhiteSpace(ownerId) ||
+                !players.TryGetValue(ownerId, out var owner) || !string.IsNullOrEmpty(owner.CurrentRoomId))
                 return null;
 
             var roomId = $"room_{nextRoomId++}";
@@ -101,8 +102,9 @@ namespace OpenGSServer
             };
 
             rooms[roomId] = room;
-            players[ownerId].CurrentRoomId = roomId;
-            players[ownerId].Status = LobbyPlayerStatus.InRoom;
+            owner.CurrentRoomId = roomId;
+            owner.Status = LobbyPlayerStatus.InRoom;
+            owner.LastActivity = System.DateTime.UtcNow;
 
             return room;
         }
@@ -110,7 +112,8 @@ namespace OpenGSServer
         public bool JoinRoom(string roomId, string playerId)
         {
             if (string.IsNullOrWhiteSpace(roomId) || string.IsNullOrWhiteSpace(playerId) ||
-                !players.ContainsKey(playerId) || !rooms.ContainsKey(roomId))
+                !players.TryGetValue(playerId, out var player) || !rooms.ContainsKey(roomId) ||
+                !string.IsNullOrEmpty(player.CurrentRoomId))
                 return false;
 
             var room = rooms[roomId];
@@ -121,9 +124,9 @@ namespace OpenGSServer
                 return false;
 
             room.Players.Add(playerId);
-            players[playerId].CurrentRoomId = roomId;
-            players[playerId].Status = LobbyPlayerStatus.InRoom;
-            players[playerId].LastActivity = System.DateTime.UtcNow;
+            player.CurrentRoomId = roomId;
+            player.Status = LobbyPlayerStatus.InRoom;
+            player.LastActivity = System.DateTime.UtcNow;
 
             return true;
         }
