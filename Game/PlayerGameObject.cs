@@ -15,6 +15,9 @@ namespace OpenGSServer
         public int MaxHp { get; private set; } = 100;
         public int Hp { get; private set; } = 100;
         private int lastHp = 100;
+        private float lastRotation;
+        private float lastVelocityX;
+        private float lastVelocityY;
 
         public bool IsAlive => Hp > 0;
 
@@ -52,13 +55,17 @@ namespace OpenGSServer
 
         public override bool HasChanged()
         {
-            return base.HasChanged() || Hp != lastHp || Rotation != 0f || VelocityX != 0f || VelocityY != 0f || !IsAlive;
+            return base.HasChanged() || Hp != lastHp || Rotation != lastRotation ||
+                   VelocityX != lastVelocityX || VelocityY != lastVelocityY || !IsAlive;
         }
 
         public override void SaveSyncState()
         {
             base.SaveSyncState();
             lastHp = Hp;
+            lastRotation = Rotation;
+            lastVelocityX = VelocityX;
+            lastVelocityY = VelocityY;
         }
 
         public override Newtonsoft.Json.Linq.JObject ToJSon()
