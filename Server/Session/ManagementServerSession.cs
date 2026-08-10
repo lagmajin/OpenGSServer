@@ -384,10 +384,12 @@ namespace OpenGSServer
             var accountManager = AccountManager.GetInstance();
             using var process = Process.GetCurrentProcess();
             var serverStartedUtc = process.StartTime.ToUniversalTime();
+            var uptimeSeconds = Math.Max(0, (DateTime.UtcNow - serverStartedUtc).TotalSeconds);
             var response = new JObject
             {
                 ["MessageType"] = NetworkingConstants.MessageType.ServerStatusResponse,
-                ["ServerUptime"] = Math.Max(0, (DateTime.UtcNow - serverStartedUtc).TotalSeconds),
+                ["ServerUptime"] = uptimeSeconds,
+                ["ServerUptimeSeconds"] = uptimeSeconds,
                 ["ServerStartedUtc"] = serverStartedUtc.ToString(UTF_FORMAT),
                 ["ProcessId"] = process.Id,
                 ["MemoryUsageMB"] = process.WorkingSet64 / (1024 * 1024),
