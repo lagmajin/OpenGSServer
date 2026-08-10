@@ -244,30 +244,33 @@ namespace OpenGSServer.Network
         /// </summary>
         public string SpawnItem(string itemType, int spawnPointId)
         {
-            if (_spawnRules.TryGetValue(itemType, out var rule) &&
-                GetActiveItemCountForType(itemType) >= rule.MaxActiveCount)
+            lock (_itemStateLock)
             {
-                return "";
-            }
+                if (_spawnRules.TryGetValue(itemType, out var rule) &&
+                    GetActiveItemCountForType(itemType) >= rule.MaxActiveCount)
+                {
+                    return "";
+                }
 
-            if (spawnPointId < 0)
-            {
-                spawnPointId = PickSpawnPointId(itemType);
-            }
+                if (spawnPointId < 0)
+                {
+                    spawnPointId = PickSpawnPointId(itemType);
+                }
 
-            if (!TryResolveSpawnPoint(spawnPointId, out var spawnPoint))
-            {
-                return SpawnItem(itemType, 0, 0, 0);
-            }
+                if (!TryResolveSpawnPoint(spawnPointId, out var spawnPoint))
+                {
+                    return SpawnItem(itemType, 0, 0, 0);
+                }
 
-            var itemId = SpawnItem(itemType, spawnPoint.PosX, spawnPoint.PosY, spawnPoint.PosZ);
-            if (_items.TryGetValue(itemId, out var item))
-            {
-                item.SpawnPointId = spawnPoint.SpawnPointId;
-                item.SpawnPointName = spawnPoint.Name;
-            }
+                var itemId = SpawnItem(itemType, spawnPoint.PosX, spawnPoint.PosY, spawnPoint.PosZ);
+                if (_items.TryGetValue(itemId, out var item))
+                {
+                    item.SpawnPointId = spawnPoint.SpawnPointId;
+                    item.SpawnPointName = spawnPoint.Name;
+                }
 
-            return itemId;
+                return itemId;
+            }
         }
 
         /// <summary>
