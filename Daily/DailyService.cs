@@ -56,6 +56,7 @@ namespace OpenGSServer
             lock (_sync)
             {
                 var date = DateTime.UtcNow.ToString("yyyy-MM-dd");
+                CleanupExpiredRecords(DateTime.UtcNow.Date.AddDays(-60));
                 return new JArray(Definitions.Select(definition => ToJson(definition, GetOrCreate(playerId, definition.Id, date))));
             }
         }
@@ -100,6 +101,15 @@ namespace OpenGSServer
             var created = new DailyProgressRecord { Id = id, PlayerId = playerId, DailyId = dailyId, ResetDateUtc = date };
             _progress.Insert(created);
             return created;
+        }
+
+        private void CleanupExpiredRecords(DateTime cutoff)
+        {
+            var expiredIds = _progress.FindAll()
+                .Where(record => DateTime.TryParse(record.ResetDateUtc, out var date) && date < cutoff)
+                .Select(record => record.Id)
+                .ToList();
+            foreach (var id in expiredIds) _progress.Delete(id);
         }
 
         private static JObject ToJson(DailyDefinition definition, DailyProgressRecord record) => new()
