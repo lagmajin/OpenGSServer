@@ -163,7 +163,8 @@ namespace OpenGSServer
                     var damagedPlayerId = json.GetValue("DamagedPlayerID")?.ToString();
                     var damageToken = json.GetValue("Damage");
                     int damage = damageToken != null ? (int)damageToken : 0;
-                    if (damagedPlayerId != null)
+                    if (!string.IsNullOrWhiteSpace(damagedPlayerId) && damage is > 0 and <= 10000 &&
+                        room.Players.Any(player => string.Equals(player.Id, damagedPlayerId, StringComparison.OrdinalIgnoreCase)))
                     {
                         HandlePlayerDamaged(room, damagedPlayerId, damage);
                     }
