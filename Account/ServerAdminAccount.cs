@@ -64,10 +64,7 @@ public sealed class ServerAdminAccount
     {
         if (string.IsNullOrWhiteSpace(path)) throw new ArgumentException("Path is required", nameof(path));
 
-        var json = JsonSerializer.Serialize(this, new JsonSerializerOptions
-        {
-            WriteIndented = true
-        });
+        var json = JsonSerializer.Serialize(this, AdminJsonSerializerContext.Default.ServerAdminAccount);
 
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, json, Encoding.UTF8);
@@ -81,7 +78,7 @@ public sealed class ServerAdminAccount
         if (!File.Exists(path)) throw new FileNotFoundException("Admin account file not found", path);
 
         var json = File.ReadAllText(path, Encoding.UTF8);
-        var account = JsonSerializer.Deserialize<ServerAdminAccount>(json);
+        var account = JsonSerializer.Deserialize(json, AdminJsonSerializerContext.Default.ServerAdminAccount);
         if (account == null) throw new InvalidDataException("Invalid admin account file");
         return account;
     }
