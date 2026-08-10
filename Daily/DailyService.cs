@@ -37,6 +37,7 @@ namespace OpenGSServer
         private readonly object _sync = new();
         private readonly LiteDatabase _database;
         private readonly ILiteCollection<DailyProgressRecord> _progress;
+        private DateTime _lastCleanupDate = DateTime.MinValue;
 
         public DailyService(string path = "Database/daily.db")
         {
@@ -56,7 +57,12 @@ namespace OpenGSServer
             lock (_sync)
             {
                 var date = DateTime.UtcNow.ToString("yyyy-MM-dd");
-                CleanupExpiredRecords(DateTime.UtcNow.Date.AddDays(-60));
+                var today = DateTime.UtcNow.Date;
+                if (_lastCleanupDate != today)
+                {
+                    CleanupExpiredRecords(today.AddDays(-60));
+                    _lastCleanupDate = today;
+                }
                 return new JArray(Definitions.Select(definition => ToJson(definition, GetOrCreate(playerId, definition.Id, date))));
             }
         }
