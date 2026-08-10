@@ -15,7 +15,7 @@ namespace OpenGSServer
     {
         private readonly List<Friend> friends = new();
 
-        public IReadOnlyList<Friend> Friends => friends;
+        public IReadOnlyList<Friend> Friends => friends.AsReadOnly();
 
         public void Add(Friend friend)
         {
