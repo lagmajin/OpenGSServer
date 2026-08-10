@@ -469,7 +469,7 @@ namespace OpenGSServer
                 if (room == null)
                     return LobbyResult<bool>.Error("Room not found");
 
-                if (!room.Players.Contains(playerId))
+                if (!room.Players.Any(id => string.Equals(id, playerId, StringComparison.OrdinalIgnoreCase)))
                     return LobbyResult<bool>.Error("Player not in this room");
 
                 ConsoleWrite.WriteMessage($"[LOBBY] Room chat in {roomId} from {playerId}: {message}", ConsoleColor.Gray);

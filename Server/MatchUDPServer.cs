@@ -360,7 +360,8 @@ namespace OpenGSServer
 
             return allRooms
                 .OfType<MatchRoom>()
-                .FirstOrDefault(room => room.Players.Any(p => p.Id == playerId));
+                .FirstOrDefault(room => room.Players.Any(p =>
+                    string.Equals(p.Id, playerId, StringComparison.OrdinalIgnoreCase)));
         }
 
         /// <summary>
