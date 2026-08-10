@@ -13,7 +13,7 @@ namespace OpenGSServer
 
     public class GuildDatabaseManager : IAbstractDatabaseManager
     {
-        private LiteDatabase db;
+        private LiteDatabase? db;
         private readonly object _syncRoot = new();
 
         static GuildDatabaseManager instance = new GuildDatabaseManager();
@@ -38,7 +38,7 @@ namespace OpenGSServer
                 }
             }
 
-            return db;
+            return db!;
         }
         private ILiteCollection<DBGuild> GuildCollection()
         {
