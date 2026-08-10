@@ -82,6 +82,8 @@ namespace OpenGSServer
 
         public (bool Success, string Error, long Reward) Claim(string playerId, string dailyId)
         {
+            if (string.IsNullOrWhiteSpace(playerId)) return (false, "Player not found", 0);
+
             lock (_sync)
             {
                 var definition = Definitions.FirstOrDefault(x => x.Id == dailyId);
