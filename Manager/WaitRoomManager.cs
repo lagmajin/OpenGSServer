@@ -45,21 +45,25 @@ namespace OpenGSServer
                 setting.RoomName = Template.RandomRoomName();
             }
 
-            if (_rooms.Count >= RoomLimit)
+            WaitRoom room;
+            lock (_lockObj)
             {
-                return new CreateNewWaitRoomResult("Server RoomLimit Over", null);
+                if (_rooms.Count >= RoomLimit)
+                {
+                    return new CreateNewWaitRoomResult("Server RoomLimit Over", null);
+                }
+
+                room = new WaitRoom(setting.RoomName, setting.Capacity);
+                setting.ApplyTo(room);
+
+                if (!_rooms.TryAdd(room.RoomId, room))
+                {
+                    return new CreateNewWaitRoomResult("Fail (Duplicate ID)", null);
+                }
             }
 
-            var room = new WaitRoom(setting.RoomName, setting.Capacity);
-            setting.ApplyTo(room);
-
-            if (_rooms.TryAdd(room.RoomId, room))
-            {
-                ConsoleWrite.WriteMessage($"[WAITROOM] Created room: {room.RoomName} ({room.RoomId}) Mode: {setting.GameMode} Map: {room.Map}", ConsoleColor.Green);
-                return new CreateNewWaitRoomResult("Successful", room);
-            }
-
-            return new CreateNewWaitRoomResult("Fail (Duplicate ID)", null);
+            ConsoleWrite.WriteMessage($"[WAITROOM] Created room: {room.RoomName} ({room.RoomId}) Mode: {setting.GameMode} Map: {room.Map}", ConsoleColor.Green);
+            return new CreateNewWaitRoomResult("Successful", room);
         }
 
         public WaitRoom? FindWaitRoom(string roomId)
