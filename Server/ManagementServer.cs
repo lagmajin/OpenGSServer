@@ -82,6 +82,7 @@ namespace OpenGSServer
     public sealed class ManagementServer : AbstractServer, IManagementServer, IDisposable
     {
         private ManagementTcpServer? _tcpServer;
+        private bool _disposed;
         private CancellationTokenSource? _updateCts;
         private Task? _updateTask;
         private DateTime _lastStatsBroadcast = DateTime.MinValue;
@@ -201,6 +202,8 @@ namespace OpenGSServer
 
         public void Dispose()
         {
+            if (_disposed) return;
+            _disposed = true;
             Stop();
             _currentProcess.Dispose();
             _updateCts?.Dispose();
