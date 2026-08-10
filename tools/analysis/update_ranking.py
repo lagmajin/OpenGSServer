@@ -1,10 +1,12 @@
 import os
 import re
 
+WORKSPACE_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+
 PROJECTS = {
-    "OpenGSCore": r"C:\dev\OpenGSCore",
-    "OpenGSServer": r"C:\dev\OpenGSServer",
-    "OpenGSR": r"C:\dev\OpenGSR"
+    "OpenGSCore": os.path.join(os.path.dirname(WORKSPACE_ROOT), "OpenGSCore"),
+    "OpenGSServer": WORKSPACE_ROOT,
+    "OpenGSR": os.path.join(os.path.dirname(WORKSPACE_ROOT), "OpenGSR")
 }
 
 UNFINISHED_KEYWORDS = [
@@ -190,7 +192,7 @@ def load_implemented_files(ranking_path):
     return implemented, implemented_section
 
 def main():
-    ranking_path = r"C:\dev\OpenGSServer\docs\ThinImplementationRanking.md"
+    ranking_path = os.path.join(WORKSPACE_ROOT, "docs", "ThinImplementationRanking.md")
     implemented_files, implemented_section_text = load_implemented_files(ranking_path)
     
     print(f"Total unique implemented files excluded: {len(implemented_files)}")
@@ -205,7 +207,7 @@ def main():
             for file in files:
                 if file.endswith(".cs"):
                     full_path = os.path.join(root, file)
-                    rel_path = os.path.relpath(full_path, r"C:\dev")
+                    rel_path = os.path.relpath(full_path, os.path.dirname(WORKSPACE_ROOT))
                     
                     rel_path_norm = rel_path.replace("/", "\\").strip().lower()
                     if rel_path_norm in implemented_files:
@@ -310,7 +312,7 @@ def main():
         md_content += f"- **主な検出理由**: {', '.join(res['reasons'])}\n"
         
         try:
-            full_path = os.path.join(r"C:\dev", res["rel_path"])
+            full_path = os.path.join(os.path.dirname(WORKSPACE_ROOT), res["rel_path"])
             with open(full_path, "r", encoding="utf-8-sig", errors="ignore") as f:
                 file_lines = f.readlines()
             
@@ -346,7 +348,7 @@ def main():
 *このレポートは `update_ranking.py` の静的解析により自動更新されました。*
 """
 
-    docs_path = r"C:\dev\OpenGSServer\docs"
+    docs_path = os.path.join(WORKSPACE_ROOT, "docs")
     os.makedirs(docs_path, exist_ok=True)
     out_file = os.path.join(docs_path, "ThinImplementationRanking.md")
     
