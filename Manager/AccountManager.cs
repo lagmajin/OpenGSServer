@@ -175,7 +175,7 @@ namespace OpenGSServer
         /// 非推奨: GetPlayerInformationを使用してください
         /// </summary>
         [Obsolete("GetPlayerInformation(string id)を使用してください")]
-        public PlayerServerInformation PlayerInformation(in string id)
+        public PlayerServerInformation? PlayerInformation(in string id)
         {
             return GetPlayerInformation(id);
         }
