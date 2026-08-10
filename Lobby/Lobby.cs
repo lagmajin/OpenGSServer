@@ -48,7 +48,8 @@ namespace OpenGSServer
                 PlayerId = playerId,
                 PlayerName = playerName,
                 Status = LobbyPlayerStatus.Idle,
-                JoinedAt = System.DateTime.UtcNow
+                JoinedAt = System.DateTime.UtcNow,
+                LastActivity = System.DateTime.UtcNow
             };
 
             players[playerId] = lobbyPlayer;
@@ -102,6 +103,7 @@ namespace OpenGSServer
             room.Players.Add(playerId);
             players[playerId].CurrentRoomId = roomId;
             players[playerId].Status = LobbyPlayerStatus.InRoom;
+            players[playerId].LastActivity = System.DateTime.UtcNow;
 
             return true;
         }
@@ -145,6 +147,7 @@ namespace OpenGSServer
 
             player.CurrentRoomId = null;
             player.Status = LobbyPlayerStatus.Idle;
+            player.LastActivity = System.DateTime.UtcNow;
 
             return true;
         }
