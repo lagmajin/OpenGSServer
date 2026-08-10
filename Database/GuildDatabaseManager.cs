@@ -260,7 +260,8 @@ namespace OpenGSServer
             }
 
             var memberCollection = GuildMemberCollection();
-            var member = memberCollection.FindOne(m => m.guildId == guildData.id && m.Id == memberId);
+            var member = memberCollection.FindAll().FirstOrDefault(m => m.guildId == guildData.id &&
+                                                                          string.Equals(m.Id, memberId, StringComparison.OrdinalIgnoreCase));
             if (member == null)
             {
                 return false;
@@ -268,7 +269,9 @@ namespace OpenGSServer
 
             if (string.Equals(role, "Leader", StringComparison.OrdinalIgnoreCase))
             {
-                var currentLeader = memberCollection.FindOne(m => m.guildId == guildData.id && m.Role == "Leader" && m.Id != memberId);
+                var currentLeader = memberCollection.FindAll().FirstOrDefault(m => m.guildId == guildData.id &&
+                                                                                    string.Equals(m.Role, "Leader", StringComparison.OrdinalIgnoreCase) &&
+                                                                                    !string.Equals(m.Id, member.Id, StringComparison.OrdinalIgnoreCase));
                 if (currentLeader != null)
                 {
                     currentLeader.Role = "Member";
@@ -276,7 +279,7 @@ namespace OpenGSServer
                     memberCollection.Update(currentLeader);
                 }
 
-                guildData.LeaderId = memberId;
+                guildData.LeaderId = member.Id;
                 GuildCollection().Update(guildData);
             }
             member.Role = role;
