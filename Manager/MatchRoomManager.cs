@@ -414,7 +414,7 @@ namespace OpenGSServer
         {
             foreach (var room in matchRooms.Values)
             {
-                if (room.Players.Exists(p => p.Id == userid))
+                if (room.Players.Exists(p => string.Equals(p.Id, userid, StringComparison.OrdinalIgnoreCase)))
                 {
                     room.RemovePlayer(userid);
                     // ルームが空になったら削除
@@ -441,7 +441,7 @@ namespace OpenGSServer
         {
             foreach (var room in matchRooms.Values)
             {
-                if (room.Players.Exists(p => p.Id == id))
+                if (room.Players.Exists(p => string.Equals(p.Id, id, StringComparison.OrdinalIgnoreCase)))
                 {
                     return room;
                 }
