@@ -66,6 +66,7 @@ namespace OpenGSServer
         {
             var tokens = new List<string>();
             var current = new StringBuilder();
+            var tokenStarted = false;
             var inQuotes = false;
             var quoteChar = '\0';
 
@@ -81,6 +82,7 @@ namespace OpenGSServer
                         if (next == quoteChar || next == '\\')
                         {
                             current.Append(next);
+                            tokenStarted = true;
                             i++;
                             continue;
                         }
@@ -101,10 +103,11 @@ namespace OpenGSServer
 
                 if (char.IsWhiteSpace(ch))
                 {
-                    if (current.Length > 0)
+                    if (tokenStarted)
                     {
                         tokens.Add(current.ToString());
                         current.Clear();
+                        tokenStarted = false;
                     }
 
                     continue;
@@ -114,13 +117,15 @@ namespace OpenGSServer
                 {
                     inQuotes = true;
                     quoteChar = ch;
+                    tokenStarted = true;
                     continue;
                 }
 
                 current.Append(ch);
+                tokenStarted = true;
             }
 
-            if (current.Length > 0)
+            if (tokenStarted)
             {
                 tokens.Add(current.ToString());
             }
