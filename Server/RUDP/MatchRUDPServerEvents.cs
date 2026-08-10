@@ -5,6 +5,8 @@ using LiteNetLib.Utils;
 using Newtonsoft.Json.Linq;
 using Newtonsoft.Json.Schema;
 
+#nullable enable
+
 namespace OpenGSServer
 {
 
