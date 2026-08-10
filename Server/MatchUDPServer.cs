@@ -7,6 +7,8 @@ using OpenGSCore;
 using OpenGSServer.Network; // ServerLagCompensationManager, ClientInputDataを使用
 using System.Linq;
 
+#nullable enable
+
 namespace OpenGSServer
 {
     /// <summary>
