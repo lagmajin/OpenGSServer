@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using Newtonsoft.Json.Linq;
 
+#nullable enable
+
 namespace OpenGSServer
 {
     internal interface IAccountEventHandler
