@@ -183,7 +183,8 @@ namespace OpenGSServer
                 if (!success)
                     return LobbyResult<LobbyPlayerInfo>.Error("Failed to add player to lobby");
 
-                var playerInfo = _lobby.GetPlayers().FirstOrDefault(p => p.PlayerId == playerId);
+                var playerInfo = _lobby.GetPlayers().FirstOrDefault(p =>
+                    string.Equals(p.PlayerId, playerId, StringComparison.OrdinalIgnoreCase));
                 if (playerInfo == null)
                     return LobbyResult<LobbyPlayerInfo>.Error("Failed to retrieve player info");
 

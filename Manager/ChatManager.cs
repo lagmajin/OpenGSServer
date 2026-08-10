@@ -53,7 +53,7 @@ namespace OpenGSServer
 
         public List<Chat> GetChatsByPlayerId(string playerId)
         {
-            return Log.Where(c => c.PlayerId == playerId).ToList();
+            return Log.Where(c => string.Equals(c.PlayerId, playerId, StringComparison.OrdinalIgnoreCase)).ToList();
         }
 
         public Chat? GetChatById(string chatId)
