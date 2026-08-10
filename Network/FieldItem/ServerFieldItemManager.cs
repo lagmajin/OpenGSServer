@@ -75,6 +75,7 @@ namespace OpenGSServer.Network
         {
             _matchId = matchId;
             _items.Clear();
+            OnItemPickedUp = null;
         }
 
         /// <summary>
@@ -83,6 +84,8 @@ namespace OpenGSServer.Network
         public void EndMatch()
         {
             _items.Clear();
+            _matchId = string.Empty;
+            OnItemPickedUp = null;
         }
 
         /// <summary>
