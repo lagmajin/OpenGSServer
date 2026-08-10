@@ -347,10 +347,15 @@ namespace OpenGSServer
 
         public static void ExitRoomRequest(in ClientSession session, IDictionary<string, JToken> dic)
         {
+            if (session is null)
+            {
+                return;
+            }
+
             var roomId = dic.GetStringOrNull("RoomId") ?? dic.GetStringOrNull("RoomID");
             var playerId = dic.GetStringOrNull("PlayerId") ??
                            dic.GetStringOrNull("PlayerID") ??
-                           session?.PlayerID;
+                           session.PlayerID;
 
             if (string.IsNullOrWhiteSpace(playerId))
             {
