@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
@@ -53,7 +54,7 @@ namespace OpenGSServer.Network
             public List<int> PreferredSpawnPointIds { get; } = new List<int>();
         }
 
-        private readonly Dictionary<string, FieldItem> _items = new();
+        private readonly ConcurrentDictionary<string, FieldItem> _items = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<int, FieldItemSpawnPoint> _spawnPoints = new();
         private readonly Dictionary<string, FieldItemSpawnRule> _spawnRules = new(StringComparer.OrdinalIgnoreCase);
         private readonly Random _random = new();
