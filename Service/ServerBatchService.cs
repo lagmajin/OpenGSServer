@@ -152,41 +152,41 @@ public sealed class ServerBatchService : IDisposable
             var lobbyStatsResult = lobby.GetLobbyStats();
             var matchStats = match.GetStats();
 
-            object? lobbyData = null;
+            JObject? lobbyData = null;
             lobbyStatsResult.Match(
                 onSuccess: s =>
                 {
-                    lobbyData = new
+                    lobbyData = new JObject
                     {
-                        s.TotalPlayers,
-                        s.ActiveRooms,
-                        s.AveragePing
+                        ["TotalPlayers"] = s.TotalPlayers,
+                        ["ActiveRooms"] = s.ActiveRooms,
+                        ["AveragePing"] = s.AveragePing
                     };
                 },
                 onError: _ => { }
             );
 
-            var stats = new
+            var stats = new JObject
             {
-                Timestamp = DateTime.UtcNow,
-                ServerStartedUtc = serverStartedUtc,
-                ServerUptimeSeconds = Math.Max(0, (DateTime.UtcNow - serverStartedUtc).TotalSeconds),
-                ProcessId = process.Id,
-                MemoryUsageMB = process.WorkingSet64 / (1024 * 1024),
-                CpuThreads = process.Threads.Count,
-                ConnectedMasters = ManagementServer.Instance.GetConnectedClientCount(),
-                Lobby = lobbyData,
-                Match = new
+                ["Timestamp"] = DateTime.UtcNow,
+                ["ServerStartedUtc"] = serverStartedUtc,
+                ["ServerUptimeSeconds"] = Math.Max(0, (DateTime.UtcNow - serverStartedUtc).TotalSeconds),
+                ["ProcessId"] = process.Id,
+                ["MemoryUsageMB"] = process.WorkingSet64 / (1024 * 1024),
+                ["CpuThreads"] = process.Threads.Count,
+                ["ConnectedMasters"] = ManagementServer.Instance.GetConnectedClientCount(),
+                ["Lobby"] = lobbyData,
+                ["Match"] = new JObject
                 {
-                    matchStats.TotalFrames,
-                    matchStats.AverageFrameTime,
-                    matchStats.ActiveRooms,
-                    matchStats.PlayingRooms,
-                    matchStats.TotalPlayers
+                    ["TotalFrames"] = matchStats.TotalFrames,
+                    ["AverageFrameTime"] = matchStats.AverageFrameTime,
+                    ["ActiveRooms"] = matchStats.ActiveRooms,
+                    ["PlayingRooms"] = matchStats.PlayingRooms,
+                    ["TotalPlayers"] = matchStats.TotalPlayers
                 }
             };
 
-            var json = JsonConvert.SerializeObject(stats, Formatting.Indented);
+            var json = stats.ToString(Formatting.Indented);
             File.WriteAllText(_statsFilePath, json);
 
             ConsoleWrite.WriteMessage($"[Batch] Server stats saved to {_statsFilePath}", ConsoleColor.Gray);
