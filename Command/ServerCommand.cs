@@ -52,7 +52,7 @@ namespace OpenGSServer
                 return;
             }
 
-            var command = tokens[0].ToLower();
+            var command = tokens[0].ToLowerInvariant();
             var parameters = tokens.Skip(1).ToList();
 
             ExecuteCommand(command, parameters);
