@@ -40,24 +40,28 @@ namespace OpenGSServer
                 roomName = $"Mission_{missionId}_{DateTime.Now:HHmm}";
             }
 
-            if (_missionRooms.Count >= RoomLimit)
+            WaitRoom room;
+            lock (_lockObj)
             {
-                return new CreateNewWaitRoomResult("Mission Server RoomLimit Over", null);
+                if (_missionRooms.Count >= RoomLimit)
+                {
+                    return new CreateNewWaitRoomResult("Mission Server RoomLimit Over", null);
+                }
+
+                room = new WaitRoom(roomName, capacity);
+                var mode = ResolveMissionMode(missionId, roomName);
+                room.ChangeGameMode(mode);
+                room.setting = new MissionMatchSetting(capacity, string.IsNullOrWhiteSpace(missionId) ? "Default" : missionId, mode);
+                room.Map = EMap.DryDays;
+
+                if (!_missionRooms.TryAdd(room.RoomId, room))
+                {
+                    return new CreateNewWaitRoomResult("Fail (Duplicate ID)", null);
+                }
             }
 
-            var room = new WaitRoom(roomName, capacity);
-            var mode = ResolveMissionMode(missionId, roomName);
-            room.ChangeGameMode(mode);
-            room.setting = new MissionMatchSetting(capacity, string.IsNullOrWhiteSpace(missionId) ? "Default" : missionId, mode);
-            room.Map = EMap.DryDays;
-
-            if (_missionRooms.TryAdd(room.RoomId, room))
-            {
-                ConsoleWrite.WriteMessage($"[MISSION] Created mission room: {room.RoomName} ({room.RoomId}) Mission: {missionId}", ConsoleColor.Magenta);
-                return new CreateNewWaitRoomResult("Successful", room);
-            }
-
-            return new CreateNewWaitRoomResult("Fail (Duplicate ID)", null);
+            ConsoleWrite.WriteMessage($"[MISSION] Created mission room: {room.RoomName} ({room.RoomId}) Mission: {missionId}", ConsoleColor.Magenta);
+            return new CreateNewWaitRoomResult("Successful", room);
         }
 
         public WaitRoom? FindMissionRoom(string roomId)
