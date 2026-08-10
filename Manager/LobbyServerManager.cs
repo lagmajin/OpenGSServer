@@ -1299,6 +1299,18 @@ namespace OpenGSServer
                 return;
             }
 
+            if (db.GetAccount(targetPlayerId) == null)
+            {
+                session.SendAsyncJsonWithTimeStamp(new JObject
+                {
+                    ["MessageType"] = MessageType.FriendRequestResponse,
+                    ["Success"] = false,
+                    ["Error"] = "Target account not found",
+                    ["TargetPlayerID"] = targetPlayerId
+                });
+                return;
+            }
+
             if (db.GetFriendIds(requesterId).Contains(targetPlayerId, StringComparer.OrdinalIgnoreCase))
             {
                 session.SendAsyncJsonWithTimeStamp(new JObject
