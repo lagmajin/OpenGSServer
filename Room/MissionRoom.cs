@@ -14,7 +14,7 @@ namespace OpenGSServer
 
     public class MissionRoom : AbstractGameRoom
     {
-        public List<string> Players { get; set; }
+        public new List<string> Players { get; set; }
 
         public MissionRoom(int roomNumber, in string roomOwnerID) : base(roomNumber, roomOwnerID)
         {
