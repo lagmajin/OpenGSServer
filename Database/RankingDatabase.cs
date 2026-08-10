@@ -25,7 +25,6 @@ namespace OpenGSServer
 
         public static string rankingDBfileName = "ranking.db";
 
-        private string connectionString = "";
         public void ConnectRankingDB()
         {
             rankingDB = new LiteDatabase(rankingDBfileName);
