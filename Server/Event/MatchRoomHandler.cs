@@ -380,9 +380,9 @@ namespace OpenGSServer
                 ["ObjectType"] = objectType,
                 ["PlayerID"] = playerId,
                 ["RoomID"] = room.Id.ToString(),
-                ["PosX"] = objectData.GetValue("PosX")?.ToObject<float>() ?? 0f,
-                ["PosY"] = objectData.GetValue("PosY")?.ToObject<float>() ?? 0f,
-                ["Rotation"] = objectData.GetValue("Rotation")?.ToObject<float>() ?? 0f,
+                ["PosX"] = GetFloat(objectData.GetValue("PosX"), 0f),
+                ["PosY"] = GetFloat(objectData.GetValue("PosY"), 0f),
+                ["Rotation"] = GetFloat(objectData.GetValue("Rotation"), 0f),
                 ["Timestamp"] = DateTime.UtcNow.ToString("o")
             };
 
@@ -402,8 +402,8 @@ namespace OpenGSServer
                 ["ObjectType"] = objectType,
                 ["DestroyedBy"] = playerId,
                 ["RoomID"] = room.Id.ToString(),
-                ["PosX"] = objectData.GetValue("PosX")?.ToObject<float>() ?? 0f,
-                ["PosY"] = objectData.GetValue("PosY")?.ToObject<float>() ?? 0f,
+                ["PosX"] = GetFloat(objectData.GetValue("PosX"), 0f),
+                ["PosY"] = GetFloat(objectData.GetValue("PosY"), 0f),
                 ["Timestamp"] = DateTime.UtcNow.ToString("o")
             };
 
