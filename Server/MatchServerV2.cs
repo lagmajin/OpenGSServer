@@ -9,6 +9,8 @@ using System.Timers;
 using OpenGSCore; // OpenGSCoreのMatchRoom使用
 using OpenGSServer.Network; // ServerLagCompensationManagerを使用
 
+#nullable enable
+
 namespace OpenGSServer
 {
     /// <summary>
