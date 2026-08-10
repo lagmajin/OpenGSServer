@@ -153,7 +153,9 @@ namespace OpenGSServer
                 case GameMessageTypes.PlayerKilled:
                     var killedPlayerId = json.GetStringOrNull("KilledPlayerID");
                     var killerId = json.GetStringOrNull("KillerID");
-                    if (killedPlayerId != null && killerId != null)
+                    if (!string.IsNullOrWhiteSpace(killedPlayerId) && !string.IsNullOrWhiteSpace(killerId) &&
+                        room.Players.Any(player => string.Equals(player.Id, killedPlayerId, StringComparison.OrdinalIgnoreCase)) &&
+                        room.Players.Any(player => string.Equals(player.Id, killerId, StringComparison.OrdinalIgnoreCase)))
                     {
                         HandlePlayerKilled(room, killerId, killedPlayerId);
                     }
