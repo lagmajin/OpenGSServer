@@ -81,7 +81,15 @@ namespace OpenGSServer
                 return;
             }
 
-            command.Execute(arguments);
+            try
+            {
+                command.Execute(arguments);
+            }
+            catch (Exception exception)
+            {
+                // A malformed admin command must not terminate the interactive console loop.
+                ConsoleWrite.WriteMessage($"[ERR] Command '{command.Name}' failed: {exception.Message}", ConsoleColor.Red);
+            }
         }
 
         private void ShowHelp(string? commandName)
