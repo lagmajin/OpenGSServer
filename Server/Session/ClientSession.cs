@@ -19,6 +19,8 @@ using Cysharp.Text;
 
 
 
+#nullable enable
+
 namespace OpenGSServer
 {
     public interface IClientSession
