@@ -75,9 +75,12 @@ namespace OpenGSServer.Network
         /// </summary>
         public void StartMatch(string matchId)
         {
-            _matchId = matchId;
-            _items.Clear();
-            OnItemPickedUp = null;
+            lock (_itemStateLock)
+            {
+                _matchId = matchId;
+                _items.Clear();
+                OnItemPickedUp = null;
+            }
         }
 
         /// <summary>
@@ -85,9 +88,12 @@ namespace OpenGSServer.Network
         /// </summary>
         public void EndMatch()
         {
-            _items.Clear();
-            _matchId = string.Empty;
-            OnItemPickedUp = null;
+            lock (_itemStateLock)
+            {
+                _items.Clear();
+                _matchId = string.Empty;
+                OnItemPickedUp = null;
+            }
         }
 
         /// <summary>
@@ -225,7 +231,10 @@ namespace OpenGSServer.Network
                 SpawnTime = (float)DateTime.UtcNow.TimeOfDay.TotalSeconds
             };
 
-            _items[itemId] = item;
+            lock (_itemStateLock)
+            {
+                _items[itemId] = item;
+            }
 
             return itemId;
         }
