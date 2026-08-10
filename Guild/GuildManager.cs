@@ -203,6 +203,11 @@ namespace OpenGSServer
                 return;
             }
 
+            if (!IsMember(guildName, senderId))
+            {
+                return;
+            }
+
             if (message.Length > 2000)
             {
                 message = message.Substring(0, 2000);
