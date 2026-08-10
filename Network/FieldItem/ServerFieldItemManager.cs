@@ -335,10 +335,13 @@ namespace OpenGSServer.Network
         /// </summary>
         public void DespawnItem(string itemId)
         {
-            if (_items.TryGetValue(itemId, out var item))
+            lock (_itemStateLock)
             {
-                item.State = "Despawned";
-                item.IsActive = false;
+                if (_items.TryGetValue(itemId, out var item))
+                {
+                    item.State = "Despawned";
+                    item.IsActive = false;
+                }
             }
         }
 
@@ -347,12 +350,15 @@ namespace OpenGSServer.Network
         /// </summary>
         public void DespawnAllItems()
         {
-            foreach (var item in _items.Values)
+            lock (_itemStateLock)
             {
-                if (item.IsActive && item.State == "Spawned")
+                foreach (var item in _items.Values)
                 {
-                    item.State = "Despawned";
-                    item.IsActive = false;
+                    if (item.IsActive && item.State == "Spawned")
+                    {
+                        item.State = "Despawned";
+                        item.IsActive = false;
+                    }
                 }
             }
         }
@@ -362,15 +368,18 @@ namespace OpenGSServer.Network
         /// </summary>
         public void RespawnItem(string itemId, float x, float y, float z)
         {
-            if (_items.TryGetValue(itemId, out var item))
+            lock (_itemStateLock)
             {
-                item.PosX = x;
-                item.PosY = y;
-                item.PosZ = z;
-                item.State = "Spawned";
-                item.IsActive = true;
-                item.PickedUpByPlayerId = "";
-                item.SpawnTime = (float)DateTime.UtcNow.TimeOfDay.TotalSeconds;
+                if (_items.TryGetValue(itemId, out var item))
+                {
+                    item.PosX = x;
+                    item.PosY = y;
+                    item.PosZ = z;
+                    item.State = "Spawned";
+                    item.IsActive = true;
+                    item.PickedUpByPlayerId = "";
+                    item.SpawnTime = (float)DateTime.UtcNow.TimeOfDay.TotalSeconds;
+                }
             }
         }
 
