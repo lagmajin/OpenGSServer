@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel.Design;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using Newtonsoft.Json.Linq;
 using OpenGSCore;
@@ -466,8 +467,8 @@ namespace OpenGSServer
             var objectType = NormalizeGrenadeObjectType(grenadeData.GetStringOrNull("GrenadeType"));
             var objectId = grenadeData.GetStringOrNull("ObjectId") ?? Guid.NewGuid().ToString("N");
             var direction = grenadeData.GetValue("Direction") as JObject;
-            var dirX = direction?.GetValue("X")?.ToObject<float>() ?? direction?.GetValue("x")?.ToObject<float>() ?? 1f;
-            var dirY = direction?.GetValue("Y")?.ToObject<float>() ?? direction?.GetValue("y")?.ToObject<float>() ?? 0f;
+            var dirX = GetFloat(direction?.GetValue("X") ?? direction?.GetValue("x"), 1f);
+            var dirY = GetFloat(direction?.GetValue("Y") ?? direction?.GetValue("y"), 0f);
             Console.WriteLine($"[Match] Room {room.Id} player {playerId} threw {objectType} ({objectId})");
 
             var message = new JObject
@@ -477,18 +478,25 @@ namespace OpenGSServer
                 ["ObjectType"] = objectType,
                 ["PlayerID"] = playerId,
                 ["RoomID"] = room.Id.ToString(),
-                ["PosX"] = grenadeData.GetValue("PosX")?.ToObject<float>() ?? 0f,
-                ["PosY"] = grenadeData.GetValue("PosY")?.ToObject<float>() ?? 0f,
+                ["PosX"] = GetFloat(grenadeData.GetValue("PosX"), 0f),
+                ["PosY"] = GetFloat(grenadeData.GetValue("PosY"), 0f),
                 ["Direction"] = new JObject
                 {
                     ["X"] = dirX,
                     ["Y"] = dirY
                 },
-                ["Rotation"] = grenadeData.GetValue("Rotation")?.ToObject<float>() ?? 0f,
+                ["Rotation"] = GetFloat(grenadeData.GetValue("Rotation"), 0f),
                 ["Timestamp"] = DateTime.UtcNow.ToString("o")
             };
 
             UdpBroadcastToRoom(room.Id.ToString(), message);
+        }
+
+        private static float GetFloat(JToken? token, float fallback)
+        {
+            return token != null && float.TryParse(token.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var value)
+                ? value
+                : fallback;
         }
 
         private static string NormalizeGrenadeObjectType(string? grenadeType)
