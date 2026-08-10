@@ -45,6 +45,8 @@ public sealed class ServerBatchService : IDisposable
     /// </summary>
     public void Start()
     {
+        if (_disposed) throw new ObjectDisposedException(nameof(ServerBatchService));
+
         if (_isRunning)
         {
             ConsoleWrite.WriteMessage("[Batch] Service already running", ConsoleColor.Yellow);
