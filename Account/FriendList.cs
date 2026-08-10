@@ -24,7 +24,7 @@ namespace OpenGSServer
                 return;
             }
 
-            if (friends.Any(x => x.Id == friend.Id))
+            if (friends.Any(x => string.Equals(x.Id, friend.Id, System.StringComparison.OrdinalIgnoreCase)))
             {
                 return;
             }
@@ -39,7 +39,7 @@ namespace OpenGSServer
                 return false;
             }
 
-            return friends.RemoveAll(x => x.Id == friendId) > 0;
+            return friends.RemoveAll(x => string.Equals(x.Id, friendId, System.StringComparison.OrdinalIgnoreCase)) > 0;
         }
 
         public JObject ToJson()
