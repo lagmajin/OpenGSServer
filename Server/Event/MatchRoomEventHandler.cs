@@ -1,6 +1,8 @@
 ﻿using Newtonsoft.Json.Linq;
 using System.Collections.Generic;
 
+#nullable enable
+
 namespace OpenGSServer
 {
 
