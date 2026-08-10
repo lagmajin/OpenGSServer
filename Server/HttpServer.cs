@@ -8,6 +8,8 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
 
+#nullable enable
+
 namespace OpenGSServer
 {
     class CommonCache
