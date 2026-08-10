@@ -226,7 +226,7 @@ namespace OpenGSServer
 
             AccountEventHandler.Logout(this);
 
-
+            receiveBuffer.Clear();
             Disconnect();
 
         
