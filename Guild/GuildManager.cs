@@ -7,6 +7,8 @@ using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 using OpenGSCore;
 
+#nullable enable
+
 namespace OpenGSServer
 {
     public class GuildManager
