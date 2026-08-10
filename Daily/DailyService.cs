@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using LiteDB;
 using Newtonsoft.Json.Linq;
 
@@ -38,6 +39,7 @@ namespace OpenGSServer
         private readonly LiteDatabase _database;
         private readonly ILiteCollection<DailyProgressRecord> _progress;
         private DateTime _lastCleanupDate = DateTime.MinValue;
+        private int _disposed;
 
         public DailyService(string path = "Database/daily.db")
         {
@@ -132,6 +134,12 @@ namespace OpenGSServer
             ["ResetDateUtc"] = record.ResetDateUtc
         };
 
-        public void Dispose() => _database.Dispose();
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) == 0)
+            {
+                _database.Dispose();
+            }
+        }
     }
 }
