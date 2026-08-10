@@ -129,7 +129,15 @@ namespace OpenGSServer
                 if (character == '\\' && index + 1 < input.Length)
                 {
                     var next = input[++index];
-                    current.Append(next is 'n' ? '\n' : next is 't' ? '\t' : next);
+                    if (next is 'n' or 't' or '\\' or '\'' or '"')
+                    {
+                        current.Append(next is 'n' ? '\n' : next is 't' ? '\t' : next);
+                    }
+                    else
+                    {
+                        current.Append('\\');
+                        current.Append(next);
+                    }
                     tokenStarted = true;
                     continue;
                 }
