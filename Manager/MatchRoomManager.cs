@@ -424,6 +424,10 @@ namespace OpenGSServer
                     {
                         matchRooms.Remove(room.Id);
                         roomEventBuses.Remove(room.Id);
+                        if (roomFieldItemManagers.TryGetValue(room.Id, out var itemManager))
+                        {
+                            itemManager.EndMatch();
+                        }
                         roomFieldItemManagers.Remove(room.Id);
                     }
                     break;
@@ -523,6 +527,10 @@ namespace OpenGSServer
 
                 matchRooms.Remove(roomId);
                 roomEventBuses.Remove(roomId);
+                if (roomFieldItemManagers.TryGetValue(roomId, out var itemManager))
+                {
+                    itemManager.EndMatch();
+                }
                 roomFieldItemManagers.Remove(roomId);
             }
         }
@@ -534,6 +542,10 @@ namespace OpenGSServer
         {
             if (forceShutdownNowPlayingRooms)
             {
+                foreach (var itemManager in roomFieldItemManagers.Values)
+                {
+                    itemManager.EndMatch();
+                }
                 matchRooms.Clear();
                 roomEventBuses.Clear();
                 roomFieldItemManagers.Clear();
@@ -554,6 +566,10 @@ namespace OpenGSServer
                 {
                     matchRooms.Remove(roomId);
                     roomEventBuses.Remove(roomId);
+                    if (roomFieldItemManagers.TryGetValue(roomId, out var itemManager))
+                    {
+                        itemManager.EndMatch();
+                    }
                     roomFieldItemManagers.Remove(roomId);
                 }
             }
