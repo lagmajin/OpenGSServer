@@ -8,6 +8,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 
+#nullable enable
+
 namespace OpenGSServer;
 
 /// <summary>
