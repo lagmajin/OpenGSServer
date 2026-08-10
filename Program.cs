@@ -23,7 +23,7 @@ using Autofac;
         // UDPサーバーマネージャーは MatchServerV2 の内部で管理されます
 
 
-        static void CurrentDomain_ProcessExit(object sender, EventArgs e)
+        static void CurrentDomain_ProcessExit(object? sender, EventArgs e)
         {
             DisposeServers();
             Console.WriteLine("exit");
