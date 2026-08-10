@@ -146,7 +146,7 @@ namespace OpenGSServer
         public int Damage { get => damage; set => damage = value; }
         public string OwnerId { get => ownerId; set => ownerId = value; }
         public GranadeType GranadeType { get => granadeType; set => granadeType = value; }
-        public float LifeTime { get => lifeTime; set => lifeTime = value; }
+        public float LifeTime { get => lifeTime; set => lifeTime = Math.Max(0f, value); }
         public float FuseTime { get => fuseTime; set => fuseTime = Math.Max(0f, value); }
         public float ExplosionRadius { get => explosionRadius; set => explosionRadius = Math.Max(0f, value); }
         public GrenadeState State => state;
