@@ -91,7 +91,7 @@ namespace OpenGSServer
             BroadcastToRoom(roomId, message);
         }
 
-        public static void SendFlagLost(string roomId, string team, string playerId = null)
+        public static void SendFlagLost(string roomId, string team, string? playerId = null)
         {
             var message = new JObject
             {
@@ -107,7 +107,7 @@ namespace OpenGSServer
             BroadcastToRoom(roomId, message);
         }
 
-        public static void SendFlagPickup(string roomId, string team, string playerId = null)
+        public static void SendFlagPickup(string roomId, string team, string? playerId = null)
         {
             var message = new JObject
             {
@@ -123,7 +123,7 @@ namespace OpenGSServer
             BroadcastToRoom(roomId, message);
         }
 
-        public static void SendFlagReturn(string roomId, string team, string playerId = null)
+        public static void SendFlagReturn(string roomId, string team, string? playerId = null)
         {
             var message = new JObject
             {
