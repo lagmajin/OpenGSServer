@@ -167,7 +167,7 @@ def main():
             for file in files:
                 if file.endswith(".cs"):
                     full_path = os.path.join(root, file)
-                    rel_path = os.path.relpath(full_path, r"C:\dev")
+                    rel_path = os.path.relpath(full_path, os.path.dirname(WORKSPACE_ROOT))
                     res = analyze_cs_file(full_path, project_name, rel_path)
                     if res and res["score"] > 0:
                         results.append(res)
