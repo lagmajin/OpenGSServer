@@ -231,13 +231,20 @@ namespace OpenGSServer
 
         
         }
-        private List<byte> receiveBuffer = new List<byte>();
+        private const int MaxReceiveBufferBytes = 1024 * 1024;
+        private readonly List<byte> receiveBuffer = new();
         //private readonly byte delimiter = (byte)'\n'; // 制御文字
 
         protected override void OnReceived(byte[] buffer, long offset, long size)
         {
             // 受信データをバッファに追加
             receiveBuffer.AddRange(buffer.Skip((int)offset).Take((int)size));
+            if (receiveBuffer.Count > MaxReceiveBufferBytes)
+            {
+                ConsoleWrite.WriteMessage("[WARN] Client receive buffer exceeded 1 MiB; dropping buffered data.", ConsoleColor.Yellow);
+                receiveBuffer.Clear();
+                return;
+            }
 
             while (true)
             {
