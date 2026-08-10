@@ -58,7 +58,7 @@ namespace OpenGSServer
 
         protected virtual void UpdateLifetime(float deltaTime)
         {
-            Lifetime -= deltaTime;
+            Lifetime = MathF.Max(0f, Lifetime - MathF.Max(0f, deltaTime));
             if (Lifetime <= 0)
             {
                 IsActive = false;
