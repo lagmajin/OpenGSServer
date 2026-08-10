@@ -24,12 +24,38 @@ using Autofac;
 
         static void CurrentDomain_ProcessExit(object sender, EventArgs e)
         {
-            var lobbyServer = LobbyServerManager.Instance;
-
-            lobbyServer.Dispose();
-            MatchServerV2.Instance.Dispose();
-            ManagementServer.Instance.Dispose();
+            DisposeServers();
             Console.WriteLine("exit");
+        }
+
+        private static void DisposeServers()
+        {
+            try
+            {
+                LobbyServerManager.Instance.Dispose();
+            }
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage($"[ERR] Lobby shutdown failed: {ex.Message}", ConsoleColor.Red);
+            }
+
+            try
+            {
+                MatchServerV2.Instance.Dispose();
+            }
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage($"[ERR] Match shutdown failed: {ex.Message}", ConsoleColor.Red);
+            }
+
+            try
+            {
+                ManagementServer.Instance.Dispose();
+            }
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage($"[ERR] Management shutdown failed: {ex.Message}", ConsoleColor.Red);
+            }
         }
         static async void MonitorTask(CancellationToken cancelToken = default)
         {
@@ -293,6 +319,7 @@ using Autofac;
                 {
                     Console.CancelKeyPress -= cancelHandler;
                     cts.Dispose();
+                    DisposeServers();
                     if (hasHandle)
                     {
                         mutex.ReleaseMutex();
