@@ -1371,6 +1371,10 @@ namespace OpenGSServer
             }
 
             var friendshipCreated = !approve || db.AddFriend(approverId, requestPlayerId);
+            if (!friendshipCreated)
+            {
+                pending.TryAdd(requestPlayerId, 0);
+            }
 
             session.SendAsyncJsonWithTimeStamp(new JObject
             {
