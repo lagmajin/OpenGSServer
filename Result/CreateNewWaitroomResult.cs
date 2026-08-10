@@ -11,7 +11,7 @@ namespace OpenGSServer
 {
     public class CreateNewWaitRoomResult
     {
-        public string Message { get; set; }
+        public string Message { get; set; } = string.Empty;
 
         public WaitRoom? Room { get; set; }
 
