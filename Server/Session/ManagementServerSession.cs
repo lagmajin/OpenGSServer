@@ -382,12 +382,15 @@ namespace OpenGSServer
             }
 
             var accountManager = AccountManager.GetInstance();
-            var serverStartedUtc = Process.GetCurrentProcess().StartTime.ToUniversalTime();
+            using var process = Process.GetCurrentProcess();
+            var serverStartedUtc = process.StartTime.ToUniversalTime();
             var response = new JObject
             {
                 ["MessageType"] = NetworkingConstants.MessageType.ServerStatusResponse,
                 ["ServerUptime"] = Math.Max(0, (DateTime.UtcNow - serverStartedUtc).TotalSeconds),
                 ["ServerStartedUtc"] = serverStartedUtc.ToString(UTF_FORMAT),
+                ["ProcessId"] = process.Id,
+                ["MemoryUsageMB"] = process.WorkingSet64 / (1024 * 1024),
                 ["LoggedInUsers"] = accountManager.GetLoggedInUserCount(),
                 ["ServerTime"] = DateTime.UtcNow.ToString(UTF_FORMAT)
             };
