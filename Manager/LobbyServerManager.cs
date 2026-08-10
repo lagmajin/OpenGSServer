@@ -385,11 +385,18 @@ namespace OpenGSServer
             _lobbyLock.EnterWriteLock();
             try
             {
+                var leavingPlayer = _lobby.GetPlayers().FirstOrDefault(p =>
+                    string.Equals(p.PlayerId, playerId, StringComparison.OrdinalIgnoreCase));
+                var roomId = leavingPlayer?.CurrentRoomId;
                 var success = _lobby.LeaveRoom(playerId);
                 if (!success)
                     return LobbyResult<bool>.Error("Player not in any room");
 
                 ConsoleWrite.WriteMessage($"[LOBBY] Player {playerId} left room", ConsoleColor.Yellow);
+                if (!string.IsNullOrWhiteSpace(roomId) && _lobby.GetRoom(roomId) == null)
+                {
+                    OnRoomClosed?.Invoke(roomId);
+                }
                 return LobbyResult<bool>.Success(true);
             }
             catch (Exception ex)
