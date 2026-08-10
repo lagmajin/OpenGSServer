@@ -1,10 +1,12 @@
 import os
 import re
 
+WORKSPACE_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+
 PROJECTS = {
-    "OpenGSCore": r"C:\dev\OpenGSCore",
-    "OpenGSServer": r"C:\dev\OpenGSServer",
-    "OpenGSR": r"C:\dev\OpenGSR"
+    "OpenGSCore": os.path.join(os.path.dirname(WORKSPACE_ROOT), "OpenGSCore"),
+    "OpenGSServer": WORKSPACE_ROOT,
+    "OpenGSR": os.path.join(os.path.dirname(WORKSPACE_ROOT), "OpenGSR")
 }
 
 # 未実装を示すキーワード (日本語・英語)
