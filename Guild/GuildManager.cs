@@ -28,7 +28,7 @@ namespace OpenGSServer
             return _database.ExistGuild(guildName);
         }
 
-        public bool CreateNewGuild(in string guildName, string leaderId, string guildShortName = null)
+        public bool CreateNewGuild(in string guildName, string leaderId, string? guildShortName = null)
         {
             if (string.IsNullOrWhiteSpace(guildName) || string.IsNullOrWhiteSpace(leaderId))
             {
