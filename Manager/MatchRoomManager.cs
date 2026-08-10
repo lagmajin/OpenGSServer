@@ -177,8 +177,7 @@ namespace OpenGSServer
                 };
                 bus.OnGameEndedWithResult += (result) =>
                 {
-                    var winners = result?["Winners"]?.Values<string>()?.ToHashSet(StringComparer.OrdinalIgnoreCase)
-                                  ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    var winners = ExtractWinnerIds(result);
                     foreach (var p in matchRoom.Players)
                     {
                         LobbyServerManager.Instance.RecordMatchDailyProgress(p.Id, winners.Contains(p.Id));
@@ -612,6 +611,28 @@ namespace OpenGSServer
             }
 
             return envelope;
+        }
+
+        private static HashSet<string> ExtractWinnerIds(JObject? result)
+        {
+            var winners = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (result == null) return winners;
+
+            foreach (var id in result["Winners"]?.Values<string>() ?? Enumerable.Empty<string>())
+            {
+                if (!string.IsNullOrWhiteSpace(id)) winners.Add(id);
+            }
+
+            foreach (var key in new[] { "Winner", "WinningPlayerId" })
+            {
+                var id = result[key]?.ToString();
+                if (!string.IsNullOrWhiteSpace(id) && !id.Equals("Draw", StringComparison.OrdinalIgnoreCase) && !id.Equals("NoPlayers", StringComparison.OrdinalIgnoreCase))
+                {
+                    winners.Add(id);
+                }
+            }
+
+            return winners;
         }
 
         private static List<PlayerInfo> PreparePlayersForMatch(AbstractMatchSetting setting, IEnumerable<PlayerInfo> players)
