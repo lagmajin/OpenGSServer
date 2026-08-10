@@ -180,17 +180,6 @@ namespace OpenGSServer
 
             }
 
-            if (messageType == "TakeFieldItem")
-            {
-
-
-                json["PlayerID"].ToString();
-                json["FieldItemType"].ToString();
-
-
-
-            }
-
             if (messageType == "PlayerBurst")
             {
 
