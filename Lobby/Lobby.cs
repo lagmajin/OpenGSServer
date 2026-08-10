@@ -2,6 +2,8 @@
 using System.Linq;
 using OpenGSCore;
 
+#nullable enable
+
 namespace OpenGSServer
 {
 
