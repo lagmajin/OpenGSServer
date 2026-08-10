@@ -50,6 +50,8 @@ namespace OpenGSServer
 
         public void Execute(string input)
         {
+            if (string.IsNullOrWhiteSpace(input)) return;
+
             if (!TryTokenize(input, out var tokens, out var error) || tokens.Count == 0)
             {
                 if (!string.IsNullOrEmpty(error)) ConsoleWrite.WriteMessage($"[ERR] {error}", ConsoleColor.Red);
@@ -122,6 +124,8 @@ namespace OpenGSServer
         internal static bool TryTokenize(string input, out List<string> tokens, out string error)
         {
             tokens = new List<string>(); error = string.Empty;
+            if (string.IsNullOrEmpty(input)) return true;
+
             var current = new StringBuilder(); char quote = '\0'; var tokenStarted = false;
             for (var index = 0; index < input.Length; index++)
             {
