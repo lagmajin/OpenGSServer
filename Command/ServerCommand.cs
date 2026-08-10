@@ -37,7 +37,16 @@ namespace OpenGSServer
                 return;
             }
 
-            var tokens = Tokenize(args);
+            string[] tokens;
+            try
+            {
+                tokens = Tokenize(args);
+            }
+            catch (FormatException ex)
+            {
+                ConsoleWrite.WriteMessage($"[ERR] {ex.Message}", ConsoleColor.Red);
+                return;
+            }
             if (tokens.Length == 0)
             {
                 return;
@@ -114,6 +123,11 @@ namespace OpenGSServer
             if (current.Length > 0)
             {
                 tokens.Add(current.ToString());
+            }
+
+            if (inQuotes)
+            {
+                throw new FormatException("Unterminated quoted argument");
             }
 
             return tokens.ToArray();
