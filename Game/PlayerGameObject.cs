@@ -3,7 +3,7 @@ using Newtonsoft.Json.Linq;
 
 namespace OpenGSServer
 {
-    public class PlayerGameObject : AbstractGameObject
+    public class PlayerGameObject : OpenGSCore.AbstractGameObject
     {
         public string PlayerId { get; set; }
         public string DisplayName { get; set; }
