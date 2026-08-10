@@ -7,6 +7,8 @@ using Newtonsoft.Json.Linq;
 using OpenGSCore;
 using OpenGSServer.Network;
 
+#nullable enable
+
 namespace OpenGSServer
 {
     internal static class MatchMessageTypes
