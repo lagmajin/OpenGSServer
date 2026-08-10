@@ -354,7 +354,7 @@ namespace OpenGSServer
 
         private int CalculateWeaponDamage(string? weaponType)
         {
-            var gunType = EGunTypeExtensions.FromString(weaponType);
+            var gunType = EGunTypeExtensions.FromString(weaponType ?? string.Empty);
             return gunType.GetDamage();
         }
 
