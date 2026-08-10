@@ -168,6 +168,7 @@ public sealed class ServerBatchService : IDisposable
                 ServerStartedUtc = serverStartedUtc,
                 ServerUptimeSeconds = Math.Max(0, (DateTime.UtcNow - serverStartedUtc).TotalSeconds),
                 ProcessId = process.Id,
+                ConnectedMasters = ManagementServer.Instance.GetConnectedClientCount(),
                 Lobby = lobbyData,
                 Match = new
                 {
