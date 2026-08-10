@@ -57,9 +57,7 @@ namespace OpenGSServer
 
         public override void SaveSyncState()
         {
-            // reset sync state
-            lastPosx = Posx;
-            lastPosy = Posy;
+            base.SaveSyncState();
             lastHp = Hp;
         }
 
