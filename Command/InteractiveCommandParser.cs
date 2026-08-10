@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
+#nullable enable
+
 namespace OpenGSServer
 {
     /// <summary>Parses and dispatches commands entered in the running server console.</summary>
