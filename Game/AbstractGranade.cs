@@ -7,6 +7,8 @@ using System;
 using Newtonsoft.Json.Linq;
 using OpenGSCore;
 
+#nullable enable
+
 namespace OpenGSServer
 {
     public enum eGranadeType : int
