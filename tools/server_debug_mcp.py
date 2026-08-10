@@ -148,13 +148,17 @@ def main() -> None:
     args = parser.parse_args()
     host, port = args.host, args.port
 
-    for line in sys.stdin:
+    for raw_line in sys.stdin.buffer:
+        if len(raw_line) > MAX_REQUEST_BYTES:
+            continue
+        try:
+            line = raw_line.decode("utf-8")
+        except UnicodeDecodeError:
+            continue
         if not line.strip():
             continue
         request_id = None
         try:
-            if len(line.encode("utf-8")) > MAX_REQUEST_BYTES:
-                raise ValueError("MCP request exceeds 1 MiB limit")
             request = json.loads(line)
             request_id = request.get("id")
             method = request.get("method", "")
