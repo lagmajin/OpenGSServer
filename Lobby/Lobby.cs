@@ -35,6 +35,11 @@ namespace OpenGSServer
 
         public void AddChat(string playerName, string chat)
         {
+            if (string.IsNullOrWhiteSpace(playerName) || string.IsNullOrWhiteSpace(chat))
+            {
+                return;
+            }
+
             chatManager.NewChat("", playerName, chat, ChatType.All);
         }
 
