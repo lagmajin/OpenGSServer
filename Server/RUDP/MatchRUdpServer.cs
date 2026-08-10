@@ -8,6 +8,8 @@ using LiteNetLib.Utils;
 using Newtonsoft.Json.Linq;
 using OpenGSServer;
 
+#nullable enable
+
 namespace OpenGSServer
 {
     public partial class MatchRUdpServer
