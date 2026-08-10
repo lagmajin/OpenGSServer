@@ -289,6 +289,11 @@ namespace OpenGSServer.Network
         /// </summary>
         public bool PickupItem(string itemId, string playerId)
         {
+            if (string.IsNullOrWhiteSpace(itemId) || string.IsNullOrWhiteSpace(playerId))
+            {
+                return false;
+            }
+
             if (_items.TryGetValue(itemId, out var item))
             {
                 if (item.IsActive && item.State == "Spawned")
