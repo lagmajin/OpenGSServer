@@ -23,8 +23,10 @@ namespace OpenGSServer
             new(() => new LobbyServerManager(), LazyThreadSafetyMode.ExecutionAndPublication);
         
         private readonly Lobby _lobby = new();
-        private readonly ConcurrentDictionary<string, LobbyPlayerInfo> _connectedPlayers = new();
-        private readonly ConcurrentDictionary<string, PlayerRateLimiter> _rateLimiters = new();
+        private readonly ConcurrentDictionary<string, LobbyPlayerInfo> _connectedPlayers =
+            new(StringComparer.OrdinalIgnoreCase);
+        private readonly ConcurrentDictionary<string, PlayerRateLimiter> _rateLimiters =
+            new(StringComparer.OrdinalIgnoreCase);
         private readonly ConcurrentDictionary<PlayerID, string> _playerIdMapping = new();
         private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, byte>> _pendingFriendRequests = new(StringComparer.OrdinalIgnoreCase);
         private readonly PingManager _pingManager = new();
