@@ -6,7 +6,7 @@ namespace OpenGSServer
     public class MissionLobby
     {
         private readonly List<string> chatLog = new();
-        private readonly HashSet<string> users = new();
+        private readonly HashSet<string> users = new(System.StringComparer.OrdinalIgnoreCase);
 
         public MissionLobby()
         {
