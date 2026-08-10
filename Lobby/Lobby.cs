@@ -1,7 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
 using OpenGSCore;
-using System.Threading;
 
 namespace OpenGSServer
 {
@@ -24,10 +23,6 @@ namespace OpenGSServer
         private readonly Dictionary<string, LobbyPlayerInfo> players = new();
         private readonly Dictionary<string, LobbyRoomInfo> rooms = new();
         private int nextRoomId = 1;
-
-        // アイドルタイムアウト用
-        private Timer idleCheckTimer;
-        private const int IDLE_TIMEOUT_MINUTES = 15; // 15分
 
         internal ChatManager ChatManager => chatManager;
 
