@@ -17,6 +17,7 @@ namespace OpenGSServer
         public string OwnerId { get; set; } = string.Empty;
         public float Lifetime { get; protected set; } = 10f;
         public bool IsActive { get; set; } = true;
+        private bool lastIsActive = true;
 
         // 計算プロパティ
         public Vector2 Position => new(Posx, Posy);
@@ -79,7 +80,13 @@ namespace OpenGSServer
 
         public override bool HasChanged()
         {
-            return IsActive && base.HasChanged(); // OpenGSCoreのメソッド使用
+            return base.HasChanged() || IsActive != lastIsActive;
+        }
+
+        public override void SaveSyncState()
+        {
+            base.SaveSyncState();
+            lastIsActive = IsActive;
         }
     }
 
