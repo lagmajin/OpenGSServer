@@ -29,11 +29,11 @@ namespace OpenGSServer
         {
             // OpenGSCore.AbstractGameObjectのSetPosメソッドを使用
             SetPos(x, y);
-            Speed = speed;
-            StoppingPower = stoppingPower;
-            Damage = damage;
+            Speed = MathF.Max(0f, speed);
+            StoppingPower = MathF.Max(0f, stoppingPower);
+            Damage = MathF.Max(0f, damage);
             Angle = angle;
-            ObjectType = eGameObjectType.Character; // OpenGSCoreのenum
+            ObjectType = eGameObjectType.Bullet;
         }
 
         public override void Update()
