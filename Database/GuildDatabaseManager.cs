@@ -227,13 +227,13 @@ namespace OpenGSServer
 
             if (string.Equals(guildData.LeaderId, memberId, StringComparison.OrdinalIgnoreCase))
             {
-                memberCollection.DeleteMany(m => m.guildId == guildData.id && m.Id == memberId);
+                memberCollection.DeleteMany(m => m.guildId == guildData.id && m.Id == targetMember.Id);
 
-                EnsureGuildLeader(guildData, memberCollection, memberId);
+                EnsureGuildLeader(guildData, memberCollection, targetMember.Id);
                 return true;
             }
 
-            return memberCollection.DeleteMany(m => m.guildId == guildData.id && m.Id == memberId) > 0;
+            return memberCollection.DeleteMany(m => m.guildId == guildData.id && m.Id == targetMember.Id) > 0;
         }
 
         public bool JoinGuild(string guildName, string memberId, string role = "Member")
