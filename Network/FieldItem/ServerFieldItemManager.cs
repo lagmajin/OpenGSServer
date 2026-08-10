@@ -58,6 +58,7 @@ namespace OpenGSServer.Network
         private readonly Dictionary<int, FieldItemSpawnPoint> _spawnPoints = new();
         private readonly Dictionary<string, FieldItemSpawnRule> _spawnRules = new(StringComparer.OrdinalIgnoreCase);
         private readonly Random _random = new();
+        private readonly object _itemStateLock = new();
 
         /// <summary>
         /// マッチID
@@ -307,21 +308,26 @@ namespace OpenGSServer.Network
                 return false;
             }
 
-            if (_items.TryGetValue(itemId, out var item))
+            string? itemType = null;
+            lock (_itemStateLock)
             {
-                if (item.IsActive && item.State == "Spawned")
+                if (_items.TryGetValue(itemId, out var item) && item.IsActive && item.State == "Spawned")
                 {
                     item.State = "PickedUp";
                     item.PickedUpByPlayerId = playerId;
                     item.IsActive = false;
-
-                    OnItemPickedUp?.Invoke(itemId, playerId, item.ItemType);
-
-                    Console.WriteLine($"[FieldItem] Picked up: {itemId} by {playerId}");
-                    return true;
+                    itemType = item.ItemType;
                 }
             }
-            return false;
+
+            if (itemType is null)
+            {
+                return false;
+            }
+
+            OnItemPickedUp?.Invoke(itemId, playerId, itemType);
+            Console.WriteLine($"[FieldItem] Picked up: {itemId} by {playerId}");
+            return true;
         }
 
         /// <summary>
