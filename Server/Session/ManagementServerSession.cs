@@ -394,6 +394,7 @@ namespace OpenGSServer
                 ["ProcessId"] = process.Id,
                 ["MemoryUsageMB"] = process.WorkingSet64 / (1024 * 1024),
                 ["LoggedInUsers"] = accountManager.GetLoggedInUserCount(),
+                ["ActiveRooms"] = WaitRoomManager.Instance().GetAllRooms().Count,
                 ["ServerTime"] = DateTime.UtcNow.ToString(UTF_FORMAT)
             };
 
