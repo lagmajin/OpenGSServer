@@ -1370,17 +1370,15 @@ namespace OpenGSServer
                 return;
             }
 
-            if (approve)
-            {
-                db.AddFriend(approverId, requestPlayerId);
-            }
+            var friendshipCreated = !approve || db.AddFriend(approverId, requestPlayerId);
 
             session.SendAsyncJsonWithTimeStamp(new JObject
             {
                 ["MessageType"] = MessageType.FriendApproveResponse,
-                ["Success"] = true,
+                ["Success"] = friendshipCreated,
                 ["Approved"] = approve,
-                ["RequestPlayerID"] = requestPlayerId
+                ["RequestPlayerID"] = requestPlayerId,
+                ["Error"] = friendshipCreated ? string.Empty : "Failed to save friendship"
             });
         }
 
