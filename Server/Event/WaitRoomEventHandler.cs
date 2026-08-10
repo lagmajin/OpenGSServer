@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using Newtonsoft.Json.Linq;
 using OpenGSCore;
 
+#nullable enable
+
 namespace OpenGSServer
 {
     internal interface IWaitRoomEventHandler
