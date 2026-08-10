@@ -92,7 +92,7 @@ namespace OpenGSServer
 
         }
 
-        public bool CreateNewGuild(string guildName, string guildShortName = null)
+        public bool CreateNewGuild(string guildName, string? guildShortName = null)
         {
             if (string.IsNullOrWhiteSpace(guildName))
             {
@@ -112,7 +112,7 @@ namespace OpenGSServer
             return true;
         }
 
-        public bool CreateNewGuild(string guildName, string leaderId, string guildShortName = null)
+        public bool CreateNewGuild(string guildName, string leaderId, string? guildShortName = null)
         {
             if (string.IsNullOrWhiteSpace(guildName) || string.IsNullOrWhiteSpace(leaderId))
             {
