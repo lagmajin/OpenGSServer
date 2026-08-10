@@ -44,6 +44,12 @@ namespace OpenGSServer
                 defaultServerSettingPath = defaultServerSettingName;
             }
 
+            var directory = Path.GetDirectoryName(defaultServerSettingPath);
+            if (!string.IsNullOrWhiteSpace(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
             File.WriteAllText(defaultServerSettingPath, CurrentSettings.ToJson().ToString(), Encoding.UTF8);
         }
 
