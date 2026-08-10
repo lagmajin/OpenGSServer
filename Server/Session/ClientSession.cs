@@ -40,15 +40,11 @@ namespace OpenGSServer
 
         private string ip = "";
 
-        private string _utf_format = "";
-
         //private byte separator = 0x1F;
 
         private char separator = '\u001F';
 
         private Stopwatch forPing=new();
-
-        private string utcDefaultFormat = "HH:mm:ss:ffff";
 
         public string? PlayerID { get; private set; }
 
@@ -61,11 +57,10 @@ namespace OpenGSServer
 
         private void setIPAddress()
         {
-            var endpoint = (IPEndPoint)Socket.RemoteEndPoint;
-
-            var v = IPAddress.Parse(endpoint.Address.ToString());
-
-            ip = v.ToString();
+            if (Socket.RemoteEndPoint is IPEndPoint endpoint)
+            {
+                ip = endpoint.Address.ToString();
+            }
         }
         public string ClientIpAddress()
         {
@@ -111,10 +106,6 @@ namespace OpenGSServer
 
         public void SendMessagePackWithTimeStamp(object obj)
         {
-            string utcFormat = "HH:mm:ss:ffff";
-
-            var serverTimeStamp = DateTime.UtcNow;
-
             byte[] serializedData = MessagePackSerializer.Serialize(obj);
 
             var str=new StringBuilder();
@@ -129,10 +120,6 @@ namespace OpenGSServer
         }
         public bool SendAsyncJsonWithTimeStamp2(JObject obj)
         {
-            string utcFormat = "HH:mm:ss:ffff";
-
-            var serverTimeStamp = DateTime.UtcNow;
-
             var str = new StringBuilder();
             str.Append("JS");
             str.Append(obj.ToString());     // メッセージ
@@ -151,11 +138,6 @@ namespace OpenGSServer
 
         public bool SendAsyncJsonWithTimeStamp(JObject obj)
         {
-            string utcFormat = "HH:mm:ss:ffff";
-
-            var serverTimeStamp = DateTime.UtcNow;
-
-
             //obj["ServerTimeStampFormat"] = utcFormat;
             //obj["ServerTimeStampUTC"] = utcDate.ToString(utcFormat);
 
@@ -175,7 +157,6 @@ namespace OpenGSServer
 
         public bool SendAsyncMemoryPack(byte[] data)
         {
-            string utcFormat = "HH:mm:ss:ffff";
             var prefix = Encoding.UTF8.GetBytes("MP");
             var separatorBytes = new byte[] { (byte)separator };  // `char` → `byte`
 
