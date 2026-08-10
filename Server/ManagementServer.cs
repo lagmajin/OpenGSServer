@@ -207,6 +207,7 @@ namespace OpenGSServer
             Stop();
             _currentProcess.Dispose();
             _updateCts?.Dispose();
+            GC.SuppressFinalize(this);
         }
 
         ~ManagementServer() => Dispose();
