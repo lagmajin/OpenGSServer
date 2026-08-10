@@ -12,6 +12,7 @@ import json
 import os
 import socket
 import sys
+import argparse
 from typing import Any
 
 PROTOCOL_VERSION = "2025-03-26"
@@ -133,16 +134,11 @@ def respond(request_id: Any, result: Any = None, error: dict[str, Any] | None = 
 
 
 def main() -> None:
-    host, port = DEFAULT_HOST, DEFAULT_PORT
-    args = sys.argv[1:]
-    for index, arg in enumerate(args):
-        if arg == "--host" and index + 1 < len(args):
-            host = args[index + 1]
-        elif arg == "--port" and index + 1 < len(args):
-            port = int(args[index + 1])
-        elif arg == "--help":
-            print(__doc__)
-            return
+    parser = argparse.ArgumentParser(description=__doc__.split("\n", 1)[0])
+    parser.add_argument("--host", default=DEFAULT_HOST)
+    parser.add_argument("--port", type=int, default=DEFAULT_PORT)
+    args = parser.parse_args()
+    host, port = args.host, args.port
 
     for line in sys.stdin:
         if not line.strip():
