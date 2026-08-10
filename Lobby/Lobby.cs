@@ -28,11 +28,6 @@ namespace OpenGSServer
 
         public int UserCount() => players.Count;
 
-        public void AddPlayer()
-        {
-            // 基本実装
-        }
-
         public void AddChat(string playerName, string chat)
         {
             if (string.IsNullOrWhiteSpace(playerName) || string.IsNullOrWhiteSpace(chat))
