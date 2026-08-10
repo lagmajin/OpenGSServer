@@ -298,7 +298,13 @@ namespace OpenGSServer.Network
         {
             if (!m_PlayerStates.TryGetValue(playerId, out var state))
             {
-                return true; // 未知のプレイヤーは OK
+                return false;
+            }
+
+            if (!IsFinite(clientX) || !IsFinite(clientY) || !IsFinite(clientZ) || !IsFinite(deltaTime))
+            {
+                RecordViolation(state, "Position contains invalid numeric values");
+                return false;
             }
 
             float dx = state.PosX - clientX;
