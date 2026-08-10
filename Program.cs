@@ -27,6 +27,8 @@ using Autofac;
             var lobbyServer = LobbyServerManager.Instance;
 
             lobbyServer.Dispose();
+            MatchServerV2.Instance.Dispose();
+            ManagementServer.Instance.Dispose();
             Console.WriteLine("exit");
         }
         static async void MonitorTask(CancellationToken cancelToken = default)
