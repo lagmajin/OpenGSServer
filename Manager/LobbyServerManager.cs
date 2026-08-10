@@ -45,6 +45,12 @@ namespace OpenGSServer
             if (won) _dailyService.AddProgress(playerId, "win_match", 1);
         }
 
+        public void RecordDamageDailyProgress(string playerId, int amount)
+        {
+            if (string.IsNullOrWhiteSpace(playerId) || amount <= 0) return;
+            _dailyService.AddProgress(playerId, "deal_damage", amount);
+        }
+
         private bool _disposed;
 
         public static LobbyServerManager Instance => _instance.Value;

@@ -401,6 +401,7 @@ namespace OpenGSServer
         {
             // ダメージ計算（武器タイプによる）
             int damage = CalculateWeaponDamage(weaponType);
+            LobbyServerManager.Instance.RecordDamageDailyProgress(shooterId, damage);
 
             // ターゲットにダメージを与える
             HandlePlayerDamaged(room, targetId, damage);
