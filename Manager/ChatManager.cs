@@ -5,6 +5,8 @@ using System.Text;
 
 using OpenGSCore;
 
+#nullable enable
+
 namespace OpenGSServer
 {
     public class ChatManager
