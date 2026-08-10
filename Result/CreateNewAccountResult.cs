@@ -22,13 +22,11 @@ namespace OpenGSServer
 
     public class CreateNewAccountResult : AbstractResult
     {
-        readonly bool successed = false;
-
         eCreateAccountResult messageType = eCreateAccountResult.Unknown;
 
         public CreateNewAccountResult(eCreateAccountResult messageType = eCreateAccountResult.Unknown)
         {
-
+            this.messageType = messageType;
         }
 
         private string MessageType()
@@ -40,14 +38,15 @@ namespace OpenGSServer
                 case eCreateAccountResult.Succeeful:
                     return "CreateNewAccountSucceeful";
                 case eCreateAccountResult.ExistAlreadySameAccount:
-                    return "";
+                    return "CreateNewAccountAlreadyExists";
+                case eCreateAccountResult.InvalidPassword:
+                    return "CreateNewAccountInvalidPassword";
                 case eCreateAccountResult.Unknown:
                     return "Unknown";
                 default:
                     return "Unknown";
             }
 
-            return "";
         }
 
         private string Message()
@@ -59,13 +58,14 @@ namespace OpenGSServer
                     return "CreateNewAccountSuccessful";
                 case eCreateAccountResult.ExistAlreadySameAccount:
                     return "ExistAlreadySameAccount";
+                case eCreateAccountResult.InvalidPassword:
+                    return "InvalidPassword";
                 case eCreateAccountResult.Unknown:
                     return "Unknown";
                 default:
                     return "Unknown";
             }
 
-            return "";
         }
 
         public JObject ToJson()
