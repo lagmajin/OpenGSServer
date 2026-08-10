@@ -57,7 +57,7 @@ namespace OpenGSServer
 
         public bool AddGuildMember(in string memberId, in string guildName, string role = "Member")
         {
-            if (string.IsNullOrWhiteSpace(memberId))
+            if (string.IsNullOrWhiteSpace(memberId) || string.IsNullOrWhiteSpace(guildName))
             {
                 return false;
             }
@@ -80,7 +80,7 @@ namespace OpenGSServer
 
         public int AddGuildMembers(IEnumerable<string> memberIds, in string guildName)
         {
-            if (memberIds == null)
+            if (memberIds == null || string.IsNullOrWhiteSpace(guildName))
             {
                 return 0;
             }
@@ -209,7 +209,7 @@ namespace OpenGSServer
         /// </summary>
         public void AddGuildExp(string guildName, long exp)
         {
-            if (exp <= 0)
+            if (string.IsNullOrWhiteSpace(guildName) || exp <= 0)
             {
                 return;
             }
@@ -222,7 +222,8 @@ namespace OpenGSServer
                 guild.Experience += exp;
                 
                 // 簡易的なレベルアップロジック (1000 * Level)
-                long nextLevelExp = guild.Level * 1000;
+                guild.Level = Math.Max(1, guild.Level);
+                long nextLevelExp = guild.Level * 1000L;
                 while (guild.Experience >= nextLevelExp)
                 {
                     guild.Experience -= nextLevelExp;
