@@ -70,8 +70,7 @@ namespace OpenGSServer
 
             if (type == eMessageType.Error)
             {
-
-
+                color = ConsoleColor.Red;
             }
 
             lock (_MessageLock)
