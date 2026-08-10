@@ -45,6 +45,9 @@ namespace OpenGSServer
 
         public bool AddPlayer(string playerId, string playerName)
         {
+            if (string.IsNullOrWhiteSpace(playerId) || string.IsNullOrWhiteSpace(playerName))
+                return false;
+
             if (players.ContainsKey(playerId))
                 return false;
 
@@ -73,7 +76,7 @@ namespace OpenGSServer
 
         public LobbyRoomInfo? CreateRoom(string roomName, string ownerId, EGameMode gameMode)
         {
-            if (!players.ContainsKey(ownerId))
+            if (string.IsNullOrWhiteSpace(roomName) || string.IsNullOrWhiteSpace(ownerId) || !players.ContainsKey(ownerId))
                 return null;
 
             var roomId = $"room_{nextRoomId++}";
@@ -98,7 +101,8 @@ namespace OpenGSServer
 
         public bool JoinRoom(string roomId, string playerId)
         {
-            if (!players.ContainsKey(playerId) || !rooms.ContainsKey(roomId))
+            if (string.IsNullOrWhiteSpace(roomId) || string.IsNullOrWhiteSpace(playerId) ||
+                !players.ContainsKey(playerId) || !rooms.ContainsKey(roomId))
                 return false;
 
             var room = rooms[roomId];
