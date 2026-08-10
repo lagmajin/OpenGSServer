@@ -18,6 +18,11 @@ namespace OpenGSServer
 
         public bool Exist(in string guildName)
         {
+            if (string.IsNullOrWhiteSpace(guildName))
+            {
+                return false;
+            }
+
             return _database.ExistGuild(guildName);
         }
 
@@ -93,11 +98,21 @@ namespace OpenGSServer
 
         public DBGuild? FindGuild(in string guildName)
         {
+            if (string.IsNullOrWhiteSpace(guildName))
+            {
+                return null;
+            }
+
             return _database.FindGuildByName(guildName);
         }
 
         public IReadOnlyList<DBGuildMember> GetGuildMembers(in string guildName)
         {
+            if (string.IsNullOrWhiteSpace(guildName))
+            {
+                return Array.Empty<DBGuildMember>();
+            }
+
             return _database.GetGuildMember(guildName);
         }
 
