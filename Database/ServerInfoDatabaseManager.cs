@@ -13,11 +13,11 @@ namespace OpenGSServer
     {
         private const string ServerInfoCollectionName = "ServerInfo";
 
-        private LiteDatabase db;
+        private LiteDatabase? db;
         public static readonly string serverDatabaseName = "Database/serverInfo.db";
 
         public static string connectionString = $"Filename={serverDatabaseName};connection=shared";
-        public static ServerInfoDatabaseManager Instance { get; private set; }
+        public static ServerInfoDatabaseManager? Instance { get; private set; }
 
         public ServerInfoDatabaseManager()
         {
