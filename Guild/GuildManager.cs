@@ -181,6 +181,18 @@ namespace OpenGSServer
         /// </summary>
         public void BroadcastGuildChat(string guildName, string senderId, string message)
         {
+            if (string.IsNullOrWhiteSpace(guildName) ||
+                string.IsNullOrWhiteSpace(senderId) ||
+                string.IsNullOrWhiteSpace(message))
+            {
+                return;
+            }
+
+            if (message.Length > 2000)
+            {
+                message = message.Substring(0, 2000);
+            }
+
             var members = GetGuildMembers(guildName);
             if (members.Count == 0) return;
 
