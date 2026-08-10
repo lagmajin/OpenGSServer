@@ -523,6 +523,7 @@ namespace OpenGSServer
 
                 matchRooms.Remove(roomId);
                 roomEventBuses.Remove(roomId);
+                roomFieldItemManagers.Remove(roomId);
             }
         }
     }
@@ -535,6 +536,7 @@ namespace OpenGSServer
             {
                 matchRooms.Clear();
                 roomEventBuses.Clear();
+                roomFieldItemManagers.Clear();
             }
             else
             {
@@ -552,6 +554,7 @@ namespace OpenGSServer
                 {
                     matchRooms.Remove(roomId);
                     roomEventBuses.Remove(roomId);
+                    roomFieldItemManagers.Remove(roomId);
                 }
             }
         }
