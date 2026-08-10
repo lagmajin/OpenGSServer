@@ -2,6 +2,8 @@
 using System.ComponentModel;
 using Newtonsoft.Json.Linq;
 
+#nullable enable
+
 namespace OpenGSServer
 {
     internal class ChatEventHandler
