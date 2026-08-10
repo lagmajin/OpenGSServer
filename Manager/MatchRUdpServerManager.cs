@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Numerics;
 using LiteNetLib;
 using LiteNetLib.Utils;
@@ -107,7 +108,7 @@ namespace OpenGSServer
                 var jsonString = System.Text.Encoding.UTF8.GetString(data);
 
                 // JSONとしてパースを試行
-                if (TryParseJson(jsonString, out JObject json))
+                if (TryParseJson(jsonString, out JObject? json))
                 {
                     // JSONメッセージとして処理
                     ProcessUdpMessage(peer, json);
@@ -342,7 +343,7 @@ namespace OpenGSServer
 
         #region ユーティリティメソッド
 
-        private bool TryParseJson(string jsonString, out JObject json)
+        private bool TryParseJson(string jsonString, [NotNullWhen(true)] out JObject? json)
         {
             try
             {
@@ -404,7 +405,7 @@ namespace OpenGSServer
 
         public void SendToPlayer(string playerId, JObject message)
         {
-            if (connectedPlayers.TryGetValue(playerId, out NetPeer peer))
+            if (connectedPlayers.TryGetValue(playerId, out NetPeer? peer))
             {
                 SendToPeer(peer, message);
             }
@@ -414,7 +415,7 @@ namespace OpenGSServer
         {
             foreach (var kvp in playerRoomMapping)
             {
-                if (kvp.Value == roomId && connectedPlayers.TryGetValue(kvp.Key, out NetPeer peer))
+                if (kvp.Value == roomId && connectedPlayers.TryGetValue(kvp.Key, out NetPeer? peer))
                 {
                     SendToPeer(peer, message);
                 }
@@ -423,12 +424,12 @@ namespace OpenGSServer
 
         public void BroadcastToRoomExceptSender(string senderPlayerId, JObject message)
         {
-            if (playerRoomMapping.TryGetValue(senderPlayerId, out string roomId))
+            if (playerRoomMapping.TryGetValue(senderPlayerId, out string? roomId))
             {
                 foreach (var kvp in playerRoomMapping)
                 {
                     if (kvp.Value == roomId && kvp.Key != senderPlayerId &&
-                        connectedPlayers.TryGetValue(kvp.Key, out NetPeer peer))
+                        connectedPlayers.TryGetValue(kvp.Key, out NetPeer? peer))
                     {
                         SendToPeer(peer, message);
                     }
