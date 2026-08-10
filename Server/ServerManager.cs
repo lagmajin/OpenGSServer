@@ -4,6 +4,8 @@ using System.IO;
 using System.Text;
 using Newtonsoft.Json.Linq;
 
+#nullable enable
+
 namespace OpenGSServer
 {
     interface IServerManager
