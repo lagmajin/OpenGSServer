@@ -166,6 +166,7 @@ namespace OpenGSServer
                 ["MessageType"] = NetworkingConstants.MessageType.ServerStats,
                 ["Timestamp"] = DateTime.UtcNow.ToString("O"),
                 ["ServerUptime"] = (DateTime.Now - _currentProcess.StartTime).ToString(@"dd\.hh\:mm\:ss"),
+                ["ServerStartedUtc"] = _currentProcess.StartTime.ToUniversalTime().ToString("O"),
                 ["MemoryUsageMB"] = _currentProcess.WorkingSet64 / (1024 * 1024),
                 ["CpuThreads"] = _currentProcess.Threads.Count,
                 ["ConnectedMasters"] = _tcpServer.GetConnectedSessionCount(),
