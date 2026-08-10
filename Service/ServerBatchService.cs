@@ -506,6 +506,8 @@ public sealed class ServerBatchService : IDisposable
 
         _hourlyTimer?.Dispose();
         _dailyTimer?.Dispose();
+        _hourlyTimer = null;
+        _dailyTimer = null;
 
         _disposed = true;
     }
