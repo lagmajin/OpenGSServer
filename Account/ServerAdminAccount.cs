@@ -66,7 +66,11 @@ public sealed class ServerAdminAccount
 
         var json = JsonSerializer.Serialize(this, AdminJsonSerializerContext.Default.ServerAdminAccount);
 
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        var directory = Path.GetDirectoryName(path);
+        if (!string.IsNullOrWhiteSpace(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
         File.WriteAllText(path, json, Encoding.UTF8);
     }
 
