@@ -161,11 +161,13 @@ namespace OpenGSServer
         {
             if (_tcpServer == null) return;
 
+            var uptimeSeconds = Math.Max(0, (DateTime.UtcNow - _currentProcess.StartTime.ToUniversalTime()).TotalSeconds);
             var stats = new JObject
             {
                 ["MessageType"] = NetworkingConstants.MessageType.ServerStats,
                 ["Timestamp"] = DateTime.UtcNow.ToString("O"),
                 ["ServerUptime"] = (DateTime.Now - _currentProcess.StartTime).ToString(@"dd\.hh\:mm\:ss"),
+                ["ServerUptimeSeconds"] = uptimeSeconds,
                 ["ServerStartedUtc"] = _currentProcess.StartTime.ToUniversalTime().ToString("O"),
                 ["MemoryUsageMB"] = _currentProcess.WorkingSet64 / (1024 * 1024),
                 ["CpuThreads"] = _currentProcess.Threads.Count,
