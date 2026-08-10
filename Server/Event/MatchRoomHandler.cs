@@ -611,13 +611,9 @@ namespace OpenGSServer
                     continue;
                 }
 
-                try
+                if (int.TryParse(token.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var tokenValue))
                 {
-                    return token.ToObject<int>();
-                }
-                catch
-                {
-                    // ignore and continue
+                    return tokenValue;
                 }
             }
 
