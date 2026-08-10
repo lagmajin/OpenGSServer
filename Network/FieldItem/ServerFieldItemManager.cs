@@ -195,6 +195,12 @@ namespace OpenGSServer.Network
         /// </summary>
         public string SpawnItem(string itemType, float x, float y, float z)
         {
+            if (string.IsNullOrWhiteSpace(itemType) ||
+                !IsFinite(x) || !IsFinite(y) || !IsFinite(z))
+            {
+                return string.Empty;
+            }
+
             string itemId = Guid.NewGuid().ToString("N").Substring(0, 8);
 
             var item = new FieldItem
@@ -390,6 +396,11 @@ namespace OpenGSServer.Network
         {
             _items.Clear();
 
+            if (array == null)
+            {
+                return;
+            }
+
             foreach (var token in array)
             {
                 var itemObj = token as JObject;
@@ -409,8 +420,20 @@ namespace OpenGSServer.Network
                     IsActive = itemObj["IsActive"]?.Value<bool>() ?? true
                 };
 
+                if (string.IsNullOrWhiteSpace(item.ItemId) ||
+                    string.IsNullOrWhiteSpace(item.ItemType) ||
+                    !IsFinite(item.PosX) || !IsFinite(item.PosY) || !IsFinite(item.PosZ))
+                {
+                    continue;
+                }
+
                 _items[item.ItemId] = item;
             }
+        }
+
+        private static bool IsFinite(float value)
+        {
+            return !float.IsNaN(value) && !float.IsInfinity(value);
         }
 
         /// <summary>
