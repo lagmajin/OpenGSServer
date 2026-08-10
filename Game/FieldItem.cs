@@ -16,12 +16,13 @@ namespace OpenGSServer
 
         public override void OnPickedUp(PlayerGameObject player)
         {
-            // パワーアップ効果を適用
-            if (player?.Status != null)
+            if (player?.Status == null)
             {
-                // 攻撃力を20%アップ（例）
-                player.Status.Booster = Math.Min(player.Status.MaxBooster, player.Status.Booster + 20);
+                return;
             }
+
+            // パワーアップ効果を適用
+            player.Status.Booster = Math.Min(player.Status.MaxBooster, player.Status.Booster + 20);
             destroyed = true;
         }
     }
@@ -37,12 +38,13 @@ namespace OpenGSServer
 
     public override void OnPickedUp(PlayerGameObject player)
     {
-        // ディフェンス効果を適用
-        if (player?.Status != null)
+        if (player?.Status == null)
         {
-            // HPを回復（例）
-            player.Status.Hp = Math.Min(player.Status.MaxHp, player.Status.Hp + 100);
+            return;
         }
+
+        // ディフェンス効果を適用
+        player.Status.Hp = Math.Min(player.Status.MaxHp, player.Status.Hp + 100);
         destroyed = true;
     }
     }
@@ -58,12 +60,14 @@ namespace OpenGSServer
 
         public override void OnPickedUp(PlayerGameObject player)
         {
-            // 手榴弾を追加（例：スコア加算）
-            if (player?.Status != null)
+            if (player?.Status == null)
             {
-                // ゲーム固有のアイテムカウントを増やす
-                // player.GranadeCount++;
+                return;
             }
+
+            // 手榴弾を追加（例：スコア加算）
+            // ゲーム固有のアイテムカウントを増やす
+            // player.GranadeCount++;
             destroyed = true;
         }
     }
@@ -79,12 +83,14 @@ namespace OpenGSServer
 
         public override void OnPickedUp(PlayerGameObject player)
         {
-            // フレームスロワー効果を適用
-            if (player?.Status != null)
+            if (player?.Status == null)
             {
-                // ブースターを回復（例）
-                player.Status.Booster = player.Status.MaxBooster;
+                return;
             }
+
+            // フレームスロワー効果を適用
+            // ブースターを回復（例）
+            player.Status.Booster = player.Status.MaxBooster;
             destroyed = true;
         }
     }
