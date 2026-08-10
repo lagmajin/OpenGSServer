@@ -1747,15 +1747,13 @@ namespace OpenGSServer
             if (session == null) return;
             var playerId = ResolveGuildPlayerId(session, data, "PlayerID", "PlayerId", "AccountID", "AccountId");
             var dailyId = data?["DailyId"]?.ToString() ?? data?["DailyID"]?.ToString() ?? string.Empty;
-            var amount = data?["Amount"]?.ToObject<int>() ?? 0;
-            var success = _dailyService.AddProgress(playerId, dailyId, amount);
             session.SendAsyncJsonWithTimeStamp(new JObject
             {
                 ["MessageType"] = MessageType.DailyProgressResponse,
-                ["Success"] = success,
+                ["Success"] = false,
                 ["DailyId"] = dailyId,
-                ["Dailies"] = success ? _dailyService.GetPlayerDailies(playerId) : new JArray(),
-                ["ErrorMessage"] = success ? string.Empty : "Invalid daily progress request"
+                ["Dailies"] = _dailyService.GetPlayerDailies(playerId),
+                ["ErrorMessage"] = "Daily progress is server-managed"
             });
         }
 
