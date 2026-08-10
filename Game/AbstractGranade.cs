@@ -139,9 +139,9 @@ namespace OpenGSServer
         public event Action<AbstractGrenade>? Exploded;
         public event Action<AbstractGrenade>? ChildGrenadeCreated;
 
-        public int StoppingPower { get => stoppingPower; set => stoppingPower = value; }
+        public int StoppingPower { get => stoppingPower; set => stoppingPower = Math.Max(0, value); }
         public int Angle { get => angle; set => angle = value; }
-        public int Speed { get => speed; set => speed = value; }
+        public int Speed { get => speed; set => speed = Math.Max(0, value); }
         public int ExplosionDamage { get => explosionDamage; set => explosionDamage = Math.Max(0, value); }
         public int Damage { get => damage; set => damage = Math.Max(0, value); }
         public string OwnerId { get => ownerId; set => ownerId = value; }
