@@ -11,6 +11,8 @@ using OpenGSServer.Utility;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
+#nullable enable
+
 namespace OpenGSServer
 {
     /// <summary>
