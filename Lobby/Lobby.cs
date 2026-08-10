@@ -20,7 +20,8 @@ namespace OpenGSServer
     public class Lobby : ILobby
     {
         private readonly ChatManager chatManager = new();
-        private readonly Dictionary<string, LobbyPlayerInfo> players = new();
+        private readonly Dictionary<string, LobbyPlayerInfo> players =
+            new(System.StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, LobbyRoomInfo> rooms = new();
         private int nextRoomId = 1;
 
@@ -112,7 +113,7 @@ namespace OpenGSServer
                 return false;
 
             var room = rooms[roomId];
-            if (room.Players.Contains(playerId))
+            if (room.Players.Any(id => string.Equals(id, playerId, System.StringComparison.OrdinalIgnoreCase)))
                 return false;
 
             if (room.Players.Count >= room.MaxPlayers)
@@ -149,14 +150,19 @@ namespace OpenGSServer
             if (rooms.ContainsKey(roomId))
             {
                 var room = rooms[roomId];
-                room.Players.Remove(playerId);
+                var playerIndex = room.Players.FindIndex(id =>
+                    string.Equals(id, playerId, System.StringComparison.OrdinalIgnoreCase));
+                if (playerIndex >= 0)
+                {
+                    room.Players.RemoveAt(playerIndex);
+                }
 
                 // ルームが空になったら削除
                 if (room.Players.Count == 0)
                 {
                     rooms.Remove(roomId);
                 }
-                else if (room.OwnerId == playerId)
+                else if (string.Equals(room.OwnerId, playerId, System.StringComparison.OrdinalIgnoreCase))
                 {
                     // オーナーが退出したら新しいオーナーを設定
                     room.OwnerId = room.Players.First();
