@@ -5,6 +5,8 @@ using System.IO;
 using System.Reflection;
 using Newtonsoft.Json.Linq;
 
+#nullable enable
+
 namespace OpenGSServer
 {
     internal class ServerInfoDatabaseManager
