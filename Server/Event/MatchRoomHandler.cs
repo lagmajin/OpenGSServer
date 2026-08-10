@@ -141,6 +141,13 @@ namespace OpenGSServer
 
         private static void ProcessRealtimeGameEvent(MatchRoom room, string eventType, JObject json, string playerId, string remoteEndPoint)
         {
+            if (room == null || string.IsNullOrWhiteSpace(playerId) ||
+                !room.Players.Any(player => string.Equals(player.Id, playerId, StringComparison.OrdinalIgnoreCase)))
+            {
+                Console.WriteLine($"[Match] Ignored realtime event from non-member '{playerId}' in room '{room?.Id}'");
+                return;
+            }
+
             switch (eventType)
             {
                 case GameMessageTypes.PlayerKilled:
