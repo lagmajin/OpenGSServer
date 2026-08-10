@@ -50,11 +50,18 @@ public sealed class ServerAdminAccount
         if (string.IsNullOrWhiteSpace(plainPassword)) return false;
         if (string.IsNullOrEmpty(Salt) || string.IsNullOrEmpty(PasswordHash)) return false;
 
-        var saltBytes = Convert.FromBase64String(Salt);
-        var expectedHash = Convert.FromBase64String(PasswordHash);
-        var inputHash = HashPassword(plainPassword, saltBytes);
+        try
+        {
+            var saltBytes = Convert.FromBase64String(Salt);
+            var expectedHash = Convert.FromBase64String(PasswordHash);
+            var inputHash = HashPassword(plainPassword, saltBytes);
 
-        return CryptographicOperations.FixedTimeEquals(expectedHash, inputHash);
+            return CryptographicOperations.FixedTimeEquals(expectedHash, inputHash);
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
     }
 
     /// <summary>
