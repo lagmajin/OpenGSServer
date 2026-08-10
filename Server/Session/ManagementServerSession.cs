@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
@@ -384,7 +385,7 @@ namespace OpenGSServer
             var response = new JObject
             {
                 ["MessageType"] = NetworkingConstants.MessageType.ServerStatusResponse,
-                ["ServerUptime"] = (DateTime.UtcNow - _sessionStartTime).TotalSeconds,
+                ["ServerUptime"] = Math.Max(0, (DateTime.UtcNow - Process.GetCurrentProcess().StartTime.ToUniversalTime()).TotalSeconds),
                 ["LoggedInUsers"] = accountManager.GetLoggedInUserCount(),
                 ["ServerTime"] = DateTime.UtcNow.ToString(UTF_FORMAT)
             };
