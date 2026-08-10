@@ -142,8 +142,8 @@ namespace OpenGSServer
         public int StoppingPower { get => stoppingPower; set => stoppingPower = value; }
         public int Angle { get => angle; set => angle = value; }
         public int Speed { get => speed; set => speed = value; }
-        public int ExplosionDamage { get => explosionDamage; set => explosionDamage = value; }
-        public int Damage { get => damage; set => damage = value; }
+        public int ExplosionDamage { get => explosionDamage; set => explosionDamage = Math.Max(0, value); }
+        public int Damage { get => damage; set => damage = Math.Max(0, value); }
         public string OwnerId { get => ownerId; set => ownerId = value; }
         public GranadeType GranadeType { get => granadeType; set => granadeType = value; }
         public float LifeTime { get => lifeTime; set => lifeTime = Math.Max(0f, value); }
