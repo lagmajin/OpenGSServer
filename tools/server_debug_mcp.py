@@ -18,6 +18,7 @@ from typing import Any
 PROTOCOL_VERSION = "2025-03-26"
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 50020
+MAX_REQUEST_BYTES = 1_048_576
 
 TOOLS = [
     {
@@ -152,6 +153,8 @@ def main() -> None:
             continue
         request_id = None
         try:
+            if len(line.encode("utf-8")) > MAX_REQUEST_BYTES:
+                raise ValueError("MCP request exceeds 1 MiB limit")
             request = json.loads(line)
             request_id = request.get("id")
             method = request.get("method", "")
