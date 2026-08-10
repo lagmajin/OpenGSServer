@@ -41,12 +41,14 @@ namespace OpenGSServer
         /// <summary>
         /// スレッドセーフなログイン中のプレイヤーアカウント管理
         /// </summary>
-        private readonly ConcurrentDictionary<string, PlayerAccount> _logonUsers = new();
+        private readonly ConcurrentDictionary<string, PlayerAccount> _logonUsers =
+            new(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>
         /// スレッドセーフなプレイヤーサーバー情報管理
         /// </summary>
-        private readonly ConcurrentDictionary<string, PlayerServerInformation> _playerInfo = new();
+        private readonly ConcurrentDictionary<string, PlayerServerInformation> _playerInfo =
+            new(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>
         /// プレイヤーアカウントデータの統合管理（将来用）
