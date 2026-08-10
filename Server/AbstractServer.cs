@@ -35,7 +35,7 @@ namespace OpenGSServer
                 while (true)
                 {
                     Update();
-                    Task.Delay(10).ConfigureAwait(false);
+                    Thread.Sleep(10);
                 }
             });
         }
