@@ -99,7 +99,22 @@ namespace OpenGSServer
 
             var record = db.GetCollection<ServerInfoRecord>(ServerInfoCollectionName)
                 .FindById("current");
-            return record == null ? null : JObject.FromObject(record);
+            if (record == null)
+            {
+                return null;
+            }
+
+            return new JObject
+            {
+                ["Id"] = record.Id,
+                ["ServerName"] = record.ServerName,
+                ["ProcessName"] = record.ProcessName,
+                ["AssemblyName"] = record.AssemblyName,
+                ["AssemblyVersion"] = record.AssemblyVersion,
+                ["TimeZoneId"] = record.TimeZoneId,
+                ["TimeZoneDisplayName"] = record.TimeZoneDisplayName,
+                ["UpdatedAtUtc"] = record.UpdatedAtUtc
+            };
         }
 
         public void RemoveDatabase()
