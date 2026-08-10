@@ -1,5 +1,4 @@
 using System;
-using System;
 using System.Collections.Generic;
 using Newtonsoft.Json.Linq;
 using OpenGSCore;
@@ -10,11 +9,16 @@ namespace OpenGSServer
     {
         public static void CreateNewWaitRoom(in ClientSession session, in IDictionary<string, JToken> dic)
         {
+            if (session is null)
+            {
+                return;
+            }
+
             // Unity's WaitroomNetworkManager sends OwnerPlayerID (often empty) for
             // CreateRoomRequest. The authenticated TCP session is authoritative.
             var playerId = dic.GetStringOrNull("PlayerID") ??
                            dic.GetStringOrNull("PlayerId") ??
-                           session?.PlayerID;
+                           session.PlayerID;
             var playerName = dic.GetStringOrNull("PlayerName") ?? "Host";
 
             if (string.IsNullOrWhiteSpace(playerId))
