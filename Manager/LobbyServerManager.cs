@@ -2042,28 +2042,5 @@ namespace OpenGSServer
             return null;
         }
 
-        private static int ReadInt(JToken? token)
-        {
-            return token != null && int.TryParse(token.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)
-                ? value
-                : 0;
-        }
-
-        private static bool ReadBool(JToken? token, bool fallback)
-        {
-            if (token == null)
-            {
-                return fallback;
-            }
-
-            if (bool.TryParse(token.ToString(), out var value))
-            {
-                return value;
-            }
-
-            return int.TryParse(token.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var numeric)
-                ? numeric != 0
-                : fallback;
-        }
     }
 }
