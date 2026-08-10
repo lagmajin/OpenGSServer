@@ -1894,6 +1894,7 @@ namespace OpenGSServer
             _lobbyLock?.Dispose();
             _dailyService.Dispose();
             GuildDatabaseManager.GetInstance().Disconnect();
+            ((IDisposable)AccountDatabaseManager.GetInstance()).Dispose();
 
             foreach (var playerId in _connectedPlayers.Keys.ToList())
             {
