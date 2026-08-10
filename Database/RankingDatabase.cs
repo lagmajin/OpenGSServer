@@ -21,7 +21,7 @@ namespace OpenGSServer
 
     public class RankingDatabase:IDisposable
     {
-        private LiteDatabase rankingDB;
+        private LiteDatabase? rankingDB;
 
         public static string rankingDBfileName = "ranking.db";
 
@@ -56,7 +56,7 @@ namespace OpenGSServer
             }
 
 
-            var col = rankingDB.GetCollection<DBTDMKillRankingData>("");
+            var col = rankingDB!.GetCollection<DBTDMKillRankingData>("");
         }
 
         public void AddSuvKillRanking(in string AccountID, in string DisplayName)
@@ -67,7 +67,7 @@ namespace OpenGSServer
                 ConnectRankingDB();
             }
 
-            var col = rankingDB.GetCollection<DBTDMKillRankingData>("");
+            var col = rankingDB!.GetCollection<DBTDMKillRankingData>("");
         }
 
         public void AddTSuvKillRanking(in string AccountID, in string DisplayName)
@@ -81,7 +81,7 @@ namespace OpenGSServer
 
         public void Dispose()
         {
-            rankingDB.Dispose();
+            rankingDB?.Dispose();
 
             //Dispose(true); 
 
