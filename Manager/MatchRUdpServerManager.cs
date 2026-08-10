@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using System.Numerics;
 using LiteNetLib;
 using LiteNetLib.Utils;
@@ -199,8 +200,8 @@ namespace OpenGSServer
             var position = message.GetValue("Position") as JObject;
             if (position != null)
             {
-                var x = position.GetValue("X")?.ToObject<float>() ?? position.GetValue("x")?.ToObject<float>() ?? 0f;
-                var y = position.GetValue("Y")?.ToObject<float>() ?? position.GetValue("y")?.ToObject<float>() ?? 0f;
+                var x = ReadFloat(position.GetValue("X") ?? position.GetValue("x"));
+                var y = ReadFloat(position.GetValue("Y") ?? position.GetValue("y"));
                 playerStateManager.SetPlayerPosition(playerId, x, y, 0f);
                 // 位置情報をルーム内の全プレイヤーにブロードキャスト
                 BroadcastToRoomExceptSender(playerId, message);
@@ -781,15 +782,22 @@ namespace OpenGSServer
                 var token = json.GetValue(key) as JObject;
                 if (token != null)
                 {
-                    var x = token.GetValue("X")?.ToObject<float>() ?? token.GetValue("x")?.ToObject<float>() ?? 0f;
-                    var y = token.GetValue("Y")?.ToObject<float>() ?? token.GetValue("y")?.ToObject<float>() ?? 0f;
+                    var x = ReadFloat(token.GetValue("X") ?? token.GetValue("x"));
+                    var y = ReadFloat(token.GetValue("Y") ?? token.GetValue("y"));
                     return new Vector2(x, y);
                 }
             }
 
-            var px = json.GetValue("PosX")?.ToObject<float>() ?? json.GetValue("PositionX")?.ToObject<float>() ?? 0f;
-            var py = json.GetValue("PosY")?.ToObject<float>() ?? json.GetValue("PositionY")?.ToObject<float>() ?? 0f;
+            var px = ReadFloat(json.GetValue("PosX") ?? json.GetValue("PositionX"));
+            var py = ReadFloat(json.GetValue("PosY") ?? json.GetValue("PositionY"));
             return new Vector2(px, py);
+        }
+
+        private static float ReadFloat(JToken? token)
+        {
+            return token != null && float.TryParse(token.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var value)
+                ? value
+                : 0f;
         }
 
         private string GetRoomId(string playerId)
