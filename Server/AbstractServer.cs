@@ -13,6 +13,7 @@ namespace OpenGSServer
 
         private string ip = "127.0.0.1";
         DateTime serverStartTime=DateTime.Now;
+        private CancellationTokenSource? updateCts;
 
         protected int Port { get => port; set => port = value; }
         protected string Ip { get => ip; set => ip = value; }
@@ -28,16 +29,17 @@ namespace OpenGSServer
 
         private void UpdateStart()
         {
-            var cts = new CancellationTokenSource();
+            updateCts = new CancellationTokenSource();
+            var token = updateCts.Token;
 
             var _ = Task.Run(() =>
             {
-                while (true)
+                while (!token.IsCancellationRequested)
                 {
                     Update();
                     Thread.Sleep(10);
                 }
-            });
+            }, token);
         }
 
         protected  virtual void Update()
@@ -53,7 +55,7 @@ namespace OpenGSServer
         }
         public virtual void Shutdown()
         {
-
+            updateCts?.Cancel();
         }
         public static string ServerTimezoneName()
         {
