@@ -28,22 +28,22 @@ namespace OpenGSServer
 
     public class MatchRoomEventBus : OpenGSCore.MatchRoomEventBus
     {
-        public void PublishLoadingStart()
+        public new void PublishLoadingStart()
         {
             Console.WriteLine("LoadingStart");
         }
 
-        public void PublishGameStart()
+        public new void PublishGameStart()
         {
             Console.WriteLine("GameStart");
         }
 
-        public void PublishGameEnd()
+        public new void PublishGameEnd()
         {
             base.PublishGameEnd();
         }
 
-        public void PublishGameEndWithResult(JObject result)
+        public new void PublishGameEndWithResult(JObject result)
         {
             base.PublishGameEndWithResult(result);
         }
@@ -68,12 +68,12 @@ namespace OpenGSServer
             Console.WriteLine($"Player left: {player.Name} from {room.RoomName}");
         }
 
-        public void PublishItemSpawn(EFieldItemType type, int spawnPointId)
+        public new void PublishItemSpawn(EFieldItemType type, int spawnPointId)
         {
             base.PublishItemSpawn(type, spawnPointId);
         }
 
-        public void PublishItemDespawn()
+        public new void PublishItemDespawn()
         {
             base.PublishItemDespawn();
         }
