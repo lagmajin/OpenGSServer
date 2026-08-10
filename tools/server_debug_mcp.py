@@ -43,6 +43,13 @@ TOOLS = [
 ]
 
 
+def port_number(value: str) -> int:
+    port = int(value)
+    if not 1 <= port <= 65535:
+        raise argparse.ArgumentTypeError("port must be between 1 and 65535")
+    return port
+
+
 class ServerProtocolError(RuntimeError):
     pass
 
@@ -136,7 +143,7 @@ def respond(request_id: Any, result: Any = None, error: dict[str, Any] | None = 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n", 1)[0])
     parser.add_argument("--host", default=DEFAULT_HOST)
-    parser.add_argument("--port", type=int, default=DEFAULT_PORT)
+    parser.add_argument("--port", type=port_number, default=DEFAULT_PORT)
     args = parser.parse_args()
     host, port = args.host, args.port
 
