@@ -632,6 +632,20 @@ namespace OpenGSServer
                 }
             }
 
+            var winningTeam = result["WinningTeam"]?.ToString();
+            if (!string.IsNullOrWhiteSpace(winningTeam) && !winningTeam.Equals("Draw", StringComparison.OrdinalIgnoreCase) && !winningTeam.Equals("None", StringComparison.OrdinalIgnoreCase))
+            {
+                foreach (var player in result["Players"] as JArray ?? new JArray())
+                {
+                    var team = player["Team"]?.ToString() ?? player["TeamName"]?.ToString();
+                    var id = player["Id"]?.ToString() ?? player["PlayerId"]?.ToString() ?? player["PlayerID"]?.ToString();
+                    if (string.Equals(team, winningTeam, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(id))
+                    {
+                        winners.Add(id);
+                    }
+                }
+            }
+
             return winners;
         }
 
