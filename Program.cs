@@ -227,9 +227,9 @@ using Autofac;
                     var managementServer = ManagementServer.Instance;
                     managementServer.Listen(startupOptions.ManagementPort);
 
-                    if(lobbyServer.IsTcpServerRunning)
+                    if (lobbyServer.IsTcpServerRunning && lobbyServer.TcpPort is int tcpPort)
                     {
-                        batchService.WriteLocalPortToFile(lobbyServer.TcpPort.Value);
+                        batchService.WriteLocalPortToFile(tcpPort);
                     }
                     
                     // バッチサービス起動
