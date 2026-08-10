@@ -1996,7 +1996,8 @@ namespace OpenGSServer
         {
             foreach (var session in Sessions.Values)
             {
-                if (session is ClientSession clientSession && clientSession.PlayerID == playerId)
+                if (session is ClientSession clientSession &&
+                    string.Equals(clientSession.PlayerID, playerId, StringComparison.OrdinalIgnoreCase))
                 {
                     return clientSession;
                 }
