@@ -191,6 +191,9 @@ namespace OpenGSServer
                     }
                 }
 
+                // UDP入力は受信コールバックで即時適用せず、固定Tickで適用する。
+                _udpServer?.Tick((_gameLoopTimer?.IntervalMs ?? 40) / 1000.0f);
+
                 _serverLagCompensationManager.Update((_gameLoopTimer?.IntervalMs ?? 40) / 1000.0f);
 
                 // UDPイベントをポーリング

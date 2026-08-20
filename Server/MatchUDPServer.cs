@@ -35,10 +35,20 @@ namespace OpenGSServer
             new(StringComparer.OrdinalIgnoreCase); // PlayerIDをstringに
         private readonly ConcurrentDictionary<string, string> _connectionTokens =
             new(StringComparer.OrdinalIgnoreCase);
+        private readonly ConcurrentDictionary<string, ConnectionTokenInfo> _connectionTokenInfo =
+            new(StringComparer.OrdinalIgnoreCase);
+        private readonly ConcurrentDictionary<int, DateTime> _pendingPeers = new();
+        private readonly ConcurrentDictionary<int, int> _unauthorizedPacketCounts = new();
+        private readonly ConcurrentDictionary<string, ConcurrentQueue<ClientInputData>> _pendingInputs =
+            new(StringComparer.OrdinalIgnoreCase);
         private readonly ConcurrentDictionary<string, TokenBucket> _matchEventRateLimiters =
             new(StringComparer.OrdinalIgnoreCase);
         private const double MatchEventBurstCapacity = 30;
         private const double MatchEventRatePerSecond = 20;
+        private const int UnauthorizedPacketLimit = 8;
+        private const int PendingPeerTimeoutSeconds = 10;
+        private const int ConnectionTokenLifetimeMinutes = 10;
+        private const int MaxInputsPerPlayerPerTick = 8;
         private bool _disposed;
 
         public bool IsRunning => _server?.IsRunning ?? false;
@@ -54,6 +64,7 @@ namespace OpenGSServer
 
             var token = Guid.NewGuid().ToString("N");
             _connectionTokens[playerId] = token;
+            _connectionTokenInfo[playerId] = new ConnectionTokenInfo(token, DateTime.UtcNow.AddMinutes(ConnectionTokenLifetimeMinutes));
             return token;
         }
 
@@ -129,9 +140,12 @@ namespace OpenGSServer
             string playerId = peer.Tag?.ToString() ?? string.Empty;
             if (string.IsNullOrWhiteSpace(playerId))
             {
+                _pendingPeers[peer.Id] = DateTime.UtcNow;
                 ConsoleWrite.WriteMessage($"[UDP] Peer connected, waiting for ClientConnect: {peer.EndPoint}", ConsoleColor.Cyan);
                 return;
             }
+
+            _pendingPeers.TryRemove(peer.Id, out _);
 
             var playerInfo = new PlayerConnectionInfo
             {
@@ -177,6 +191,9 @@ namespace OpenGSServer
 
             _connectedPlayers.TryRemove(playerId, out _); // Dictionaryのキーをstringに
             _matchEventRateLimiters.TryRemove(playerId, out _);
+            _pendingInputs.TryRemove(playerId, out _);
+            _pendingPeers.TryRemove(peer.Id, out _);
+            _unauthorizedPacketCounts.TryRemove(peer.Id, out _);
 
             ConsoleWrite.WriteMessage(
                 $"[UDP] Player disconnected: {playerId} ({peer.Id}) (Reason: {info.Reason})", 
@@ -280,6 +297,7 @@ namespace OpenGSServer
 
                 if (peer.Tag is not string playerId || string.IsNullOrWhiteSpace(playerId))
                 {
+                    RegisterUnauthorizedPacket(peer);
                     ConsoleWrite.WriteMessage($"[UDP] Ignoring binary packet from peer without PlayerID: {peer.EndPoint}", ConsoleColor.Yellow);
                     return;
                 }
@@ -370,8 +388,11 @@ namespace OpenGSServer
 
                 var token = message["UdpToken"]?.ToString() ?? message["Token"]?.ToString();
                 if (!_connectionTokens.TryGetValue(messagePlayerId, out var expectedToken) ||
+                    !_connectionTokenInfo.TryGetValue(messagePlayerId, out var tokenInfo) ||
+                    tokenInfo.IsExpired ||
                     string.IsNullOrWhiteSpace(token) ||
-                    !string.Equals(expectedToken, token, StringComparison.Ordinal))
+                    !string.Equals(expectedToken, token, StringComparison.Ordinal) ||
+                    !string.Equals(tokenInfo.Token, token, StringComparison.Ordinal))
                 {
                     ConsoleWrite.WriteMessage($"[UDP] Rejected ClientConnect without a valid token for {messagePlayerId}", ConsoleColor.Yellow);
                     peer.Disconnect();
@@ -384,6 +405,7 @@ namespace OpenGSServer
 
             if (peer.Tag is not string playerId || string.IsNullOrWhiteSpace(playerId))
             {
+                RegisterUnauthorizedPacket(peer);
                 ConsoleWrite.WriteMessage($"[UDP] Ignoring JSON packet before ClientConnect: {peer.EndPoint}", ConsoleColor.Yellow);
                 return;
             }
@@ -438,10 +460,7 @@ namespace OpenGSServer
                 ClientPosZ = ReadJsonFloat(message, "PosZ", "PositionZ")
             };
 
-            if (!MatchServerV2.Instance.ServerLagCompensationManager.ProcessClientInput(input, out var rejectionReason))
-            {
-                ConsoleWrite.WriteMessage($"[UDP] Rejected JSON input from {playerId}: {rejectionReason}", ConsoleColor.Yellow);
-            }
+            QueueInput(input);
         }
 
         private static bool IsJsonInputMessage(string messageType)
@@ -634,7 +653,7 @@ namespace OpenGSServer
         }
 
         private void RegisterJsonPeer(NetPeer peer, string playerId)
-        {
+    {
             if (_connectedPlayers.TryGetValue(playerId, out var existing))
             {
                 if (existing.PeerId == peer.Id)
@@ -647,7 +666,19 @@ namespace OpenGSServer
             }
 
             peer.Tag = playerId;
+            _pendingPeers.TryRemove(peer.Id, out _);
+            _unauthorizedPacketCounts.TryRemove(peer.Id, out _);
             OnPeerConnected(peer);
+        }
+
+        private void RegisterUnauthorizedPacket(NetPeer peer)
+        {
+            var unauthorizedCount = _unauthorizedPacketCounts.AddOrUpdate(peer.Id, 1, (_, count) => count + 1);
+            if (unauthorizedCount >= UnauthorizedPacketLimit)
+            {
+                ConsoleWrite.WriteMessage($"[UDP] Disconnecting unauthenticated peer after {unauthorizedCount} packets: {peer.EndPoint}", ConsoleColor.Yellow);
+                peer.Disconnect();
+            }
         }
 
         private static float ReadJsonFloat(JObject? json, params string[] names)
@@ -709,10 +740,7 @@ namespace OpenGSServer
                 DeltaTime = deltaTime
             };
 
-            if (!MatchServerV2.Instance.ServerLagCompensationManager.ProcessClientInput(inputData, out var rejectionReason))
-            {
-                ConsoleWrite.WriteMessage($"[UDP] Rejected move input from {playerId}: {rejectionReason}", ConsoleColor.Yellow);
-            }
+            QueueInput(inputData);
         }
 
         /// <summary>
@@ -741,10 +769,7 @@ namespace OpenGSServer
                 Timestamp = timestamp,
                 DeltaTime = deltaTime
             };
-            if (!MatchServerV2.Instance.ServerLagCompensationManager.ProcessClientInput(inputData, out var rejectionReason))
-            {
-                ConsoleWrite.WriteMessage($"[UDP] Rejected shoot input from {playerId}: {rejectionReason}", ConsoleColor.Yellow);
-            }
+            QueueInput(inputData);
         }
 
         /// <summary>
@@ -921,6 +946,79 @@ namespace OpenGSServer
         }
 
         /// <summary>
+        /// 固定サーバーTick。ネットワーク受信コールバックから入力を直接適用せず、
+        /// MatchServerV2のゲームループ上でプレイヤー入力を適用する。
+        /// </summary>
+        public void Tick(float deltaTime)
+        {
+            _ = deltaTime;
+            ProcessPendingInputs();
+            ExpireUnauthenticatedPeers();
+            ExpireConnectionTokens();
+        }
+
+        private void QueueInput(ClientInputData input)
+        {
+            if (string.IsNullOrWhiteSpace(input.PlayerId)) return;
+
+            var queue = _pendingInputs.GetOrAdd(
+                input.PlayerId,
+                _ => new ConcurrentQueue<ClientInputData>());
+
+            // 古い入力を無限に溜めず、遅延が増えた場合は最新側を優先する。
+            while (queue.Count >= MaxInputsPerPlayerPerTick * 4 && queue.TryDequeue(out _)) { }
+            queue.Enqueue(input);
+        }
+
+        private void ProcessPendingInputs()
+        {
+            foreach (var entry in _pendingInputs)
+            {
+                if (!_connectedPlayers.ContainsKey(entry.Key))
+                {
+                    _pendingInputs.TryRemove(entry.Key, out _);
+                    continue;
+                }
+
+                var processed = 0;
+                while (processed++ < MaxInputsPerPlayerPerTick && entry.Value.TryDequeue(out var input))
+                {
+                    if (!MatchServerV2.Instance.ServerLagCompensationManager.ProcessClientInput(input, out var rejectionReason) &&
+                        !string.IsNullOrWhiteSpace(rejectionReason))
+                    {
+                        ConsoleWrite.WriteMessage($"[UDP] Rejected queued input from {entry.Key}: {rejectionReason}", ConsoleColor.Yellow);
+                    }
+                }
+            }
+        }
+
+        private void ExpireUnauthenticatedPeers()
+        {
+            var cutoff = DateTime.UtcNow.AddSeconds(-PendingPeerTimeoutSeconds);
+            foreach (var pending in _pendingPeers)
+            {
+                if (pending.Value > cutoff) continue;
+
+                var peer = _server?.GetPeerById(pending.Key);
+                peer?.Disconnect();
+                _pendingPeers.TryRemove(pending.Key, out _);
+                _unauthorizedPacketCounts.TryRemove(pending.Key, out _);
+                ConsoleWrite.WriteMessage($"[UDP] Disconnected peer that did not authenticate within {PendingPeerTimeoutSeconds}s: {pending.Key}", ConsoleColor.Yellow);
+            }
+        }
+
+        private void ExpireConnectionTokens()
+        {
+            foreach (var entry in _connectionTokenInfo)
+            {
+                if (!entry.Value.IsExpired) continue;
+
+                _connectionTokenInfo.TryRemove(entry.Key, out _);
+                _connectionTokens.TryRemove(entry.Key, out _);
+            }
+        }
+
+        /// <summary>
         /// イベントをポーリング
         /// </summary>
         public void PollingEvent()
@@ -997,6 +1095,10 @@ namespace OpenGSServer
             {
                 _connectedPlayers.Clear();
                 _connectionTokens.Clear();
+                _connectionTokenInfo.Clear();
+                _pendingPeers.Clear();
+                _unauthorizedPacketCounts.Clear();
+                _pendingInputs.Clear();
                 return;
             }
 
@@ -1018,6 +1120,10 @@ namespace OpenGSServer
             UdpPort = null;
             _connectedPlayers.Clear();
             _connectionTokens.Clear();
+            _connectionTokenInfo.Clear();
+            _pendingPeers.Clear();
+            _unauthorizedPacketCounts.Clear();
+            _pendingInputs.Clear();
             _matchEventRateLimiters.Clear();
 
             ConsoleWrite.WriteMessage("[UDP] Server shutdown complete", ConsoleColor.Green);
@@ -1041,5 +1147,18 @@ namespace OpenGSServer
         public required string EndPoint { get; init; }
         public required DateTime ConnectedAt { get; init; }
         public required string PlayerId { get; init; } // PlayerIDを追加
+    }
+
+    internal sealed class ConnectionTokenInfo
+    {
+        public ConnectionTokenInfo(string token, DateTime expiresAtUtc)
+        {
+            Token = token;
+            ExpiresAtUtc = expiresAtUtc;
+        }
+
+        public string Token { get; }
+        public DateTime ExpiresAtUtc { get; }
+        public bool IsExpired => DateTime.UtcNow >= ExpiresAtUtc;
     }
 }
