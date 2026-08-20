@@ -178,6 +178,11 @@ namespace OpenGSServer
 
             try
             {
+                // ネットワークイベントをTickの先頭で取り込み、同じTickで入力を
+                // 検証・適用できるようにする。末尾でポーリングすると入力が
+                // 常に1Tick遅れて処理される。
+                _udpServer?.PollingEvent();
+
                 // MatchRoomManagerから全ルームを取得
                 var matchRoomManager = MatchRoomManager.Instance;
                 var allRooms = matchRoomManager.AllRooms();
@@ -195,9 +200,6 @@ namespace OpenGSServer
                 _udpServer?.Tick((_gameLoopTimer?.IntervalMs ?? 40) / 1000.0f);
 
                 _serverLagCompensationManager.Update((_gameLoopTimer?.IntervalMs ?? 40) / 1000.0f);
-
-                // UDPイベントをポーリング
-                _udpServer?.PollingEvent();
 
                 // TCPフレームカウント更新
                 _tcpServer?.IncrementFrame();
