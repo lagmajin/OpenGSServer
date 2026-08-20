@@ -121,7 +121,7 @@ namespace OpenGSServer
                     break;
 
                 case GameMessageTypes.PlayerRespawn:
-                    HandlePlayerRespawn(room, playerId);
+                    HandlePlayerRespawn(room, playerId, json);
                     break;
 
                 case GameMessageTypes.PlayerPose:
@@ -156,11 +156,17 @@ namespace OpenGSServer
                 case GameMessageTypes.PlayerKilled:
                     var killedPlayerId = json.GetStringOrNull("KilledPlayerID");
                     var killerId = json.GetStringOrNull("KillerID");
-                    if (!string.IsNullOrWhiteSpace(killedPlayerId) && !string.IsNullOrWhiteSpace(killerId) &&
-                        room.Players.Any(player => string.Equals(player.Id, killedPlayerId, StringComparison.OrdinalIgnoreCase)) &&
-                        room.Players.Any(player => string.Equals(player.Id, killerId, StringComparison.OrdinalIgnoreCase)))
+                    if (!string.Equals(killerId, playerId, StringComparison.OrdinalIgnoreCase))
                     {
-                        HandlePlayerKilled(room, killerId, killedPlayerId);
+                        Console.WriteLine($"[Match] Ignored kill with forged killer '{killerId}' from '{playerId}'");
+                        break;
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(killedPlayerId) &&
+                        room.Players.Any(player => string.Equals(player.Id, killedPlayerId, StringComparison.OrdinalIgnoreCase)) &&
+                        room.Players.Any(player => string.Equals(player.Id, playerId, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        HandlePlayerKilled(room, playerId, killedPlayerId);
                     }
                     break;
 
@@ -168,10 +174,19 @@ namespace OpenGSServer
                     var damagedPlayerId = json.GetValue("DamagedPlayerID")?.ToString();
                     var damageToken = json.GetValue("Damage");
                     int damage = damageToken != null ? (int)damageToken : 0;
+                    var requestedAttackerId = json.GetStringOrNull("AttackerID") ??
+                        json.GetStringOrNull("AttackerId");
+                    if (!string.IsNullOrWhiteSpace(requestedAttackerId) &&
+                        !string.Equals(requestedAttackerId, playerId, StringComparison.OrdinalIgnoreCase))
+                    {
+                        Console.WriteLine($"[Match] Ignored damage with forged attacker '{requestedAttackerId}' from '{playerId}'");
+                        break;
+                    }
+
                     if (!string.IsNullOrWhiteSpace(damagedPlayerId) && damage is > 0 and <= 10000 &&
                         room.Players.Any(player => string.Equals(player.Id, damagedPlayerId, StringComparison.OrdinalIgnoreCase)))
                     {
-                        HandlePlayerDamaged(room, damagedPlayerId, damage);
+                        HandlePlayerDamaged(room, damagedPlayerId, damage, playerId, json.GetValue("HitPosition") as JObject);
                     }
                     break;
 
@@ -192,11 +207,19 @@ namespace OpenGSServer
                     break;
 
                 case GameMessageTypes.FlagReturn:
-                    HandleFlagReturn(room, ReadString(json, "Team", "CapturingTeam"), ReadString(json, "ReturnedByPlayerId", "ReturnedByPlayerID", "PlayerID", "PlayerId"));
+                    var returnedByPlayerId = ReadString(json, "ReturnedByPlayerId", "ReturnedByPlayerID", "PlayerID", "PlayerId");
+                    if (!string.IsNullOrWhiteSpace(returnedByPlayerId) &&
+                        !string.Equals(returnedByPlayerId, playerId, StringComparison.OrdinalIgnoreCase))
+                    {
+                        Console.WriteLine($"[Match] Ignored flag return with forged player '{returnedByPlayerId}' from '{playerId}'");
+                        break;
+                    }
+
+                    HandleFlagReturn(room, ReadString(json, "Team", "CapturingTeam"), playerId);
                     break;
 
                 case GameMessageTypes.FlagScoreUpdate:
-                    HandleFlagScoreUpdate(room, json);
+                    HandleFlagScoreUpdate(room);
                     break;
 
                 case "PlayerEliminated":
@@ -227,16 +250,31 @@ namespace OpenGSServer
 
         private static void HandlePlayerKilled(MatchRoom room, string killerId, string killedPlayerId)
         {
-            // キラーにスコア加算（基本実装）
             Console.WriteLine($"Player {killedPlayerId} was killed by {killerId}");
-
-            // 全プレイヤーに通知（基本実装）
-            Console.WriteLine($"Kill event: {killerId} killed {killedPlayerId}");
+            GameMessageDispatcher.SendPlayerKilled(room.Id.ToString(), killerId, killedPlayerId);
         }
 
-        private static void HandlePlayerDamaged(MatchRoom room, string damagedPlayerId, int damage)
+        private static void HandlePlayerDamaged(
+            MatchRoom room,
+            string damagedPlayerId,
+            int damage,
+            string attackerId = "",
+            JObject? hitPosition = null)
         {
             Console.WriteLine($"Player {damagedPlayerId} took {damage} damage");
+
+            GameMessageDispatcher.BroadcastToRoom(room.Id.ToString(), new JObject
+            {
+                ["MessageType"] = "PlayerDamaged",
+                ["RoomID"] = room.Id.ToString(),
+                ["DamagedPlayerID"] = damagedPlayerId,
+                ["TargetId"] = damagedPlayerId,
+                ["AttackerID"] = attackerId,
+                ["AttackerId"] = attackerId,
+                ["Damage"] = damage,
+                ["HitPosition"] = hitPosition,
+                ["Timestamp"] = DateTime.UtcNow.ToString("o")
+            });
         }
 
         private static void HandleFlagCaptured(MatchRoom room, string capturingTeam)
@@ -292,20 +330,13 @@ namespace OpenGSServer
             GameMessageDispatcher.SendFlagReturn(room.Id.ToString(), team, playerId);
         }
 
-        private static void HandleFlagScoreUpdate(MatchRoom room, JObject json)
+        private static void HandleFlagScoreUpdate(MatchRoom room)
         {
-            var red = ReadInt(json, "RedTeamScore", "RedTeamFlagScore");
-            var blue = ReadInt(json, "BlueTeamScore", "BlueTeamFlagScore");
+            // Score is derived from server-side flag events. Never relay the
+            // client-provided score fields as authoritative state.
             var currentRed = room.GetFlagScore(ETeam.Red);
             var currentBlue = room.GetFlagScore(ETeam.Blue);
-
-            if (red == currentRed && blue == currentBlue)
-            {
-                Console.WriteLine($"FlagScoreUpdate ignored because it matches room state ({red}:{blue})");
-                return;
-            }
-
-            GameMessageDispatcher.SendFlagScoreUpdate(room.Id.ToString(), red, blue);
+            GameMessageDispatcher.SendFlagScoreUpdate(room.Id.ToString(), currentRed, currentBlue);
         }
 
         private static void HandlePlayerEliminated(MatchRoom room, string playerId)
@@ -317,6 +348,7 @@ namespace OpenGSServer
         {
             var status = $"Match Active - Players: {room.Players.Count}";
             Console.WriteLine($"Sending status to {requestingPlayerId}: {status}");
+            GameMessageDispatcher.SendMatchStatus(room.Id.ToString(), status);
         }
 
         private static void HandlePositionUpdate(MatchRoom room, string playerId, JObject position)
@@ -324,9 +356,23 @@ namespace OpenGSServer
             Console.WriteLine($"Player {playerId} position updated");
         }
 
-        private static void HandlePlayerRespawn(MatchRoom room, string playerId)
+        private static void HandlePlayerRespawn(MatchRoom room, string playerId, JObject json)
         {
             Console.WriteLine($"Player {playerId} respawned");
+
+            var spawnPosition = json.GetValue("SpawnPosition") as JObject ?? new JObject
+            {
+                ["X"] = GetFloat(json.GetValue("PosX"), 0f),
+                ["Y"] = GetFloat(json.GetValue("PosY"), 0f)
+            };
+
+            var spawnX = GetFloat(spawnPosition.GetValue("X") ?? spawnPosition.GetValue("x"), 0f);
+            var spawnY = GetFloat(spawnPosition.GetValue("Y") ?? spawnPosition.GetValue("y"), 0f);
+            var spawnZ = GetFloat(spawnPosition.GetValue("Z") ?? spawnPosition.GetValue("z"), 0f);
+            MatchServerV2.Instance?.ServerLagCompensationManager.SetPlayerPosition(
+                playerId, spawnX, spawnY, spawnZ);
+
+            GameMessageDispatcher.SendPlayerRespawn(room.Id.ToString(), playerId, spawnPosition);
         }
 
         private static void HandlePlayerPose(MatchRoom room, string playerId, JObject json)
@@ -371,6 +417,7 @@ namespace OpenGSServer
         {
             var objectType = objectData.GetStringOrNull("ObjectType") ?? "Unknown";
             var objectId = objectData.GetStringOrNull("ObjectId") ?? Guid.NewGuid().ToString("N");
+            var position = objectData.GetValue("Position") as JObject;
             Console.WriteLine($"[Match] Room {room.Id} player {playerId} spawned {objectType} ({objectId})");
 
             var message = new JObject
@@ -380,8 +427,8 @@ namespace OpenGSServer
                 ["ObjectType"] = objectType,
                 ["PlayerID"] = playerId,
                 ["RoomID"] = room.Id.ToString(),
-                ["PosX"] = GetFloat(objectData.GetValue("PosX"), 0f),
-                ["PosY"] = GetFloat(objectData.GetValue("PosY"), 0f),
+                ["PosX"] = GetFloat(objectData.GetValue("PosX") ?? position?.GetValue("X") ?? position?.GetValue("x"), 0f),
+                ["PosY"] = GetFloat(objectData.GetValue("PosY") ?? position?.GetValue("Y") ?? position?.GetValue("y"), 0f),
                 ["Rotation"] = GetFloat(objectData.GetValue("Rotation"), 0f),
                 ["Timestamp"] = DateTime.UtcNow.ToString("o")
             };
@@ -393,6 +440,7 @@ namespace OpenGSServer
         {
             var objectId = objectData.GetStringOrNull("ObjectId") ?? Guid.NewGuid().ToString("N");
             var objectType = objectData.GetStringOrNull("ObjectType") ?? "Unknown";
+            var position = objectData.GetValue("Position") as JObject;
             Console.WriteLine($"[Match] Room {room.Id} player {playerId} destroyed {objectType} ({objectId})");
 
             var message = new JObject
@@ -402,8 +450,8 @@ namespace OpenGSServer
                 ["ObjectType"] = objectType,
                 ["DestroyedBy"] = playerId,
                 ["RoomID"] = room.Id.ToString(),
-                ["PosX"] = GetFloat(objectData.GetValue("PosX"), 0f),
-                ["PosY"] = GetFloat(objectData.GetValue("PosY"), 0f),
+                ["PosX"] = GetFloat(objectData.GetValue("PosX") ?? position?.GetValue("X") ?? position?.GetValue("x"), 0f),
+                ["PosY"] = GetFloat(objectData.GetValue("PosY") ?? position?.GetValue("Y") ?? position?.GetValue("y"), 0f),
                 ["Timestamp"] = DateTime.UtcNow.ToString("o")
             };
 
@@ -424,10 +472,7 @@ namespace OpenGSServer
             LobbyServerManager.Instance.RecordDamageDailyProgress(shooterId, damage);
 
             // ターゲットにダメージを与える
-            HandlePlayerDamaged(room, targetId, damage);
-
-            // 射撃ヒットイベントをブロードキャスト
-            BroadcastShotHitEvent(room, shooterId, targetId, damage, hitPosition);
+            HandlePlayerDamaged(room, targetId, damage, shooterId, hitPosition);
         }
 
         private static int CalculateWeaponDamage(string? weaponType)
@@ -453,8 +498,14 @@ namespace OpenGSServer
             {
                 ["MessageType"] = GameMessageTypes.PlayerShot,
                 ["PlayerID"] = playerId,
+                ["PlayerId"] = playerId,
                 ["RoomID"] = room.Id.ToString(),
                 ["ShotData"] = shotData,
+                ["PosX"] = GetFloat(shotData.GetValue("PosX") ?? (shotData["Position"] as JObject)?.GetValue("X"), 0f),
+                ["PosY"] = GetFloat(shotData.GetValue("PosY") ?? (shotData["Position"] as JObject)?.GetValue("Y"), 0f),
+                ["DirX"] = GetFloat(shotData.GetValue("DirX") ?? (shotData["Direction"] as JObject)?.GetValue("X"), 1f),
+                ["DirY"] = GetFloat(shotData.GetValue("DirY") ?? (shotData["Direction"] as JObject)?.GetValue("Y"), 0f),
+                ["WeaponType"] = shotData.GetStringOrNull("WeaponType") ?? "Unknown",
                 ["Timestamp"] = DateTime.UtcNow.ToString("o")
             };
 
@@ -466,6 +517,7 @@ namespace OpenGSServer
         {
             var objectType = NormalizeGrenadeObjectType(grenadeData.GetStringOrNull("GrenadeType"));
             var objectId = grenadeData.GetStringOrNull("ObjectId") ?? Guid.NewGuid().ToString("N");
+            var position = grenadeData.GetValue("Position") as JObject;
             var direction = grenadeData.GetValue("Direction") as JObject;
             var dirX = GetFloat(direction?.GetValue("X") ?? direction?.GetValue("x"), 1f);
             var dirY = GetFloat(direction?.GetValue("Y") ?? direction?.GetValue("y"), 0f);
@@ -477,9 +529,13 @@ namespace OpenGSServer
                 ["ObjectId"] = objectId,
                 ["ObjectType"] = objectType,
                 ["PlayerID"] = playerId,
+                ["PlayerId"] = playerId,
                 ["RoomID"] = room.Id.ToString(),
-                ["PosX"] = GetFloat(grenadeData.GetValue("PosX"), 0f),
-                ["PosY"] = GetFloat(grenadeData.GetValue("PosY"), 0f),
+                ["PosX"] = GetFloat(grenadeData.GetValue("PosX") ?? position?.GetValue("X") ?? position?.GetValue("x"), 0f),
+                ["PosY"] = GetFloat(grenadeData.GetValue("PosY") ?? position?.GetValue("Y") ?? position?.GetValue("y"), 0f),
+                ["DirX"] = dirX,
+                ["DirY"] = dirY,
+                ["GrenadeType"] = grenadeData.GetStringOrNull("GrenadeType") ?? objectType,
                 ["Direction"] = new JObject
                 {
                     ["X"] = dirX,
@@ -515,26 +571,9 @@ namespace OpenGSServer
             };
         }
 
-        private static void BroadcastShotHitEvent(MatchRoom room, string shooterId, string targetId, int damage, JObject? hitPosition)
-        {
-            var message = new JObject
-            {
-                ["MessageType"] = "ShotHit",
-                ["ShooterID"] = shooterId,
-                ["TargetID"] = targetId,
-                ["Damage"] = damage,
-                ["HitPosition"] = hitPosition,
-                ["Timestamp"] = DateTime.UtcNow.ToString("o")
-            };
-
-            UdpBroadcastToRoom(room.Id.ToString(), message);
-        }
-
         private static void UdpBroadcastToRoom(string roomId, JObject message)
         {
-            // UDPブロードキャストの実装
-            // MatchRUdpServerManagerなどを通じてルーム内の全プレイヤーに送信
-            Console.WriteLine($"UDP Broadcast to room {roomId}: {message["MessageType"]}");
+            GameMessageDispatcher.BroadcastToRoom(roomId, message);
         }
 
         /// <summary>
@@ -585,39 +624,5 @@ namespace OpenGSServer
             return null;
         }
 
-        private static int ReadInt(JObject json, params string[] keys)
-        {
-            var text = ReadString(json, keys);
-            if (int.TryParse(text, out var value))
-            {
-                return value;
-            }
-
-            if (json == null || keys == null)
-            {
-                return 0;
-            }
-
-            foreach (var key in keys)
-            {
-                if (string.IsNullOrWhiteSpace(key))
-                {
-                    continue;
-                }
-
-                var token = json.GetValue(key);
-                if (token == null)
-                {
-                    continue;
-                }
-
-                if (int.TryParse(token.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var tokenValue))
-                {
-                    return tokenValue;
-                }
-            }
-
-            return 0;
-        }
     }
 }

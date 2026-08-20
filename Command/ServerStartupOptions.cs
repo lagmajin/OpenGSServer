@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Net;
+using System.Linq;
 using CommandLine;
 using CommandLine.Text;
 
@@ -21,6 +23,9 @@ namespace OpenGSServer
         [Option("match-udp-port", Default = 63000, HelpText = "UDP port used by the match server (1-65535).")]
         public int MatchUdpPort { get; set; }
 
+        [Option("public-ip", Default = "", HelpText = "Advertised match-server IP or host name for remote clients.")]
+        public string PublicIp { get; set; } = string.Empty;
+
         [Option("management-port", Default = 50020, HelpText = "TCP port used by the management server (1-65535).")]
         public int ManagementPort { get; set; }
 
@@ -37,6 +42,18 @@ namespace OpenGSServer
                 if (port is < 1 or > 65535)
                 {
                     error = $"{name} must be between 1 and 65535 (received {port}).";
+                    return false;
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(PublicIp))
+            {
+                var advertisedHost = PublicIp.Trim();
+                if (advertisedHost.Any(char.IsWhiteSpace) ||
+                    (IPAddress.TryParse(advertisedHost, out _) == false &&
+                     Uri.CheckHostName(advertisedHost) != UriHostNameType.Dns))
+                {
+                    error = $"--public-ip must be an IP address or DNS host name (received '{PublicIp}').";
                     return false;
                 }
             }

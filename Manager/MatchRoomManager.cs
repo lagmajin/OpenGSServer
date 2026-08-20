@@ -159,6 +159,12 @@ namespace OpenGSServer
                     {
                         var session = LobbyServerManager.Instance.GetSession(p.Id);
                         session?.SendAsyncJsonWithTimeStamp(gameStartJson);
+                        session?.SendAsyncJsonWithTimeStamp(new JObject
+                        {
+                            ["MessageType"] = MessageType.AllowEnterMap,
+                            ["RoomID"] = matchRoom.Id.ToString(),
+                            ["Approved"] = true
+                        });
                     }
                 };
                 
@@ -193,12 +199,12 @@ namespace OpenGSServer
                 };
                 bus.OnGameEnded += () => {
                     itemManager.EndMatch();
-                    // UDPで全プレイヤーにMatchEndedを通知
+                    // UDPで全プレイヤーに正規のマッチ終了通知を送る
                     var firstPlayer = matchRoom.Players.Find(p => !string.IsNullOrEmpty(p.Id));
-                    if (firstPlayer != null && int.TryParse(firstPlayer.Id, out var peerId))
+                    if (firstPlayer != null)
                     {
-                        MatchServerV2.Instance.BroadcastToRoom(peerId, "MatchEnded", writer => { });
-                        ConsoleWrite.WriteMessage($"[Match] Broadcasted MatchEnded via UDP to Room: {matchRoom.RoomName}", ConsoleColor.Cyan);
+                        MatchServerV2.Instance.BroadcastToRoom(firstPlayer.Id, MessageType.MatchEndNotification);
+                        ConsoleWrite.WriteMessage($"[Match] Broadcasted {MessageType.MatchEndNotification} via UDP to Room: {matchRoom.RoomName}", ConsoleColor.Cyan);
                     }
 
                     // 待機室の状態を更新して全プレイヤーに通知

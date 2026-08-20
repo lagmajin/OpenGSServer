@@ -41,6 +41,7 @@ namespace OpenGSServer
         
         // アイドルチェック用
         private readonly Timer _idleCheckTimer;
+        private readonly Timer _connectionCheckTimer;
         private readonly DailyService _dailyService = new();
 
         public void RecordMatchDailyProgress(string playerId, bool won)
@@ -86,6 +87,13 @@ namespace OpenGSServer
                 state: null,
                 dueTime: TimeSpan.FromMinutes(1),
                 period: TimeSpan.FromMinutes(1)
+            );
+
+            _connectionCheckTimer = new Timer(
+                callback: _ => _tcpServer?.DisconnectStaleSessions(),
+                state: null,
+                dueTime: TimeSpan.FromSeconds(1),
+                period: TimeSpan.FromSeconds(1)
             );
         }
 
@@ -868,6 +876,11 @@ namespace OpenGSServer
         /// TCPポート番号を取得
         /// </summary>
         public int? TcpPort => _tcpServer?.Endpoint.Port;
+
+        public void PruneDisconnectedTcpSessions()
+        {
+            _tcpServer?.DisconnectStaleSessions();
+        }
         
         public void BroadcastToAllClients(string message)
         {
@@ -952,20 +965,71 @@ namespace OpenGSServer
                         break;
                     }
 
+                    if (!string.IsNullOrWhiteSpace(clientSession.PlayerID))
+                    {
+                        clientSession.SendAsyncJsonWithTimeStamp(new JObject
+                        {
+                            ["MessageType"] = MessageType.LoginResponse,
+                            ["Success"] = false,
+                            ["Message"] = "Session is already authenticated",
+                            ["Error"] = "Session is already authenticated"
+                        });
+                        break;
+                    }
+
                     var playerId = AccountEventHandler.Login(clientSession, data);
-                    if (playerId != null) clientSession.SetPlayerID(playerId);
+                    if (playerId != null)
+                    {
+                        clientSession.SetPlayerID(playerId);
+                        var playerName = data["PlayerName"]?.ToString() ??
+                                         data["DisplayName"]?.ToString() ??
+                                         playerId;
+                        PlayerJoinLobby(playerId, playerName);
+                    }
+                    break;
+                case MessageType.CreateAccountRequest:
+                    if (clientSession is not null)
+                    {
+                        AccountEventHandler.CreateNewAccount(clientSession, data);
+                    }
                     break;
                 case MessageType.LogoutRequest:
                     if (clientSession is not null)
                     {
+                        var loggedOutPlayerId = clientSession.PlayerID;
                         AccountEventHandler.Logout(clientSession);
+                        if (!string.IsNullOrWhiteSpace(loggedOutPlayerId))
+                        {
+                            PlayerLeaveLobby(loggedOutPlayerId);
+                            WaitRoomEventHandler.RemoveDisconnectedPlayer(loggedOutPlayerId);
+                        }
+                        clientSession.ClearPlayerID();
+                        clientSession.SendAsyncJsonWithTimeStamp(new JObject
+                        {
+                            ["MessageType"] = MessageType.LogoutSuccessful,
+                            ["Success"] = true,
+                            ["PlayerID"] = loggedOutPlayerId ?? string.Empty
+                        });
                     }
                     break;
                 case MessageType.CreateRoomRequest:
-                    LobbyEventHandler.CreateNewWaitRoom(clientSession, data);
+                    if (data.ContainsKey("IsMission") || data.ContainsKey("MissionId") || data.ContainsKey("MissionID") || data.ContainsKey("MissionType"))
+                    {
+                        LobbyEventHandler.CreateNewMissionRoom(clientSession, data);
+                    }
+                    else
+                    {
+                        LobbyEventHandler.CreateNewWaitRoom(clientSession, data);
+                    }
                     break;
                 case MessageType.JoinRoomRequest:
                     LobbyEventHandler.EnterRoomRequest(clientSession, data);
+                    break;
+                case MessageType.GameStartRequest:
+                    LobbyEventHandler.MatchStart(clientSession, data);
+                    break;
+                case MessageType.SceneTransitionRequest:
+                    HandleSceneTransitionRequest(clientSession, data);
                     break;
                 case MessageType.MatchServerInfoRequest:
                     HandleMatchServerInfoRequest(clientSession, data);
@@ -982,7 +1046,12 @@ namespace OpenGSServer
                     // original RoomID/PlayerID fields expected by the core setting
                     // parser.
                     var roomSettingsData = FlattenRoomSettings(data);
-                    if (roomSettingsData.ContainsKey("RoomName") || roomSettingsData.ContainsKey("Capacity") || roomSettingsData.ContainsKey("GameMode"))
+                    if (roomSettingsData.ContainsKey("RoomName") ||
+                        roomSettingsData.ContainsKey("Capacity") ||
+                        roomSettingsData.ContainsKey("GameMode") ||
+                        roomSettingsData.ContainsKey("Map") ||
+                        roomSettingsData.ContainsKey("TeamBalance") ||
+                        roomSettingsData.ContainsKey("Password"))
                     {
                         WaitRoomEventHandler.ChangeRoomSetting(clientSession, roomSettingsData);
                     }
@@ -996,23 +1065,21 @@ namespace OpenGSServer
                 case MessageType.WaitRoomPlayerUnready:
                     WaitRoomEventHandler.ReadyRequest(clientSession, data);
                     break;
+                case MessageType.WaitRoomKickPlayer:
+                    WaitRoomEventHandler.KickPlayerRequest(clientSession, data);
+                    break;
                 case MessageType.LoadingStarted:
                 case MessageType.ClientLoadingSceneEntered:
                     WaitRoomEventHandler.LoadingStartedRequest(clientSession, data);
                     break;
                 case MessageType.LoadingProgress:
+                    WaitRoomEventHandler.LoadingProgressRequest(clientSession, data);
                     break;
                 case MessageType.LoadingCompleted:
                     WaitRoomEventHandler.LoadingCompletedRequest(clientSession, data);
                     break;
                 case MessageType.LobbyChatRequest:
-                    // チャット処理
-                    var playerIdChat = data["PlayerId"]?.ToString() ?? data["PlayerID"]?.ToString();
-                    var message = data["Message"]?.ToString();
-                    if (!string.IsNullOrEmpty(playerIdChat) && !string.IsNullOrEmpty(message))
-                    {
-                        AddLobbyChat(playerIdChat, message);
-                    }
+                    HandleLobbyChatMessage(clientSession, data);
                     break;
                 case MessageType.ShopStateRequest:
                     HandleShopStateRequest(clientSession, data);
@@ -1101,6 +1168,72 @@ namespace OpenGSServer
             return flattened;
         }
 
+        private void HandleLobbyChatMessage(ClientSession? session, JObject data)
+        {
+            var playerId = session?.PlayerID ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(playerId))
+            {
+                return;
+            }
+
+            var message = data["Message"]?.ToString() ?? string.Empty;
+            if (!AddLobbyChat(playerId, message).IsSuccess)
+            {
+                return;
+            }
+
+            var notification = new JObject
+            {
+                ["MessageType"] = MessageType.LobbyChatNotification,
+                ["PlayerID"] = playerId,
+                ["PlayerName"] = ResolvePlayerDisplayName(playerId),
+                ["Message"] = message,
+                ["RoomID"] = data["RoomID"]?.ToString() ?? data["RoomId"]?.ToString() ?? string.Empty
+            };
+
+            var roomId = notification["RoomID"]?.ToString();
+            var waitRoom = string.IsNullOrWhiteSpace(roomId)
+                ? null
+                : WaitRoomManager.Instance().FindWaitRoom(roomId);
+            if (waitRoom != null)
+            {
+                foreach (var player in waitRoom.AllPlayers())
+                {
+                    FindSessionByPlayerId(player.Id)?.SendAsyncJsonWithTimeStamp(notification);
+                }
+                return;
+            }
+
+            foreach (var connectedPlayerId in _connectedPlayers.Keys)
+            {
+                FindSessionByPlayerId(connectedPlayerId)?.SendAsyncJsonWithTimeStamp(notification);
+            }
+        }
+
+        private static void HandleSceneTransitionRequest(ClientSession? session, JObject data)
+        {
+            if (session is null)
+            {
+                return;
+            }
+
+            var fromScene = data["FromScene"]?.ToString() ?? string.Empty;
+            var toScene = data["ToScene"]?.ToString() ?? string.Empty;
+            var reason = data["Reason"]?.ToString() ?? string.Empty;
+            var approved = !string.IsNullOrWhiteSpace(toScene);
+
+            session.SendAsyncJsonWithTimeStamp(new JObject
+            {
+                ["MessageType"] = MessageType.SceneTransitionResponse,
+                ["Approved"] = approved,
+                ["FromScene"] = fromScene,
+                ["ToScene"] = toScene,
+                ["Reason"] = approved
+                    ? "Approved"
+                    : $"Transition denied: destination scene is empty ({reason})"
+            });
+        }
+
         private void HandleMatchServerInfoRequest(ClientSession? session, JObject data)
         {
             if (session == null) return;
@@ -1108,9 +1241,25 @@ namespace OpenGSServer
             var infoJson = new JObject();
             var matchServer = MatchServerV2.Instance; // Instanceプロパティを使用
 
-            infoJson["MessageType"] = "MatchServerInformationNotification";
+            infoJson["MessageType"] = MessageType.MatchServerInfoResponse;
             infoJson["Port"] = matchServer.TcpPort; // TcpPortプロパティを使用
-            infoJson["SubPort"] = 2000;
+            infoJson["UdpPort"] = matchServer.UdpPort;
+            var udpToken = matchServer.IssueUdpConnectionToken(session.PlayerID ?? string.Empty);
+            if (!string.IsNullOrWhiteSpace(udpToken))
+            {
+                infoJson["UdpToken"] = udpToken;
+            }
+            if (!string.IsNullOrWhiteSpace(matchServer.AdvertisedIp))
+            {
+                infoJson["IP"] = matchServer.AdvertisedIp;
+            }
+
+            var roomId = data["RoomID"]?.ToString() ?? data["RoomId"]?.ToString();
+            if (!string.IsNullOrWhiteSpace(roomId))
+            {
+                infoJson["RoomID"] = roomId;
+                infoJson["RoomId"] = roomId;
+            }
 
             var str = infoJson.ToString(Formatting.None);
             ConsoleWrite.WriteMessage(str);
@@ -1841,9 +1990,12 @@ namespace OpenGSServer
 
         private static string ResolveGuildPlayerId(ClientSession? session, JObject? data, params string[] candidateKeys)
         {
-            if (session != null && !string.IsNullOrWhiteSpace(session.PlayerID))
+            // A connected TCP session is still unauthenticated until LoginRequest
+            // assigns PlayerID. Never fall back to a client-supplied account ID
+            // for account-owned operations.
+            if (session != null)
             {
-                return session.PlayerID;
+                return session.PlayerID ?? string.Empty;
             }
 
             if (data != null)
@@ -1949,6 +2101,7 @@ namespace OpenGSServer
 
             _cleanupTimer?.Dispose();
             _idleCheckTimer?.Dispose();
+            _connectionCheckTimer?.Dispose();
             _lobbyLock?.Dispose();
             _dailyService.Dispose();
             GuildDatabaseManager.GetInstance().Disconnect();
@@ -2012,6 +2165,12 @@ namespace OpenGSServer
         {
             if (session is ClientSession clientSession)
             {
+                var playerId = clientSession.PlayerID;
+                if (!string.IsNullOrWhiteSpace(playerId))
+                {
+                    _manager.PlayerLeaveLobby(playerId);
+                    WaitRoomEventHandler.RemoveDisconnectedPlayer(playerId);
+                }
                 ConsoleWrite.WriteMessage($"[LOBBY] Client disconnected", ConsoleColor.Yellow);
             }
         }
@@ -2040,6 +2199,24 @@ namespace OpenGSServer
                 }
             }
             return null;
+        }
+
+        public void DisconnectStaleSessions()
+        {
+            foreach (var session in Sessions.Values.OfType<ClientSession>())
+            {
+                try
+                {
+                    if (!session.IsConnected)
+                    {
+                        session.Disconnect();
+                    }
+                }
+                catch (ObjectDisposedException)
+                {
+                    // The session is already being torn down.
+                }
+            }
         }
 
     }

@@ -72,5 +72,9 @@ namespace OpenGSServer.Network
         public byte SequenceNumber;
         public float Timestamp;
         public float DeltaTime;
+        public bool HasClientPosition;
+        public float ClientPosX;
+        public float ClientPosY;
+        public float ClientPosZ;
     }
 }

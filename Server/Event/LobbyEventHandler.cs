@@ -1,4 +1,5 @@
 using System;
+using System;
 using System.Collections.Generic;
 using Newtonsoft.Json.Linq;
 using OpenGSCore;
@@ -9,6 +10,42 @@ namespace OpenGSServer
 {
     public static class LobbyEventHandler
     {
+        private static WaitRoom? FindWaitRoomForPlayer(string playerId)
+        {
+            if (string.IsNullOrWhiteSpace(playerId))
+            {
+                return null;
+            }
+
+            foreach (var room in WaitRoomManager.Instance().GetAllRooms())
+            {
+                if (room.ContainsPlayer(playerId))
+                {
+                    return room;
+                }
+            }
+
+            return null;
+        }
+
+        private static WaitRoom? FindMissionRoomForPlayer(string playerId)
+        {
+            if (string.IsNullOrWhiteSpace(playerId))
+            {
+                return null;
+            }
+
+            foreach (var room in MissionWaitRoomManager.Instance.GetAllMissionRooms())
+            {
+                if (room.ContainsPlayer(playerId))
+                {
+                    return room;
+                }
+            }
+
+            return null;
+        }
+
         public static void CreateNewWaitRoom(in ClientSession session, in IDictionary<string, JToken> dic)
         {
             if (session is null)
@@ -16,11 +53,9 @@ namespace OpenGSServer
                 return;
             }
 
-            // Unity's WaitroomNetworkManager sends OwnerPlayerID (often empty) for
-            // CreateRoomRequest. The authenticated TCP session is authoritative.
-            var playerId = dic.GetStringOrNull("PlayerID") ??
-                           dic.GetStringOrNull("PlayerId") ??
-                           session.PlayerID;
+            // The authenticated TCP session is authoritative; request IDs are
+            // display/protocol data and must not select another account.
+            var playerId = session.PlayerID;
             var playerName = dic.GetStringOrNull("PlayerName") ?? "Host";
 
             if (string.IsNullOrWhiteSpace(playerId))
@@ -30,6 +65,20 @@ namespace OpenGSServer
                     ["MessageType"] = MessageType.CreateRoomResponse,
                     ["Success"] = false,
                     ["ErrorMessage"] = "PlayerID is required"
+                });
+                return;
+            }
+
+            var existingRoom = FindWaitRoomForPlayer(playerId) ?? FindMissionRoomForPlayer(playerId);
+            if (existingRoom != null)
+            {
+                session.SendAsyncJsonWithTimeStamp(new JObject
+                {
+                    ["MessageType"] = MessageType.CreateRoomResponse,
+                    ["Success"] = false,
+                    ["RoomID"] = existingRoom.RoomId,
+                    ["RoomId"] = existingRoom.RoomId,
+                    ["ErrorMessage"] = "Player is already in a wait room"
                 });
                 return;
             }
@@ -57,6 +106,7 @@ namespace OpenGSServer
 
             var roomInfoJson = room.ToSnapshot().ToJson();
             roomInfoJson["OwnerId"] = room.GetFirstPlayerId();
+            roomInfoJson["OwnerID"] = roomInfoJson["OwnerId"];
             roomInfoJson["HasPassword"] = !string.IsNullOrWhiteSpace(room.Password);
 
             var json = new JObject
@@ -71,17 +121,19 @@ namespace OpenGSServer
                 ["GameMode"] = room.GameMode.ToString(),
                 ["Map"] = room.Map.ToString(),
                 ["TeamBalance"] = room.setting is AbstractTeamMatchSetting teamSetting && teamSetting.TeamBalance,
+                ["HasPassword"] = roomInfoJson["HasPassword"],
                 ["OwnerId"] = roomInfoJson["OwnerId"],
                 ["PlayerCount"] = room.PlayerCount,
                 ["NowPlaying"] = room.NowPlaying
             };
 
             session.SendAsyncJsonWithTimeStamp(json);
+            BroadcastRoomListUpdate();
         }
 
         public static void CreateNewMissionRoom(in ClientSession session, in IDictionary<string, JToken> dic)
         {
-            var playerId = dic.GetStringOrNull("PlayerID") ?? dic.GetStringOrNull("PlayerId");
+            var playerId = session?.PlayerID;
             var playerName = dic.GetStringOrNull("PlayerName") ?? "Host";
             var roomName = dic.GetStringOrNull("RoomName") ?? string.Empty;
             var missionId = dic.GetStringOrNull("MissionId") ?? dic.GetStringOrNull("MissionID") ?? dic.GetStringOrNull("MissionType") ?? "Default";
@@ -94,6 +146,20 @@ namespace OpenGSServer
                     ["MessageType"] = MessageType.CreateRoomResponse,
                     ["Success"] = false,
                     ["ErrorMessage"] = "PlayerID is required"
+                });
+                return;
+            }
+
+            var existingRoom = FindWaitRoomForPlayer(playerId) ?? FindMissionRoomForPlayer(playerId);
+            if (existingRoom != null)
+            {
+                session.SendAsyncJsonWithTimeStamp(new JObject
+                {
+                    ["MessageType"] = MessageType.CreateRoomResponse,
+                    ["Success"] = false,
+                    ["RoomID"] = existingRoom.RoomId,
+                    ["RoomId"] = existingRoom.RoomId,
+                    ["ErrorMessage"] = "Player is already in a wait room"
                 });
                 return;
             }
@@ -116,6 +182,7 @@ namespace OpenGSServer
 
             var roomInfoJson = room.ToSnapshot().ToJson();
             roomInfoJson["OwnerId"] = room.GetFirstPlayerId();
+            roomInfoJson["OwnerID"] = roomInfoJson["OwnerId"];
             roomInfoJson["HasPassword"] = !string.IsNullOrWhiteSpace(room.Password);
 
             session.SendAsyncJsonWithTimeStamp(new JObject
@@ -132,10 +199,12 @@ namespace OpenGSServer
                 ["GameMode"] = room.GameMode.ToString(),
                 ["Map"] = room.Map.ToString(),
                 ["TeamBalance"] = room.setting is AbstractTeamMatchSetting teamSetting && teamSetting.TeamBalance,
+                ["HasPassword"] = roomInfoJson["HasPassword"],
                 ["OwnerId"] = roomInfoJson["OwnerId"],
                 ["PlayerCount"] = room.PlayerCount,
                 ["NowPlaying"] = room.NowPlaying
             });
+            BroadcastRoomListUpdate();
         }
 
         public static void QuickStartRequest(in ClientSession session, in IDictionary<string, JToken> dic)
@@ -147,7 +216,7 @@ namespace OpenGSServer
         public static void EnterRoomRequest(in ClientSession session, in IDictionary<string, JToken> dic)
         {
             var roomId = dic.GetStringOrNull("RoomID") ?? dic.GetStringOrNull("RoomId");
-            var playerId = dic.GetStringOrNull("PlayerID") ?? dic.GetStringOrNull("PlayerId");
+            var playerId = session?.PlayerID;
             var playerName = dic.GetStringOrNull("PlayerName") ?? "Player";
             var password = dic.GetStringOrNull("Password") ?? string.Empty;
 
@@ -162,18 +231,38 @@ namespace OpenGSServer
                 return;
             }
 
-            var roomManager = WaitRoomManager.Instance();
-            var room = roomManager.FindWaitRoom(roomId);
-            if (room == null)
+            var existingRoom = FindWaitRoomForPlayer(playerId) ?? FindMissionRoomForPlayer(playerId);
+            if (existingRoom != null && !string.Equals(existingRoom.RoomId, roomId, StringComparison.OrdinalIgnoreCase))
             {
                 session.SendAsyncJsonWithTimeStamp(new JObject
                 {
                     ["MessageType"] = MessageType.JoinRoomResponse,
                     ["Success"] = false,
-                    ["ErrorMessage"] = "Room not found",
-                    ["RoomID"] = roomId
+                    ["RoomID"] = roomId,
+                    ["RoomId"] = roomId,
+                    ["ErrorMessage"] = "Player is already in another wait room",
+                    ["CurrentRoomID"] = existingRoom.RoomId,
+                    ["CurrentRoomId"] = existingRoom.RoomId
                 });
                 return;
+            }
+
+            var roomManager = WaitRoomManager.Instance();
+            var room = roomManager.FindWaitRoom(roomId);
+            if (room == null)
+            {
+                room = MissionWaitRoomManager.Instance.FindMissionRoom(roomId);
+                if (room == null)
+                {
+                    session.SendAsyncJsonWithTimeStamp(new JObject
+                    {
+                        ["MessageType"] = MessageType.JoinRoomResponse,
+                        ["Success"] = false,
+                        ["ErrorMessage"] = "Room not found",
+                        ["RoomID"] = roomId
+                    });
+                    return;
+                }
             }
 
             if (!string.IsNullOrWhiteSpace(room.Password) && !string.Equals(room.Password, password, StringComparison.Ordinal))
@@ -204,12 +293,14 @@ namespace OpenGSServer
 
             var roomInfoJson = room.ToSnapshot().ToJson();
             roomInfoJson["OwnerId"] = room.GetFirstPlayerId();
+            roomInfoJson["OwnerID"] = roomInfoJson["OwnerId"];
             roomInfoJson["HasPassword"] = !string.IsNullOrWhiteSpace(room.Password);
 
             var response = new JObject
             {
                 ["MessageType"] = MessageType.JoinRoomResponse,
                 ["Success"] = true,
+                ["IsMission"] = MissionWaitRoomManager.Instance.FindMissionRoom(room.RoomId) != null,
                 ["RoomInfo"] = roomInfoJson,
                 ["RoomId"] = room.RoomId,
                 ["RoomID"] = room.RoomId,
@@ -218,6 +309,7 @@ namespace OpenGSServer
                 ["GameMode"] = room.GameMode.ToString(),
                 ["Map"] = room.Map.ToString(),
                 ["TeamBalance"] = room.setting is AbstractTeamMatchSetting teamSetting && teamSetting.TeamBalance,
+                ["HasPassword"] = roomInfoJson["HasPassword"],
                 ["OwnerId"] = roomInfoJson["OwnerId"],
                 ["PlayerCount"] = room.PlayerCount,
                 ["NowPlaying"] = room.NowPlaying,
@@ -226,6 +318,8 @@ namespace OpenGSServer
             };
 
             session.SendAsyncJsonWithTimeStamp(response);
+            WaitRoomEventHandler.BroadcastRoomUpdate(room, MessageType.WaitRoomUpdateNotification);
+            BroadcastRoomListUpdate();
         }
 
         public static void ExitRoom(in ClientSession session, in IDictionary<string, JToken> dic)
@@ -244,37 +338,105 @@ namespace OpenGSServer
         {
             _ = dic;
 
-            var matchRoomManager = MatchRoomManager.Instance;
-            var rooms = matchRoomManager.AllRooms();
+            LobbyServerManager.Instance.PruneDisconnectedTcpSessions();
+
+            var result = BuildRoomListUpdate();
+            session.SendAsyncJsonWithTimeStamp(result);
+        }
+
+        public static void BroadcastRoomListUpdate()
+        {
+            LobbyServerManager.Instance.BroadcastToAllInLobby(BuildRoomListUpdate());
+        }
+
+        private static JObject BuildRoomListUpdate()
+        {
 
             var result = new JObject
             {
-                ["MessageType"] = MessageType.UpdateRoomResult,
-                ["RoomCount"] = rooms.Count
+                ["MessageType"] = MessageType.RoomListUpdateNotification
             };
 
             var roomArray = new JArray();
-            foreach (var item in rooms)
+            foreach (var room in WaitRoomManager.Instance().GetAllRooms())
             {
-                var json = new JObject
+                var json = new RoomListEntry
                 {
-                    ["RoomNumber"] = item.RoomNumber,
-                    ["RoomID"] = item.Id,
-                    ["GameMode"] = "",
-                    ["MacCapacity"] = 10
-                };
-
+                    RoomId = room.RoomId,
+                    RoomName = room.RoomName,
+                    OwnerId = room.GetFirstPlayerId(),
+                    Capacity = room.Capacity,
+                    GameMode = room.GameMode.ToString(),
+                    TeamBalance = room.setting is AbstractTeamMatchSetting teamSetting && teamSetting.TeamBalance,
+                    PlayerCount = room.Players.Count
+                }.ToJson();
+                json["Map"] = room.Map.ToString();
+                json["NowPlaying"] = room.NowPlaying;
+                json["HasPassword"] = !string.IsNullOrWhiteSpace(room.Password);
                 roomArray.Add(json);
             }
 
-            result["AllRoom"] = roomArray;
-            session.SendAsync(result.ToString());
+            foreach (var room in MissionWaitRoomManager.Instance.GetAllMissionRooms())
+            {
+                var json = new JObject
+                {
+                    ["RoomId"] = room.RoomId,
+                    ["RoomID"] = room.RoomId,
+                    ["RoomName"] = room.RoomName,
+                    ["OwnerId"] = room.GetFirstPlayerId(),
+                    ["OwnerID"] = room.GetFirstPlayerId(),
+                    ["Capacity"] = room.Capacity,
+                    ["GameMode"] = room.GameMode.ToString(),
+                    ["PlayerCount"] = room.PlayerCount,
+                    ["NowPlaying"] = room.NowPlaying,
+                    ["Map"] = room.Map.ToString(),
+                    ["HasPassword"] = !string.IsNullOrWhiteSpace(room.Password),
+                    ["IsMission"] = true
+                };
+                roomArray.Add(json);
+            }
+
+            result["Rooms"] = roomArray;
+            result["RoomCount"] = roomArray.Count;
+            return result;
         }
 
         public static void MatchStart(in ClientSession session, in IDictionary<string, JToken> dic)
         {
-            _ = session;
-            _ = dic;
+            var roomId = dic.GetStringOrNull("RoomID") ?? dic.GetStringOrNull("RoomId");
+            var playerId = session?.PlayerID;
+
+            var waitRoom = WaitRoomManager.Instance().FindWaitRoom(roomId ?? string.Empty)
+                ?? MissionWaitRoomManager.Instance.FindMissionRoom(roomId ?? string.Empty);
+            if (waitRoom == null)
+            {
+                SendMatchStartError(session, roomId, "RoomNotFound");
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(playerId) ||
+                !string.Equals(waitRoom.GetFirstPlayerId(), playerId, StringComparison.OrdinalIgnoreCase))
+            {
+                SendMatchStartError(session, roomId, "Only the room owner can start the match");
+                return;
+            }
+
+            var matchRoom = MatchRoomManager.Instance.StartMatchFromWaitRoom(waitRoom);
+            if (matchRoom == null)
+            {
+                SendMatchStartError(session, roomId, "Match could not be started");
+            }
+        }
+
+        private static void SendMatchStartError(ClientSession session, string? roomId, string error)
+        {
+            session?.SendAsyncJsonWithTimeStamp(new JObject
+            {
+                ["MessageType"] = MessageType.ErrorNotification,
+                ["Success"] = false,
+                ["ErrorMessage"] = error,
+                ["RoomID"] = roomId ?? string.Empty
+            });
         }
     }
 }

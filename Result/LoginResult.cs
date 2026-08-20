@@ -80,24 +80,24 @@ namespace OpenGSServer
 
         public JObject ToJson()
         {
-            var result = new JObject();
+            var result = new JObject
+            {
+                ["MessageType"] = OpenGSCore.MessageType.LoginResponse,
+                ["Success"] = succeeded,
+                ["Message"] = Message(),
+                ["LegacyMessageType"] = MessageType()
+            };
 
             if (succeeded)
             {
-                result["MessageType"] = "LoginSuccessful";
                 result["AccountID"] = id_;
-
-
-
-
+                result["PlayerID"] = id_;
+                result["GlobalUserId"] = id_;
             }
             else
             {
-                result["MessageType"] = "LoginFailure";
+                result["Error"] = Message();
             }
-
-
-            result["Message"] = Message();
 
 
             return result;

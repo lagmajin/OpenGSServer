@@ -178,7 +178,10 @@ namespace OpenGSServer
                 ["MessageType"] = GameMessageTypes.PlayerRespawn,
                 ["RoomID"] = roomId,
                 ["PlayerID"] = playerId,
+                ["PlayerId"] = playerId,
                 ["SpawnPosition"] = spawnPosition,
+                ["PosX"] = spawnPosition.GetValue("X") ?? spawnPosition.GetValue("x") ?? 0f,
+                ["PosY"] = spawnPosition.GetValue("Y") ?? spawnPosition.GetValue("y") ?? 0f,
                 ["Timestamp"] = DateTime.UtcNow.ToString("o")
             };
 
@@ -209,10 +212,15 @@ namespace OpenGSServer
                 winnerArray.Add(winner);
             }
 
+            // Consumers use the standard match-result notification and can render a
+            // single winner directly. Keep the full list for draw/tie-capable modes.
+            var primaryWinner = winners.Count > 0 ? winners[0] : "Draw";
+
             var message = new JObject
             {
-                ["MessageType"] = GameMessageTypes.MatchEnd,
+                ["MessageType"] = MessageType.MatchEndNotification,
                 ["RoomID"] = roomId,
+                ["Winner"] = primaryWinner,
                 ["Winners"] = winnerArray,
                 ["Timestamp"] = DateTime.UtcNow.ToString("o")
             };

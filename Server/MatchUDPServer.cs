@@ -3,6 +3,8 @@ using LiteNetLib;
 using LiteNetLib.Utils;
 using System;
 using System.Collections.Concurrent;
+using System.Text;
+using Newtonsoft.Json.Linq;
 using OpenGSCore;
 using OpenGSServer.Network; // ServerLagCompensationManager, ClientInputDataを使用
 using System.Linq;
@@ -19,15 +21,41 @@ namespace OpenGSServer
     public sealed class MatchUDPServer : IDisposable
     {
         private const string ConnectionKey = "OpenGS";
+        private static readonly string[] MatchEventTypes =
+        {
+            "LoadingStarted", "LoadingProgress", "LoadingCompleted", "LoadingFinished",
+            "MatchStatusRequest", "PlayerRespawn", "PlayerPose", "GrenadeThrow", "PlayerShot",
+            "ShootRequest", "FlagCaptured", "FlagLost", "FlagPickup", "FlagReturn",
+            "FlagScoreUpdate", "PlayerEliminated", "ObjectSpawned", "ObjectDestroyed"
+        };
         
         private NetManager? _server;
         private readonly EventBasedNetListener _listener = new();
         private readonly ConcurrentDictionary<string, PlayerConnectionInfo> _connectedPlayers =
             new(StringComparer.OrdinalIgnoreCase); // PlayerIDをstringに
+        private readonly ConcurrentDictionary<string, string> _connectionTokens =
+            new(StringComparer.OrdinalIgnoreCase);
+        private readonly ConcurrentDictionary<string, TokenBucket> _matchEventRateLimiters =
+            new(StringComparer.OrdinalIgnoreCase);
+        private const double MatchEventBurstCapacity = 30;
+        private const double MatchEventRatePerSecond = 20;
         private bool _disposed;
 
         public bool IsRunning => _server?.IsRunning ?? false;
         public int ConnectedPlayerCount => _connectedPlayers.Count;
+        public int? UdpPort { get; private set; }
+
+        public string IssueConnectionToken(string playerId)
+        {
+            if (string.IsNullOrWhiteSpace(playerId))
+            {
+                return string.Empty;
+            }
+
+            var token = Guid.NewGuid().ToString("N");
+            _connectionTokens[playerId] = token;
+            return token;
+        }
 
         /// <summary>
         /// UDPサーバーを起動
@@ -43,10 +71,6 @@ namespace OpenGSServer
             ConsoleWrite.WriteMessage($"[UDP] Starting server on port {port}...", ConsoleColor.Cyan);
 
             _server = new NetManager(_listener);
-            _server.Start(port);
-
-            // start periodic snapshot broadcast (default 20Hz)
-            StartSnapshotBroadcast(50);
 
             // イベントハンドラー登録
             _listener.ConnectionRequestEvent += OnConnectionRequest;
@@ -54,6 +78,28 @@ namespace OpenGSServer
             _listener.PeerDisconnectedEvent += OnPeerDisconnected;
             _listener.NetworkReceiveEvent += OnNetworkReceive;
             _listener.NetworkErrorEvent += OnNetworkError;
+
+            try
+            {
+                if (!_server.Start(port))
+                {
+                    throw new InvalidOperationException($"Unable to start UDP server on port {port}.");
+                }
+
+                UdpPort = port;
+
+            }
+            catch
+            {
+                _listener.ConnectionRequestEvent -= OnConnectionRequest;
+                _listener.PeerConnectedEvent -= OnPeerConnected;
+                _listener.PeerDisconnectedEvent -= OnPeerDisconnected;
+                _listener.NetworkReceiveEvent -= OnNetworkReceive;
+                _listener.NetworkErrorEvent -= OnNetworkError;
+                _server = null;
+                UdpPort = null;
+                throw;
+            }
 
             ConsoleWrite.WriteMessage($"[UDP] Server started on port {port}", ConsoleColor.Green);
         }
@@ -63,28 +109,15 @@ namespace OpenGSServer
         /// </summary>
         private void OnConnectionRequest(ConnectionRequest request)
         {
-            // 接続キー検証 (ClientNetworkManagerのClientPlayerIdをTagとして設定)
-            var reader = request.Data;
-            string playerId = reader.GetString(); // クライアントからのPlayerIDを読み取る
-            reader.Recycle(); // readerをリサイクル
-
-            if (!string.IsNullOrEmpty(playerId))
+            // 接続キーは認証用であり、PlayerID は接続後の ClientConnect で受け取る。
+            var peer = request.AcceptIfKey(ConnectionKey);
+            if (peer != null)
             {
-                var peer = request.AcceptIfKey(ConnectionKey);
-                if (peer != null)
-                {
-                    peer.Tag = playerId; // PeerにPlayerIDを紐付ける
-                    ConsoleWrite.WriteMessage($"[UDP] Connection request accepted from {peer.EndPoint} for Player: {playerId}", ConsoleColor.Green);
-                }
-                else
-                {
-                    ConsoleWrite.WriteMessage($"[UDP] Connection request rejected (invalid key or PlayerID missing)", ConsoleColor.Yellow);
-                }
+                ConsoleWrite.WriteMessage($"[UDP] Connection request accepted from {peer.EndPoint}; waiting for ClientConnect", ConsoleColor.Green);
             }
             else
             {
-                 request.Reject();
-                 ConsoleWrite.WriteMessage($"[UDP] Connection request rejected (PlayerID missing in data)", ConsoleColor.Yellow);
+                ConsoleWrite.WriteMessage("[UDP] Connection request rejected (invalid key)", ConsoleColor.Yellow);
             }
         }
 
@@ -93,7 +126,12 @@ namespace OpenGSServer
         /// </summary>
         private void OnPeerConnected(NetPeer peer)
         {
-            string playerId = peer.Tag?.ToString() ?? "Unknown";
+            string playerId = peer.Tag?.ToString() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(playerId))
+            {
+                ConsoleWrite.WriteMessage($"[UDP] Peer connected, waiting for ClientConnect: {peer.EndPoint}", ConsoleColor.Cyan);
+                return;
+            }
 
             var playerInfo = new PlayerConnectionInfo
             {
@@ -115,8 +153,7 @@ namespace OpenGSServer
                 state => SendTransformStateToClient(peer, state)
             );
 
-            // MatchRoomに通知（必要に応じて）
-            // NotifyPlayerJoined(peer.Id); // IDがintなので要修正
+            NotifyPlayerJoined(playerId);
         }
 
         /// <summary>
@@ -124,8 +161,22 @@ namespace OpenGSServer
         /// </summary>
         private void OnPeerDisconnected(NetPeer peer, DisconnectInfo info)
         {
-            string playerId = peer.Tag?.ToString() ?? "Unknown";
+            string playerId = peer.Tag?.ToString() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(playerId))
+            {
+                return;
+            }
+
+            // 同じ PlayerID が再接続している場合、古い peer の切断通知で
+            // 現在の接続とラグ補償状態まで削除しない。
+            if (!_connectedPlayers.TryGetValue(playerId, out var currentConnection) ||
+                currentConnection.PeerId != peer.Id)
+            {
+                return;
+            }
+
             _connectedPlayers.TryRemove(playerId, out _); // Dictionaryのキーをstringに
+            _matchEventRateLimiters.TryRemove(playerId, out _);
 
             ConsoleWrite.WriteMessage(
                 $"[UDP] Player disconnected: {playerId} ({peer.Id}) (Reason: {info.Reason})", 
@@ -135,8 +186,7 @@ namespace OpenGSServer
             // ラグ補償システムからクライアントを解除
             MatchServerV2.Instance.ServerLagCompensationManager.RemovePlayer(playerId);
 
-            // MatchRoomに通知
-            // NotifyPlayerLeft(peer.Id); // IDがintなので要修正
+            NotifyPlayerLeft(playerId);
         }
 
         /// <summary>
@@ -144,25 +194,67 @@ namespace OpenGSServer
         /// </summary>
         private void SendTransformStateToClient(NetPeer peer, ServerTransformState state)
         {
-            if (peer == null || peer.ConnectionState != ConnectionState.Connected) return;
+            var message = CreateTransformStateMessage(state);
+            var room = GetMatchRoomForPlayer(state.PlayerId);
+            if (room == null)
+            {
+                if (peer != null && peer.ConnectionState == ConnectionState.Connected)
+                {
+                    SendJsonToPeer(peer, message, DeliveryMethod.Unreliable);
+                }
 
+                return;
+            }
+
+            foreach (var player in room.Players)
+            {
+                if (!_connectedPlayers.TryGetValue(player.Id, out var connectionInfo))
+                {
+                    continue;
+                }
+
+                var targetPeer = _server?.GetPeerById(connectionInfo.PeerId);
+                if (targetPeer != null && targetPeer.ConnectionState == ConnectionState.Connected)
+                {
+                    SendJsonToPeer(targetPeer, message, DeliveryMethod.Unreliable);
+                }
+            }
+        }
+
+        private static JObject CreateTransformStateMessage(ServerTransformState state)
+        {
+            return new JObject
+            {
+                ["MessageType"] = "ServerTransformState",
+                ["NetworkId"] = state.NetworkId,
+                ["PlayerID"] = state.PlayerId,
+                ["PlayerId"] = state.PlayerId,
+                ["PosX"] = state.PositionX,
+                ["PosY"] = state.PositionY,
+                ["PosZ"] = state.PositionZ,
+                ["PositionX"] = state.PositionX,
+                ["PositionY"] = state.PositionY,
+                ["PositionZ"] = state.PositionZ,
+                ["RotationX"] = state.RotationX,
+                ["RotationY"] = state.RotationY,
+                ["RotationZ"] = state.RotationZ,
+                ["RotationW"] = state.RotationW,
+                ["VelX"] = state.VelocityX,
+                ["VelY"] = state.VelocityY,
+                ["VelZ"] = state.VelocityZ,
+                ["VelocityX"] = state.VelocityX,
+                ["VelocityY"] = state.VelocityY,
+                ["VelocityZ"] = state.VelocityZ,
+                ["Timestamp"] = state.Timestamp,
+                ["SequenceNumber"] = state.SequenceNumber
+            };
+        }
+
+        private static void SendJsonToPeer(NetPeer peer, JObject message, DeliveryMethod method)
+        {
             var writer = new NetDataWriter();
-            writer.Put("ServerTransformState"); // メッセージタイプ
-            writer.Put(state.NetworkId);
-            writer.Put(state.PlayerId);
-            writer.Put(state.PositionX);
-            writer.Put(state.PositionY);
-            writer.Put(state.PositionZ);
-            writer.Put(state.RotationX);
-            writer.Put(state.RotationY);
-            writer.Put(state.RotationZ);
-            writer.Put(state.RotationW);
-            writer.Put(state.VelocityX);
-            writer.Put(state.VelocityY);
-            writer.Put(state.VelocityZ);
-            writer.Put(state.Timestamp);
-            writer.Put(state.SequenceNumber);
-            peer.Send(writer, DeliveryMethod.Unreliable);
+            writer.Put(message.ToString(Newtonsoft.Json.Formatting.None));
+            peer.Send(writer, method);
         }
 
         /// <summary>
@@ -172,29 +264,47 @@ namespace OpenGSServer
         {
             try
             {
+                var data = reader.GetRemainingBytes();
+                if (LooksLikeJson(data))
+                {
+                    if (TryParseJson(data, out var json))
+                    {
+                        HandleJsonMessage(peer, json!);
+                    }
+                    else
+                    {
+                        ConsoleWrite.WriteMessage($"[UDP] Rejected malformed JSON packet from {peer.EndPoint}", ConsoleColor.Yellow);
+                    }
+                    return;
+                }
+
+                if (peer.Tag is not string playerId || string.IsNullOrWhiteSpace(playerId))
+                {
+                    ConsoleWrite.WriteMessage($"[UDP] Ignoring binary packet from peer without PlayerID: {peer.EndPoint}", ConsoleColor.Yellow);
+                    return;
+                }
+
+                var binaryReader = new NetDataReader(data);
                 // メッセージタイプを読み取り
-                var messageType = reader.GetString();
+                var messageType = binaryReader.GetString();
 
                 // メッセージタイプに応じて処理
                 switch (messageType)
                 {
                     case "PlayerMove":
-                        HandlePlayerMove(peer, reader);
+                        HandlePlayerMove(peer, binaryReader);
                         break;
 
                     case "PlayerShoot":
-                        HandlePlayerShoot(peer, reader);
+                        HandlePlayerShoot(peer, binaryReader);
                         break;
 
                     case "PlayerAction":
-                        HandlePlayerAction(peer, reader);
+                        HandlePlayerAction(peer, binaryReader);
                         break;
 
                     case "Ping":
-                        HandlePing(peer, reader);
-                        break;
-                    case "ClientConnect": // クライアントからPlayerIDを受け取るための初期接続メッセージ
-                        // peer.Tagに既に設定済みなので何もしない
+                        HandlePing(peer, binaryReader);
                         break;
 
                     default:
@@ -212,10 +322,363 @@ namespace OpenGSServer
             }
         }
 
+        private static bool TryParseJson(byte[] data, out JObject? json)
+        {
+            json = null;
+            var text = Encoding.UTF8.GetString(data).TrimStart();
+            if (!text.StartsWith("{", StringComparison.Ordinal)) return false;
+
+            try
+            {
+                json = JObject.Parse(text);
+                return true;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        private static bool LooksLikeJson(byte[] data)
+        {
+            if (data == null)
+            {
+                return false;
+            }
+
+            var index = 0;
+            while (index < data.Length && char.IsWhiteSpace((char)data[index]))
+            {
+                index++;
+            }
+
+            return index < data.Length && data[index] == (byte)'{';
+        }
+
+        private void HandleJsonMessage(NetPeer peer, JObject message)
+        {
+            var messageType = MessageType.Normalize(message["MessageType"]?.ToString());
+            var messagePlayerId = message["PlayerID"]?.ToString() ?? message["PlayerId"]?.ToString();
+
+            if (string.Equals(messageType, "ClientConnect", StringComparison.OrdinalIgnoreCase))
+            {
+                if (string.IsNullOrWhiteSpace(messagePlayerId))
+                {
+                    peer.Disconnect();
+                    return;
+                }
+
+                var token = message["UdpToken"]?.ToString() ?? message["Token"]?.ToString();
+                if (!_connectionTokens.TryGetValue(messagePlayerId, out var expectedToken) ||
+                    string.IsNullOrWhiteSpace(token) ||
+                    !string.Equals(expectedToken, token, StringComparison.Ordinal))
+                {
+                    ConsoleWrite.WriteMessage($"[UDP] Rejected ClientConnect without a valid token for {messagePlayerId}", ConsoleColor.Yellow);
+                    peer.Disconnect();
+                    return;
+                }
+
+                RegisterJsonPeer(peer, messagePlayerId);
+                return;
+            }
+
+            if (peer.Tag is not string playerId || string.IsNullOrWhiteSpace(playerId))
+            {
+                ConsoleWrite.WriteMessage($"[UDP] Ignoring JSON packet before ClientConnect: {peer.EndPoint}", ConsoleColor.Yellow);
+                return;
+            }
+
+            if (string.Equals(messageType, "PingRequest", StringComparison.OrdinalIgnoreCase))
+            {
+                HandleJsonPing(peer, playerId, message);
+                return;
+            }
+
+            if (string.Equals(messageType, "PingResponse", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            if (string.Equals(messageType, "PlayerPositionUpdate", StringComparison.OrdinalIgnoreCase))
+            {
+                HandleJsonPositionUpdate(playerId, message);
+                return;
+            }
+
+            if (TryDispatchMatchEvent(peer, playerId, messageType, message))
+            {
+                return;
+            }
+
+            if (!IsJsonInputMessage(messageType))
+            {
+                ConsoleWrite.WriteMessage(
+                    $"[UDP] Ignoring unsupported JSON message type '{messageType}' from {playerId}",
+                    ConsoleColor.Yellow);
+                return;
+            }
+
+            var direction = message["Direction"] as JObject;
+            var input = new ClientInputData
+            {
+                PlayerId = playerId,
+                MoveX = ReadJsonFloat(message, "VelX", "MoveX"),
+                MoveY = ReadJsonFloat(message, "VelY", "MoveY"),
+                MoveZ = ReadJsonFloat(message, "VelZ", "MoveZ"),
+                LookX = ReadJsonFloat(direction, "X", "DirX"),
+                LookY = ReadJsonFloat(direction, "Y", "DirY"),
+                Jump = ReadJsonBool(message, "Jump"),
+                Fire = ReadJsonBool(message, "Fire"),
+                SequenceNumber = ReadJsonByte(message, "SequenceNumber", "Sequence"),
+                Timestamp = ReadJsonFloat(message, "Timestamp"),
+                DeltaTime = ReadJsonFloat(message, "DeltaTime"),
+                HasClientPosition = message["PosX"] != null || message["PositionX"] != null,
+                ClientPosX = ReadJsonFloat(message, "PosX", "PositionX"),
+                ClientPosY = ReadJsonFloat(message, "PosY", "PositionY"),
+                ClientPosZ = ReadJsonFloat(message, "PosZ", "PositionZ")
+            };
+
+            if (!MatchServerV2.Instance.ServerLagCompensationManager.ProcessClientInput(input, out var rejectionReason))
+            {
+                ConsoleWrite.WriteMessage($"[UDP] Rejected JSON input from {playerId}: {rejectionReason}", ConsoleColor.Yellow);
+            }
+        }
+
+        private static bool IsJsonInputMessage(string messageType)
+        {
+            // PlayerMove is the current client wire format; PlayerInput remains
+            // accepted for older clients and local integration harnesses.
+            return string.Equals(messageType, "PlayerMove", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(messageType, "PlayerInput", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static void HandleJsonPing(NetPeer peer, string playerId, JObject message)
+        {
+            var response = new JObject
+            {
+                ["MessageType"] = "PingResponse",
+                ["PlayerID"] = playerId,
+                ["PlayerId"] = playerId,
+                ["ClientTimestamp"] = message["ClientTimestamp"] ?? JValue.CreateNull(),
+                ["ServerTimestamp"] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+            };
+
+            SendJsonToPeer(peer, response, DeliveryMethod.Unreliable);
+        }
+
+        private void HandleJsonPositionUpdate(string playerId, JObject message)
+        {
+            var position = message["Position"] as JObject;
+            var x = message["PosX"] != null || message["PositionX"] != null
+                ? ReadJsonFloat(message, "PosX", "PositionX")
+                : ReadJsonFloat(position, "X", "x");
+            var y = message["PosY"] != null || message["PositionY"] != null
+                ? ReadJsonFloat(message, "PosY", "PositionY")
+                : ReadJsonFloat(position, "Y", "y");
+            var z = message["PosZ"] != null || message["PositionZ"] != null
+                ? ReadJsonFloat(message, "PosZ", "PositionZ")
+                : ReadJsonFloat(position, "Z", "z");
+            var rotation = ReadJsonFloat(message, "Rotation", "RotationZ", "RotationY");
+            var deltaTime = ReadJsonFloat(message, "DeltaTime");
+
+            if (!IsFinite(x) || !IsFinite(y) || !IsFinite(z) || !IsFinite(rotation) || !IsFinite(deltaTime))
+            {
+                ConsoleWrite.WriteMessage($"[UDP] Rejected non-finite position update from {playerId}", ConsoleColor.Yellow);
+                return;
+            }
+
+            if (!MatchServerV2.Instance.ServerLagCompensationManager.ValidatePlayerPosition(
+                    playerId, x, y, z, deltaTime, out var rejectionReason))
+            {
+                ConsoleWrite.WriteMessage($"[UDP] Rejected position update from {playerId}: {rejectionReason}", ConsoleColor.Yellow);
+                return;
+            }
+
+            MatchServerV2.Instance.ServerLagCompensationManager.SetPlayerPosition(playerId, x, y, z);
+
+            var room = MatchRoomManager.Instance.SearchRoomByMemberID(playerId);
+            if (room == null)
+            {
+                return;
+            }
+
+            var update = new JObject
+            {
+                ["MessageType"] = "PlayerPositionUpdate",
+                ["PlayerID"] = playerId,
+                ["PlayerId"] = playerId,
+                ["RoomID"] = room.Id.ToString(),
+                ["Position"] = new JObject
+                {
+                    ["X"] = x,
+                    ["Y"] = y,
+                    ["Z"] = z
+                },
+                ["PosX"] = x,
+                ["PosY"] = y,
+                ["PosZ"] = z,
+                ["Rotation"] = rotation,
+                ["SequenceNumber"] = message["SequenceNumber"] ?? message["Sequence"] ?? 0,
+                ["Timestamp"] = message["Timestamp"] ?? DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+            };
+
+            foreach (var player in room.Players)
+            {
+                if (string.Equals(player.Id, playerId, StringComparison.OrdinalIgnoreCase) ||
+                    !_connectedPlayers.TryGetValue(player.Id, out var connectionInfo))
+                {
+                    continue;
+                }
+
+                var peer = _server?.GetPeerById(connectionInfo.PeerId);
+                if (peer != null && peer.ConnectionState == ConnectionState.Connected)
+                {
+                    SendJsonToPeer(peer, update, DeliveryMethod.Unreliable);
+                }
+            }
+        }
+
+        private static bool IsFinite(float value)
+        {
+            return !float.IsNaN(value) && !float.IsInfinity(value);
+        }
+
+        private bool TryDispatchMatchEvent(NetPeer peer, string playerId, string messageType, JObject message)
+        {
+            messageType = CanonicalizeMatchEventType(messageType);
+            message["MessageType"] = messageType;
+
+            if (string.Equals(messageType, "ShootRequest", StringComparison.OrdinalIgnoreCase))
+            {
+                messageType = "PlayerShot";
+                message["MessageType"] = messageType;
+            }
+
+            var isSystemEvent = messageType is
+                "LoadingStarted" or
+                "LoadingProgress" or
+                "LoadingCompleted" or
+                "LoadingFinished" or
+                "MatchStatusRequest" or
+                "PlayerRespawn" or
+                "PlayerPose";
+
+            var isRealtimeEvent = messageType is
+                "GrenadeThrow" or
+                "PlayerShot" or
+                "FlagCaptured" or
+                "FlagLost" or
+                "FlagPickup" or
+                "FlagReturn" or
+                "FlagScoreUpdate" or
+                "PlayerEliminated" or
+                "ObjectSpawned" or
+                "ObjectDestroyed";
+
+            if (!isSystemEvent && !isRealtimeEvent)
+            {
+                return false;
+            }
+
+            var room = MatchRoomManager.Instance.SearchRoomByMemberID(playerId);
+            if (room == null)
+            {
+                ConsoleWrite.WriteMessage($"[UDP] Ignoring {messageType} from player without a match room: {playerId}", ConsoleColor.Yellow);
+                return true;
+            }
+
+            var rateLimiter = _matchEventRateLimiters.GetOrAdd(
+                playerId,
+                _ => new TokenBucket(MatchEventBurstCapacity, MatchEventRatePerSecond));
+            if (!rateLimiter.TryConsume(1))
+            {
+                ConsoleWrite.WriteMessage($"[UDP] Rate limit exceeded for match events from {playerId}", ConsoleColor.Yellow);
+                return true;
+            }
+
+            message["PlayerID"] = playerId;
+            message["PlayerId"] = playerId;
+            message["RoomID"] = room.Id.ToString();
+            message["RoomId"] = room.Id.ToString();
+
+            if (isSystemEvent)
+            {
+                InGameMatchEventHandler.HandleTcpSystemEvent(message);
+            }
+            else
+            {
+                InGameMatchEventHandler.HandleUdpGameEvent(
+                    Encoding.UTF8.GetBytes(message.ToString(Newtonsoft.Json.Formatting.None)),
+                    peer.EndPoint.ToString());
+            }
+
+            return true;
+        }
+
+        private static string CanonicalizeMatchEventType(string messageType)
+        {
+            if (string.IsNullOrWhiteSpace(messageType))
+            {
+                return messageType;
+            }
+
+            foreach (var knownType in MatchEventTypes)
+            {
+                if (string.Equals(messageType, knownType, StringComparison.OrdinalIgnoreCase))
+                {
+                    return knownType;
+                }
+            }
+
+            return messageType;
+        }
+
+        private void RegisterJsonPeer(NetPeer peer, string playerId)
+        {
+            if (_connectedPlayers.TryGetValue(playerId, out var existing))
+            {
+                if (existing.PeerId == peer.Id)
+                {
+                    peer.Tag = playerId;
+                    return;
+                }
+
+                _server?.GetPeerById(existing.PeerId)?.Disconnect();
+            }
+
+            peer.Tag = playerId;
+            OnPeerConnected(peer);
+        }
+
+        private static float ReadJsonFloat(JObject? json, params string[] names)
+        {
+            if (json == null) return 0f;
+            foreach (var name in names)
+            {
+                if (float.TryParse(json[name]?.ToString(), System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out var value)) return value;
+            }
+            return 0f;
+        }
+
+        private static bool ReadJsonBool(JObject json, string name)
+        {
+            return bool.TryParse(json[name]?.ToString(), out var value) && value;
+        }
+
+        private static byte ReadJsonByte(JObject json, params string[] names)
+        {
+            foreach (var name in names)
+            {
+                if (byte.TryParse(json[name]?.ToString(), out var value)) return value;
+            }
+            return 0;
+        }
+
         /// <summary>
         /// プレイヤー移動処理
         /// </summary>
-        private void HandlePlayerMove(NetPeer peer, NetPacketReader reader)
+        private void HandlePlayerMove(NetPeer peer, NetDataReader reader)
         {
             var moveX = reader.GetFloat();
             var moveY = reader.GetFloat();
@@ -255,7 +718,7 @@ namespace OpenGSServer
         /// <summary>
         /// プレイヤー射撃処理
         /// </summary>
-        private void HandlePlayerShoot(NetPeer peer, NetPacketReader reader)
+        private void HandlePlayerShoot(NetPeer peer, NetDataReader reader)
         {
             var weaponType = reader.GetInt(); // クライアントがweaponTypeを送ってくる場合
             var posX = reader.GetFloat(); // クライアントが射撃時の位置を送ってくる場合
@@ -287,7 +750,7 @@ namespace OpenGSServer
         /// <summary>
         /// プレイヤーアクション処理
         /// </summary>
-        private void HandlePlayerAction(NetPeer peer, NetPacketReader reader)
+        private void HandlePlayerAction(NetPeer peer, NetDataReader reader)
         {
             var actionType = reader.GetString();
 
@@ -298,15 +761,16 @@ namespace OpenGSServer
         /// <summary>
         /// Ping処理
         /// </summary>
-        private void HandlePing(NetPeer peer, NetPacketReader reader)
+        private void HandlePing(NetPeer peer, NetDataReader reader)
         {
             var timestamp = reader.GetLong();
 
             // Pong返信
-            var writer = new NetDataWriter();
-            writer.Put("Pong");
-            writer.Put(timestamp);
-            peer.Send(writer, DeliveryMethod.Unreliable);
+            SendJsonToPeer(peer, new JObject
+            {
+                ["MessageType"] = "Pong",
+                ["Timestamp"] = timestamp
+            }, DeliveryMethod.Unreliable);
 
             // Ping統計を記録
             string playerId = peer.Tag?.ToString() ?? "Unknown";
@@ -348,6 +812,40 @@ namespace OpenGSServer
             }
         }
 
+        public void BroadcastToRoom(string senderPlayerId, string messageType)
+        {
+            var matchRoom = GetMatchRoomForPlayer(senderPlayerId);
+            if (matchRoom == null) return;
+
+            var message = new JObject
+            {
+                ["MessageType"] = messageType,
+                ["PlayerID"] = senderPlayerId,
+                ["PlayerId"] = senderPlayerId,
+                ["RoomID"] = matchRoom.Id.ToString(),
+                ["RoomId"] = matchRoom.Id.ToString()
+            };
+
+            BroadcastJsonToRoom(matchRoom, message);
+        }
+
+        private void BroadcastJsonToRoom(MatchRoom matchRoom, JObject message)
+        {
+            if (matchRoom == null || message == null) return;
+
+            foreach (var player in matchRoom.Players)
+            {
+                if (_connectedPlayers.TryGetValue(player.Id, out var connectionInfo))
+                {
+                    var peer = _server?.GetPeerById(connectionInfo.PeerId);
+                    if (peer != null && peer.ConnectionState == ConnectionState.Connected)
+                    {
+                        SendJsonToPeer(peer, message, DeliveryMethod.ReliableOrdered);
+                    }
+                }
+            }
+        }
+
         /// <summary>
         /// プレイヤーの所属MatchRoomを取得
         /// </summary>
@@ -367,20 +865,59 @@ namespace OpenGSServer
                     string.Equals(p.Id, playerId, StringComparison.OrdinalIgnoreCase)));
         }
 
+        private MatchRoom? GetMatchRoomForPlayer(string playerId)
+        {
+            if (string.IsNullOrWhiteSpace(playerId)) return null;
+
+            return MatchRoomManager.Instance.AllRooms()
+                .OfType<MatchRoom>()
+                .FirstOrDefault(room => room.Players.Any(p =>
+                    string.Equals(p.Id, playerId, StringComparison.OrdinalIgnoreCase)));
+        }
+
         /// <summary>
         /// プレイヤー参加通知
         /// </summary>
-        private void NotifyPlayerJoined(string playerId) // playerId を string に変更
+        private void NotifyPlayerJoined(string playerId)
         {
-            // 必要に応じてMatchRoomManagerに通知
+            var room = GetMatchRoomForPlayer(playerId);
+            if (room == null) return;
+
+            var player = room.Players.FirstOrDefault(candidate =>
+                string.Equals(candidate.Id, playerId, StringComparison.OrdinalIgnoreCase));
+            var message = new JObject
+            {
+                ["MessageType"] = "PlayerJoined",
+                ["PlayerID"] = playerId,
+                ["PlayerId"] = playerId,
+                ["PlayerName"] = player?.Name ?? playerId,
+                ["Team"] = player?.Team.ToString() ?? "NoTeam",
+                ["RoomID"] = room.Id.ToString(),
+                ["RoomId"] = room.Id.ToString()
+            };
+
+            BroadcastJsonToRoom(room, message);
         }
 
         /// <summary>
         /// プレイヤー退出通知
         /// </summary>
-        private void NotifyPlayerLeft(string playerId) // playerId を string に変更
+        private void NotifyPlayerLeft(string playerId)
         {
-            // 必要に応じてMatchRoomManagerに通知
+            var room = GetMatchRoomForPlayer(playerId);
+            if (room == null) return;
+
+            var message = new JObject
+            {
+                ["MessageType"] = "PlayerLeft",
+                ["PlayerID"] = playerId,
+                ["PlayerId"] = playerId,
+                ["Reason"] = "Disconnected",
+                ["RoomID"] = room.Id.ToString(),
+                ["RoomId"] = room.Id.ToString()
+            };
+
+            BroadcastJsonToRoom(room, message);
         }
 
         /// <summary>
@@ -430,28 +967,13 @@ namespace OpenGSServer
                             var playerState = lagCompManager.GetPlayerState(player.Id);
                             if (playerState.PlayerId != null) // デフォルト値でないことを確認
                             {
-                                // ServerTransformStateをシリアライズして送信
-                                var writer = new NetDataWriter();
-                                writer.Put("ServerTransformState"); // メッセージタイプ
-                                writer.Put(playerState.NetworkId);
-                                writer.Put(playerState.PlayerId);
-                                writer.Put(playerState.PositionX);
-                                writer.Put(playerState.PositionY);
-                                writer.Put(playerState.PositionZ);
-                                writer.Put(playerState.RotationX);
-                                writer.Put(playerState.RotationY);
-                                writer.Put(playerState.RotationZ);
-                                writer.Put(playerState.RotationW);
-                                writer.Put(playerState.VelocityX);
-                                writer.Put(playerState.VelocityY);
-                                writer.Put(playerState.VelocityZ);
-                                writer.Put(playerState.Timestamp);
-                                writer.Put(playerState.SequenceNumber);
-
                                 if (_connectedPlayers.TryGetValue(player.Id, out var connectionInfo))
                                 {
                                     var peerById = _server?.GetPeerById(connectionInfo.PeerId);
-                                    peerById?.Send(writer, DeliveryMethod.Unreliable);
+                                    if (peerById != null)
+                                    {
+                                        SendJsonToPeer(peerById, CreateTransformStateMessage(playerState), DeliveryMethod.Unreliable);
+                                    }
                                 }
                             }
                         }
@@ -469,8 +991,12 @@ namespace OpenGSServer
         /// </summary>
         public void Shutdown()
         {
-            if (_server == null || !_server.IsRunning)
+            StopSnapshotBroadcast();
+
+            if (_server == null)
             {
+                _connectedPlayers.Clear();
+                _connectionTokens.Clear();
                 return;
             }
 
@@ -483,8 +1009,16 @@ namespace OpenGSServer
             _listener.NetworkReceiveEvent -= OnNetworkReceive;
             _listener.NetworkErrorEvent -= OnNetworkError;
 
-            _server.Stop();
+            if (_server.IsRunning)
+            {
+                _server.Stop();
+            }
+
+            _server = null;
+            UdpPort = null;
             _connectedPlayers.Clear();
+            _connectionTokens.Clear();
+            _matchEventRateLimiters.Clear();
 
             ConsoleWrite.WriteMessage("[UDP] Server shutdown complete", ConsoleColor.Green);
         }

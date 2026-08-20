@@ -42,8 +42,15 @@ namespace OpenGSServer
 
         public static string? Login(in IClientSession session, in IDictionary<string, JToken> dic)
         {
-            if (!TryReadString(dic, "id", out var id) || !TryReadString(dic, "pass", out var pass))
+            if (!TryReadFirstString(dic, out var id, "id", "AccountID", "AccountId", "PlayerID") ||
+                !TryReadFirstString(dic, out var pass, "pass", "Password"))
             {
+                session.SendAsyncJsonWithTimeStamp(new JObject
+                {
+                    [ServerMessageTypes.MessageType] = MessageType.LoginResponse,
+                    ["Success"] = false,
+                    ["Error"] = "AccountID and Password are required"
+                });
                 return null;
             }
 
@@ -98,6 +105,20 @@ namespace OpenGSServer
 
             value = token?.ToString() ?? string.Empty;
             return !string.IsNullOrWhiteSpace(value);
+        }
+
+        private static bool TryReadFirstString(IDictionary<string, JToken> dic, out string value, params string[] keys)
+        {
+            foreach (var key in keys)
+            {
+                if (TryReadString(dic, key, out value))
+                {
+                    return true;
+                }
+            }
+
+            value = string.Empty;
+            return false;
         }
     }
 

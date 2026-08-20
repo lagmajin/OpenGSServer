@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using OpenGSCore;
 
 
 namespace OpenGSServer
@@ -70,10 +71,19 @@ namespace OpenGSServer
 
         public JObject ToJson()
         {
-            var result = new JObject();
+            var succeeded = messageType == eCreateAccountResult.Succeeful;
+            var result = new JObject
+            {
+                ["MessageType"] = OpenGSCore.MessageType.CreateAccountResponse,
+                ["Success"] = succeeded,
+                ["Message"] = Message(),
+                ["LegacyMessageType"] = MessageType()
+            };
 
-            result["MessageType"] = MessageType();
-            result["Message"] = Message();
+            if (!succeeded)
+            {
+                result["Error"] = Message();
+            }
 
 
             return result;

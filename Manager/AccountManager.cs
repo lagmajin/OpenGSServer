@@ -281,7 +281,9 @@ namespace OpenGSServer
                 return false;
             }
 
-            return _logonUsers.TryRemove(id, out _);
+            var userRemoved = _logonUsers.TryRemove(id, out _);
+            var infoRemoved = _playerInfo.TryRemove(id, out _);
+            return userRemoved || infoRemoved;
         }
 
         /// <summary>

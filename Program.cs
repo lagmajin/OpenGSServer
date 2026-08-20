@@ -224,7 +224,7 @@ using Autofac;
 
                     // 新しい MatchServerV2 (同時処理/マルチコア対応) を使用
                     var matchServer = MatchServerV2.Instance;
-                    matchServer.Listen(startupOptions.MatchTcpPort, startupOptions.MatchUdpPort);
+                    matchServer.Listen(startupOptions.MatchTcpPort, startupOptions.MatchUdpPort, startupOptions.PublicIp);
                     matchServer.EnableMultiCore();
 
                     var managementServer = ManagementServer.Instance;

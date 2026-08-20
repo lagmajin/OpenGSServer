@@ -36,6 +36,7 @@ namespace OpenGSServer.Network
             public byte LastProcessedSequence;
             public byte LastAcceptedSequence;
             public bool HasAcceptedSequence;
+            public bool HasAuthoritativePosition;
             public Queue<ClientInputData> InputQueue = new Queue<ClientInputData>();
             public DateTime LastUpdateTime = DateTime.UtcNow;
             public bool IsGrounded = true;
@@ -119,6 +120,15 @@ namespace OpenGSServer.Network
                     if (!string.IsNullOrWhiteSpace(clampedReason))
                     {
                         rejectionReason = clampedReason;
+                    }
+
+                    if (!state.HasAuthoritativePosition && input.HasClientPosition &&
+                        IsFinite(input.ClientPosX) && IsFinite(input.ClientPosY) && IsFinite(input.ClientPosZ))
+                    {
+                        state.PosX = input.ClientPosX;
+                        state.PosY = input.ClientPosY;
+                        state.PosZ = input.ClientPosZ;
+                        state.HasAuthoritativePosition = true;
                     }
 
                     state.InputQueue.Enqueue(input);
@@ -240,6 +250,7 @@ namespace OpenGSServer.Network
             state.PosX += state.VelX * dt;
             state.PosY += state.VelY * dt;
             state.PosZ += state.VelZ * dt;
+            state.HasAuthoritativePosition = true;
 
             if (state.PosZ <= GroundHeight)
             {

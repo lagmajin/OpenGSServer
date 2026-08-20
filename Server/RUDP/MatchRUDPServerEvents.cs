@@ -90,11 +90,15 @@ namespace OpenGSServer
                 // 旧処理
                 if (reader.TryGetByte(out var data))
                 {
-                    ConsoleWrite.WriteMessage(data.ToString());
+                    var remainingData = reader.GetRemainingBytes();
+                    var legacyData = new byte[remainingData.Length + 1];
+                    legacyData[0] = data;
+                    Array.Copy(remainingData, 0, legacyData, 1, remainingData.Length);
+                    ConsoleWrite.WriteMessage($"[RUDP] Legacy packet received ({legacyData.Length} bytes)");
 
                     try
                     {
-                        var jsonString = System.Text.Encoding.UTF8.GetString(new byte[] { data });
+                        var jsonString = System.Text.Encoding.UTF8.GetString(legacyData);
                         var json = JObject.Parse(jsonString);
 
                         // ハートビート応答チェック
@@ -114,7 +118,7 @@ namespace OpenGSServer
                     }
                     catch
                     {
-                        InGameMatchEventHandler.HandleUdpGameEvent(new byte[] { data }, "unknown");
+                        InGameMatchEventHandler.HandleUdpGameEvent(legacyData, "unknown");
                     }
                 }
             }
