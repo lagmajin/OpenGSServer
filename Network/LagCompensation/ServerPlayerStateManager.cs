@@ -326,6 +326,12 @@ namespace OpenGSServer.Network
                 return false;
             }
 
+            if (deltaTime < 0f || deltaTime > MaxInputDeltaTime)
+            {
+                RecordViolation(state, $"Position delta time out of range: {deltaTime:F3}");
+                return false;
+            }
+
             float dx = state.PosX - clientX;
             float dy = state.PosY - clientY;
             float dz = state.PosZ - clientZ;
