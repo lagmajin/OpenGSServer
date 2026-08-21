@@ -527,8 +527,6 @@ namespace OpenGSServer
                 return;
             }
 
-            MatchServerV2.Instance.ServerLagCompensationManager.SetPlayerPosition(playerId, x, y, z);
-
             var room = MatchRoomManager.Instance.SearchRoomByMemberID(playerId);
             if (room == null)
             {
@@ -545,14 +543,14 @@ namespace OpenGSServer
                 ["RoomID"] = room.Id.ToString(),
                 ["Position"] = new JObject
                 {
-                    ["X"] = x,
-                    ["Y"] = y,
-                    ["Z"] = z
+                    ["X"] = authoritativeState.PositionX,
+                    ["Y"] = authoritativeState.PositionY,
+                    ["Z"] = authoritativeState.PositionZ
                 },
-                ["PosX"] = x,
-                ["PosY"] = y,
-                ["PosZ"] = z,
-                ["Rotation"] = rotation,
+                ["PosX"] = authoritativeState.PositionX,
+                ["PosY"] = authoritativeState.PositionY,
+                ["PosZ"] = authoritativeState.PositionZ,
+                ["Rotation"] = authoritativeState.RotationY,
                 ["SequenceNumber"] = authoritativeState.SequenceNumber,
                 ["Timestamp"] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
             };
