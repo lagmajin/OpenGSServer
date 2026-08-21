@@ -63,6 +63,9 @@ project.lock.json
 project.fragment.lock.json
 artifacts/
 
+# Local server databases may contain account and progress data.
+Database/*.db
+
 # ASP.NET Scaffolding
 ScaffoldingReadMe.txt
 
