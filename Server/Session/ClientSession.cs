@@ -229,6 +229,7 @@ namespace OpenGSServer
 
             if (!string.IsNullOrWhiteSpace(PlayerID))
             {
+                InGameMatchEventHandler.ClearPlayerState(PlayerID);
                 LobbyServerManager.Instance.PlayerLeaveLobby(PlayerID);
                 WaitRoomEventHandler.RemoveDisconnectedPlayer(PlayerID);
             }
