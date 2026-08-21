@@ -10,6 +10,7 @@ namespace OpenGSServer.Network
     public class ServerPlayerStateManager
     {
         private const float MaxInputDeltaTime = 0.25f;
+        private const float MaxSimulationTimePerTick = 0.1f;
         private const float MaxMovementMagnitude = 1.15f;
         private const float MaxHorizontalSpeed = 10f;
         private const float MaxVerticalSpeed = 12f;
@@ -165,15 +166,16 @@ namespace OpenGSServer.Network
         /// </summary>
         public void ProcessAllInputs()
         {
-            ProcessAllInputs(0f);
+            ProcessAllInputs(0.05f);
         }
 
         public void ProcessAllInputs(float serverDeltaTime)
         {
             var idleDeltaTime = Clamp(serverDeltaTime, 0f, MaxInputDeltaTime);
+            var simulationBudget = MathF.Min(MaxSimulationTimePerTick, idleDeltaTime * 2f);
             foreach (var kvp in m_PlayerStates)
             {
-                ProcessPlayerInputs(kvp.Value, idleDeltaTime);
+                ProcessPlayerInputs(kvp.Value, idleDeltaTime, simulationBudget);
             }
         }
 
@@ -184,23 +186,33 @@ namespace OpenGSServer.Network
         {
             if (m_PlayerStates.TryGetValue(playerId, out var state))
             {
-                ProcessPlayerInputs(state, 0f);
+                ProcessPlayerInputs(state, 0f, MaxSimulationTimePerTick);
             }
         }
 
         /// <summary>
         /// プレイヤー入力を処理する
         /// </summary>
-        private void ProcessPlayerInputs(PlayerServerState state, float idleDeltaTime)
+        private void ProcessPlayerInputs(PlayerServerState state, float idleDeltaTime, float simulationBudget)
         {
             var processedInput = false;
+            var simulatedTime = 0f;
             while (state.InputQueue.Count > 0)
             {
+                var remainingBudget = simulationBudget - simulatedTime;
+                if (remainingBudget <= 0f)
+                {
+                    break;
+                }
+
                 var input = state.InputQueue.Dequeue();
+                var effectiveDeltaTime = MathF.Min(input.DeltaTime, remainingBudget);
+                input.DeltaTime = effectiveDeltaTime;
 
                 // 予測移動を適用（実際のゲームロジックに置き換えが必要）
                 ApplyServerMovement(state, input);
                 processedInput = true;
+                simulatedTime += effectiveDeltaTime;
 
                 state.LastProcessedSequence = input.SequenceNumber;
                 state.LastInputTimestamp = input.Timestamp;
