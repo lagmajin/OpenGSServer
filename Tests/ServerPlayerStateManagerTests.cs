@@ -70,6 +70,28 @@ public sealed class ServerPlayerStateManagerTests
     }
 
     [Fact]
+    public void QueuedInputsRespectPerTickSimulationBudget()
+    {
+        var manager = new ServerPlayerStateManager();
+        manager.RegisterPlayer("player-1");
+        manager.QueueClientInput(new ClientInputData
+        {
+            PlayerId = "player-1", SequenceNumber = 1, DeltaTime = 0.25f,
+            Timestamp = 1f, MoveX = 1f
+        }, out _);
+        manager.QueueClientInput(new ClientInputData
+        {
+            PlayerId = "player-1", SequenceNumber = 2, DeltaTime = 0.25f,
+            Timestamp = 2f, MoveX = 1f
+        }, out _);
+
+        manager.ProcessAllInputs(0.05f);
+
+        var state = manager.GetPlayerState("player-1");
+        Assert.InRange(state.PositionX, 0f, 1f);
+    }
+
+    [Fact]
     public void IdleSimulationAppliesGravityAfterJump()
     {
         var manager = new ServerPlayerStateManager();
