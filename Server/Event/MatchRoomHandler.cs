@@ -745,13 +745,20 @@ namespace OpenGSServer
 
         private static string? NormalizeWeaponType(string? weaponType)
         {
-            return weaponType?.ToLowerInvariant() switch
+            var normalized = weaponType?.Trim().ToLowerInvariant()
+                .Replace("(clone)", string.Empty, StringComparison.Ordinal)
+                .Replace("_", string.Empty, StringComparison.Ordinal)
+                .Replace("-", string.Empty, StringComparison.Ordinal)
+                .Replace(" ", string.Empty, StringComparison.Ordinal);
+
+            return normalized switch
             {
-                "pistol" => "Pistol",
-                "smg" => "SMG",
+                "pistol" or "handgun" or "glock" or "deserteagle" => "Pistol",
+                "smg" or "submachinegun" or "scorpion" or "fnp90" or "uzi" or "mp5" => "SMG",
                 "shotgun" => "Shotgun",
-                "rifle" => "Rifle",
-                "sniper" => "Sniper",
+                "rifle" or "assaultrifle" or "ak47" or "m16" or "famas" or "f2000" or
+                    "steyraug" or "mg42" or "m60" or "fnminimisaw" => "Rifle",
+                "sniper" or "sniperrifle" or "scout" or "dragunov" or "psg1" or "awp" => "Sniper",
                 _ => null
             };
         }
