@@ -130,11 +130,11 @@ namespace OpenGSServer
                     break;
 
                 case GameMessageTypes.ObjectSpawned:
-                    HandleObjectSpawned(room, playerId, json);
+                    Console.WriteLine($"[Match] Ignored client-supplied object spawn from '{playerId}'; objects are server-authoritative");
                     break;
 
                 case GameMessageTypes.ObjectDestroyed:
-                    HandleObjectDestroyed(room, playerId, json);
+                    Console.WriteLine($"[Match] Ignored client-supplied object destroy from '{playerId}'; objects are server-authoritative");
                     break;
 
                 default:
