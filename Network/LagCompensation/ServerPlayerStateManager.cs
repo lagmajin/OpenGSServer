@@ -72,7 +72,8 @@ namespace OpenGSServer.Network
                 RotY = 0,
                 RotZ = 0,
                 RotW = 1,
-                IsGrounded = true
+                IsGrounded = true,
+                HasAuthoritativePosition = true
             };
         }
 

@@ -162,6 +162,18 @@ namespace OpenGSServer
 
             // ラグ補償システムにクライアントを登録
             MatchServerV2.Instance.ServerLagCompensationManager.AddPlayer(playerId);
+            var matchRoom = MatchRoomManager.Instance.SearchRoomByMemberID(playerId);
+            var roomPlayer = matchRoom?.Players.FirstOrDefault(player =>
+                string.Equals(player.Id, playerId, StringComparison.OrdinalIgnoreCase));
+            if (matchRoom != null && roomPlayer != null &&
+                ServerManager.Instance.Settings.TryGetRespawnPoint(
+                    roomPlayer.Team,
+                    matchRoom.Players.IndexOf(roomPlayer),
+                    out var initialSpawn))
+            {
+                MatchServerV2.Instance.ServerLagCompensationManager.SetPlayerPosition(
+                    playerId, initialSpawn.X, initialSpawn.Y, initialSpawn.Z);
+            }
             MatchServerV2.Instance.ServerLagCompensationManager.RegisterClientCallback(
                 playerId,
                 state => SendTransformStateToClient(peer, state)
