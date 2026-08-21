@@ -513,9 +513,10 @@ namespace OpenGSServer
             var rotation = ReadJsonFloat(message, "Rotation", "RotationZ", "RotationY");
             var deltaTime = ReadJsonFloat(message, "DeltaTime");
 
-            if (!IsFinite(x) || !IsFinite(y) || !IsFinite(z) || !IsFinite(rotation) || !IsFinite(deltaTime))
+            if (!IsFinite(x) || !IsFinite(y) || !IsFinite(z) || !IsFinite(rotation) || !IsFinite(deltaTime) ||
+                deltaTime < 0f || deltaTime > 0.25f)
             {
-                ConsoleWrite.WriteMessage($"[UDP] Rejected non-finite position update from {playerId}", ConsoleColor.Yellow);
+                ConsoleWrite.WriteMessage($"[UDP] Rejected invalid position timing from {playerId}", ConsoleColor.Yellow);
                 return;
             }
 
