@@ -62,9 +62,13 @@ namespace OpenGSServer
                 {
                     var room = manager.SearchRoomByMemberID(playerId);
 
-                    if (room != null)
+                    if (room != null && IsRoomMatch(room, roomId))
                     {
                         ProcessSystemEvent(room, type, json, playerId);
+                    }
+                    else if (room != null)
+                    {
+                        Console.WriteLine($"[Match] Rejected TCP event for mismatched room '{roomId}' from '{playerId}'");
                     }
                 }
             }
@@ -90,9 +94,13 @@ namespace OpenGSServer
                     MatchRoomManager manager = MatchRoomManager.Instance;
                     var room = manager.SearchRoomByMemberID(playerId);
 
-                    if (room != null)
+                    if (room != null && IsRoomMatch(room, roomId))
                     {
                         ProcessRealtimeGameEvent(room, type, json, playerId, remoteEndPoint);
+                    }
+                    else if (room != null)
+                    {
+                        Console.WriteLine($"[Match] Rejected UDP event for mismatched room '{roomId}' from '{playerId}'");
                     }
                 }
             }
@@ -749,6 +757,11 @@ namespace OpenGSServer
             }
 
             return null;
+        }
+
+        private static bool IsRoomMatch(MatchRoom room, string roomId)
+        {
+            return string.Equals(room.Id.ToString(), roomId, StringComparison.OrdinalIgnoreCase);
         }
 
     }
