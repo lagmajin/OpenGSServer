@@ -348,6 +348,19 @@ namespace OpenGSServer
             var spawnX = serverState.PositionX;
             var spawnY = serverState.PositionY;
             var spawnZ = serverState.PositionZ;
+            var respawnedPlayer = room.Players.FirstOrDefault(player =>
+                string.Equals(player.Id, playerId, StringComparison.OrdinalIgnoreCase));
+            if (respawnedPlayer != null &&
+                ServerManager.Instance.Settings.TryGetRespawnPoint(
+                    respawnedPlayer.Team,
+                    room.Players.IndexOf(respawnedPlayer),
+                    out var configuredSpawn))
+            {
+                spawnX = configuredSpawn.X;
+                spawnY = configuredSpawn.Y;
+                spawnZ = configuredSpawn.Z;
+            }
+
             var spawnPosition = new JObject
             {
                 ["X"] = spawnX,
@@ -357,8 +370,6 @@ namespace OpenGSServer
             MatchServerV2.Instance?.ServerLagCompensationManager.SetPlayerPosition(
                 playerId, spawnX, spawnY, spawnZ);
 
-            var respawnedPlayer = room.Players.FirstOrDefault(player =>
-                string.Equals(player.Id, playerId, StringComparison.OrdinalIgnoreCase));
             if (respawnedPlayer != null)
             {
                 respawnedPlayer.Health = Math.Max(1, respawnedPlayer.MaxHealth);

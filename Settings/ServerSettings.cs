@@ -9,6 +9,7 @@ namespace OpenGSServer
     public class ServerSettings
     {
         private readonly List<EGameMode> _allowGameModes = new();
+        private readonly List<ServerRespawnPoint> _respawnPoints = new();
 
         public int MaxRoom { get; private set; } = 32;
         public int MaxUser { get; private set; } = 200;
@@ -16,6 +17,7 @@ namespace OpenGSServer
         public bool CanRegisterAccounts { get; private set; } = true;
 
         public IReadOnlyList<EGameMode> AllowGameModes => _allowGameModes;
+        public IReadOnlyList<ServerRespawnPoint> RespawnPoints => _respawnPoints;
 
         public ServerSettings()
         {
@@ -67,6 +69,8 @@ namespace OpenGSServer
                 ["AllowGameModes"] = new JArray(_allowGameModes.Select(m => m.ToString()))
             };
 
+            result["RespawnPoints"] = new JArray(_respawnPoints.Select(point => point.ToJson()));
+
             return result;
         }
 
@@ -91,6 +95,31 @@ namespace OpenGSServer
                     SetAllowedGameModes(parsedModes);
                 }
             }
+
+            if (json["RespawnPoints"] is JArray respawnPoints)
+            {
+                _respawnPoints.Clear();
+                foreach (var token in respawnPoints.OfType<JObject>())
+                {
+                    if (ServerRespawnPoint.TryParse(token, out var point))
+                    {
+                        _respawnPoints.Add(point);
+                    }
+                }
+            }
+        }
+
+        public bool TryGetRespawnPoint(ETeam team, int slot, out ServerRespawnPoint point)
+        {
+            var candidates = _respawnPoints.Where(candidate => candidate.Team == team).ToList();
+            if (candidates.Count == 0)
+            {
+                point = null!;
+                return false;
+            }
+
+            point = candidates[Math.Abs(slot) % candidates.Count];
+            return true;
         }
 
         private static int ReadInt(JObject json, string propertyName, int fallback, int minimum)
@@ -215,4 +244,41 @@ namespace OpenGSServer
 
 
 
+}
+
+public sealed class ServerRespawnPoint
+{
+    public ETeam Team { get; init; } = ETeam.NoTeam;
+    public float X { get; init; }
+    public float Y { get; init; }
+    public float Z { get; init; }
+
+    public JObject ToJson() => new()
+    {
+        ["Team"] = Team.ToString(),
+        ["X"] = X,
+        ["Y"] = Y,
+        ["Z"] = Z
+    };
+
+    public static bool TryParse(JObject json, out ServerRespawnPoint point)
+    {
+        point = null!;
+        if (!Enum.TryParse(json["Team"]?.ToString(), true, out ETeam team) || team == ETeam.NoTeam)
+        {
+            return false;
+        }
+
+        if (!float.TryParse(json["X"]?.ToString(), out var x) ||
+            !float.TryParse(json["Y"]?.ToString(), out var y) ||
+            !float.TryParse(json["Z"]?.ToString(), out var z) ||
+            float.IsNaN(x) || float.IsNaN(y) || float.IsNaN(z) ||
+            float.IsInfinity(x) || float.IsInfinity(y) || float.IsInfinity(z))
+        {
+            return false;
+        }
+
+        point = new ServerRespawnPoint { Team = team, X = x, Y = y, Z = z };
+        return true;
+    }
 }

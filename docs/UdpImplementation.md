@@ -13,3 +13,20 @@ legacy/experimental implementations. They are not referenced by
 `MatchServerV2` or `Program`. New protocol or gameplay work must target
 `MatchUDPServer` first. Keep the legacy files available until a separate
 cleanup change removes them after downstream branches have migrated.
+
+## Respawn points
+
+The server settings file can provide team-owned spawn points. Coordinates from
+the client are ignored. Example:
+
+```json
+{
+  "RespawnPoints": [
+    { "Team": "Red", "X": -8, "Y": 0, "Z": 0 },
+    { "Team": "Blue", "X": 8, "Y": 0, "Z": 0 }
+  ]
+}
+```
+
+If no point exists for a player's team, the server keeps the authoritative
+position already held by the lag-compensation state manager.
