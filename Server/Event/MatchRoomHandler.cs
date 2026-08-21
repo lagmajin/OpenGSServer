@@ -411,9 +411,9 @@ namespace OpenGSServer
         private static void HandleGrenadeThrow(MatchRoom room, string playerId, JObject grenadeData)
         {
             var objectType = NormalizeGrenadeObjectType(grenadeData.GetStringOrNull("GrenadeType"));
-            var objectId = grenadeData.GetStringOrNull("ObjectId") ?? Guid.NewGuid().ToString("N");
+            var objectId = Guid.NewGuid().ToString("N");
             Console.WriteLine($"Player {playerId} threw {objectType} ({objectId})");
-            BroadcastGrenadeEvent(room, playerId, grenadeData);
+            BroadcastGrenadeEvent(room, playerId, grenadeData, objectId);
         }
 
         private static void HandleObjectSpawned(MatchRoom room, string playerId, JObject objectData)
@@ -565,14 +565,29 @@ namespace OpenGSServer
             UdpBroadcastToRoom(room.Id.ToString(), message);
         }
 
-        private static void BroadcastGrenadeEvent(MatchRoom room, string playerId, JObject grenadeData)
+        private static void BroadcastGrenadeEvent(MatchRoom room, string playerId, JObject grenadeData, string objectId)
         {
             var objectType = NormalizeGrenadeObjectType(grenadeData.GetStringOrNull("GrenadeType"));
-            var objectId = grenadeData.GetStringOrNull("ObjectId") ?? Guid.NewGuid().ToString("N");
-            var position = grenadeData.GetValue("Position") as JObject;
+            var serverState = MatchServerV2.Instance?.ServerLagCompensationManager.GetPlayerState(playerId) ?? default;
+            if (!string.Equals(serverState.PlayerId, playerId, StringComparison.OrdinalIgnoreCase) ||
+                !IsFinite(serverState.PositionX) || !IsFinite(serverState.PositionY) || !IsFinite(serverState.PositionZ))
+            {
+                Console.WriteLine($"[Match] Ignored grenade from unregistered player '{playerId}' in room '{room.Id}'");
+                return;
+            }
+
             var direction = grenadeData.GetValue("Direction") as JObject;
-            var dirX = GetFloat(direction?.GetValue("X") ?? direction?.GetValue("x"), 1f);
-            var dirY = GetFloat(direction?.GetValue("Y") ?? direction?.GetValue("y"), 0f);
+            var dirX = GetFloat(grenadeData.GetValue("DirX") ?? direction?.GetValue("X") ?? direction?.GetValue("x"), float.NaN);
+            var dirY = GetFloat(grenadeData.GetValue("DirY") ?? direction?.GetValue("Y") ?? direction?.GetValue("y"), float.NaN);
+            var directionLength = MathF.Sqrt((dirX * dirX) + (dirY * dirY));
+            if (!IsFinite(dirX) || !IsFinite(dirY) || !IsFinite(directionLength) || directionLength < 0.001f)
+            {
+                Console.WriteLine($"[Match] Ignored grenade with invalid direction from '{playerId}'");
+                return;
+            }
+
+            dirX /= directionLength;
+            dirY /= directionLength;
             Console.WriteLine($"[Match] Room {room.Id} player {playerId} threw {objectType} ({objectId})");
 
             var message = new JObject
@@ -583,17 +598,18 @@ namespace OpenGSServer
                 ["PlayerID"] = playerId,
                 ["PlayerId"] = playerId,
                 ["RoomID"] = room.Id.ToString(),
-                ["PosX"] = GetFloat(grenadeData.GetValue("PosX") ?? position?.GetValue("X") ?? position?.GetValue("x"), 0f),
-                ["PosY"] = GetFloat(grenadeData.GetValue("PosY") ?? position?.GetValue("Y") ?? position?.GetValue("y"), 0f),
+                ["PosX"] = serverState.PositionX,
+                ["PosY"] = serverState.PositionY,
+                ["PosZ"] = serverState.PositionZ,
                 ["DirX"] = dirX,
                 ["DirY"] = dirY,
-                ["GrenadeType"] = grenadeData.GetStringOrNull("GrenadeType") ?? objectType,
+                ["GrenadeType"] = objectType,
                 ["Direction"] = new JObject
                 {
                     ["X"] = dirX,
                     ["Y"] = dirY
                 },
-                ["Rotation"] = GetFloat(grenadeData.GetValue("Rotation"), 0f),
+                ["Rotation"] = MathF.Atan2(dirY, dirX),
                 ["Timestamp"] = DateTime.UtcNow.ToString("o")
             };
 
@@ -605,6 +621,11 @@ namespace OpenGSServer
             return token != null && float.TryParse(token.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var value)
                 ? value
                 : fallback;
+        }
+
+        private static bool IsFinite(float value)
+        {
+            return !float.IsNaN(value) && !float.IsInfinity(value);
         }
 
         private static string NormalizeGrenadeObjectType(string? grenadeType)
