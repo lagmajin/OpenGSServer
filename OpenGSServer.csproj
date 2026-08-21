@@ -25,6 +25,7 @@
     <Compile Remove="Build\**" />
     <Compile Remove="Script\**" />
     <Compile Remove="Server\TCP\**" />
+    <Compile Remove="Tests\**" />
     <Compile Remove="Game\FieldItem.cs" />
 
     <Compile Remove="Game\GameScene.cs" />
