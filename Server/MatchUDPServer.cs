@@ -194,6 +194,7 @@ namespace OpenGSServer
             _pendingInputs.TryRemove(playerId, out _);
             _pendingPeers.TryRemove(peer.Id, out _);
             _unauthorizedPacketCounts.TryRemove(peer.Id, out _);
+            InGameMatchEventHandler.ClearPlayerState(playerId);
 
             ConsoleWrite.WriteMessage(
                 $"[UDP] Player disconnected: {playerId} ({peer.Id}) (Reason: {info.Reason})", 

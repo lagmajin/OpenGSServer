@@ -343,6 +343,24 @@ namespace OpenGSServer
             return $"{room.Id}:{playerId}";
         }
 
+        public static void ClearPlayerState(string playerId)
+        {
+            if (string.IsNullOrWhiteSpace(playerId))
+            {
+                return;
+            }
+
+            foreach (var entry in FlagCarriers.Keys.Where(key => key.EndsWith($":{playerId}", StringComparison.OrdinalIgnoreCase)))
+            {
+                FlagCarriers.TryRemove(entry, out _);
+            }
+
+            foreach (var entry in LastFlagEvents.Keys.Where(key => key.Contains($":{playerId}:", StringComparison.OrdinalIgnoreCase)))
+            {
+                LastFlagEvents.TryRemove(entry, out _);
+            }
+        }
+
         private static void HandleFlagScoreUpdate(MatchRoom room)
         {
             // Score is derived from server-side flag events. Never relay the
