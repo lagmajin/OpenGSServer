@@ -458,7 +458,6 @@ namespace OpenGSServer
             // 射撃処理 - ヒット判定、ダメージ計算など
             var targetId = shotData.GetStringOrNull("TargetID");
             var weaponType = NormalizeWeaponType(shotData.GetStringOrNull("WeaponType"));
-            var hitPosition = shotData.GetValue("HitPosition") as JObject;
 
             if (weaponType == null)
             {
@@ -476,7 +475,7 @@ namespace OpenGSServer
             if (targetId != null)
             {
                 // ヒット判定とダメージ処理
-                HandleShotHit(room, playerId, targetId, weaponType, hitPosition);
+                HandleShotHit(room, playerId, targetId, weaponType);
             }
 
             // 全プレイヤーに射撃イベントをブロードキャスト（UDP）
@@ -536,7 +535,7 @@ namespace OpenGSServer
             UdpBroadcastToRoom(room.Id.ToString(), message);
         }
 
-        private static void HandleShotHit(MatchRoom room, string shooterId, string targetId, string? weaponType, JObject? hitPosition)
+        private static void HandleShotHit(MatchRoom room, string shooterId, string targetId, string? weaponType)
         {
             var shooter = room.Players.FirstOrDefault(player =>
                 string.Equals(player.Id, shooterId, StringComparison.OrdinalIgnoreCase));
@@ -561,7 +560,14 @@ namespace OpenGSServer
             LobbyServerManager.Instance.RecordDamageDailyProgress(shooterId, damage);
 
             target.Health = Math.Max(0, target.Health - damage);
-            HandlePlayerDamaged(room, targetId, damage, shooterId, hitPosition, target.Health);
+            var targetState = MatchServerV2.Instance.ServerLagCompensationManager.GetPlayerState(targetId);
+            var authoritativeHitPosition = new JObject
+            {
+                ["X"] = targetState.PositionX,
+                ["Y"] = targetState.PositionY,
+                ["Z"] = targetState.PositionZ
+            };
+            HandlePlayerDamaged(room, targetId, damage, shooterId, authoritativeHitPosition, target.Health);
 
             if (target.Health <= 0)
             {
