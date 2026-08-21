@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.ComponentModel.Design;
 using System.Globalization;
@@ -39,6 +40,8 @@ namespace OpenGSServer
     }
     internal class InGameMatchEventHandler:IInGameMatchRoomHandler
     {
+        private static readonly ConcurrentDictionary<string, DateTime> LastFlagEvents = new();
+
         public InGameMatchEventHandler() { }
 
         /// <summary>
@@ -250,7 +253,7 @@ namespace OpenGSServer
         private static void HandleFlagCaptured(MatchRoom room, string playerId)
         {
             var team = ResolvePlayerTeam(room, playerId);
-            if (team == ETeam.NoTeam)
+            if (team == ETeam.NoTeam || !AcceptFlagEvent(room, playerId, GameMessageTypes.FlagCaptured, TimeSpan.FromSeconds(2)))
             {
                 return;
             }
@@ -268,7 +271,7 @@ namespace OpenGSServer
         private static void HandleFlagLost(MatchRoom room, string playerId)
         {
             var team = ResolvePlayerTeam(room, playerId);
-            if (team == ETeam.NoTeam)
+            if (team == ETeam.NoTeam || !AcceptFlagEvent(room, playerId, GameMessageTypes.FlagLost, TimeSpan.FromMilliseconds(500)))
             {
                 return;
             }
@@ -280,7 +283,7 @@ namespace OpenGSServer
         private static void HandleFlagPickup(MatchRoom room, string playerId)
         {
             var team = ResolvePlayerTeam(room, playerId);
-            if (team == ETeam.NoTeam)
+            if (team == ETeam.NoTeam || !AcceptFlagEvent(room, playerId, GameMessageTypes.FlagPickup, TimeSpan.FromMilliseconds(500)))
             {
                 return;
             }
@@ -292,7 +295,7 @@ namespace OpenGSServer
         private static void HandleFlagReturn(MatchRoom room, string playerId)
         {
             var team = ResolvePlayerTeam(room, playerId);
-            if (team == ETeam.NoTeam)
+            if (team == ETeam.NoTeam || !AcceptFlagEvent(room, playerId, GameMessageTypes.FlagReturn, TimeSpan.FromMilliseconds(500)))
             {
                 return;
             }
@@ -305,6 +308,20 @@ namespace OpenGSServer
         {
             return room.Players.FirstOrDefault(player =>
                 string.Equals(player.Id, playerId, StringComparison.OrdinalIgnoreCase))?.Team ?? ETeam.NoTeam;
+        }
+
+        private static bool AcceptFlagEvent(MatchRoom room, string playerId, string eventType, TimeSpan cooldown)
+        {
+            var key = $"{room.Id}:{playerId}:{eventType}";
+            var now = DateTime.UtcNow;
+            if (LastFlagEvents.TryGetValue(key, out var lastEvent) && now - lastEvent < cooldown)
+            {
+                Console.WriteLine($"[Match] Ignored repeated {eventType} from '{playerId}' in room '{room.Id}'");
+                return false;
+            }
+
+            LastFlagEvents[key] = now;
+            return true;
         }
 
         private static void HandleFlagScoreUpdate(MatchRoom room)
