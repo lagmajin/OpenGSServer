@@ -454,8 +454,14 @@ namespace OpenGSServer
         {
             // 射撃処理 - ヒット判定、ダメージ計算など
             var targetId = shotData.GetStringOrNull("TargetID");
-            var weaponType = shotData.GetStringOrNull("WeaponType");
+            var weaponType = NormalizeWeaponType(shotData.GetStringOrNull("WeaponType"));
             var hitPosition = shotData.GetValue("HitPosition") as JObject;
+
+            if (weaponType == null)
+            {
+                Console.WriteLine($"[Match] Ignored shot with unknown weapon from '{playerId}'");
+                return;
+            }
 
             Console.WriteLine($"Player {playerId} shot with {weaponType}");
 
@@ -734,6 +740,19 @@ namespace OpenGSServer
                 "fire" => "FireGrenade",
                 "smoke" => "SmokeGrenade",
                 _ => "NormalGrenade"
+            };
+        }
+
+        private static string? NormalizeWeaponType(string? weaponType)
+        {
+            return weaponType?.ToLowerInvariant() switch
+            {
+                "pistol" => "Pistol",
+                "smg" => "SMG",
+                "shotgun" => "Shotgun",
+                "rifle" => "Rifle",
+                "sniper" => "Sniper",
+                _ => null
             };
         }
 
