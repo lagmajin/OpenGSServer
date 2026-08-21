@@ -398,12 +398,17 @@ namespace OpenGSServer
         private static void HandlePlayerPose(MatchRoom room, string playerId, JObject json)
         {
             var poseState = ReadString(json, "PoseState", "Pose", "Posture") ?? "Stand";
-            Console.WriteLine($"Player {playerId} pose changed to {poseState}");
-            if (Enum.TryParse<EPlayerPoseState>(poseState, true, out var pose))
+            if (!Enum.TryParse<EPlayerPoseState>(poseState, true, out var pose) ||
+                !Enum.IsDefined(typeof(EPlayerPoseState), pose))
             {
-                room.SetPlayerPoseState(playerId, pose);
+                Console.WriteLine($"[Match] Ignored invalid pose '{poseState}' from '{playerId}'");
+                return;
             }
-            GameMessageDispatcher.SendPlayerPose(room.Id.ToString(), playerId, poseState);
+
+            var canonicalPose = pose.ToString();
+            Console.WriteLine($"Player {playerId} pose changed to {canonicalPose}");
+            room.SetPlayerPoseState(playerId, pose);
+            GameMessageDispatcher.SendPlayerPose(room.Id.ToString(), playerId, canonicalPose);
         }
 
         private static void HandlePlayerShot(MatchRoom room, string playerId, JObject shotData)
