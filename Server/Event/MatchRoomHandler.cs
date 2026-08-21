@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Runtime.InteropServices;
 using Newtonsoft.Json.Linq;
 using OpenGSCore;
+using OpenGSServer.Network;
 
 
 #nullable enable
@@ -154,40 +155,11 @@ namespace OpenGSServer
             switch (eventType)
             {
                 case GameMessageTypes.PlayerKilled:
-                    var killedPlayerId = json.GetStringOrNull("KilledPlayerID");
-                    var killerId = json.GetStringOrNull("KillerID");
-                    if (!string.Equals(killerId, playerId, StringComparison.OrdinalIgnoreCase))
-                    {
-                        Console.WriteLine($"[Match] Ignored kill with forged killer '{killerId}' from '{playerId}'");
-                        break;
-                    }
-
-                    if (!string.IsNullOrWhiteSpace(killedPlayerId) &&
-                        room.Players.Any(player => string.Equals(player.Id, killedPlayerId, StringComparison.OrdinalIgnoreCase)) &&
-                        room.Players.Any(player => string.Equals(player.Id, playerId, StringComparison.OrdinalIgnoreCase)))
-                    {
-                        HandlePlayerKilled(room, playerId, killedPlayerId);
-                    }
+                    Console.WriteLine($"[Match] Ignored client-supplied kill event from '{playerId}'; kills are server-authoritative");
                     break;
 
                 case "PlayerDamaged":
-                    var damagedPlayerId = json.GetValue("DamagedPlayerID")?.ToString();
-                    var damageToken = json.GetValue("Damage");
-                    int damage = damageToken != null ? (int)damageToken : 0;
-                    var requestedAttackerId = json.GetStringOrNull("AttackerID") ??
-                        json.GetStringOrNull("AttackerId");
-                    if (!string.IsNullOrWhiteSpace(requestedAttackerId) &&
-                        !string.Equals(requestedAttackerId, playerId, StringComparison.OrdinalIgnoreCase))
-                    {
-                        Console.WriteLine($"[Match] Ignored damage with forged attacker '{requestedAttackerId}' from '{playerId}'");
-                        break;
-                    }
-
-                    if (!string.IsNullOrWhiteSpace(damagedPlayerId) && damage is > 0 and <= 10000 &&
-                        room.Players.Any(player => string.Equals(player.Id, damagedPlayerId, StringComparison.OrdinalIgnoreCase)))
-                    {
-                        HandlePlayerDamaged(room, damagedPlayerId, damage, playerId, json.GetValue("HitPosition") as JObject);
-                    }
+                    Console.WriteLine($"[Match] Ignored client-supplied damage event from '{playerId}'; damage is server-authoritative");
                     break;
 
                 case GameMessageTypes.FlagCaptured:
@@ -259,7 +231,8 @@ namespace OpenGSServer
             string damagedPlayerId,
             int damage,
             string attackerId = "",
-            JObject? hitPosition = null)
+            JObject? hitPosition = null,
+            int? remainingHealth = null)
         {
             Console.WriteLine($"Player {damagedPlayerId} took {damage} damage");
 
@@ -272,6 +245,7 @@ namespace OpenGSServer
                 ["AttackerID"] = attackerId,
                 ["AttackerId"] = attackerId,
                 ["Damage"] = damage,
+                ["RemainingHealth"] = remainingHealth,
                 ["HitPosition"] = hitPosition,
                 ["Timestamp"] = DateTime.UtcNow.ToString("o")
             });
@@ -372,6 +346,13 @@ namespace OpenGSServer
             MatchServerV2.Instance?.ServerLagCompensationManager.SetPlayerPosition(
                 playerId, spawnX, spawnY, spawnZ);
 
+            var respawnedPlayer = room.Players.FirstOrDefault(player =>
+                string.Equals(player.Id, playerId, StringComparison.OrdinalIgnoreCase));
+            if (respawnedPlayer != null)
+            {
+                respawnedPlayer.Health = Math.Max(1, respawnedPlayer.MaxHealth);
+            }
+
             GameMessageDispatcher.SendPlayerRespawn(room.Id.ToString(), playerId, spawnPosition);
         }
 
@@ -460,10 +441,21 @@ namespace OpenGSServer
 
         private static void HandleShotHit(MatchRoom room, string shooterId, string targetId, string? weaponType, JObject? hitPosition)
         {
-            if (string.IsNullOrWhiteSpace(targetId) ||
-                !room.Players.Any(player => string.Equals(player.Id, targetId, StringComparison.OrdinalIgnoreCase)))
+            var shooter = room.Players.FirstOrDefault(player =>
+                string.Equals(player.Id, shooterId, StringComparison.OrdinalIgnoreCase));
+            var target = room.Players.FirstOrDefault(player =>
+                string.Equals(player.Id, targetId, StringComparison.OrdinalIgnoreCase));
+
+            if (shooter == null || target == null)
             {
                 Console.WriteLine($"[Match] Ignored shot against non-member '{targetId}' in room '{room.Id}'");
+                return;
+            }
+
+            if (shooter.Health <= 0 || target.Health <= 0 ||
+                !IsServerValidatedShot(shooterId, targetId, weaponType))
+            {
+                Console.WriteLine($"[Match] Ignored invalid shot {shooterId}->{targetId} in room '{room.Id}'");
                 return;
             }
 
@@ -471,8 +463,46 @@ namespace OpenGSServer
             int damage = CalculateWeaponDamage(weaponType);
             LobbyServerManager.Instance.RecordDamageDailyProgress(shooterId, damage);
 
-            // ターゲットにダメージを与える
-            HandlePlayerDamaged(room, targetId, damage, shooterId, hitPosition);
+            target.Health = Math.Max(0, target.Health - damage);
+            HandlePlayerDamaged(room, targetId, damage, shooterId, hitPosition, target.Health);
+
+            if (target.Health <= 0)
+            {
+                target.Deaths++;
+                shooter.Kills++;
+                shooter.Score += 100;
+                HandlePlayerKilled(room, shooterId, targetId);
+            }
+        }
+
+        private static bool IsServerValidatedShot(string shooterId, string targetId, string? weaponType)
+        {
+            var stateManager = MatchServerV2.Instance.ServerLagCompensationManager;
+            var shooterState = stateManager.GetPlayerState(shooterId);
+            var targetState = stateManager.GetPlayerState(targetId);
+            if (!string.Equals(shooterState.PlayerId, shooterId, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(targetState.PlayerId, targetId, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            var dx = shooterState.PositionX - targetState.PositionX;
+            var dy = shooterState.PositionY - targetState.PositionY;
+            var dz = shooterState.PositionZ - targetState.PositionZ;
+            var distanceSquared = (dx * dx) + (dy * dy) + (dz * dz);
+            var range = weaponType switch
+            {
+                "Pistol" => 45f,
+                "SMG" => 55f,
+                "Shotgun" => 25f,
+                "Rifle" => 90f,
+                "Sniper" => 180f,
+                _ => 60f
+            };
+
+            return !float.IsNaN(distanceSquared) &&
+                   !float.IsInfinity(distanceSquared) &&
+                   distanceSquared <= range * range;
         }
 
         private static int CalculateWeaponDamage(string? weaponType)
