@@ -573,12 +573,23 @@ namespace OpenGSServer
                 message["MessageType"] = messageType;
             }
 
-            var isSystemEvent = messageType is
+            // Loading and match-control messages are authoritative TCP
+            // operations. Keeping them out of the UDP path prevents a stale
+            // or forged datagram from changing room/loading state.
+            if (messageType is
                 "LoadingStarted" or
                 "LoadingProgress" or
                 "LoadingCompleted" or
                 "LoadingFinished" or
-                "MatchStatusRequest" or
+                "MatchStatusRequest")
+            {
+                ConsoleWrite.WriteMessage(
+                    $"[UDP] Ignoring TCP control message '{messageType}' from {playerId}; use the match TCP session.",
+                    ConsoleColor.Yellow);
+                return true;
+            }
+
+            var isSystemEvent = messageType is
                 "PlayerRespawn" or
                 "PlayerPose";
 
