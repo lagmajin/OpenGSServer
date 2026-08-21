@@ -543,7 +543,28 @@ namespace OpenGSServer
         // UDPブロードキャストメソッド群
         private static void BroadcastShotEvent(MatchRoom room, string playerId, JObject shotData)
         {
-            var objectId = shotData.GetStringOrNull("ObjectId") ?? "unknown";
+            var serverState = MatchServerV2.Instance?.ServerLagCompensationManager.GetPlayerState(playerId) ?? default;
+            if (!string.Equals(serverState.PlayerId, playerId, StringComparison.OrdinalIgnoreCase) ||
+                !IsFinite(serverState.PositionX) || !IsFinite(serverState.PositionY) || !IsFinite(serverState.PositionZ))
+            {
+                Console.WriteLine($"[Match] Ignored shot broadcast from unregistered player '{playerId}'");
+                return;
+            }
+
+            var objectId = Guid.NewGuid().ToString("N");
+            var weaponType = shotData.GetStringOrNull("WeaponType") ?? "Unknown";
+            var direction = shotData.GetValue("Direction") as JObject;
+            var dirX = GetFloat(shotData.GetValue("DirX") ?? direction?.GetValue("X") ?? direction?.GetValue("x"), 1f);
+            var dirY = GetFloat(shotData.GetValue("DirY") ?? direction?.GetValue("Y") ?? direction?.GetValue("y"), 0f);
+            var directionLength = MathF.Sqrt((dirX * dirX) + (dirY * dirY));
+            if (!IsFinite(dirX) || !IsFinite(dirY) || !IsFinite(directionLength) || directionLength < 0.001f)
+            {
+                Console.WriteLine($"[Match] Ignored shot with invalid direction from '{playerId}'");
+                return;
+            }
+
+            dirX /= directionLength;
+            dirY /= directionLength;
             Console.WriteLine($"[Match] Room {room.Id} player {playerId} fired shot ({objectId})");
 
             var message = new JObject
@@ -552,12 +573,23 @@ namespace OpenGSServer
                 ["PlayerID"] = playerId,
                 ["PlayerId"] = playerId,
                 ["RoomID"] = room.Id.ToString(),
-                ["ShotData"] = shotData,
-                ["PosX"] = GetFloat(shotData.GetValue("PosX") ?? (shotData["Position"] as JObject)?.GetValue("X"), 0f),
-                ["PosY"] = GetFloat(shotData.GetValue("PosY") ?? (shotData["Position"] as JObject)?.GetValue("Y"), 0f),
-                ["DirX"] = GetFloat(shotData.GetValue("DirX") ?? (shotData["Direction"] as JObject)?.GetValue("X"), 1f),
-                ["DirY"] = GetFloat(shotData.GetValue("DirY") ?? (shotData["Direction"] as JObject)?.GetValue("Y"), 0f),
-                ["WeaponType"] = shotData.GetStringOrNull("WeaponType") ?? "Unknown",
+                ["ObjectId"] = objectId,
+                ["PosX"] = serverState.PositionX,
+                ["PosY"] = serverState.PositionY,
+                ["PosZ"] = serverState.PositionZ,
+                ["DirX"] = dirX,
+                ["DirY"] = dirY,
+                ["WeaponType"] = weaponType,
+                ["ShotData"] = new JObject
+                {
+                    ["ObjectId"] = objectId,
+                    ["WeaponType"] = weaponType,
+                    ["PosX"] = serverState.PositionX,
+                    ["PosY"] = serverState.PositionY,
+                    ["PosZ"] = serverState.PositionZ,
+                    ["DirX"] = dirX,
+                    ["DirY"] = dirY
+                },
                 ["Timestamp"] = DateTime.UtcNow.ToString("o")
             };
 
