@@ -51,6 +51,47 @@ namespace OpenGSServer
             if (won) _dailyService.AddProgress(playerId, "win_match", 1);
         }
 
+        public OpenGSServer.Network.MatchResultResponse RecordMatchResult(
+            string playerId, int matchScore, int kills, int deaths, bool won, EGameMode mode)
+        {
+            var result = new OpenGSServer.Network.MatchResultResponse { PlayerId = playerId };
+            if (string.IsNullOrWhiteSpace(playerId)) return result;
+
+            var database = AccountDatabaseManager.GetInstance();
+            var account = database.GetAccount(playerId);
+            if (account == null) return result;
+
+            var calculated = OpenGSServer.Network.MatchLevelCalculator.CreateMatchResultResponse(
+                playerId,
+                Math.Max(0, matchScore),
+                Math.Max(0, kills),
+                Math.Max(0, deaths),
+                won,
+                (int)Math.Clamp(account.Exp, 0, int.MaxValue));
+
+            account.Exp = calculated.NewTotalXp;
+            account.Level = calculated.NewLevel;
+            account.LifeTimeScore ??= new PlayerLifeTimeScore();
+            switch (mode)
+            {
+                case EGameMode.TeamDeathMatch:
+                    account.LifeTimeScore.RecordTeamDeathMatchResult(won);
+                    break;
+                case EGameMode.Survival:
+                    account.LifeTimeScore.RecordSurvivalResult(won, false);
+                    break;
+                case EGameMode.TeamSurvival:
+                    account.LifeTimeScore.RecordSurvivalResult(won, true);
+                    break;
+                default:
+                    account.LifeTimeScore.RecordDeathMatchResult(won);
+                    break;
+            }
+
+            database.UpdateAccountData(account);
+            return calculated;
+        }
+
         public void RecordDamageDailyProgress(string playerId, int amount)
         {
             if (string.IsNullOrWhiteSpace(playerId) || amount <= 0) return;

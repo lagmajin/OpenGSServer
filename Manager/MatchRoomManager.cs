@@ -189,10 +189,21 @@ namespace OpenGSServer
                     foreach (var p in matchRoom.Players)
                     {
                         LobbyServerManager.Instance.RecordMatchDailyProgress(p.Id, winners.Contains(p.Id));
+                        var persisted = LobbyServerManager.Instance.RecordMatchResult(
+                            p.Id,
+                            p.Score,
+                            p.Kills,
+                            p.Deaths,
+                            winners.Contains(p.Id),
+                            matchRoom.Setting.Mode);
                         var session = LobbyServerManager.Instance.GetSession(p.Id);
                         if (session != null)
                         {
                             var perPlayerResult = BuildMatchResultEnvelope(matchRoom, result, p);
+                            perPlayerResult["XpGained"] = persisted.XpGained;
+                            perPlayerResult["TotalExp"] = persisted.NewTotalXp;
+                            perPlayerResult["NewLevel"] = persisted.NewLevel;
+                            perPlayerResult["IsLevelUp"] = persisted.IsLevelUp;
                             session.SendAsyncJsonWithTimeStamp(perPlayerResult);
                         }
                     }
