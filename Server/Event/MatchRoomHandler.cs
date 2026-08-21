@@ -335,17 +335,25 @@ namespace OpenGSServer
 
         private static void HandlePlayerRespawn(MatchRoom room, string playerId, JObject json)
         {
-            Console.WriteLine($"Player {playerId} respawned");
-
-            var spawnPosition = json.GetValue("SpawnPosition") as JObject ?? new JObject
+            // The client may request a respawn, but it never chooses the
+            // position. Until map-specific spawn tables are configured, keep
+            // the authoritative server position and ignore client coordinates.
+            var serverState = MatchServerV2.Instance?.ServerLagCompensationManager.GetPlayerState(playerId) ?? default;
+            if (!string.Equals(serverState.PlayerId, playerId, StringComparison.OrdinalIgnoreCase))
             {
-                ["X"] = GetFloat(json.GetValue("PosX"), 0f),
-                ["Y"] = GetFloat(json.GetValue("PosY"), 0f)
-            };
+                Console.WriteLine($"[Match] Ignored respawn for unregistered player '{playerId}'");
+                return;
+            }
 
-            var spawnX = GetFloat(spawnPosition.GetValue("X") ?? spawnPosition.GetValue("x"), 0f);
-            var spawnY = GetFloat(spawnPosition.GetValue("Y") ?? spawnPosition.GetValue("y"), 0f);
-            var spawnZ = GetFloat(spawnPosition.GetValue("Z") ?? spawnPosition.GetValue("z"), 0f);
+            var spawnX = serverState.PositionX;
+            var spawnY = serverState.PositionY;
+            var spawnZ = serverState.PositionZ;
+            var spawnPosition = new JObject
+            {
+                ["X"] = spawnX,
+                ["Y"] = spawnY,
+                ["Z"] = spawnZ
+            };
             MatchServerV2.Instance?.ServerLagCompensationManager.SetPlayerPosition(
                 playerId, spawnX, spawnY, spawnZ);
 
