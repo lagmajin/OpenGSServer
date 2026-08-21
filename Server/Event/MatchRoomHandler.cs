@@ -472,7 +472,14 @@ namespace OpenGSServer
 
             Console.WriteLine($"Player {playerId} shot with {weaponType}");
 
-            if (targetId != null)
+            if (!string.IsNullOrWhiteSpace(targetId) &&
+                string.Equals(targetId, playerId, StringComparison.OrdinalIgnoreCase))
+            {
+                Console.WriteLine($"[Match] Ignored self-targeted shot from '{playerId}'");
+                targetId = null;
+            }
+
+            if (!string.IsNullOrWhiteSpace(targetId))
             {
                 // ヒット判定とダメージ処理
                 HandleShotHit(room, playerId, targetId, weaponType);
