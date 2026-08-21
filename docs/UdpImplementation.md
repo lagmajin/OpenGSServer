@@ -14,6 +14,27 @@ legacy/experimental implementations. They are not referenced by
 `MatchUDPServer` first. Keep the legacy files available until a separate
 cleanup change removes them after downstream branches have migrated.
 
+## Authoritative gameplay boundary
+
+`PlayerMove` inputs are simulated by the server. Client positions are never
+used to initialize or overwrite server state; the legacy `PlayerPositionUpdate`
+path only validates the claim and sends back the server transform. Server
+movement also advances during input gaps and caps the amount of queued input
+time simulated in one tick.
+
+Combat and match events are sanitized before broadcast: damage, kills,
+respawns, projectile positions, timestamps, sequence numbers, and flag carrier
+state are server-owned. TCP-only control messages cannot be injected through
+UDP.
+
+## Regression tests
+
+Run the movement authority tests with:
+
+```powershell
+dotnet test Tests/OpenGSServer.Tests.csproj
+```
+
 ## Respawn points
 
 The server settings file can provide team-owned spawn points. Coordinates from
