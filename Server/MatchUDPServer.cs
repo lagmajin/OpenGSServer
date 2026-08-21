@@ -535,6 +535,8 @@ namespace OpenGSServer
                 return;
             }
 
+            var authoritativeState = MatchServerV2.Instance.ServerLagCompensationManager.GetPlayerState(playerId);
+
             var update = new JObject
             {
                 ["MessageType"] = "PlayerPositionUpdate",
@@ -551,8 +553,8 @@ namespace OpenGSServer
                 ["PosY"] = y,
                 ["PosZ"] = z,
                 ["Rotation"] = rotation,
-                ["SequenceNumber"] = message["SequenceNumber"] ?? message["Sequence"] ?? 0,
-                ["Timestamp"] = message["Timestamp"] ?? DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+                ["SequenceNumber"] = authoritativeState.SequenceNumber,
+                ["Timestamp"] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
             };
 
             foreach (var player in room.Players)
