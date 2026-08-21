@@ -42,6 +42,7 @@ namespace OpenGSServer
     {
         private static readonly ConcurrentDictionary<string, DateTime> LastFlagEvents = new();
         private static readonly ConcurrentDictionary<string, byte> FlagCarriers = new();
+        private static readonly ConcurrentDictionary<string, DateTime> LastShots = new();
 
         public InGameMatchEventHandler() { }
 
@@ -359,6 +360,8 @@ namespace OpenGSServer
             {
                 LastFlagEvents.TryRemove(entry, out _);
             }
+
+            LastShots.TryRemove(playerId, out _);
         }
 
         private static void HandleFlagScoreUpdate(MatchRoom room)
@@ -460,6 +463,11 @@ namespace OpenGSServer
             if (weaponType == null)
             {
                 Console.WriteLine($"[Match] Ignored shot with unknown weapon from '{playerId}'");
+                return;
+            }
+
+            if (!AcceptShot(playerId, weaponType))
+            {
                 return;
             }
 
@@ -607,6 +615,28 @@ namespace OpenGSServer
             };
         }
 
+        private static bool AcceptShot(string playerId, string weaponType)
+        {
+            var cooldown = weaponType switch
+            {
+                "Pistol" => TimeSpan.FromMilliseconds(200),
+                "SMG" => TimeSpan.FromMilliseconds(80),
+                "Shotgun" => TimeSpan.FromMilliseconds(800),
+                "Rifle" => TimeSpan.FromMilliseconds(150),
+                "Sniper" => TimeSpan.FromSeconds(1),
+                _ => TimeSpan.FromMilliseconds(200)
+            };
+            var now = DateTime.UtcNow;
+            if (LastShots.TryGetValue(playerId, out var lastShot) && now - lastShot < cooldown)
+            {
+                Console.WriteLine($"[Match] Ignored rapid {weaponType} shot from '{playerId}'");
+                return false;
+            }
+
+            LastShots[playerId] = now;
+            return true;
+        }
+
         // UDPブロードキャストメソッド群
         private static void BroadcastShotEvent(MatchRoom room, string playerId, JObject shotData)
         {
@@ -619,7 +649,7 @@ namespace OpenGSServer
             }
 
             var objectId = Guid.NewGuid().ToString("N");
-            var weaponType = shotData.GetStringOrNull("WeaponType") ?? "Unknown";
+            var weaponType = NormalizeWeaponType(shotData.GetStringOrNull("WeaponType")) ?? "Unknown";
             var direction = shotData.GetValue("Direction") as JObject;
             var dirX = GetFloat(shotData.GetValue("DirX") ?? direction?.GetValue("X") ?? direction?.GetValue("x"), 1f);
             var dirY = GetFloat(shotData.GetValue("DirY") ?? direction?.GetValue("Y") ?? direction?.GetValue("y"), 0f);
