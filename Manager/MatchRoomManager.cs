@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Linq;
 using System.Threading;
 using Newtonsoft.Json.Linq;
@@ -26,6 +27,7 @@ namespace OpenGSServer
     {
         private Dictionary<string, OpenGSCore.MatchRoom> matchRooms = new Dictionary<string, OpenGSCore.MatchRoom>();
         private readonly object matchRoomsLock = new();
+        private readonly ConcurrentDictionary<string, byte> persistedMatchPlayers = new(StringComparer.OrdinalIgnoreCase);
         private int roomNumberCount = 0;
         public readonly Dictionary<string, MatchRoomEventBus> roomEventBuses = new Dictionary<string, MatchRoomEventBus>();
         public static MatchRoomManager Instance { get; } = new();
@@ -188,6 +190,12 @@ namespace OpenGSServer
                     var winners = ExtractWinnerIds(result);
                     foreach (var p in matchRoom.Players)
                     {
+                        var resultKey = $"{matchRoom.Id}:{p.Id}";
+                        if (!persistedMatchPlayers.TryAdd(resultKey, 0))
+                        {
+                            continue;
+                        }
+
                         LobbyServerManager.Instance.RecordMatchDailyProgress(p.Id, winners.Contains(p.Id));
                         var persisted = LobbyServerManager.Instance.RecordMatchResult(
                             p.Id,
@@ -544,6 +552,13 @@ namespace OpenGSServer
 
                 matchRooms.Remove(roomId);
                 roomEventBuses.Remove(roomId);
+                foreach (var key in persistedMatchPlayers.Keys)
+                {
+                    if (key.StartsWith($"{roomId}:", StringComparison.OrdinalIgnoreCase))
+                    {
+                        persistedMatchPlayers.TryRemove(key, out _);
+                    }
+                }
                 if (roomFieldItemManagers.TryGetValue(roomId, out var itemManager))
                 {
                     itemManager.EndMatch();
