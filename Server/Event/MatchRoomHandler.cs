@@ -404,8 +404,13 @@ namespace OpenGSServer
             var spawnZ = serverState.PositionZ;
             var respawnedPlayer = room.Players.FirstOrDefault(player =>
                 string.Equals(player.Id, playerId, StringComparison.OrdinalIgnoreCase));
-            if (respawnedPlayer != null &&
-                ServerManager.Instance.Settings.TryGetRespawnPoint(
+            if (respawnedPlayer == null || respawnedPlayer.Health > 0)
+            {
+                Console.WriteLine($"[Match] Ignored respawn request from living or unknown player '{playerId}'");
+                return;
+            }
+
+            if (ServerManager.Instance.Settings.TryGetRespawnPoint(
                     respawnedPlayer.Team,
                     room.Players.IndexOf(respawnedPlayer),
                     out var configuredSpawn))
@@ -424,10 +429,7 @@ namespace OpenGSServer
             MatchServerV2.Instance?.ServerLagCompensationManager.SetPlayerPosition(
                 playerId, spawnX, spawnY, spawnZ);
 
-            if (respawnedPlayer != null)
-            {
-                respawnedPlayer.Health = Math.Max(1, respawnedPlayer.MaxHealth);
-            }
+            respawnedPlayer.Health = Math.Max(1, respawnedPlayer.MaxHealth);
 
             GameMessageDispatcher.SendPlayerRespawn(room.Id.ToString(), playerId, spawnPosition);
         }
