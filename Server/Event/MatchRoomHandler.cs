@@ -41,6 +41,7 @@ namespace OpenGSServer
     internal class InGameMatchEventHandler:IInGameMatchRoomHandler
     {
         private static readonly ConcurrentDictionary<string, DateTime> LastFlagEvents = new();
+        private static readonly ConcurrentDictionary<string, byte> FlagCarriers = new();
 
         public InGameMatchEventHandler() { }
 
@@ -261,8 +262,10 @@ namespace OpenGSServer
         private static void HandleFlagCaptured(MatchRoom room, string playerId)
         {
             var team = ResolvePlayerTeam(room, playerId);
-            if (team == ETeam.NoTeam || !AcceptFlagEvent(room, playerId, GameMessageTypes.FlagCaptured, TimeSpan.FromSeconds(2)))
+            if (team == ETeam.NoTeam || !AcceptFlagEvent(room, playerId, GameMessageTypes.FlagCaptured, TimeSpan.FromSeconds(2)) ||
+                !FlagCarriers.TryRemove(GetFlagCarrierKey(room, playerId), out _))
             {
+                Console.WriteLine($"[Match] Ignored flag capture without a server-tracked carrier '{playerId}'");
                 return;
             }
 
@@ -285,6 +288,7 @@ namespace OpenGSServer
             }
 
             Console.WriteLine($"Team {team} lost the flag");
+            FlagCarriers.TryRemove(GetFlagCarrierKey(room, playerId), out _);
             GameMessageDispatcher.SendFlagLost(room.Id.ToString(), team.ToString(), playerId);
         }
 
@@ -297,6 +301,7 @@ namespace OpenGSServer
             }
 
             Console.WriteLine($"Team {team} picked up the flag");
+            FlagCarriers[GetFlagCarrierKey(room, playerId)] = 0;
             GameMessageDispatcher.SendFlagPickup(room.Id.ToString(), team.ToString(), playerId);
         }
 
@@ -309,6 +314,7 @@ namespace OpenGSServer
             }
 
             Console.WriteLine($"Team {team} returned the flag");
+            FlagCarriers.TryRemove(GetFlagCarrierKey(room, playerId), out _);
             GameMessageDispatcher.SendFlagReturn(room.Id.ToString(), team.ToString(), playerId);
         }
 
@@ -330,6 +336,11 @@ namespace OpenGSServer
 
             LastFlagEvents[key] = now;
             return true;
+        }
+
+        private static string GetFlagCarrierKey(MatchRoom room, string playerId)
+        {
+            return $"{room.Id}:{playerId}";
         }
 
         private static void HandleFlagScoreUpdate(MatchRoom room)
