@@ -114,6 +114,13 @@ namespace OpenGSServer.Network
                     return false;
                 }
 
+                if (state.HasAcceptedSequence && input.Timestamp + 0.001f < state.LastClientTimestamp)
+                {
+                    rejectionReason = $"Client timestamp moved backwards: {input.Timestamp:F3} < {state.LastClientTimestamp:F3}";
+                    RecordViolation(state, rejectionReason);
+                    return false;
+                }
+
                 // シーケンスが古ければスキップ
                 if (!state.HasAcceptedSequence || IsSequenceNewer(input.SequenceNumber, state.LastAcceptedSequence))
                 {
