@@ -44,6 +44,32 @@ public sealed class ServerPlayerStateManagerTests
     }
 
     [Fact]
+    public void BackwardsClientTimestampIsRejected()
+    {
+        var manager = new ServerPlayerStateManager();
+        manager.RegisterPlayer("player-1");
+
+        var firstAccepted = manager.QueueClientInput(new ClientInputData
+        {
+            PlayerId = "player-1",
+            SequenceNumber = 1,
+            DeltaTime = 0.05f,
+            Timestamp = 10f
+        }, out _);
+        manager.ProcessAllInputs(0.05f);
+        var secondAccepted = manager.QueueClientInput(new ClientInputData
+        {
+            PlayerId = "player-1",
+            SequenceNumber = 2,
+            DeltaTime = 0.05f,
+            Timestamp = 9f
+        }, out _);
+
+        Assert.True(firstAccepted);
+        Assert.False(secondAccepted);
+    }
+
+    [Fact]
     public void IdleSimulationAppliesGravityAfterJump()
     {
         var manager = new ServerPlayerStateManager();
