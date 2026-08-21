@@ -163,19 +163,15 @@ namespace OpenGSServer
                     break;
 
                 case GameMessageTypes.FlagCaptured:
-                    var capturingTeam = ReadString(json, "CapturingTeam", "Team");
-                    if (capturingTeam != null)
-                    {
-                        HandleFlagCaptured(room, capturingTeam);
-                    }
+                    HandleFlagCaptured(room, playerId);
                     break;
 
                 case GameMessageTypes.FlagLost:
-                    HandleFlagLost(room, ReadString(json, "Team", "CapturingTeam"), playerId);
+                    HandleFlagLost(room, playerId);
                     break;
 
                 case GameMessageTypes.FlagPickup:
-                    HandleFlagPickup(room, ReadString(json, "Team", "CapturingTeam"), playerId);
+                    HandleFlagPickup(room, playerId);
                     break;
 
                 case GameMessageTypes.FlagReturn:
@@ -187,7 +183,7 @@ namespace OpenGSServer
                         break;
                     }
 
-                    HandleFlagReturn(room, ReadString(json, "Team", "CapturingTeam"), playerId);
+                    HandleFlagReturn(room, playerId);
                     break;
 
                 case GameMessageTypes.FlagScoreUpdate:
@@ -251,57 +247,64 @@ namespace OpenGSServer
             });
         }
 
-        private static void HandleFlagCaptured(MatchRoom room, string capturingTeam)
+        private static void HandleFlagCaptured(MatchRoom room, string playerId)
         {
-            Console.WriteLine($"Team {capturingTeam} captured the flag");
-            if (string.IsNullOrWhiteSpace(capturingTeam))
+            var team = ResolvePlayerTeam(room, playerId);
+            if (team == ETeam.NoTeam)
             {
                 return;
             }
 
-            if (Enum.TryParse<ETeam>(capturingTeam, true, out var team))
-            {
-                room.AddFlagCapture(team);
-            }
+            Console.WriteLine($"Team {team} captured the flag");
+            room.AddFlagCapture(team);
 
-            GameMessageDispatcher.SendFlagCaptured(room.Id.ToString(), capturingTeam);
+            GameMessageDispatcher.SendFlagCaptured(room.Id.ToString(), team.ToString());
             GameMessageDispatcher.SendFlagScoreUpdate(
                 room.Id.ToString(),
                 room.GetFlagScore(ETeam.Red),
                 room.GetFlagScore(ETeam.Blue));
         }
 
-        private static void HandleFlagLost(MatchRoom room, string team, string playerId)
+        private static void HandleFlagLost(MatchRoom room, string playerId)
         {
+            var team = ResolvePlayerTeam(room, playerId);
+            if (team == ETeam.NoTeam)
+            {
+                return;
+            }
+
             Console.WriteLine($"Team {team} lost the flag");
-            if (string.IsNullOrWhiteSpace(team))
+            GameMessageDispatcher.SendFlagLost(room.Id.ToString(), team.ToString(), playerId);
+        }
+
+        private static void HandleFlagPickup(MatchRoom room, string playerId)
+        {
+            var team = ResolvePlayerTeam(room, playerId);
+            if (team == ETeam.NoTeam)
             {
                 return;
             }
 
-            GameMessageDispatcher.SendFlagLost(room.Id.ToString(), team, playerId);
-        }
-
-        private static void HandleFlagPickup(MatchRoom room, string team, string playerId)
-        {
             Console.WriteLine($"Team {team} picked up the flag");
-            if (string.IsNullOrWhiteSpace(team))
-            {
-                return;
-            }
-
-            GameMessageDispatcher.SendFlagPickup(room.Id.ToString(), team, playerId);
+            GameMessageDispatcher.SendFlagPickup(room.Id.ToString(), team.ToString(), playerId);
         }
 
-        private static void HandleFlagReturn(MatchRoom room, string team, string playerId)
+        private static void HandleFlagReturn(MatchRoom room, string playerId)
         {
-            Console.WriteLine($"Team {team} returned the flag");
-            if (string.IsNullOrWhiteSpace(team))
+            var team = ResolvePlayerTeam(room, playerId);
+            if (team == ETeam.NoTeam)
             {
                 return;
             }
 
-            GameMessageDispatcher.SendFlagReturn(room.Id.ToString(), team, playerId);
+            Console.WriteLine($"Team {team} returned the flag");
+            GameMessageDispatcher.SendFlagReturn(room.Id.ToString(), team.ToString(), playerId);
+        }
+
+        private static ETeam ResolvePlayerTeam(MatchRoom room, string playerId)
+        {
+            return room.Players.FirstOrDefault(player =>
+                string.Equals(player.Id, playerId, StringComparison.OrdinalIgnoreCase))?.Team ?? ETeam.NoTeam;
         }
 
         private static void HandleFlagScoreUpdate(MatchRoom room)
