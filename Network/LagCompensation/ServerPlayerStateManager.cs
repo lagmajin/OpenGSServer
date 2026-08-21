@@ -165,9 +165,15 @@ namespace OpenGSServer.Network
         /// </summary>
         public void ProcessAllInputs()
         {
+            ProcessAllInputs(0f);
+        }
+
+        public void ProcessAllInputs(float serverDeltaTime)
+        {
+            var idleDeltaTime = Clamp(serverDeltaTime, 0f, MaxInputDeltaTime);
             foreach (var kvp in m_PlayerStates)
             {
-                ProcessPlayerInputs(kvp.Value);
+                ProcessPlayerInputs(kvp.Value, idleDeltaTime);
             }
         }
 
@@ -178,25 +184,39 @@ namespace OpenGSServer.Network
         {
             if (m_PlayerStates.TryGetValue(playerId, out var state))
             {
-                ProcessPlayerInputs(state);
+                ProcessPlayerInputs(state, 0f);
             }
         }
 
         /// <summary>
         /// プレイヤー入力を処理する
         /// </summary>
-        private void ProcessPlayerInputs(PlayerServerState state)
+        private void ProcessPlayerInputs(PlayerServerState state, float idleDeltaTime)
         {
+            var processedInput = false;
             while (state.InputQueue.Count > 0)
             {
                 var input = state.InputQueue.Dequeue();
 
                 // 予測移動を適用（実際のゲームロジックに置き換えが必要）
                 ApplyServerMovement(state, input);
+                processedInput = true;
 
                 state.LastProcessedSequence = input.SequenceNumber;
                 state.LastInputTimestamp = input.Timestamp;
                 state.LastClientTimestamp = input.Timestamp;
+                state.LastUpdateTime = DateTime.UtcNow;
+            }
+
+            if (!processedInput && idleDeltaTime > 0f)
+            {
+                ApplyServerMovement(state, new ClientInputData
+                {
+                    PlayerId = state.PlayerId,
+                    DeltaTime = idleDeltaTime,
+                    SequenceNumber = state.LastProcessedSequence,
+                    Timestamp = state.LastClientTimestamp
+                });
                 state.LastUpdateTime = DateTime.UtcNow;
             }
         }

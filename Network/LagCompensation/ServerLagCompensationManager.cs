@@ -136,7 +136,7 @@ namespace OpenGSServer.Network
             if (!m_IsEnabled) return;
 
             // 入力処理
-            m_PlayerStateManager.ProcessAllInputs();
+            m_PlayerStateManager.ProcessAllInputs(deltaTime);
 
             // 状態ブロードキャスト
             m_StateBroadcaster.Update(deltaTime);
