@@ -23,6 +23,19 @@ Done when:
 - configuration loading happens before network services depend on it
 - process exit leaves the server in a clean state
 
+Current status:
+- `Server/ServerHost.cs` owns the bootstrap and shutdown order; `Program.cs`
+  now only parses arguments and decides when to stop
+- configuration and admin credentials are loaded before any listener starts
+- `Shutdown` is idempotent and safe to call from both the normal path and
+  `AppDomain` exit; the instance mutex is always released
+- `Server/StartupBanner.cs` holds the startup log, so it can be removed or
+  redirected without touching the bootstrap sequence
+- `Tests/ServerHostTests.cs` covers single-instance locking, idempotent
+  shutdown, and option validation
+- `tools/run_smoke.ps1` repeats the full local bootstrap and smoke path in
+  one command, so startup and shutdown regressions fail fast
+
 ## S1. Authoritative Lobby And Account State
 
 Goal: move lobby and account behavior into a single backend source of truth.
@@ -102,6 +115,15 @@ Why this matters:
 Done when:
 - there is a repeatable login -> lobby -> room -> match smoke path
 - protocol changes fail fast in scripted validation or a small test harness
+
+Current status:
+- `test_client.py` drives the management listener
+- `tools/run_smoke.ps1` builds, boots a throwaway server, and runs
+  `lobby_smoke_client.py`, `two_player_loading_smoke.py`, and
+  `mission_room_lifecycle_smoke.py` in one command
+- the same command runs in `.github/workflows/server-build.yml`
+- `ServerHostTests` and `ServerPlayerStateManagerTests` cover the
+  regression-prone server rules
 
 ## S5. Core-Only Runtime Harness
 

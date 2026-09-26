@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -28,8 +28,6 @@
     <Compile Remove="Tests\**" />
     <Compile Remove="Game\FieldItem.cs" />
 
-    <Compile Remove="Game\GameScene.cs" />
-    <Compile Remove="Server\Event\LobbyEventHandlerV2.cs" />
     <Compile Remove="Deprecated\**" />
     <EmbeddedResource Remove="Build\**" />
     <EmbeddedResource Remove="Script\**" />
@@ -37,13 +35,6 @@
     <None Remove="Build\**" />
     <None Remove="Script\**" />
     <None Remove="Server\TCP\**" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Compile Remove="Constants\Tickrate.cs" />
-    <Compile Remove="Constants\ItemConstants.cs" />
-
-    <Compile Remove="Room\OldWaitRoom.cs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -68,11 +59,6 @@
     <Folder Include="Platform\Linus" />
     <Folder Include="WebAPI\" />
     <Folder Include="新しいフォルダー\" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <None Include="Constants\ItemConstants.cs" />
-    <None Include="Room\OldWaitRoom.cs" />
   </ItemGroup>
 
   <ItemGroup>

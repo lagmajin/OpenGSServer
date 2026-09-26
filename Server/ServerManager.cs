@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -8,19 +8,12 @@ using Newtonsoft.Json.Linq;
 
 namespace OpenGSServer
 {
-    interface IServerManager
-    {
-    }
-
     sealed class ServerManager
     {
         public static ServerManager Instance { get; private set; } = new();
 
         private ServerSettings settings = new ServerSettings();
 
-        private static MatchServer matchServer_ = new MatchServer();
-        private static GeneralServer generalServer_ = new GeneralServer();
-        private static ManagementServer managementServer = new ManagementServer();
 
         // 管理者アカウントは AdminManager で管理
         private readonly AdminManager adminManager = AdminManager.CreateDefault();
@@ -80,9 +73,6 @@ namespace OpenGSServer
             return adminManager.ListAdminIds().Count > 0;
         }
 
-        public MatchServer GetMatchServer() => matchServer_;
-        public GeneralServer GetGeneralServer() => generalServer_;
-        public ManagementServer GetManagementServer() => managementServer;
 
         public void AddRegisterAdminAccount(string id, string pass)
         {

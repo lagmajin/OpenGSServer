@@ -1,95 +1,72 @@
-# –¢g—pƒNƒ‰ƒXíœƒvƒ‰ƒ“
+# æœªä½¿ç”¨ã‚¯ãƒ©ã‚¹ã®æ•´ç†çŠ¶æ³
 
-## ?? ‘¦íœ„§iˆÀ‘S‚Éíœ‰Â”\j
+ã“ã®ãƒ•ã‚¡ã‚¤ãƒ«ã¯ã€å‚ç…§èª¿æŸ»ã¨ãƒ“ãƒ«ãƒ‰çµæœã¨ã—ã¦æ¤œè¨¼æ¸ˆã¿ã®å‰Šé™¤å†…å®¹ã‚’è¨˜éŒ²ã—ã¾ã™ã€‚
+æ¨æ¸¬ã§ã¯ãªãã€`git grep` ã®å‚ç…§èª¿æŸ»ã¨ãƒ“ãƒ«ãƒ‰çµæœã«åŸºã¥ãã¾ã™ã€‚
 
-### Phase 1: Š®‘S–¢g—pƒtƒ@ƒCƒ‹
-```bash
-# ‚±‚ê‚ç‚Ìƒtƒ@ƒCƒ‹‚ÍŠ®‘S‚Éíœ‚Å‚«‚é
-- Game\InstantItem.cs          # ‚·‚×‚Ä‹óÀ‘•
-- Game\MakeGameObject.cs       # –¢Š®¬Aí‚Énull•Ô‚·
-```
+## å®Œäº†: å‰Šé™¤æ¸ˆã¿
 
-### Phase 2: •”•ª“Iíœ
-```csharp
-// GameObject.cs ‚©‚çíœ
-- class NormalGranade          # AbstractGranade‚Å‘ã‘ÖÏ‚İ
-- interface ISyncable          # ‚Ç‚±‚©‚ç‚àg‚í‚ê‚Ä‚¢‚È‚¢
+### `Server/ã‚´ãƒŸ/` ã¨ `ã‚´ãƒŸ/`
 
-// CoreServerBridge.cs ‚©‚çíœ
-- class TypeAliases            # Š®‘S‚É‹ó
+ã“ã‚Œã‚‰ã®ãƒ•ã‚¡ã‚¤ãƒ«ã¯å‰Šé™¤å€™è£œå½“æ—¶ã€ãƒ“ãƒ«ãƒ‰å¯¾è±¡ã«å«ã¾ã‚Œã¦ã„ã¾ã—ãŸ
+ï¼ˆ`OpenGSServer.csproj` ã® `Compile Remove` ã« `ã‚´ãƒŸ` ã®æŒ‡å®šãŒç„¡ãã€
+å®Ÿéš›ã«ã‚³ãƒ³ãƒ‘ã‚¤ãƒ«ã•ã‚Œã¦ã„ã¾ã—ãŸï¼‰ã€‚
 
-// Utility\Time.cs ‚©‚çíœ
-- class Time                   # .NET•W€TimeSpan‚Å‘ã‘Ö
-  ¦ class Ping ‚Íg‚í‚ê‚Ä‚¢‚é‰Â”\«‚ª‚ ‚é‚½‚ß—vŠm”F
-```
+| ãƒ•ã‚¡ã‚¤ãƒ« | å†…å®¹ | åˆ¤å®š |
+| --- | --- | --- |
+| `Server/ã‚´ãƒŸ/GeneralServer.cs` | æ—§TCPãƒªã‚¹ãƒŠã€‚`ServerManager` ã® static ãƒ•ã‚£ãƒ¼ãƒ«ãƒ‰ã‹ã‚‰ new ã•ã‚Œã‚‹ã ã‘ | å‰Šé™¤ |
+| `Server/ã‚´ãƒŸ/MatchServer.cs` | æ—§ãƒãƒƒãƒã‚µãƒ¼ãƒã€‚åŒæ§˜ã« static ãƒ•ã‚£ãƒ¼ãƒ«ãƒ‰ã‹ã‚‰ new ã•ã‚Œã‚‹ã ã‘ | å‰Šé™¤ |
+| `Server/ã‚´ãƒŸ/OldServer2.cs` | å…¨ä½“ãŒã‚³ãƒ¡ãƒ³ãƒˆã‚¢ã‚¦ãƒˆã•ã‚ŒãŸæ—§ã‚µãƒ¼ãƒ | å‰Šé™¤ |
+| `ã‚´ãƒŸ/Socket.cs` | å…¨ä½“ãŒã‚³ãƒ¡ãƒ³ãƒˆã‚¢ã‚¦ãƒˆ | å‰Šé™¤ |
+| `ã‚´ãƒŸ/GameManager.cs` | `[Obsolete]` ä»˜ãã€`parseMessage` ãŒç©º | å‰Šé™¤ |
+| `ã‚´ãƒŸ/CityOfDarkness2.cs` | ç©ºã‚¯ãƒ©ã‚¹ã€å‚ç…§ã‚¼ãƒ­ | å‰Šé™¤ |
 
-### Phase 3: ’iŠK“Iíœi@Obsoleteƒ}[ƒNÏ‚İj
-```csharp
-// «—ˆ“I‚Éíœ
-- Game\GameMode.cs ‚Ì GameMode ƒNƒ‰ƒX
-- Game\GameObject.cs ‚Ì AbstractGameObjectiŒã•ûŒİŠ·—pj
-```
+`GeneralServer` ã¨ `MatchServer` ã¯å‰¯ä½œç”¨ã®ãªã„ç©ºã‚³ãƒ³ã‚¹ãƒˆãƒ©ã‚¯ã‚¿ã§ã—ãŸã€‚
+ãã®ãŸã‚ `ServerManager` ã®ãƒ•ã‚£ãƒ¼ãƒ«ãƒ‰ã¨ `GetGeneralServer()` /
+`GetMatchServer()` / `GetManagementServer()` ã‚’ä¸€ä½“ã¨ã—ã¦å‰Šé™¤ã—ã¦ã‚‚ã€
+èµ·å‹•ã¨é€šä¿¡ã«å½±éŸ¿ã—ãªã„ã“ã¨ã‚’ç¢ºèªã—ã¦ã„ã¾ã™ã€‚
 
----
+ç¾åœ¨ã® `ServerManager` ã¯è¨­å®šã¨ç®¡ç†è€…ã‚¢ã‚«ã‚¦ãƒ³ãƒˆã®ã¿ã‚’æ‹…å½“ã—ã¾ã™ã€‚
+å®Ÿéš›ã®ãƒªã‚¹ãƒŠã¯ `ServerHost`ï¼ˆ`Server/ServerHost.cs`ï¼‰ãŒ
+`LobbyServerManager` / `MatchServerV2` / `ManagementServer` ã‚’ç›´æ¥æ‰±ã„ã¾ã™ã€‚
 
-## ?? íœ‚É‚æ‚éŒø‰Ê
+## å®Œäº†: å­˜åœ¨ã—ãªã„ãƒ•ã‚¡ã‚¤ãƒ«ã¸ã®é™¤å¤–æŒ‡å®šã‚’å‰Šé™¤
 
-### ƒR[ƒhƒTƒCƒYíŒ¸:
-- **InstantItem.cs**: ~50s ¨ 0s
-- **MakeGameObject.cs**: ~45s ¨ 0s
-- **NormalGranade**: ~20s ¨ 0s
-- **ISyncable**: ~7s ¨ 0s
-- **TypeAliases**: ~5s ¨ 0s
-- **Time ƒNƒ‰ƒX**: ~10s ¨ 0s
+`OpenGSServer.csproj` ã«ã€å®Ÿãƒ•ã‚¡ã‚¤ãƒ«ãŒå­˜åœ¨ã—ãªã„
+`Compile Remove` / `None Include` æŒ‡å®šãŒ6ä»¶ã‚ã‚Šã¾ã—ãŸã€‚
+å®Ÿãƒ•ã‚¡ã‚¤ãƒ«ãŒå­˜åœ¨ã—ãªã„ãŸã‚ç„¡åŠ¹ãªã®ã§ã€è©²å½“ã‚°ãƒ«ãƒ¼ãƒ—ã‚’å‰Šé™¤ã—ã¾ã—ãŸã€‚
 
-**‡ŒvíŒ¸: –ñ137s**
+- `Game/GameScene.cs`ï¼ˆå®Ÿä½“ã¯ `Deprecated/GameScene.cs` ã¸ç§»å‹•æ¸ˆã¿ï¼‰
+- `Server/Event/LobbyEventHandlerV2.cs`ï¼ˆ`Deprecated/` ã¸ç§»å‹•æ¸ˆã¿ï¼‰
+- `Constants/Tickrate.cs`ï¼ˆ`Deprecated/` ã¸ç§»å‹•æ¸ˆã¿ï¼‰
+- `Constants/ItemConstants.cs`ï¼ˆ`Deprecated/` ã¸ç§»å‹•æ¸ˆã¿ï¼‰
+- `Room/OldWaitRoom.cs`ï¼ˆ`Deprecated/` ã¸ç§»å‹•æ¸ˆã¿ï¼‰
 
-### •Ûç«Œüã:
-- ? ¬—‚ğµ‚­–¢Š®¬ƒR[ƒh‚Ìíœ
-- ? g‚í‚ê‚Ä‚¢‚È‚¢ƒCƒ“ƒ^[ƒtƒF[ƒX‚Ìíœ
-- ? OpenGSCore‚Æ‚Ì“‡‚ª–¾Šm‰»
+## æ®‹å­˜: `Deprecated/` é…ä¸‹ï¼ˆç¾åœ¨ã‚‚ãƒ“ãƒ«ãƒ‰å¯¾è±¡å¤–ï¼‰
 
----
+ä»¥ä¸‹ã¯ `OpenGSServer.csproj` ã® `<Compile Remove="Deprecated\**" />` ã§
+ç¢ºå®Ÿã«é™¤å¤–ã•ã‚Œã¦ã„ã¾ã™ã€‚å°†æ¥çš„ã«å‰Šé™¤ã™ã‚‹å€™è£œã§ã™ã€‚
 
-## ?? íœ‘O‚ÌŠm”F–€
+- `GameScene.cs`
+- `InstantItem.cs`
+- `ItemConstants.cs`
+- `LobbyEventHandlerV2.cs`
+- `OldAbstractGameRoom.cs`
+- `OldMatchRoom.cs`
+- `OldWaitRoom.cs`
+- `Tickrate.cs`
 
-1. **PingƒNƒ‰ƒX‚Ìg—pŠm”F**
-```bash
-# ŒŸõ‚µ‚Äg‚í‚ê‚Ä‚¢‚é‚©Šm”F
-git grep "Ping.CalcPing"
-git grep "new Ping"
-```
+## æ®‹å­˜: `OpenGSCore/Deprecated/`
 
-2. **GameModeƒNƒ‰ƒX‚ÌQÆŠm”F**
-```bash
-# ‚Ç‚±‚©‚çg‚í‚ê‚Ä‚¢‚é‚©Šm”F
-git grep "new GameMode"
-git grep "GameMode("
-```
+- `AbstactFieldItem.cs`
 
----
+`OpenGSCore` å´ã¯ `UnityEngine` ä¾å­˜ã®æ•´ç†ãŒçµ¡ã‚€ãŸã‚ã€åˆ¥èª²é¡Œã§æ‰±ã£ã¦ãã ã•ã„ã€‚
 
-## ?? íœÀsƒRƒ}ƒ“ƒhiˆÄj
+## å‰Šé™¤å¾Œã®æ¤œè¨¼æ‰‹é †
 
-```bash
-# Phase 1: ˆÀ‘S‚Éíœ‚Å‚«‚éƒtƒ@ƒCƒ‹
-rm Game\InstantItem.cs
-rm Game\MakeGameObject.cs
+å‰Šé™¤å¾Œã¯å¿…ãšæ¬¡ã‚’é€šã—ã¾ã™ã€‚
 
-# Phase 2: GitŒo—R‚Åíœi—š—ğ‚Éc‚·j
-git rm Game\InstantItem.cs
-git rm Game\MakeGameObject.cs
-git commit -m "Remove unused classes: InstantItem, MakeGameObject"
-```
-
----
-
-## ? íœŒã‚Ìƒrƒ‹ƒhŠm”F
-
-```bash
-dotnet build
-# ƒGƒ‰[‚ª‚È‚¢‚±‚Æ‚ğŠm”F
-
-dotnet test
-# ‚·‚×‚Ä‚ÌƒeƒXƒg‚ª’Ê‚é‚±‚Æ‚ğŠm”F
+```powershell
+dotnet build OpenGSServer.sln
+dotnet test Tests/OpenGSServer.Tests.csproj
+.\tools\run_smoke.ps1
 ```
