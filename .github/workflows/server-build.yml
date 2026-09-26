@@ -30,3 +30,12 @@ jobs:
 
       - name: Test
         run: dotnet test Tests/OpenGSServer.Tests.csproj --configuration Release --no-restore
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Lobby and mission smoke
+        shell: pwsh
+        run: ./tools/run_smoke.ps1 -Configuration Release
