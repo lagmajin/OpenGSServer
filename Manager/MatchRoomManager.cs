@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
 using System.Linq;
@@ -168,12 +168,10 @@ namespace OpenGSServer
                     {
                         var session = LobbyServerManager.Instance.GetSession(p.Id);
                         session?.SendAsyncJsonWithTimeStamp(gameStartJson);
-                        session?.SendAsyncJsonWithTimeStamp(new JObject
-                        {
-                            ["MessageType"] = MessageType.AllowEnterMap,
-                            ["RoomID"] = matchRoom.Id.ToString(),
-                            ["Approved"] = true
-                        });
+                        // AllowEnterMap is not sent here. The loading gate in
+                        // WaitRoomEventHandler already approved entry using the
+                        // wait room id, and sending a second copy keyed by the
+                        // match room id made clients see two different rooms.
                     }
                 };
                 
@@ -265,6 +263,54 @@ namespace OpenGSServer
             if (matchRoom == null) return null;
             matchRoom.StartLoading();
             return matchRoom;
+        }
+
+        /// <summary>
+        /// Marks a match room as running, which is what starts its status
+        /// updates and publishes the game start event.
+        /// <para>
+        /// S2 asks for the match progression to be driven by a real server
+        /// loop. Nothing called MatchRoom.GameStart, so Playing stayed false
+        /// and the game loop skipped the room entirely: the match never
+        /// actually started even though the lobby handshake completed. This is
+        /// called once the loading gate has approved entry.
+        /// </para>
+        /// </summary>
+        /// <summary>
+        /// Starts the match room linked to a wait room, if there is one.
+        /// </summary>
+        public void BeginMatchForWaitRoom(WaitRoom waitRoom)
+        {
+            if (waitRoom == null || string.IsNullOrWhiteSpace(waitRoom.RoomId))
+            {
+                return;
+            }
+
+            var matchRoom = AllRooms()
+                .OfType<OpenGSCore.MatchRoom>()
+                .FirstOrDefault(candidate =>
+                    candidate.WaitRoomLink != null &&
+                    string.Equals(candidate.WaitRoomLink.RoomId, waitRoom.RoomId, StringComparison.OrdinalIgnoreCase));
+
+            BeginMatch(matchRoom);
+        }
+
+        public void BeginMatch(OpenGSCore.MatchRoom matchRoom)
+        {
+            if (matchRoom == null)
+            {
+                return;
+            }
+
+            if (matchRoom.Playing)
+            {
+                return;
+            }
+
+            matchRoom.GameStart();
+            ConsoleWrite.WriteMessage(
+                $"[Match] Room {matchRoom.Id} ({matchRoom.RoomName}) is now playing",
+                ConsoleColor.Green);
         }
 
         public List<AbstractGameRoom> AllRooms()

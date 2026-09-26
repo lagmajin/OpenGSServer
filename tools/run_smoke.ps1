@@ -42,13 +42,14 @@ $smokes = @(
     @{ Name = 'two_player_loading'; Script = 'two_player_loading_smoke.py' },
     @{ Name = 'mission'; Script = 'mission_room_lifecycle_smoke.py' }
     @{ Name = 'reconnect'; Script = 'reconnect_smoke.py' },
-    @{ Name = 'loading_timeout'; Script = 'loading_timeout_smoke.py' }
+    @{ Name = 'loading_timeout'; Script = 'loading_timeout_smoke.py' },
+    @{ Name = 'match_playthrough'; Script = 'match_playthrough_smoke.py' }
 )
 
 if ($Only.Count -gt 0) {
     $smokes = $smokes | Where-Object { $Only -contains $_.Name }
     if ($smokes.Count -eq 0) {
-        throw "No smoke client matched -Only. Valid names: lobby, two_player_loading, mission, reconnect, loading_timeout"
+        throw "No smoke client matched -Only. Valid names: lobby, two_player_loading, mission, reconnect, loading_timeout, match_playthrough"
     }
 }
 
@@ -105,6 +106,11 @@ try {
     # S3: keep the loading deadline short so the timeout smoke does not have to
     # wait out the production 60s window.
     $env:OPENGS_LOADING_TIMEOUT_SECONDS = '6'
+
+    # The match playthrough drives the management listener, so the admin
+    # credentials it uses have to match what the server boots with.
+    $env:OPENGS_ADMIN_ID = 'admin'
+    $env:OPENGS_ADMIN_PASSWORD = 'admin123'
 
     Write-Host "Starting server (lobby $lobbyPort). Log: $logFile"
     $server = Start-Process -FilePath 'dotnet' -ArgumentList @(

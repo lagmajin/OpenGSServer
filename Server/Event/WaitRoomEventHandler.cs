@@ -594,6 +594,10 @@ namespace OpenGSServer
 
             if (allPlayersCompletedLoading)
             {
+                // S2: entry is approved, so the match room can actually start
+                // running. Without this the game loop skipped the room because
+                // Playing was never set.
+                MatchRoomManager.Instance.BeginMatchForWaitRoom(waitRoom);
                 BroadcastAllowEnterMap(waitRoom);
             }
 

@@ -818,7 +818,18 @@ namespace OpenGSServer
             try
             {
                 var matchRoomManager = MatchRoomManager.Instance;
+                // The operator usually has the wait room id, while the match
+                // room is keyed by its own id, so fall back to matching on the
+                // linked wait room.
                 var room = matchRoomManager.FindRoom(matchId) as OpenGSCore.MatchRoom;
+                if (room == null)
+                {
+                    room = matchRoomManager.AllRooms()
+                        .OfType<OpenGSCore.MatchRoom>()
+                        .FirstOrDefault(candidate =>
+                            candidate.WaitRoomLink != null &&
+                            string.Equals(candidate.WaitRoomLink.RoomId, matchId, StringComparison.OrdinalIgnoreCase));
+                }
                 if (room == null)
                 {
                     ConsoleWrite.WriteMessage($"[ERR] Match room with ID '{matchId}' not found.", ConsoleColor.Red);
@@ -844,7 +855,18 @@ namespace OpenGSServer
             try
             {
                 var matchRoomManager = MatchRoomManager.Instance;
+                // The operator usually has the wait room id, while the match
+                // room is keyed by its own id, so fall back to matching on the
+                // linked wait room.
                 var room = matchRoomManager.FindRoom(matchId) as OpenGSCore.MatchRoom;
+                if (room == null)
+                {
+                    room = matchRoomManager.AllRooms()
+                        .OfType<OpenGSCore.MatchRoom>()
+                        .FirstOrDefault(candidate =>
+                            candidate.WaitRoomLink != null &&
+                            string.Equals(candidate.WaitRoomLink.RoomId, matchId, StringComparison.OrdinalIgnoreCase));
+                }
                 if (room == null)
                 {
                     ConsoleWrite.WriteMessage($"[ERR] Match room with ID '{matchId}' not found.", ConsoleColor.Red);
@@ -857,6 +879,50 @@ namespace OpenGSServer
             catch (Exception ex)
             {
                 ConsoleWrite.WriteMessage($"[ERR] Failed to start match '{matchId}': {ex.Message}", ConsoleColor.Red);
+            }
+        }
+
+        /// <summary>
+        /// Ends a running match. The rule set decides the winner through the
+        /// result evaluator, so this takes the same path a real match end does.
+        /// Exposed as an admin command so a headless test can play a match to
+        /// completion without waiting out the match timer.
+        /// </summary>
+        public static void EndMatch(string matchId)
+        {
+            try
+            {
+                var matchRoomManager = MatchRoomManager.Instance;
+                // The operator usually has the wait room id, while the match
+                // room is keyed by its own id, so fall back to matching on the
+                // linked wait room.
+                var room = matchRoomManager.FindRoom(matchId) as OpenGSCore.MatchRoom;
+                if (room == null)
+                {
+                    room = matchRoomManager.AllRooms()
+                        .OfType<OpenGSCore.MatchRoom>()
+                        .FirstOrDefault(candidate =>
+                            candidate.WaitRoomLink != null &&
+                            string.Equals(candidate.WaitRoomLink.RoomId, matchId, StringComparison.OrdinalIgnoreCase));
+                }
+                if (room == null)
+                {
+                    ConsoleWrite.WriteMessage($"[ERR] Match room with ID '{matchId}' not found.", ConsoleColor.Red);
+                    return;
+                }
+
+                if (!room.Playing)
+                {
+                    ConsoleWrite.WriteMessage($"[ERR] Match '{room.RoomName}' (ID: {room.Id}) is not playing.", ConsoleColor.Yellow);
+                    return;
+                }
+
+                room.Finish();
+                ConsoleWrite.WriteMessage($"[OK] Match '{room.RoomName}' (ID: {room.Id}) ended.", ConsoleColor.Green);
+            }
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage($"[ERR] Failed to end match '{matchId}': {ex.Message}", ConsoleColor.Red);
             }
         }
 

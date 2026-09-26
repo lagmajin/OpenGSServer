@@ -1,6 +1,7 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
@@ -232,6 +233,10 @@ namespace OpenGSServer
 
                 case NetworkingConstants.MessageType.ShutdownServerRequest:
                     HandleShutdownRequest(json);
+                    break;
+
+                case "ExecuteCommandRequest":
+                    HandleExecuteCommand(json);
                     break;
 
                 default:
@@ -516,6 +521,63 @@ namespace OpenGSServer
 
             SendJsonAsyncWithTimeStamp(response);
             ConsoleWrite.WriteMessage($"[Management] ブロードキャストメッセージ: {message} (送信者: {_adminId})", ConsoleColor.Cyan);
+        }
+
+        /// <summary>
+        /// Runs a console command over the management socket.
+        /// <para>
+        /// The server is usually started with --no-console, so a headless test
+        /// has no other way to drive the server side. The command goes through
+        /// the same parser an operator would use, and whatever the command
+        /// printed is returned so the caller can see what happened.
+        /// </para>
+        /// </summary>
+        private void HandleExecuteCommand(JObject json)
+        {
+            if (!_isAuthenticated)
+            {
+                SendErrorResponse("Authentication required");
+                return;
+            }
+
+            var command = json["Command"]?.ToString() ?? json["command"]?.ToString();
+            if (string.IsNullOrWhiteSpace(command))
+            {
+                SendErrorResponse("Command is required");
+                return;
+            }
+
+            var response = new JObject
+            {
+                ["MessageType"] = "ExecuteCommandResponse",
+                ["Command"] = command
+            };
+
+            try
+            {
+                var output = new StringWriter();
+                var previous = Console.Out;
+                Console.SetOut(output);
+                try
+                {
+                    var parser = new InteractiveCommandParser();
+                    parser.Execute(command);
+                }
+                finally
+                {
+                    Console.SetOut(previous);
+                }
+
+                response["Success"] = true;
+                response["Output"] = output.ToString();
+            }
+            catch (Exception ex)
+            {
+                response["Success"] = false;
+                response["ErrorMessage"] = ex.Message;
+            }
+
+            SendJsonAsyncWithTimeStamp(response);
         }
 
         /// <summary>
