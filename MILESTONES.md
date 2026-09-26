@@ -99,6 +99,15 @@ Done when:
 - room state and match state stay in sync
 - broadcast paths are implemented instead of stubbed
 
+Current status:
+- `MatchServerV2` runs a 25Hz `TickTimer` and drives `room.GameUpdate()` for
+  every playing room. Verified by reading the loop, not by a headless match
+  test; there is still no test that plays a match end to end
+- UDP input is applied on the fixed tick rather than in the receive callback,
+  and the lag compensation manager is ticked with the same delta
+- `BroadcastToRoom` and `BroadcastToAll` are implemented for both LiteNetLib
+  writers and JObject messages; no stubs remain in the file
+
 ## S3. Loading And Room Transition Handshake
 
 Goal: make the lobby-to-match transition explicit.
@@ -117,6 +126,25 @@ Done when:
 - loading start, progress, completion, and map-entry approval are handled by
   the server path
 - timeout and fallback behavior are deterministic
+
+Current status:
+- start, progress, and completion are server handled, and `AllowEnterMap` is
+  correctly withheld until every player reports in
+- `MatchRoomManager` now registers the room as waiting when it announces
+  `LoadingStartedNotification`. It did not before, so the gate and the timeout
+  both had nothing to work with
+- `LoadingTimeoutMonitor` sweeps every 5s and, past the deadline, sends
+  `LoadingFailed` with the players that never reported, clears the loading
+  state, and releases the wait room. The deadline defaults to 60s and comes
+  from `OPENGS_LOADING_TIMEOUT_SECONDS` so tests need not wait it out
+- `WaitRoom.CancelPendingMatch` releases a room whose match never started.
+  Without it `NowPlaying` stayed true and `CanStartMatch()` returned false
+  forever, so the room could never be retried
+- the client already handles `LoadingFailed` in
+  `OnlineLoadingSceneNetworkManager` and returns to the wait room through
+  `OnlineLoadingScene.OnLoadingFailed`
+- `loading_timeout_smoke.py` covers the stall, the fallback message, and the
+  retry
 
 ## S4. Integration Checks And Observability
 
