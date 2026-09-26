@@ -28,7 +28,6 @@
     <Compile Remove="Tests\**" />
     <Compile Remove="Game\FieldItem.cs" />
 
-    <Compile Remove="Deprecated\**" />
     <EmbeddedResource Remove="Build\**" />
     <EmbeddedResource Remove="Script\**" />
     <EmbeddedResource Remove="Server\TCP\**" />

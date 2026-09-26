@@ -41,19 +41,24 @@
 - `Constants/ItemConstants.cs`（`Deprecated/` へ移動済み）
 - `Room/OldWaitRoom.cs`（`Deprecated/` へ移動済み）
 
-## 残存: `Deprecated/` 配下（現在もビルド対象外）
+## 完了: `Deprecated/` を削除
 
-以下は `OpenGSServer.csproj` の `<Compile Remove="Deprecated\**" />` で
-確実に除外されています。将来的に削除する候補です。
+8ファイルすべて削除しました。削除前に型名ベースで参照を確認しています。
 
-- `GameScene.cs`
-- `InstantItem.cs`
-- `ItemConstants.cs`
-- `LobbyEventHandlerV2.cs`
-- `OldAbstractGameRoom.cs`
-- `OldMatchRoom.cs`
-- `OldWaitRoom.cs`
-- `Tickrate.cs`
+- `GameSceneUpdateInfo`, `PowerGranadePack`, `FireGranadePack`,
+  `LobbyEventHandlerV2`, `OldMatchRoom2` は参照ゼロ
+- `AbstractGameRoom` と `IMatchRoom` は参照ありに見えますが、実際に
+  使われているのは `OpenGSCore` 側の定義（`Room/AbstractGameRoom.cs`、
+  `Match/MatchRoom.cs`）です。`Deprecated/` 側の旧定義は未使用
+- `GameScene`, `InstantItem`, `Tickrate` の名前が現れる箇所は
+  `AbstractGranade.cs` のコメント、`LobbyServerManager.cs` の
+  `EquipInstantItems` 文字列、`ServerSettings.TickRate` プロパティで、
+  いずれも型参照ではありません
+
+削除に合わせ `OpenGSServer.csproj` の
+`<Compile Remove="Deprecated\**" />` も外しました。`Build\**`、
+`Script\**`、`Server\TCP\**` の指定はディレクトリが実在しませんが、将来
+再生成された場合に黙ってビルドされるのを防ぐため残しています。
 
 ## 残存: `OpenGSCore/Deprecated/`
 
