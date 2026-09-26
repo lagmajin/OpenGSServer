@@ -101,12 +101,23 @@ Done when:
 
 Current status:
 - `MatchServerV2` runs a 25Hz `TickTimer` and drives `room.GameUpdate()` for
-  every playing room. Verified by reading the loop, not by a headless match
-  test; there is still no test that plays a match end to end
+  every playing room
 - UDP input is applied on the fixed tick rather than in the receive callback,
   and the lag compensation manager is ticked with the same delta
 - `BroadcastToRoom` and `BroadcastToAll` are implemented for both LiteNetLib
   writers and JObject messages; no stubs remain in the file
+- the loop had nothing to drive until now. Nothing called
+  `MatchRoom.GameStart`, so `Playing` stayed false and the room was skipped.
+  `MatchRoomManager.BeginMatch` runs it from the loading gate, once every
+  player has reported completion
+- `match_playthrough_smoke.py` plays a match from two lobby clients through
+  to `MatchEndNotification`, so this is covered by a test rather than by
+  reading the code
+- `endmatch` and `ExecuteCommandRequest` on the management listener exist so
+  a headless test can end a match without waiting out the match timer
+- RUDP gameplay input is still not driven by any test; the playthrough covers
+  the server loop, the result evaluator, the result broadcast, and the
+  persistence path
 
 ## S3. Loading And Room Transition Handshake
 
@@ -168,7 +179,7 @@ Current status:
 - `test_client.py` drives the management listener
 - `tools/run_smoke.ps1` builds, boots a throwaway server, and runs
   `lobby_smoke_client.py`, `two_player_loading_smoke.py`,
-  `mission_room_lifecycle_smoke.py`, and `reconnect_smoke.py` in one command
+  `mission_room_lifecycle_smoke.py`, `reconnect_smoke.py`,`r`n  `loading_timeout_smoke.py`, and `match_playthrough_smoke.py` in one command
 - the same command runs in `.github/workflows/server-build.yml`
 - `ServerHostTests` and `ServerPlayerStateManagerTests` cover the
   regression-prone server rules
