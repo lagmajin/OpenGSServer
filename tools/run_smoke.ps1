@@ -41,12 +41,13 @@ $smokes = @(
     @{ Name = 'lobby'; Script = 'lobby_smoke_client.py' },
     @{ Name = 'two_player_loading'; Script = 'two_player_loading_smoke.py' },
     @{ Name = 'mission'; Script = 'mission_room_lifecycle_smoke.py' }
+    @{ Name = 'reconnect'; Script = 'reconnect_smoke.py' }
 )
 
 if ($Only.Count -gt 0) {
     $smokes = $smokes | Where-Object { $Only -contains $_.Name }
     if ($smokes.Count -eq 0) {
-        throw "No smoke client matched -Only. Valid names: lobby, two_player_loading, mission"
+        throw "No smoke client matched -Only. Valid names: lobby, two_player_loading, mission, reconnect"
     }
 }
 

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
@@ -1038,12 +1038,7 @@ namespace OpenGSServer
                     if (clientSession is not null)
                     {
                         var loggedOutPlayerId = clientSession.PlayerID;
-                        AccountEventHandler.Logout(clientSession);
-                        if (!string.IsNullOrWhiteSpace(loggedOutPlayerId))
-                        {
-                            PlayerLeaveLobby(loggedOutPlayerId);
-                            WaitRoomEventHandler.RemoveDisconnectedPlayer(loggedOutPlayerId);
-                        }
+                        PlayerSessionCleanup.Release(loggedOutPlayerId);
                         clientSession.ClearPlayerID();
                         clientSession.SendAsyncJsonWithTimeStamp(new JObject
                         {

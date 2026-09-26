@@ -1,4 +1,4 @@
-﻿using NetCoreServer;
+using NetCoreServer;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System;
@@ -225,14 +225,7 @@ namespace OpenGSServer
             ConsoleWrite.WriteMessage($"TCP session with Id {Id} disconnected!", ConsoleColor.Red);
 
 
-            AccountEventHandler.Logout(this);
-
-            if (!string.IsNullOrWhiteSpace(PlayerID))
-            {
-                InGameMatchEventHandler.ClearPlayerState(PlayerID);
-                LobbyServerManager.Instance.PlayerLeaveLobby(PlayerID);
-                WaitRoomEventHandler.RemoveDisconnectedPlayer(PlayerID);
-            }
+            PlayerSessionCleanup.Release(PlayerID);
 
             receiveBuffer.Clear();
         }
