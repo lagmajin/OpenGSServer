@@ -41,13 +41,14 @@ $smokes = @(
     @{ Name = 'lobby'; Script = 'lobby_smoke_client.py' },
     @{ Name = 'two_player_loading'; Script = 'two_player_loading_smoke.py' },
     @{ Name = 'mission'; Script = 'mission_room_lifecycle_smoke.py' }
-    @{ Name = 'reconnect'; Script = 'reconnect_smoke.py' }
+    @{ Name = 'reconnect'; Script = 'reconnect_smoke.py' },
+    @{ Name = 'loading_timeout'; Script = 'loading_timeout_smoke.py' }
 )
 
 if ($Only.Count -gt 0) {
     $smokes = $smokes | Where-Object { $Only -contains $_.Name }
     if ($smokes.Count -eq 0) {
-        throw "No smoke client matched -Only. Valid names: lobby, two_player_loading, mission, reconnect"
+        throw "No smoke client matched -Only. Valid names: lobby, two_player_loading, mission, reconnect, loading_timeout"
     }
 }
 
@@ -101,6 +102,10 @@ try {
         throw "Server assembly not found at $dll"
     }
 
+    # S3: keep the loading deadline short so the timeout smoke does not have to
+    # wait out the production 60s window.
+    $env:OPENGS_LOADING_TIMEOUT_SECONDS = '6'
+
     Write-Host "Starting server (lobby $lobbyPort). Log: $logFile"
     $server = Start-Process -FilePath 'dotnet' -ArgumentList @(
         $dll,
@@ -131,7 +136,7 @@ try {
 } finally {
     Stop-SmokeServer -Process $server
     foreach ($file in @($logFile, "$logFile.err")) {
-        if (Test-Path $file) { Remove-Item $file -Force }
+        if ((Test-Path $file) -and -not $env:OPENGS_KEEP_SMOKE_LOGS) { Remove-Item $file -Force }
     }
 }
 

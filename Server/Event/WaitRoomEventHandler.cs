@@ -19,6 +19,87 @@ namespace OpenGSServer
         private static readonly Dictionary<string, HashSet<string>> LoadingCompletedPlayers = new(StringComparer.OrdinalIgnoreCase);
         private static readonly HashSet<string> LoadingRooms = new(StringComparer.OrdinalIgnoreCase);
 
+        // S3: loading start, progress, completion, and map entry approval all
+        // run through the server, but a client that never reports completion
+        // used to hold the room locked forever. This monitor gives that wait a
+        // deadline and releases the room when it passes.
+        //
+        // The deadline is read once at startup. Tests set
+        // OPENGS_LOADING_TIMEOUT_SECONDS to a small value so they do not have
+        // to wait a full minute.
+        private static readonly TimeSpan LoadingTimeout = ReadLoadingTimeout();
+
+        private static TimeSpan ReadLoadingTimeout()
+        {
+            var configured = Environment.GetEnvironmentVariable("OPENGS_LOADING_TIMEOUT_SECONDS");
+            if (int.TryParse(configured, out var seconds) && seconds > 0)
+            {
+                return TimeSpan.FromSeconds(seconds);
+            }
+
+            return TimeSpan.FromSeconds(60);
+        }
+
+        private static readonly LoadingTimeoutMonitor LoadingTimeouts = new(
+            LoadingTimeout,
+            new Func<IEnumerable<WaitRoom>>[]
+            {
+                () => WaitRoomManager.Instance().GetAllRooms()
+            },
+            IsRoomWaitingForLoading,
+            HandleLoadingTimeout);
+
+        internal static void StartLoadingTimeoutMonitor() => LoadingTimeouts.Start();
+
+        internal static void StopLoadingTimeoutMonitor() => LoadingTimeouts.Dispose();
+
+        /// <summary>
+        /// True when the room entered loading but has not been approved yet.
+        /// </summary>
+        private static bool IsRoomWaitingForLoading(string roomId)
+        {
+            if (string.IsNullOrWhiteSpace(roomId))
+            {
+                return false;
+            }
+
+            lock (LoadingStateLock)
+            {
+                return LoadingRooms.Contains(roomId);
+            }
+        }
+
+        private static void HandleLoadingTimeout(WaitRoom waitRoom, IReadOnlyList<string> pendingPlayers)
+        {
+            lock (LoadingStateLock)
+            {
+                LoadingRooms.Remove(waitRoom.RoomId);
+                LoadingCompletedPlayers.Remove(waitRoom.RoomId);
+            }
+
+            // S3: the MatchRoom created for this attempt is discarded, so the
+            // wait room has to be released first. Otherwise the update below
+            // still reports NowPlaying true, and CanStartMatch keeps failing.
+            waitRoom.CancelPendingMatch();
+
+            BroadcastLoadingNotification(waitRoom, new JObject
+            {
+                ["MessageType"] = MessageType.LoadingFailed,
+                ["RoomID"] = waitRoom.RoomId,
+                ["RoomId"] = waitRoom.RoomId,
+                ["Success"] = false,
+                ["Message"] = "Loading timed out. These players did not report completion: " + string.Join(", ", pendingPlayers),
+                ["PendingPlayers"] = new JArray(pendingPlayers)
+            });
+
+            BroadcastRoomUpdate(waitRoom, MessageType.WaitRoomUpdateNotification);
+            LobbyEventHandler.BroadcastRoomListUpdate();
+
+            ConsoleWrite.WriteMessage(
+                $"[Loading] room {waitRoom.RoomId} released after {LoadingTimeout.TotalSeconds:0}s with {pendingPlayers.Count} player(s) still loading",
+                ConsoleColor.Yellow);
+        }
+
         private static JObject CreateRoomError(string messageType, string roomId)
         {
             return new JObject
@@ -51,8 +132,31 @@ namespace OpenGSServer
             }
         }
 
+        /// <summary>
+        /// Marks a room as waiting on its players to finish loading.
+        /// <para>
+        /// The match start path calls this when it announces
+        /// LoadingStartedNotification, so the AllowEnterMap gate and the loading
+        /// timeout both have a room to work with. The client driven
+        /// LoadingStarted message goes through the same registration.
+        /// </para>
+        /// </summary>
+        internal static void BeginLoadingForRoom(WaitRoom waitRoom)
+        {
+            if (waitRoom == null || string.IsNullOrWhiteSpace(waitRoom.RoomId))
+            {
+                return;
+            }
+
+            BeginLoading(waitRoom);
+        }
+
         private static void BeginLoading(WaitRoom waitRoom)
         {
+            // S3: start the clock so a client that never reports completion
+            // cannot hold the room locked.
+            LoadingTimeouts.TrackLoadingStarted(waitRoom.RoomId);
+
             lock (LoadingStateLock)
             {
                 if (LoadingRooms.Add(waitRoom.RoomId))
@@ -98,6 +202,9 @@ namespace OpenGSServer
             {
                 return;
             }
+
+            // S3: the room is no longer waiting on its players.
+            LoadingTimeouts.Forget(roomId);
 
             lock (LoadingStateLock)
             {

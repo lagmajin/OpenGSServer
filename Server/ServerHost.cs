@@ -76,6 +76,10 @@ namespace OpenGSServer
 
             ManagementServer.Instance.Listen(options.ManagementPort);
 
+            // S3: give the loading handshake a deadline, so a client that never
+            // reports completion releases its room instead of locking it.
+            WaitRoomEventHandler.StartLoadingTimeoutMonitor();
+
             if (lobbyServer.IsTcpServerRunning && lobbyServer.TcpPort is int tcpPort)
             {
                 batchService.WriteLocalPortToFile(tcpPort);
@@ -98,6 +102,8 @@ namespace OpenGSServer
             }
 
             StopBatchService();
+
+            WaitRoomEventHandler.StopLoadingTimeoutMonitor();
 
             DisposeServers();
 

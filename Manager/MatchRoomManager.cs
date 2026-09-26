@@ -136,6 +136,13 @@ namespace OpenGSServer
 
                 bus.OnLoadingStarted += () =>
                 {
+                    // S3: the loading handshake is server owned, so the room has
+                    // to enter the loading state here. Without this the room is
+                    // never registered as waiting, the AllowEnterMap gate has
+                    // nothing to check, and the loading timeout cannot release
+                    // it either.
+                    WaitRoomEventHandler.BeginLoadingForRoom(waitRoom);
+
                     var loadingJson = new JObject
                     {
                         ["MessageType"] = MessageType.LoadingStartedNotification,
