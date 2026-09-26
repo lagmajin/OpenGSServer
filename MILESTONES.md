@@ -57,6 +57,26 @@ Done when:
 - server-side state survives reconnects in the intended environment
 - local test wrappers are clearly separated from the authoritative path
 
+Current status:
+- `lobby_smoke_client.py` already covers the shared contract: login, account
+  creation, room list, create, join, leave, and the same session refusing a
+  second login
+- `reconnect_smoke.py` covers a dropped connection: same account, same player
+  id, no ghost room left by the dead session, and a working account
+- `Server/Event/PlayerSessionCleanup.cs` is the single teardown path. It was
+  added because LogoutRequest and the dropped connection had drifted apart:
+  logout left in-game match state and the account session behind, while a
+  drop cleared all four
+- the client side has `NetworkAuthorityGate`, so a call site no longer has to
+  read `localServerTestMode` itself to know whether a request reaches the
+  backend or a local stub
+- giving `Assets/Scripts/NetworkTest` its own assembly is blocked, not
+  overlooked. `LocalTestTcpServer` holds a `NetworkRequestRouter` and
+  `LocalTestMatchRUDPServer` holds a `ServerReplayTape`, both in the OpenGSR
+  assembly, while OpenGSR registers both servers in its Autofac containers.
+  The dependency is bidirectional, so Unity reports a cyclic dependency.
+  Breaking it means moving those two types into a shared lower assembly
+
 ## S2. Match Server Core
 
 Goal: make the real-time match path authoritative instead of log-driven.
@@ -119,8 +139,8 @@ Done when:
 Current status:
 - `test_client.py` drives the management listener
 - `tools/run_smoke.ps1` builds, boots a throwaway server, and runs
-  `lobby_smoke_client.py`, `two_player_loading_smoke.py`, and
-  `mission_room_lifecycle_smoke.py` in one command
+  `lobby_smoke_client.py`, `two_player_loading_smoke.py`,
+  `mission_room_lifecycle_smoke.py`, and `reconnect_smoke.py` in one command
 - the same command runs in `.github/workflows/server-build.yml`
 - `ServerHostTests` and `ServerPlayerStateManagerTests` cover the
   regression-prone server rules
