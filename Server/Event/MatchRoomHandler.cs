@@ -225,6 +225,10 @@ namespace OpenGSServer
                     HandleGrenadeThrow(room, playerId, json);
                     break;
                 case GameMessageTypes.FieldItemPickup:
+                // The client sends ItemPickup on the realtime channel and
+                // FieldItemPickup on the reliable one. Accept both so either route
+                // reaches the same authoritative check.
+                case "ItemPickup":
                     HandleFieldItemPickup(room, playerId, json);
                     break;
 
@@ -766,6 +770,10 @@ namespace OpenGSServer
                 ["RoomID"] = room.Id.ToString(),
                 ["KillerID"] = attackerId,
                 ["KilledPlayerID"] = targetId,
+                // The client reads the dead player from PlayerId on the death
+                // message it was built around, so both spellings travel together.
+                ["DeadPlayerID"] = targetId,
+                ["PlayerId"] = targetId,
                 ["IsSelfInflicted"] = isSelfInflicted,
                 ["Timestamp"] = DateTime.UtcNow.ToString("o")
             });

@@ -617,7 +617,12 @@ namespace OpenGSServer
                 "FlagScoreUpdate" or
                 "PlayerEliminated" or
                 "ObjectSpawned" or
-                "ObjectDestroyed";
+                "ObjectDestroyed" or
+                // A field item claim arrives here during a match, so it belongs to
+                // the realtime set. It was missing, which meant every claim was
+                // dropped before the dispatcher ever saw it.
+                "ItemPickup" or
+                "FieldItemPickup";
 
             if (!isSystemEvent && !isRealtimeEvent)
             {
