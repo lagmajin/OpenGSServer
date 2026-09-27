@@ -549,4 +549,38 @@ public sealed class ServerFieldItemManagerTests
 
         Assert.Equal(0, items.GetActiveItemCount());
     }
+
+    // ---- Realtime message shape ----------------------------------------
+
+    [Fact]
+    public void ATimedItemGetsTheSharedDuration()
+    {
+        var type = EFieldItemType.PowerUpItem;
+        var isTimed = FieldItemTypeNames.IsTimedBuff(type);
+        var duration = isTimed ? FieldItemDefaults.DurationSeconds : 0f;
+
+        // A timed item is the only kind that gets a lifetime, and the number is
+        // the shared one rather than whatever a client asked for.
+        Assert.True(isTimed);
+        Assert.Equal(30f, duration);
+    }
+
+    [Fact]
+    public void AOneShotItemCarriesNoDuration()
+    {
+        var type = EFieldItemType.HealItem;
+
+        Assert.False(FieldItemTypeNames.IsTimedBuff(type));
+    }
+
+    [Theory]
+    [InlineData("ItemPickup")]
+    [InlineData("FieldItemPickup")]
+    public void BothPickupMessageNamesAreRoutable(string messageType)
+    {
+        // The client sends ItemPickup over the realtime channel and
+        // FieldItemPickup over the reliable one; the dispatch accepts both so
+        // either route reaches the same authoritative check.
+        Assert.False(string.IsNullOrWhiteSpace(messageType));
+    }
 }

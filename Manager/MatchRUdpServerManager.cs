@@ -19,6 +19,7 @@ namespace OpenGSServer
         public const string GrenadeThrow = "GrenadeThrow";
         public const string ObjectSpawned = "ObjectSpawned";
         public const string ObjectDestroyed = "ObjectDestroyed";
+        public const string ItemPickup = "ItemPickup";
     }
 
     /// <summary>
@@ -159,6 +160,11 @@ namespace OpenGSServer
                     HandlePlayerGrenade(peer, message, playerId);
                     break;
 
+                case MatchMessageTypes.ItemPickup:
+                case GameMessageTypes.FieldItemPickup:
+                    HandleFieldItemPickup(peer, message, playerId);
+                    break;
+
                 case NetworkingConstants.MessageType.PlayerPosition:
                     HandlePlayerPosition(peer, message, playerId);
                     break;
@@ -253,6 +259,115 @@ namespace OpenGSServer
             };
 
             SendToPeer(peer, response);
+        }
+
+        /// <summary>
+        /// Grants a field item over the realtime channel.
+        /// <para>
+        /// The client sends ItemPickup as a RUDP message, and the realtime
+        /// dispatch had no case for it, so the message was logged as unknown and
+        /// dropped. Nothing about a pickup was ever authoritative.
+        /// </para>
+        /// <para>
+        /// The client writes the player id as "PlayerId" while the dispatch reads
+        /// "PlayerID" through a case sensitive dictionary lookup, so the player
+        /// lookup would fail before this handler is even reached. Both spellings
+        /// are read here, and the claimed player is compared against the
+        /// connection's player so one player cannot claim for another.
+        /// </para>
+        /// </summary>
+        private void HandleFieldItemPickup(NetPeer peer, JObject message, string playerId)
+        {
+            var roomId = GetRoomId(playerId);
+            if (string.IsNullOrEmpty(roomId))
+            {
+                ConsoleWrite.WriteMessage($"[RUDP] Refused field item pickup from unassigned '{playerId}'", ConsoleColor.Yellow);
+                return;
+            }
+
+            var itemId = message.GetStringOrNull("ItemId");
+            if (string.IsNullOrEmpty(itemId))
+            {
+                ConsoleWrite.WriteMessage($"[RUDP] Ignored field item pickup with no item id from '{playerId}'", ConsoleColor.Yellow);
+                return;
+            }
+
+            // The client sends "PlayerId"; the realtime dispatch reads "PlayerID".
+            var claimed = message.GetStringOrNull("PlayerId") ?? message.GetStringOrNull("PlayerID");
+            if (!string.IsNullOrEmpty(claimed) &&
+                !string.Equals(claimed, playerId, StringComparison.OrdinalIgnoreCase))
+            {
+                ConsoleWrite.WriteMessage($"[RUDP] Ignored field item pickup for '{claimed}' sent by '{playerId}'", ConsoleColor.Yellow);
+                return;
+            }
+
+            var itemManager = MatchRoomManager.Instance.GetFieldItemManager(roomId);
+            if (itemManager == null)
+            {
+                ConsoleWrite.WriteMessage($"[RUDP] Field item pickup with no item manager in room '{roomId}'", ConsoleColor.Yellow);
+                return;
+            }
+
+            var state = MatchServerV2.Instance.ServerLagCompensationManager.GetPlayerState(playerId);
+            if (string.IsNullOrEmpty(state.PlayerId))
+            {
+                ConsoleWrite.WriteMessage($"[RUDP] Refused field item pickup for '{playerId}': no authoritative position", ConsoleColor.Yellow);
+                return;
+            }
+
+            var granted = itemManager.PickupItem(itemId, playerId, state.PositionX, state.PositionY, state.PositionZ);
+            if (!granted)
+            {
+                ConsoleWrite.WriteMessage($"[RUDP] Refused field item pickup of '{itemId}' by '{playerId}'", ConsoleColor.Yellow);
+                return;
+            }
+
+            BroadcastFieldItemPickup(roomId, playerId, itemId, itemManager);
+        }
+
+        /// <summary>
+        /// Tells the room a pickup was granted, with the duration the server
+        /// decided rather than the one the client asked for.
+        /// </summary>
+        private void BroadcastFieldItemPickup(
+            string roomId,
+            string playerId,
+            string itemId,
+            Network.ServerFieldItemManager itemManager)
+        {
+            if (!itemManager.TryGetItem(itemId, out var item))
+            {
+                return;
+            }
+
+            var type = item!.ItemType;
+            var isTimed = OpenGSCore.FieldItemTypeNames.IsTimedBuff(type);
+            var duration = isTimed ? OpenGSCore.FieldItemDefaults.DurationSeconds : 0f;
+
+            var json = new JObject
+            {
+                ["MessageType"] = GameMessageTypes.FieldItemPickup,
+                ["RoomID"] = roomId,
+                ["PlayerId"] = playerId,
+                ["PlayerID"] = playerId,
+                ["ItemId"] = itemId,
+                ["ItemType"] = OpenGSCore.FieldItemTypeNames.ToWireName(type),
+                ["Duration"] = duration,
+                ["IsTimedBuff"] = isTimed,
+                ["ExpiresAtSeconds"] = duration > 0f
+                    ? (double)DateTime.UtcNow.TimeOfDay.TotalSeconds + duration
+                    : 0.0d,
+                ["Success"] = true,
+                ["Timestamp"] = DateTime.UtcNow.ToString("o")
+            };
+
+            // The pickup is acknowledged to the player who claimed it rather
+            // than broadcast, so the other clients in the room do not see a
+            // grant that concerns only one of them.
+            if (connectedPlayers.TryGetValue(playerId, out var peer))
+            {
+                SendToPeer(peer, json);
+            }
         }
 
         private void HandlePlayerShot(NetPeer peer, JObject message, string playerId)
