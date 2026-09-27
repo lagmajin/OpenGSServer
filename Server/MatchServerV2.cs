@@ -197,7 +197,13 @@ namespace OpenGSServer
                 }
 
                 // UDP入力は受信コールバックで即時適用せず、固定Tickで適用する。
-                _udpServer?.Tick((_gameLoopTimer?.IntervalMs ?? 40) / 1000.0f);
+                var tickSeconds = (_gameLoopTimer?.IntervalMs ?? 40) / 1000.0f;
+                _udpServer?.Tick(tickSeconds);
+
+                // Projectiles are server owned, so they are stepped here rather
+                // than left to the client, which previously simulated nothing
+                // on the server at all.
+                InGameMatchEventHandler.UpdateProjectiles(tickSeconds);
 
                 _serverLagCompensationManager.Update((_gameLoopTimer?.IntervalMs ?? 40) / 1000.0f);
 

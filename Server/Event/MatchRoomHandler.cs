@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
+using System.Numerics;
 using System.ComponentModel.Design;
 using System.Globalization;
 using System.Runtime.InteropServices;
@@ -599,14 +601,207 @@ namespace OpenGSServer
             BroadcastShotEvent(room, playerId, shotData);
         }
 
-        private static void HandleGrenadeThrow(MatchRoom room, string playerId, JObject grenadeData)
+        /// <summary>
+        /// Server side flight of bullets and grenades. The live match path drives
+        /// it, so a grenade is simulated rather than only echoed back.
+        /// </summary>
+        private static readonly OpenGSServer.Network.ServerProjectileSimulator Projectiles =
+            new();
+
+        /// <summary>
+        /// Applies a simulation tick to every live projectile.
+        /// </summary>
+        public static void UpdateProjectiles(float deltaSeconds)
         {
-            var objectType = NormalizeGrenadeObjectType(grenadeData.GetStringOrNull("GrenadeType"));
-            var objectId = Guid.NewGuid().ToString("N");
-            Console.WriteLine($"Player {playerId} threw {objectType} ({objectId})");
-            BroadcastGrenadeEvent(room, playerId, grenadeData, objectId);
+            if (deltaSeconds <= 0f || !float.IsFinite(deltaSeconds))
+            {
+                return;
+            }
+
+            Projectiles.PlayerPositionLookup = playerId =>
+            {
+                var state = MatchServerV2.Instance.ServerLagCompensationManager.GetPlayerState(playerId);
+                return new Vector2(state.PositionX, state.PositionY);
+            };
+            Projectiles.PlayerIds = () => GetActiveMatchPlayerIds();
+            Projectiles.OnSpawn = (projectile, spawnType) => BroadcastProjectileSpawn(projectile, spawnType);
+            Projectiles.OnExpire = projectile => BroadcastProjectileExpire(projectile);
+            Projectiles.OnDamage = (targetId, attackerId, damage, hit) =>
+                HandleProjectileDamage(targetId, attackerId, damage, hit);
+
+            Projectiles.Update(deltaSeconds);
+        }
+        /// <summary>
+        /// Every player currently in a live match, used to resolve projectile
+        /// hits. The simulator asks for this each tick rather than caching it,
+        /// so a player who joins or leaves is reflected immediately.
+        /// </summary>
+        private static List<string> GetActiveMatchPlayerIds()
+        {
+            var ids = new List<string>();
+            foreach (var room in MatchRoomManager.Instance.AllRooms().OfType<MatchRoom>())
+            {
+                if (!room.Playing)
+                {
+                    continue;
+                }
+
+                foreach (var player in room.Players)
+                {
+                    if (!string.IsNullOrWhiteSpace(player.Id))
+                    {
+                        ids.Add(player.Id);
+                    }
+                }
+            }
+
+            return ids;
         }
 
+        private static void BroadcastProjectileSpawn(
+            OpenGSServer.Network.ServerProjectileState projectile,
+            string spawnType)
+        {
+            var room = MatchRoomManager.Instance.GetRoomById(projectile.RoomId);
+            if (room == null)
+            {
+                return;
+            }
+
+            GameMessageDispatcher.BroadcastToRoom(room.Id.ToString(), new JObject
+            {
+                ["MessageType"] = GameMessageTypes.ObjectSpawned,
+                ["ObjectId"] = projectile.ProjectileId,
+                ["ObjectType"] = spawnType,
+                ["RoomID"] = room.Id.ToString(),
+                ["PosX"] = projectile.Position.X,
+                ["PosY"] = projectile.Position.Y,
+                ["ProjectileId"] = projectile.ProjectileId
+            });
+        }
+
+        private static void BroadcastProjectileExpire(OpenGSServer.Network.ServerProjectileState projectile)
+        {
+            var room = MatchRoomManager.Instance.GetRoomById(projectile.RoomId);
+            if (room == null)
+            {
+                return;
+            }
+
+            GameMessageDispatcher.BroadcastToRoom(room.Id.ToString(), new JObject
+            {
+                ["MessageType"] = GameMessageTypes.ObjectDestroyed,
+                ["ObjectId"] = projectile.ProjectileId,
+                ["RoomID"] = room.Id.ToString()
+            });
+        }
+
+        private static void HandleProjectileDamage(
+            string targetId,
+            string attackerId,
+            int damage,
+            Vector2 hitPosition)
+        {
+            var room = MatchRoomManager.Instance.SearchRoomByMemberID(targetId);
+            if (room == null)
+            {
+                return;
+            }
+
+            var poseMultiplier = GetPoseDamageMultiplier(room.Id.ToString(), targetId);
+            var adjusted = Math.Max(1, (int)MathF.Round(damage * poseMultiplier));
+
+            GameMessageDispatcher.BroadcastToRoom(room.Id.ToString(), new JObject
+            {
+                ["MessageType"] = "PlayerDamaged",
+                ["RoomID"] = room.Id.ToString(),
+                ["DamagedPlayerID"] = targetId,
+                ["AttackerID"] = attackerId,
+                ["Damage"] = adjusted,
+                ["PoseMultiplier"] = poseMultiplier,
+                ["HitPosition"] = new JObject { ["X"] = hitPosition.X, ["Y"] = hitPosition.Y },
+                ["Timestamp"] = DateTime.UtcNow.ToString("o")
+            });
+        }
+        /// <summary>
+        /// Reads a two component position out of a message, accepting both the
+        /// nested and the flat shape clients have used.
+        /// </summary>
+        private static Vector2 ReadVector2(JObject json, params string[] keys)
+        {
+            if (json == null || keys == null)
+            {
+                return Vector2.Zero;
+            }
+
+            foreach (var key in keys)
+            {
+                var nested = json[key] as JObject;
+                if (nested != null)
+                {
+                    return new Vector2(
+                        GetFloat(nested["X"] ?? nested["x"], 0f),
+                        GetFloat(nested["Y"] ?? nested["y"], 0f));
+                }
+            }
+
+            foreach (var key in keys)
+            {
+                if (json[key] == null)
+                {
+                    continue;
+                }
+
+                var x = GetFloat(json[key + "X"] ?? json[key + "x"], float.NaN);
+                var y = GetFloat(json[key + "Y"] ?? json[key + "y"], float.NaN);
+                if (!float.IsNaN(x) || !float.IsNaN(y))
+                {
+                    return new Vector2(
+                        float.IsNaN(x) ? 0f : x,
+                        float.IsNaN(y) ? 0f : y);
+                }
+            }
+
+            return Vector2.Zero;
+        }
+
+        /// <summary>
+        /// Pose state scaling applied to damage, so a crouching or rolling player
+        /// takes less. Unknown pose falls back to full damage.
+        /// </summary>
+        private static float GetPoseDamageMultiplier(string roomId, string playerId)
+        {
+            var room = MatchRoomManager.Instance.GetRoomById(roomId);
+            if (room == null)
+            {
+                return 1f;
+            }
+
+            var pose = room.GetPlayerPoseState(playerId);
+            return pose switch
+            {
+                EPlayerPoseState.Sit => 0.5f,
+                EPlayerPoseState.LieDown => 0.75f,
+                _ => 1f
+            };
+        }
+        private static void HandleGrenadeThrow(MatchRoom room, string playerId, JObject grenadeData)
+        {
+            var grenadeType = grenadeData.GetStringOrNull("GrenadeType")
+                ?? grenadeData.GetStringOrNull("WeaponType")
+                ?? "Normal";
+            var origin = ReadVector2(grenadeData, "Position", "Origin");
+            var direction = ReadVector2(grenadeData, "Direction", "AimDirection");
+
+            // The server now owns the flight, the fuse, and the blast. The throw
+            // used to be logged and echoed to the room, so the grenade existed
+            // only as a message and nothing was ever simulated.
+            var projectileId = Projectiles.CreateGrenade(
+                room.Id.ToString(), playerId, origin, direction, grenadeType);
+
+            Console.WriteLine($"Player {playerId} threw {grenadeType} ({projectileId})");
+            BroadcastGrenadeEvent(room, playerId, grenadeData, projectileId);
+        }
         private static void HandleObjectSpawned(MatchRoom room, string playerId, JObject objectData)
         {
             var objectType = objectData.GetStringOrNull("ObjectType") ?? "Unknown";
