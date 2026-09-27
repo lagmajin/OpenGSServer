@@ -24,6 +24,9 @@ namespace OpenGSServer.Tests;
 /// connection.
 /// </para>
 /// </summary>
+// These tests each bind a real udp port, so two of them running at once
+// can land on the same one. Sharing a collection keeps them on one lane.
+[Collection("RealtimeSocket")]
 public sealed class MatchRudpDamageTests : IDisposable
 {
     private static int nextPort = 65150;

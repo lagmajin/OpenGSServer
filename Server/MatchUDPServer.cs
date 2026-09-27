@@ -527,6 +527,12 @@ namespace OpenGSServer
                 return;
             }
 
+            // The update was only echoed to the room before, so the state the
+            // server keeps for this player never moved. Anything that later measures
+            // against an authoritative position, a pickup radius for one, was then
+            // reading the spawn point the player had already left.
+            MatchServerV2.Instance.ServerLagCompensationManager.SetPlayerPosition(playerId, x, y, z);
+
             var room = MatchRoomManager.Instance.SearchRoomByMemberID(playerId);
             if (room == null)
             {

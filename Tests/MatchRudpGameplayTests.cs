@@ -17,6 +17,9 @@ namespace OpenGSServer.Tests;
 /// rather than over a socket, because the delivery timing of a UDP probe is
 /// not what these assertions are about and made them flaky.
 /// </summary>
+// These tests each bind a real udp port, so two of them running at once
+// can land on the same one. Sharing a collection keeps them on one lane.
+[Collection("RealtimeSocket")]
 public sealed class MatchRudpGameplayTests
 {
     private const float HorizontalSpeedCap = 10f;

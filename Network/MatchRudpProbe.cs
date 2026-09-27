@@ -46,6 +46,28 @@ namespace OpenGSServer
             client = new NetManager(listener);
         }
 
+        /// <summary>
+        /// Sends a json payload as the raw utf-8 bytes a real client sends.
+        /// <para>
+        /// The server sniffs the first byte of a packet to tell json from its own
+        /// binary format, so a payload written with Put(string) arrives behind a
+        /// length prefix and is read as binary instead. That is not a detail of the
+        /// probe: the peer then never registers, the handshake fails silently and
+        /// every later message is refused, so the probe has to frame its packets
+        /// exactly the way the client does.
+        /// </para>
+        /// </summary>
+        private void Send(JObject payload, DeliveryMethod method)
+        {
+            if (peer == null)
+            {
+                throw new InvalidOperationException("The probe is not connected.");
+            }
+
+            var bytes = System.Text.Encoding.UTF8.GetBytes(payload.ToString());
+            peer.Send(bytes, 0, method);
+        }
+
         /// <summary>Connects and completes the ClientConnect handshake.</summary>
         public bool Connect(
             string host,
@@ -92,22 +114,33 @@ namespace OpenGSServer
 
             peer.Tag = playerId;
 
-            writer.Reset();
-            writer.Put(new JObject
+            Send(new JObject
             {
                 ["MessageType"] = "ClientConnect",
                 ["PlayerID"] = playerId,
                 ["RoomID"] = roomId,
                 ["UdpToken"] = token
-            }.ToString());
-
-            peer.Send(writer, DeliveryMethod.ReliableOrdered);
+            }, DeliveryMethod.ReliableOrdered);
 
             // The server only registers the peer once it has processed the
-            // handshake, so give it a moment before the first input packet.
-            Thread.Sleep(250);
-            Poll(200);
-            return true;
+            // handshake, so wait for it here with the server being polled. Polling
+            // only the probe would let the handshake sit unsent and every later
+            // message would be refused as coming from an unregistered peer.
+            Poll(500, pumpServer);
+
+            // The server answers a rejected handshake by dropping the peer, so a
+            // peer still connected afterwards is the evidence the token was
+            // accepted. Reporting success without checking would let a test pass on
+            // a connection the server never registered.
+            return peer.ConnectionState == ConnectionState.Connected;
+        }
+
+        /// <summary>Sends an arbitrary json message on the realtime channel.</summary>
+        public void Send(string playerId, string roomId, JObject payload)
+        {
+            payload["PlayerID"] = playerId;
+            payload["RoomID"] = roomId;
+            Send(payload, DeliveryMethod.ReliableOrdered);
         }
 
         /// <summary>Sends one authoritative position input.</summary>
@@ -126,8 +159,7 @@ namespace OpenGSServer
                 throw new InvalidOperationException("The probe is not connected.");
             }
 
-            writer.Reset();
-            writer.Put(new JObject
+            Send(new JObject
             {
                 ["MessageType"] = "PlayerPositionUpdate",
                 ["PlayerID"] = playerId,
@@ -139,9 +171,7 @@ namespace OpenGSServer
                 ["DeltaTime"] = deltaTime,
                 ["SequenceNumber"] = sequence,
                 ["Timestamp"] = Environment.TickCount64 / 1000.0
-            }.ToString());
-
-            peer.Send(writer, DeliveryMethod.Unreliable);
+            }, DeliveryMethod.Unreliable);
         }
 
         /// <summary>Sends a movement input packet.</summary>
@@ -160,8 +190,7 @@ namespace OpenGSServer
                 throw new InvalidOperationException("The probe is not connected.");
             }
 
-            writer.Reset();
-            writer.Put(new JObject
+            Send(new JObject
             {
                 ["MessageType"] = "PlayerMove",
                 ["PlayerID"] = playerId,
@@ -175,18 +204,32 @@ namespace OpenGSServer
                 ["DeltaTime"] = deltaTime,
                 ["SequenceNumber"] = sequence,
                 ["Timestamp"] = Environment.TickCount64 / 1000.0
-            }.ToString());
-
-            peer.Send(writer, DeliveryMethod.Unreliable);
+            }, DeliveryMethod.Unreliable);
         }
 
         /// <summary>Polls for <paramref name="durationMs"/> and queues what arrives.</summary>
         public void Poll(int durationMs)
         {
+            Poll(durationMs, null);
+        }
+
+        /// <summary>
+        /// Polls the probe and, when supplied, the server.
+        /// <para>
+        /// The probe only transmits what it sends while it is polled, and the
+        /// server only receives a packet while it is polled. A caller that owns
+        /// the server therefore has to pass its pump here, or the two never
+        /// actually talk: the probe believes it sent a message and the server
+        /// never receives one.
+        /// </para>
+        /// </summary>
+        public void Poll(int durationMs, Action? pumpServer)
+        {
             var deadline = Environment.TickCount64 + durationMs;
             while (Environment.TickCount64 < deadline)
             {
                 client.PollEvents();
+                pumpServer?.Invoke();
                 Thread.Sleep(5);
             }
         }

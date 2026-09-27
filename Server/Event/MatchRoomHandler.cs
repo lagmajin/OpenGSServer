@@ -294,10 +294,11 @@ namespace OpenGSServer
             }
 
             var state = MatchServerV2.Instance.ServerLagCompensationManager.GetPlayerState(playerId);
-            if (string.IsNullOrEmpty(state.PlayerId))
+            if (string.IsNullOrEmpty(state.PlayerId) || !state.HasAuthoritativePosition)
             {
-                // No authoritative position recorded yet, so the radius cannot be
-                // enforced. Refuse rather than hand out an unverified claim.
+                // A registered player who has never reported a position still reads as
+                // the origin, so checking the id alone would treat "position unknown"
+                // as "standing at 0,0,0" and hand out an item that is spawning there.
                 Console.WriteLine($"[Match] Refused field item pickup for '{playerId}': no authoritative position");
                 return;
             }

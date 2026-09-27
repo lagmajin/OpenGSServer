@@ -17,6 +17,9 @@ namespace OpenGSServer.Tests;
 /// It uses the same LiteNetLib build as the server, so the wire format is
 /// the real one rather than a reimplementation.
 /// </summary>
+// These tests each bind a real udp port, so two of them running at once
+// can land on the same one. Sharing a collection keeps them on one lane.
+[Collection("RealtimeSocket")]
 public sealed class MatchRudpProbeTests : IDisposable
 {
     private static int nextPort = 64980;

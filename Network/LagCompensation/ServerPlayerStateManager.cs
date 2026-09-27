@@ -74,7 +74,12 @@ namespace OpenGSServer.Network
                 RotZ = 0,
                 RotW = 1,
                 IsGrounded = true,
-                HasAuthoritativePosition = true
+
+                // The spawn point is a place to put the player, not a place the
+                // server has seen them. Marking it authoritative here let a
+                // player who never reported a position redeem an item spawning on
+                // the origin, so this stays false until an update arrives.
+                HasAuthoritativePosition = false
             };
         }
 
@@ -131,8 +136,13 @@ namespace OpenGSServer.Network
                         rejectionReason = clampedReason;
                     }
 
+                    // The first position a client offers still has to survive the same
+                    // check as every later one. Adopting it here made the distance test
+                    // measure the claim against itself, so a first input could place a
+                    // player anywhere and every later check would accept it as home.
                     if (!state.HasAuthoritativePosition && input.HasClientPosition &&
-                        IsFinite(input.ClientPosX) && IsFinite(input.ClientPosY) && IsFinite(input.ClientPosZ))
+                        IsFinite(input.ClientPosX) && IsFinite(input.ClientPosY) && IsFinite(input.ClientPosZ) &&
+                        IsWithinFirstPositionTolerance(state, input))
                     {
                         state.PosX = input.ClientPosX;
                         state.PosY = input.ClientPosY;
@@ -400,7 +410,8 @@ namespace OpenGSServer.Network
                     VelocityY = state.VelY,
                     VelocityZ = state.VelZ,
                     Timestamp = (float)(DateTime.UtcNow - state.LastUpdateTime).TotalSeconds,
-                    SequenceNumber = state.LastProcessedSequence
+                    SequenceNumber = state.LastProcessedSequence,
+                    HasAuthoritativePosition = state.HasAuthoritativePosition
                 };
             }
 
@@ -422,7 +433,30 @@ namespace OpenGSServer.Network
                 state.VelZ = 0f;
                 state.IsGrounded = MathF.Abs(z - GroundHeight) < 0.01f;
                 state.LastUpdateTime = DateTime.UtcNow;
+                // The server has been told where this player is, so the state can now
+                // be treated as a position to measure a pickup against.
+                state.HasAuthoritativePosition = true;
             }
+        }
+
+        /// <summary>
+        /// Whether a first position claim stays inside what the player could reach.
+        /// <para>
+        /// With no position established there is nothing to compare against, so the
+        /// bound has to come from the spawn point the server placed the player at.
+        /// Without it a client could name any spot as its location and have the
+        /// server treat it as fact, which is what the tolerance exists to prevent.
+        /// </para>
+        /// </summary>
+        private static bool IsWithinFirstPositionTolerance(PlayerServerState state, ClientInputData input)
+        {
+            var dx = state.PosX - input.ClientPosX;
+            var dy = state.PosY - input.ClientPosY;
+            var dz = state.PosZ - input.ClientPosZ;
+            var distance = MathF.Sqrt(dx * dx + dy * dy + dz * dz);
+            var allowed = PositionTolerance + TeleportAllowancePerSecond * MathF.Max(0f, input.DeltaTime);
+
+            return distance <= allowed;
         }
 
         /// <summary>

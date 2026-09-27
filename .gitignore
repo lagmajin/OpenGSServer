@@ -370,3 +370,6 @@ smoke*.txt
 smoke_server_*.log
 .err.log
 all.txt
+
+# written by the running server
+server_status.txt

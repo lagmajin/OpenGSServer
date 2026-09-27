@@ -22,6 +22,17 @@ namespace OpenGSServer.Network
         public float Timestamp;
         public byte SequenceNumber;
 
+        /// <summary>
+        /// Whether the position has ever been established.
+        /// <para>
+        /// A registered player with no reported position still reads as the origin,
+        /// so a caller that trusts the coordinates alone is trusting a value the
+        /// server never received. This is the difference between a player standing
+        /// at the origin and one whose position is simply unknown.
+        /// </para>
+        /// </summary>
+        public bool HasAuthoritativePosition;
+
         public static ServerTransformState Create(
             uint networkId,
             string playerId,
@@ -70,6 +81,17 @@ namespace OpenGSServer.Network
         public bool Jump;
         public bool Fire;
         public byte SequenceNumber;
+
+        /// <summary>
+        /// Whether the position has ever been established.
+        /// <para>
+        /// A registered player with no reported position still reads as the origin,
+        /// so a caller that trusts the coordinates alone is trusting a value the
+        /// server never received. This is the difference between a player standing
+        /// at the origin and one whose position is simply unknown.
+        /// </para>
+        /// </summary>
+        public bool HasAuthoritativePosition;
         public float Timestamp;
         public float DeltaTime;
         public bool HasClientPosition;
