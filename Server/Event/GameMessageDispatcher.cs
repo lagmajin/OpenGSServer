@@ -28,6 +28,9 @@ namespace OpenGSServer
         public const string LoadingProgress = "LoadingProgress";
         public const string LoadingCompleted = "LoadingCompleted";
         public const string MatchEnd = "MatchEnd";
+        public const string FieldItemSpawn = "FieldItemSpawn";
+        public const string FieldItemPickup = "FieldItemPickup";
+        public const string FieldItemDespawn = "FieldItemDespawn";
     }
 
     public interface IGameMessageSender

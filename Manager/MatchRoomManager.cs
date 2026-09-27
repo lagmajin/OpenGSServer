@@ -346,6 +346,18 @@ namespace OpenGSServer
             }
         }
 
+        /// <summary>
+        /// The field item manager for a room, or null when the room has none.
+        /// The managers are created alongside the room and torn down with it, so
+        /// this is the only way to reach the item state for a live match.
+        /// </summary>
+        public OpenGSServer.Network.ServerFieldItemManager? GetFieldItemManager(string roomId)
+        {
+            lock (matchRoomsLock)
+            {
+                return roomFieldItemManagers.TryGetValue(roomId, out var manager) ? manager : null;
+            }
+        }
         public AbstractGameRoom? FindRoom(string roomId)
         {
             return GetRoomById(roomId);

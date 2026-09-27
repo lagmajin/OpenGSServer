@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.ComponentModel.Design;
@@ -222,12 +222,108 @@ namespace OpenGSServer
                 case GameMessageTypes.GrenadeThrow:
                     HandleGrenadeThrow(room, playerId, json);
                     break;
+                case GameMessageTypes.FieldItemPickup:
+                    HandleFieldItemPickup(room, playerId, json);
+                    break;
 
                 default:
                     Console.WriteLine($"Unknown realtime game event type: {eventType}");
                     break;
             }
         }
+
+        /// <summary>
+        /// Grants a field item to a player, or refuses.
+        /// <para>
+        /// The client sends the item id and the server used to have no route for
+        /// this message at all, so the item never became claimed and the client
+        /// only saw its own optimistic state. Nothing about the pickup was
+        /// authoritative: the client decided it had touched an item and applied
+        /// the effect locally.
+        /// </para>
+        /// <para>
+        /// The claim is checked against the position the server already tracks
+        /// for the player, so an id cannot be redeemed from across the map. The
+        /// player id in the message is ignored in favour of the connection's
+        /// player, so one player cannot claim on behalf of another.
+        /// </para>
+        /// </summary>
+        private static void HandleFieldItemPickup(MatchRoom room, string playerId, JObject json)
+        {
+            var itemId = ReadString(json, "ItemId", "itemId", "ItemID") ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(itemId))
+            {
+                Console.WriteLine($"[Match] Ignored field item pickup with no item id from '{playerId}'");
+                return;
+            }
+
+            // A client supplied player id is not evidence of who is asking.
+            var claimed = ReadString(json, "PlayerID", "PlayerId");
+            if (!string.IsNullOrWhiteSpace(claimed) &&
+                !string.Equals(claimed, playerId, StringComparison.OrdinalIgnoreCase))
+            {
+                Console.WriteLine($"[Match] Ignored field item pickup for '{claimed}' sent by '{playerId}'");
+                return;
+            }
+
+            var itemManager = MatchRoomManager.Instance.GetFieldItemManager(room.Id);
+            if (itemManager == null)
+            {
+                Console.WriteLine($"[Match] Field item pickup for '{playerId}' with no item manager in room '{room.Id}'");
+                return;
+            }
+
+            var state = MatchServerV2.Instance.ServerLagCompensationManager.GetPlayerState(playerId);
+            if (string.IsNullOrEmpty(state.PlayerId))
+            {
+                // No authoritative position recorded yet, so the radius cannot be
+                // enforced. Refuse rather than hand out an unverified claim.
+                Console.WriteLine($"[Match] Refused field item pickup for '{playerId}': no authoritative position");
+                return;
+            }
+
+            var granted = itemManager.PickupItem(itemId, playerId, state.PositionX, state.PositionY, state.PositionZ);
+            if (!granted)
+            {
+                Console.WriteLine($"[Match] Refused field item pickup of '{itemId}' by '{playerId}'");
+                return;
+            }
+
+            if (!itemManager.TryGetItem(itemId, out var item))
+            {
+                return;
+            }
+
+            var type = item!.ItemType;
+            var duration = FieldItemTypeNames.IsTimedBuff(type)
+                ? FieldItemDefaults.DurationSeconds
+                : 0f;
+
+            // The duration is decided here rather than taken from the client.
+            // A timed item used to carry its own thirty second lifetime that
+            // only the client knew about, so the server could neither shorten
+            // it nor answer a question about it.
+            GameMessageDispatcher.BroadcastToRoom(room.Id.ToString(), new JObject
+            {
+                ["MessageType"] = GameMessageTypes.FieldItemPickup,
+                ["RoomID"] = room.Id.ToString(),
+                ["ItemId"] = itemId,
+                ["PlayerID"] = playerId,
+                ["ItemType"] = FieldItemTypeNames.ToWireName(type),
+                ["Duration"] = duration,
+                ["IsTimedBuff"] = FieldItemTypeNames.IsTimedBuff(type),
+                ["ExpiresAtSeconds"] = duration > 0f
+                    ? NowSeconds() + duration
+                    : 0.0d,
+                ["Success"] = true,
+                ["Timestamp"] = DateTime.UtcNow.ToString("o")
+            });
+        }
+        /// <summary>
+        /// Seconds on a clock the client cannot influence, used for effect
+        /// expiry stamps in the messages sent to clients.
+        /// </summary>
+        private static double NowSeconds() => (double)DateTime.UtcNow.TimeOfDay.TotalSeconds;
 
         private static void HandlePlayerKilled(MatchRoom room, string killerId, string killedPlayerId)
         {

@@ -500,4 +500,53 @@ public sealed class ServerFieldItemManagerTests
         // A player who walked over later still gets it.
         Assert.True(manager.PickupItem(itemId, "p-1", 0f, 0f, 0f));
     }
+
+    // ---- Room wiring ---------------------------------------------------
+
+    [Fact]
+    public void EveryRoomGetsAFieldItemManager()
+    {
+        var manager = new MatchRoomManager();
+        var roomId = manager.CreateNewDeathMatchRoom("room", "owner-1").RoomId;
+
+        // The manager is created with the room, which is the only way a live
+        // match can reach item state at all.
+        var items = manager.GetFieldItemManager(roomId);
+
+        Assert.NotNull(items);
+    }
+
+    [Fact]
+    public void TheItemManagerIsTornDownWithTheRoom()
+    {
+        var manager = new MatchRoomManager();
+        var roomId = manager.CreateNewDeathMatchRoom("room", "owner-1").RoomId;
+
+        manager.RemoveRoom(roomId);
+
+        Assert.Null(manager.GetFieldItemManager(roomId));
+    }
+
+    [Fact]
+    public void AnUnknownRoomHasNoItemManager()
+    {
+        var manager = new MatchRoomManager();
+
+        Assert.Null(manager.GetFieldItemManager("missing"));
+    }
+
+    [Fact]
+    public void TheItemManagerRestartsEmptyForANewMatch()
+    {
+        var manager = new MatchRoomManager();
+        var roomId = manager.CreateNewDeathMatchRoom("room", "owner-1").RoomId;
+        var items = manager.GetFieldItemManager(roomId)!;
+        items.SpawnItem(EFieldItemType.HealItem, 0f, 0f, 0f);
+
+        // A leftover item from a previous match would be claimable at the start
+        // of the next one.
+        items.StartMatch(roomId);
+
+        Assert.Equal(0, items.GetActiveItemCount());
+    }
 }
