@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
@@ -21,7 +21,11 @@ namespace OpenGSServer
 
         public int RoomLimit { get; private set; } = 32;
 
-        private WaitRoomManager()
+        // Public so tests can build an isolated manager. The rooms live in an
+        // instance field, so sharing the singleton would let one test see
+        // rooms another test created. Production code should still reach for
+        // Instance() rather than constructing its own.
+        public WaitRoomManager()
         {
         }
 
