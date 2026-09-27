@@ -248,8 +248,22 @@ namespace OpenGSServer
         /// player, so one player cannot claim on behalf of another.
         /// </para>
         /// </summary>
+        /// <summary>
+        /// The pickup budget, shared by the reliable and the realtime route so a
+        /// client cannot get twice the allowance by alternating between them.
+        /// </summary>
+        private static readonly FieldItemPickupRateLimiter ItemPickupBudget = new();
+
+
         private static void HandleFieldItemPickup(MatchRoom room, string playerId, JObject json)
         {
+            // Both routes draw on one budget, so alternating between them does
+            // not buy a second allowance.
+            if (!ItemPickupBudget.TryConsume(playerId))
+            {
+                return;
+            }
+
             var itemId = ReadString(json, "ItemId", "itemId", "ItemID") ?? string.Empty;
             if (string.IsNullOrWhiteSpace(itemId))
             {

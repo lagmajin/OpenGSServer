@@ -1,4 +1,6 @@
+using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using Newtonsoft.Json.Linq;
 using OpenGSCore;
 using OpenGSServer.Network;
@@ -582,5 +584,126 @@ public sealed class ServerFieldItemManagerTests
         // FieldItemPickup over the reliable one; the dispatch accepts both so
         // either route reaches the same authoritative check.
         Assert.False(string.IsNullOrWhiteSpace(messageType));
+    }
+
+    // ---- Pickup rate limit ---------------------------------------------
+
+    [Fact]
+    public void ABurstOfClaimsIsAllowed()
+    {
+        var limiter = new FieldItemPickupRateLimiter();
+
+        // The budget has to cover a player sweeping a cluster of nearby spawns
+        // without being cut off halfway through.
+        for (var i = 0; i < FieldItemPickupRateLimiter.BurstCapacity; i++)
+        {
+            Assert.True(limiter.TryConsume("burst-player"));
+        }
+    }
+
+    [Fact]
+    public void AClaimBeyondTheBurstIsRefused()
+    {
+        var limiter = new FieldItemPickupRateLimiter();
+        for (var i = 0; i < FieldItemPickupRateLimiter.BurstCapacity; i++)
+        {
+            limiter.TryConsume("flood-player");
+        }
+
+        Assert.False(limiter.TryConsume("flood-player"));
+    }
+
+    [Fact]
+    public void TheBudgetIsPerPlayerSoOneSpammerDoesNotThrottleTheRoom()
+    {
+        var limiter = new FieldItemPickupRateLimiter();
+        for (var i = 0; i < 12; i++)
+        {
+            limiter.TryConsume("spammer");
+        }
+
+        // The bystander is untouched by whatever the spammer did.
+        Assert.True(limiter.TryConsume("bystander"));
+    }
+
+    [Fact]
+    public void ABudgetCanBeClearedSoARejoiningPlayerStartsFresh()
+    {
+        var limiter = new FieldItemPickupRateLimiter();
+        for (var i = 0; i < 12; i++)
+        {
+            limiter.TryConsume("leaver");
+        }
+
+        limiter.Clear("leaver");
+
+        Assert.True(limiter.TryConsume("leaver"));
+    }
+
+    [Fact]
+    public void AnEmptyPlayerIdIsRefused()
+    {
+        var limiter = new FieldItemPickupRateLimiter();
+
+        Assert.False(limiter.TryConsume(""));
+        Assert.False(limiter.TryConsume("   "));
+        Assert.False(limiter.TryConsume(null!));
+    }
+
+    [Fact]
+    public void SustainedRefusalIsReportedAsAbuseOnce()
+    {
+        var limiter = new FieldItemPickupRateLimiter();
+        var reported = new List<string>();
+        limiter.OnAbuseLimitReached += reported.Add;
+
+        for (var i = 0; i < FieldItemPickupRateLimiter.BurstCapacity; i++)
+        {
+            limiter.TryConsume("looper");
+        }
+
+        for (var i = 0; i < FieldItemPickupRateLimiter.AbuseLimit + 2; i++)
+        {
+            limiter.TryConsume("looper");
+        }
+
+        // Reported once, not once per refusal past the limit.
+        Assert.Equal(new[] { "looper" }, reported);
+    }
+
+    [Fact]
+    public void AnAcceptedClaimClearsTheRefusalTally()
+    {
+        var limiter = new FieldItemPickupRateLimiter();
+        for (var i = 0; i < FieldItemPickupRateLimiter.BurstCapacity; i++)
+        {
+            limiter.TryConsume("player");
+        }
+
+        limiter.TryConsume("player");
+        Assert.Equal(1, limiter.RefusalCount("player"));
+
+        // A later accepted claim has to reset the tally, otherwise a player who
+        // was briefly throttled still trips the abuse limit later.
+        Thread.Sleep(1200);
+        Assert.True(limiter.TryConsume("player"));
+        Assert.Equal(0, limiter.RefusalCount("player"));
+    }
+
+    [Fact]
+    public void TheAbuseLimitDropsTheBudgetSoThePlayerStartsFresh()
+    {
+        var limiter = new FieldItemPickupRateLimiter();
+        for (var i = 0; i < FieldItemPickupRateLimiter.BurstCapacity; i++)
+        {
+            limiter.TryConsume("looper");
+        }
+
+        for (var i = 0; i < FieldItemPickupRateLimiter.AbuseLimit; i++)
+        {
+            limiter.TryConsume("looper");
+        }
+
+        Assert.Equal(0, limiter.RefusalCount("looper"));
     }
 }

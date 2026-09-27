@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Numerics;
@@ -276,8 +277,15 @@ namespace OpenGSServer
         /// connection's player so one player cannot claim for another.
         /// </para>
         /// </summary>
+        private static readonly FieldItemPickupRateLimiter RudpItemPickupBudget = new();
+
         private void HandleFieldItemPickup(NetPeer peer, JObject message, string playerId)
         {
+            if (!RudpItemPickupBudget.TryConsume(playerId))
+            {
+                return;
+            }
+
             var roomId = GetRoomId(playerId);
             if (string.IsNullOrEmpty(roomId))
             {
@@ -583,6 +591,7 @@ namespace OpenGSServer
             connectedPlayers.Remove(playerId);
             playerRoomMapping.Remove(playerId);
             playerStateManager.UnregisterPlayer(playerId);
+            RudpItemPickupBudget.Clear(playerId);
         }
 
         private void RemovePlayerMapping(NetPeer peer)
