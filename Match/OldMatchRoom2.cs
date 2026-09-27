@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using OpenGSCore;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -243,18 +243,7 @@ namespace OpenGSServer
             
             
             Playing = false;
-
-
-            var matchResultService= new MatchResultService();
-
-
-            
-
-            
-            
-
         }
-        
         public JObject ToJson()
         {
             var json = new JObject();
