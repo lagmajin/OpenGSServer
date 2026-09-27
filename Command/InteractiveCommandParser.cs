@@ -35,6 +35,7 @@ namespace OpenGSServer
                 Define("addplayertomatch", "<matchId> <playerId>", "Add a player to a match.", 2, 2, a => CommandExecutor.AddPlayerToMatch(a[0], a[1])),
                 Define("startmatch", "<matchId>", "Start a match.", 1, 1, a => CommandExecutor.StartMatch(a[0])),
                 Define("endmatch", "<matchId>", "End a running match and publish the result.", 1, 1, a => CommandExecutor.EndMatch(a[0])),
+                Define("roomstatus", "<matchId>", "Show player health and score in a match.", 1, 1, a => CommandExecutor.RoomStatus(a[0])),
                 Define("playerinfo", "<playerId>", "Show player information.", 1, 1, a => CommandExecutor.PlayerInfo(a[0])),
                 Define("guildinfo", "<guildName>", "Show guild information.", 1, 1, a => CommandExecutor.GuildInfo(a[0])),
                 Define("lobbyinfo", "", "Show lobby information.", 0, 0, _ => CommandExecutor.LobbyInfo()),

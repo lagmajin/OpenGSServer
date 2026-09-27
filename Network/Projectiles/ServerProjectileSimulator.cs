@@ -326,8 +326,8 @@ namespace OpenGSServer.Network
 
                 // Falls off linearly to the edge of the blast, so a player right
                 // next to the grenade takes the most and one at the rim the least.
-                var falloff = 1f - Math.Clamp(distance / Math.Max(0.001f, grenade.ExplosionRadius), 0f, 1f);
-                var damage = Math.Max(1, (int)MathF.Round(grenade.ExplosionDamage * falloff));
+                var damage = ServerDamageResolver.BlastDamage(
+                    grenade.ExplosionDamage, distance, grenade.ExplosionRadius);
                 hits.Add((grenade, candidate, damage, grenade.Position));
             }
         }

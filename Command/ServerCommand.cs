@@ -888,6 +888,55 @@ namespace OpenGSServer
         /// Exposed as an admin command so a headless test can play a match to
         /// completion without waiting out the match timer.
         /// </summary>
+        /// <summary>
+        /// Shows the server side health and score of every player in a match.
+        /// <para>
+        /// Health used to change without anything reporting it, so a test could
+        /// not tell whether a hit landed. This makes the state the server keeps
+        /// readable from outside, which is what the damage smoke needs to check
+        /// against what the clients were told.
+        /// </para>
+        /// </summary>
+        public static void RoomStatus(string matchId)
+        {
+            try
+            {
+                var matchRoomManager = MatchRoomManager.Instance;
+                var room = matchRoomManager.FindRoom(matchId) as OpenGSCore.MatchRoom;
+                if (room == null)
+                {
+                    room = matchRoomManager.AllRooms()
+                        .OfType<OpenGSCore.MatchRoom>()
+                        .FirstOrDefault(candidate =>
+                            candidate.WaitRoomLink != null &&
+                            string.Equals(candidate.WaitRoomLink.RoomId, matchId, StringComparison.OrdinalIgnoreCase));
+                }
+
+                if (room == null)
+                {
+                    ConsoleWrite.WriteMessage($"[ERR] Match room with ID '{matchId}' not found.", ConsoleColor.Red);
+                    return;
+                }
+
+                ConsoleWrite.WriteMessage(
+                    $"[OK] Room '{room.RoomName}' (ID: {room.Id}) mode={room.Setting.Mode} " +
+                    $"playing={room.Playing} finished={room.Finished} players={room.Players.Count}",
+                    ConsoleColor.Cyan);
+
+                foreach (var player in room.Players)
+                {
+                    var pose = room.GetPlayerPoseState(player.Id);
+                    ConsoleWrite.WriteMessage(
+                        $"[OK] Player {player.Id} health={player.Health}/{player.MaxHealth} " +
+                        $"kills={player.Kills} deaths={player.Deaths} score={player.Score} pose={pose}",
+                        ConsoleColor.Green);
+                }
+            }
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage($"[ERR] Failed to read room status for '{matchId}': {ex.Message}", ConsoleColor.Red);
+            }
+        }
         public static void EndMatch(string matchId)
         {
             try

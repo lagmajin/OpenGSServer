@@ -708,8 +708,19 @@ namespace OpenGSServer
                 return;
             }
 
-            var poseMultiplier = GetPoseDamageMultiplier(room.Id.ToString(), targetId);
-            var adjusted = Math.Max(1, (int)MathF.Round(damage * poseMultiplier));
+            if (!room.TryGetPlayer(targetId, out var target) || target == null)
+            {
+                return;
+            }
+
+            var pose = room.GetPlayerPoseState(targetId);
+            var outcome = ServerDamageResolver.Apply(target, damage, pose);
+
+            if (outcome.WasAlreadyDown)
+            {
+                // A hit on someone who is already out is not news.
+                return;
+            }
 
             GameMessageDispatcher.BroadcastToRoom(room.Id.ToString(), new JObject
             {
@@ -717,9 +728,41 @@ namespace OpenGSServer
                 ["RoomID"] = room.Id.ToString(),
                 ["DamagedPlayerID"] = targetId,
                 ["AttackerID"] = attackerId,
-                ["Damage"] = adjusted,
-                ["PoseMultiplier"] = poseMultiplier,
+                ["Damage"] = outcome.Applied,
+                ["RequestedDamage"] = outcome.Requested,
+                ["RemainingHealth"] = outcome.RemainingHealth,
+                ["MaxHealth"] = target.MaxHealth,
+                ["IsDown"] = outcome.IsNowDown,
+                ["PoseMultiplier"] = ServerDamageResolver.PoseMultiplier(pose),
                 ["HitPosition"] = new JObject { ["X"] = hitPosition.X, ["Y"] = hitPosition.Y },
+                ["Timestamp"] = DateTime.UtcNow.ToString("o")
+            });
+
+            if (!outcome.IsNowDown)
+            {
+                return;
+            }
+
+            // The health change is the authority for a kill now, not a client
+            // claiming one. A self hit counts as a death without crediting an
+            // attacker.
+            target.Deaths++;
+            var isSelfInflicted = string.Equals(attackerId, targetId, StringComparison.OrdinalIgnoreCase);
+            if (!isSelfInflicted && room.TryGetPlayer(attackerId, out var attacker) && attacker != null)
+            {
+                attacker.Kills++;
+            }
+
+            Console.WriteLine(
+                $"[Match] {targetId} is down in room {room.Id} (hit by {attackerId})");
+
+            GameMessageDispatcher.BroadcastToRoom(room.Id.ToString(), new JObject
+            {
+                ["MessageType"] = GameMessageTypes.PlayerKilled,
+                ["RoomID"] = room.Id.ToString(),
+                ["KillerID"] = attackerId,
+                ["KilledPlayerID"] = targetId,
+                ["IsSelfInflicted"] = isSelfInflicted,
                 ["Timestamp"] = DateTime.UtcNow.ToString("o")
             });
         }
