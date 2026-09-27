@@ -369,3 +369,4 @@ FodyWeavers.xsd
 smoke*.txt
 smoke_server_*.log
 .err.log
+all.txt
