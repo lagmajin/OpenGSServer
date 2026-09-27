@@ -628,7 +628,10 @@ namespace OpenGSServer
                 // the realtime set. It was missing, which meant every claim was
                 // dropped before the dispatcher ever saw it.
                 "ItemPickup" or
-                "FieldItemPickup";
+                "FieldItemPickup" or
+                // A dropped weapon leaves the player's hands, so the server has to
+                // be told or the weapon is not really on the ground for anyone.
+                "WeaponDrop";
 
             if (!isSystemEvent && !isRealtimeEvent)
             {

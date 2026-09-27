@@ -117,12 +117,43 @@ public sealed class MatchRudpItemPickupTests : IDisposable
 
     /// <summary>
     /// Moves the player onto a spot and lets the server settle it.
+    /// <para>
+    /// It walks rather than teleports. The server only adopts a position within a
+    /// tolerance of the one it holds, and a three unit jump at a 0.04s delta is
+    /// outside that while a one unit step is inside it. A single packet claiming
+    /// the far side of the room would simply be refused, and the player would
+    /// never be where the test believes it is.
+    /// </para>
     /// </summary>
     private void MoveTo(float x, float y)
     {
-        for (var i = 0; i < 5; i++)
+        const float stepSize = 1f;
+        byte sequence = 1;
+
+        float currentX = 0f;
+        float currentY = 0f;
+        while (MathF.Abs(currentX - x) > 0.001f || MathF.Abs(currentY - y) > 0.001f)
         {
-            probe.SendPosition(playerId, roomId, x, y, 0f, 0f, 0.04f, (byte)(i + 1));
+            var dx = x - currentX;
+            var dy = y - currentY;
+            var distance = MathF.Sqrt((dx * dx) + (dy * dy));
+            if (distance > stepSize)
+            {
+                dx = (dx / distance) * stepSize;
+                dy = (dy / distance) * stepSize;
+            }
+
+            currentX += dx;
+            currentY += dy;
+            probe.SendPosition(playerId, roomId, currentX, currentY, 0f, 0f, 0.04f, sequence++);
+            Pump(60);
+        }
+
+        // Settle at the destination, so the last packet the server accepted is the
+        // spot the test is asserting about rather than one step short of it.
+        for (var i = 0; i < 3; i++)
+        {
+            probe.SendPosition(playerId, roomId, currentX, currentY, 0f, 0f, 0.04f, sequence++);
             Pump(60);
         }
     }
@@ -209,5 +240,171 @@ public sealed class MatchRudpItemPickupTests : IDisposable
         // granted path cannot be triggered twice by a repeated message.
         Assert.Equal("PickedUp", ItemState());
         Assert.Equal(0, items.GetActiveItemCount());
+    }
+
+    // ---- Weapon drop -----------------------------------------------------
+
+    /// <summary>
+    /// Drops a weapon the way a client does, over the realtime channel.
+    /// </summary>
+    private void DropWeapon(string weaponType = "Rifle", int? magazine = null)
+    {
+        var payload = new JObject
+        {
+            ["MessageType"] = "WeaponDrop",
+            ["WeaponType"] = weaponType
+        };
+        if (magazine.HasValue)
+        {
+            payload["MagazineAmmo"] = magazine.Value;
+        }
+
+        probe.Send(playerId, roomId, payload);
+    }
+
+    private JArray Items()
+    {
+        return MatchRoomManager.Instance.GetFieldItemManager(roomId)!.ToJson();
+    }
+
+    private JObject? WeaponItem()
+    {
+        foreach (var token in Items())
+        {
+            if (token["ItemType"]?.ToString() == nameof(EFieldItemType.WeaponItem))
+            {
+                return token as JObject;
+            }
+        }
+
+        return null;
+    }
+
+    [Fact]
+    public void AWeaponDroppedOverRealtimeAppearsAsAnItem()
+    {
+        SetUpRoom();
+        MoveTo(3f, 0f);
+
+        DropWeapon("Rifle", magazine: 17);
+        Pump(400);
+
+        // The drop message has to reach the item manager. The weapon used to be
+        // instantiated by the dropping client alone, so it existed on one screen
+        // and nowhere else: the server had no record of it and no other player
+        // could ever see or pick it up.
+        var weapon = WeaponItem();
+        Assert.NotNull(weapon);
+        Assert.Equal("Spawned", weapon!["State"]?.ToString());
+        Assert.Equal("Rifle", weapon["WeaponType"]?.ToString());
+        Assert.Equal(17, weapon["MagazineAmmo"]?.Value<int>());
+    }
+
+    [Fact]
+    public void AWeaponIsDroppedWhereTheServerSaysThePlayerIs()
+    {
+        SetUpRoom();
+        MoveTo(3f, 0f);
+
+        // The message says the weapon is dropped at the origin, which is where
+        // a client with something to gain from it would like it to appear.
+        probe.Send(playerId, roomId, new JObject
+        {
+            ["MessageType"] = "WeaponDrop",
+            ["WeaponType"] = "Rifle",
+            ["PosX"] = 0f,
+            ["PosY"] = 0f
+        });
+        Pump(400);
+
+        var weapon = WeaponItem();
+        Assert.NotNull(weapon);
+
+        // The drop is placed from the position the server is holding, which is
+        // the same reason a shot is resolved from it rather than from the message.
+        Assert.Equal(3f, weapon!["PositionX"]?.Value<float>() ?? 0f, 2);
+        Assert.Equal(0f, weapon["PositionY"]?.Value<float>() ?? 0f, 2);
+    }
+
+    [Fact]
+    public void ADroppedWeaponKeepsItsRoundsThroughAStateRoundTrip()
+    {
+        SetUpRoom();
+        MoveTo(3f, 0f);
+
+        DropWeapon("Sniper", magazine: 3);
+        Pump(400);
+
+        // The magazine travels with the weapon, so it has to survive a state
+        // sync. A dropped weapon that came back empty would silently lose the
+        // rounds the player was carrying.
+        var items = MatchRoomManager.Instance.GetFieldItemManager(roomId)!;
+        var round = items.ToJson();
+        items.LoadFromJson(round);
+
+        Assert.Equal(3, WeaponItem()?["MagazineAmmo"]?.Value<int>());
+    }
+
+    [Fact]
+    public void AWeaponDroppedWhereThePlayerStandsCanBePickedUpAgain()
+    {
+        SetUpRoom();
+        MoveTo(3f, 0f);
+
+        DropWeapon("Rifle", magazine: 12);
+        Pump(400);
+
+        var weapon = WeaponItem();
+        Assert.NotNull(weapon);
+        var itemId = weapon!["ItemId"]?.ToString() ?? "";
+
+        // The drop goes through the same claim path as any other item, so the
+        // pickup radius that was added for the spawn items governs a dropped
+        // weapon too, and it can be taken back.
+        ClaimPickup(itemId);
+        Pump(400);
+
+        // The claim is recorded on the item rather than removing it, so what
+        // proves it was taken is the state, not its absence.
+        Assert.True(
+            MatchRoomManager.Instance.GetFieldItemManager(roomId)!.TryGetItem(itemId, out var taken),
+            "the claimed weapon was not recorded at all");
+        Assert.Equal("PickedUp", taken!.State);
+        Assert.Equal(playerId, taken.PickedUpByPlayerId);
+    }
+
+    [Fact]
+    public void ADropFromAPlayerWithNoPositionIsRefused()
+    {
+        SetUpRoom();
+
+        // Nowhere to put it. A registered player with no position reads as the
+        // origin, so this is the case where a drop would land in the middle of
+        // the map for a player the server has never actually seen.
+        DropWeapon("Rifle", magazine: 5);
+        Pump(400);
+
+        Assert.Null(WeaponItem());
+    }
+
+    [Fact]
+    public void ADropWithNoWeaponTypeIsInert()
+    {
+        SetUpRoom();
+        MoveTo(3f, 0f);
+
+        DropWeapon(weaponType: "");
+        Pump(400);
+
+        Assert.Null(WeaponItem());
+    }
+
+    [Fact]
+    public void AWeaponIsNotATimedBuff()
+    {
+        // Picking a weapon up is not a thirty second effect, and the paths that
+        // fire for every pickup have to be able to tell the difference.
+        Assert.False(FieldItemTypeNames.IsTimedBuff(EFieldItemType.WeaponItem));
+        Assert.True(FieldItemTypeNames.IsCarriedEquipment(EFieldItemType.WeaponItem));
     }
 }

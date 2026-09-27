@@ -232,6 +232,10 @@ namespace OpenGSServer
                     HandleFieldItemPickup(room, playerId, json);
                     break;
 
+                case "WeaponDrop":
+                    HandleWeaponDrop(room, playerId, json);
+                    break;
+
                 default:
                     Console.WriteLine($"Unknown realtime game event type: {eventType}");
                     break;
@@ -345,6 +349,77 @@ namespace OpenGSServer
         /// expiry stamps in the messages sent to clients.
         /// </summary>
         private static double NowSeconds() => (double)DateTime.UtcNow.TimeOfDay.TotalSeconds;
+
+        /// <summary>
+        /// Puts a weapon the player let go of on the ground.
+        /// <para>
+        /// The weapon is placed at the position the server is already holding for
+        /// the player rather than one from the message, and the type and the
+        /// magazine come from the message because those are facts about the weapon
+        /// the player is holding, which only they can know. A player the server
+        /// has never seen a position for cannot drop, since there would be nowhere
+        /// to put it.
+        /// </para>
+        /// </summary>
+        private static void HandleWeaponDrop(MatchRoom room, string playerId, JObject json)
+        {
+            var weaponType = ReadString(json, "WeaponType", "WeaponID", "WeaponId");
+            if (string.IsNullOrWhiteSpace(weaponType))
+            {
+                Console.WriteLine($"[Match] Ignored weapon drop with no weapon type from '{playerId}'");
+                return;
+            }
+
+            var state = MatchServerV2.Instance.ServerLagCompensationManager.GetPlayerState(playerId);
+            if (string.IsNullOrEmpty(state.PlayerId) || !state.HasAuthoritativePosition)
+            {
+                Console.WriteLine($"[Match] Refused weapon drop for '{playerId}': no authoritative position");
+                return;
+            }
+
+            var itemManager = MatchRoomManager.Instance.GetFieldItemManager(room.Id);
+            if (itemManager == null)
+            {
+                Console.WriteLine($"[Match] Weapon drop for '{playerId}' with no item manager in room '{room.Id}'");
+                return;
+            }
+
+            var magazine = ReadInt(json, -1, "MagazineAmmo", "Ammo", "CurrentAmmo");
+            var slot = ReadInt(json, -1, "SlotIndex", "WeaponSlot");
+            var itemId = itemManager.DropWeapon(
+                weaponType,
+                state.PositionX,
+                state.PositionY,
+                state.PositionZ,
+                magazine,
+                slot);
+
+            if (string.IsNullOrEmpty(itemId))
+            {
+                Console.WriteLine($"[Match] Refused weapon drop of '{weaponType}' by '{playerId}'");
+                return;
+            }
+
+            Console.WriteLine($"[Match] {playerId} dropped {weaponType} as '{itemId}' in room {room.Id}");
+
+            // Everyone is told, because a weapon lying on the ground that only the
+            // dropper can see is not a weapon anybody can pick up.
+            GameMessageDispatcher.BroadcastToRoom(room.Id.ToString(), new JObject
+            {
+                ["MessageType"] = "WeaponDropped",
+                ["RoomID"] = room.Id.ToString(),
+                ["ItemId"] = itemId,
+                ["PlayerID"] = playerId,
+                ["PlayerId"] = playerId,
+                ["WeaponType"] = weaponType,
+                ["MagazineAmmo"] = magazine,
+                ["SlotIndex"] = slot,
+                ["PosX"] = state.PositionX,
+                ["PosY"] = state.PositionY,
+                ["PosZ"] = state.PositionZ,
+                ["Timestamp"] = DateTime.UtcNow.ToString("o")
+            });
+        }
 
         private static void HandlePlayerKilled(MatchRoom room, string killerId, string killedPlayerId)
         {
@@ -1414,6 +1489,45 @@ namespace OpenGSServer
             }
 
             return null;
+        }
+
+        /// <summary>
+        /// Reads an integer, falling back when the message does not carry a
+        /// readable one.
+        /// <para>
+        /// A value that does not parse is not treated as zero. A magazine count of
+        /// zero means an empty weapon, which is a different claim from saying
+        /// nothing, so an unreadable count has to fall through to the default
+        /// rather than empty the weapon.
+        /// </para>
+        /// </summary>
+        private static int ReadInt(JObject json, int fallback, params string[] keys)
+        {
+            if (json == null || keys == null)
+            {
+                return fallback;
+            }
+
+            foreach (var key in keys)
+            {
+                if (string.IsNullOrWhiteSpace(key))
+                {
+                    continue;
+                }
+
+                var token = json.GetValue(key);
+                if (token == null)
+                {
+                    continue;
+                }
+
+                if (int.TryParse(token.ToString(), out var parsed))
+                {
+                    return parsed;
+                }
+            }
+
+            return fallback;
         }
 
         private static bool IsRoomMatch(MatchRoom room, string roomId)

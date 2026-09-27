@@ -29,6 +29,26 @@ namespace OpenGSServer.Network
             public string PickedUpByPlayerId { get; set; } = "";
             public bool IsActive { get; set; } = true;
             public float SpawnTime { get; set; }
+
+            /// <summary>
+            /// What a dropped weapon is, and what is left in it.
+            /// <para>
+            /// A weapon is the one item that travels with state: the rounds in its
+            /// magazine belong to the weapon, not to whoever drops it, so they have
+            /// to survive the drop and be handed over with it. The other item types
+            /// have nothing to carry and leave these alone.
+            /// </para>
+            /// </summary>
+            public string WeaponType { get; set; } = "";
+
+            /// <summary>Equipped slot a dropped weapon came from.</summary>
+            public int WeaponSlot { get; set; } = -1;
+
+            /// <summary>
+            /// Rounds left in the magazine. Negative means the client did not say
+            /// and the weapon is taken at its own value.
+            /// </summary>
+            public int MagazineAmmo { get; set; } = -1;
         }
 
         /// <summary>
@@ -466,12 +486,62 @@ namespace OpenGSServer.Network
                     ["SpawnPointName"] = kvp.Value.SpawnPointName,
                     ["State"] = kvp.Value.State,
                     ["PickedUpByPlayerId"] = kvp.Value.PickedUpByPlayerId,
-                    ["IsActive"] = kvp.Value.IsActive
+                    ["IsActive"] = kvp.Value.IsActive,
+                    // Carried with the weapon, so it has to survive the round trip
+                    // or a dropped weapon comes back empty after a state sync.
+                    ["WeaponType"] = kvp.Value.WeaponType,
+                    ["WeaponSlot"] = kvp.Value.WeaponSlot,
+                    ["MagazineAmmo"] = kvp.Value.MagazineAmmo
                 };
                 array.Add(item);
             }
 
             return array;
+        }
+
+        /// <summary>
+        /// Puts a dropped weapon on the ground at a position.
+        /// <para>
+        /// The position is the dropper's authoritative one, not a coordinate from
+        /// the message, for the same reason a shot is resolved from the server's
+        /// positions: a client that could place its own weapon anywhere could
+        /// place it out of reach of anyone but itself, or on top of a weapon
+        /// already lying there.
+        /// </para>
+        /// <returns>The new item's id, or empty when the weapon is not something that can be dropped.</returns>
+        public string DropWeapon(
+            string weaponType,
+            float x,
+            float y,
+            float z,
+            int magazineAmmo = -1,
+            int slot = -1)
+        {
+            if (string.IsNullOrWhiteSpace(weaponType) ||
+                !IsFinite(x) || !IsFinite(y) || !IsFinite(z))
+            {
+                return string.Empty;
+            }
+
+            var itemId = SpawnItem(EFieldItemType.WeaponItem, x, y, z);
+            if (string.IsNullOrEmpty(itemId))
+            {
+                return string.Empty;
+            }
+
+            lock (_itemStateLock)
+            {
+                if (_items.TryGetValue(itemId, out var item))
+                {
+                    item.WeaponType = weaponType;
+                    // A negative count means the client did not say, and the weapon
+                    // keeps whatever it was carrying rather than becoming empty.
+                    item.MagazineAmmo = Math.Max(-1, magazineAmmo);
+                    item.WeaponSlot = slot;
+                }
+            }
+
+            return itemId;
         }
 
         /// <summary>
@@ -507,7 +577,10 @@ namespace OpenGSServer.Network
                     SpawnPointName = itemObj["SpawnPointName"]?.ToString() ?? "",
                     State = itemObj["State"]?.ToString() ?? "Spawned",
                     PickedUpByPlayerId = itemObj["PickedUpByPlayerId"]?.ToString() ?? "",
-                    IsActive = itemObj["IsActive"]?.Value<bool>() ?? true
+                    IsActive = itemObj["IsActive"]?.Value<bool>() ?? true,
+                    WeaponType = itemObj["WeaponType"]?.ToString() ?? "",
+                    WeaponSlot = itemObj["WeaponSlot"]?.Value<int>() ?? -1,
+                    MagazineAmmo = itemObj["MagazineAmmo"]?.Value<int>() ?? -1
                 };
 
                 if (string.IsNullOrWhiteSpace(item.ItemId) ||
