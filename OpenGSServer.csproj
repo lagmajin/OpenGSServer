@@ -37,6 +37,16 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!--
+      The test project drives the live match handler rather than a stand-in, so
+      it can ask whether a message that arrived over a socket reached the code
+      the match loop actually runs. That handler is internal, and making it
+      public to say so would widen the server's surface for a test's benefit.
+    -->
+    <InternalsVisibleTo Include="OpenGSServer.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Autofac" Version="8.2.0" />
     <PackageReference Include="CommandLineParser" Version="2.9.1" />
     <PackageReference Include="DynaJson" Version="2.0.0" />

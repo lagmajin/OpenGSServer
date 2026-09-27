@@ -317,6 +317,15 @@ namespace OpenGSServer.Network
 
             foreach (var candidate in players)
             {
+                if (string.Equals(candidate, grenade.OwnerId, StringComparison.OrdinalIgnoreCase))
+                {
+                    // The thrower is not a victim of their own throw. A grenade
+                    // leaves the hand, so the owner is inside its own blast radius
+                    // on the first tick and would take the full damage every time
+                    // they threw one. The bullet path already skips the owner.
+                    continue;
+                }
+
                 var position = lookup(candidate);
                 var distance = Vector2.Distance(grenade.Position, position);
                 if (distance > grenade.ExplosionRadius)

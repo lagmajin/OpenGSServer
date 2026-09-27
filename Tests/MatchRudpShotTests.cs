@@ -75,6 +75,13 @@ public sealed class MatchRudpShotTests : IDisposable
         room!.AddNewPlayer(new PlayerInfo(shooterId, "Shooter"));
         room.AddNewPlayer(new PlayerInfo(victimId, "Victim"));
 
+        // The room has to be playing. The projectile simulation only resolves
+        // hits against players in a live match, so without this the grenade
+        // would explode in a room that was never in play and reach nobody. A real
+        // match reaches this state through the lobby, which is part of why the
+        // routing went unchecked.
+        room.GameStart();
+
         // The hit path refuses a shot when either player has no position, so both
         // are registered before the handshake.
         var lag = MatchServerV2.Instance.ServerLagCompensationManager;
@@ -115,6 +122,40 @@ public sealed class MatchRudpShotTests : IDisposable
             $"the realtime client for {playerId} did not connect");
 
         return probe;
+    }
+
+    /// <summary>
+    /// Throws the way a client does, which is what
+    /// RUDPMessageTypes.CreateGrenadeThrow builds: a position, a direction, a
+    /// type and a power, naming nobody.
+    /// </summary>
+    private void ThrowGrenade(string grenadeType = "Normal", float dirX = 1f, float dirY = 0f)
+    {
+        shooter.Send(shooterId, roomId, new JObject
+        {
+            ["MessageType"] = "GrenadeThrow",
+            ["PosX"] = 0f,
+            ["PosY"] = 0f,
+            ["DirX"] = dirX,
+            ["DirY"] = dirY,
+            ["GrenadeType"] = grenadeType,
+            ["Power"] = 1f
+        });
+    }
+
+    /// <summary>
+    /// Runs the server's projectile simulation for long enough for a fuse to run
+    /// out. The loop only steps projectiles when it ticks, and a test drives that
+    /// loop itself, so the fuse has to be waited out rather than assumed.
+    /// </summary>
+    private void RunProjectiles(int milliseconds)
+    {
+        var deadline = Environment.TickCount64 + milliseconds;
+        while (Environment.TickCount64 < deadline)
+        {
+            InGameMatchEventHandler.UpdateProjectiles(0.05f);
+            Thread.Sleep(5);
+        }
     }
 
     /// <summary>
@@ -247,6 +288,26 @@ public sealed class MatchRudpShotTests : IDisposable
     {
         Assert.True(room.TryGetPlayer(shooterId, out var info), "the shooter left the room");
         return info!.Kills;
+    }
+
+    private int ShooterHealth()
+    {
+        Assert.True(room.TryGetPlayer(shooterId, out var info), "the shooter left the room");
+        return info!.Health;
+    }
+
+    /// <summary>
+    /// How many projectiles the server is currently simulating.
+    /// <para>
+    /// This is reached through the static simulation the match loop steps, rather
+    /// than a simulator the test built, because the question is whether a message
+    /// that arrived over a socket reached the one the live match uses. A test with
+    /// its own simulator would answer a different question.
+    /// </para>
+    /// </summary>
+    private static int ProjectileCount()
+    {
+        return InGameMatchEventHandler.LiveProjectileCount();
     }
 
     [Fact]
@@ -431,6 +492,74 @@ public sealed class MatchRudpShotTests : IDisposable
         FireAt(victimId, "Pistol", dirX: 1f);
         Pump(400);
 
+        Assert.Equal(before, VictimHealth());
+    }
+
+    [Fact]
+    public void AGrenadeThrownOverRealtimeReachesTheSimulation()
+    {
+        SetUpRoom();
+        MoveTo(shooter, shooterId, 0f, 0f);
+        // A cluster grenade has a two second fuse and travels at twelve units a
+        // second, so it bursts about twenty four units down the line. The blast
+        // radius is three, so the player stands inside that.
+        MoveTo(victim, victimId, 24f, 0f);
+
+        var before = VictimHealth();
+
+        // The throw message has to reach the simulator at all. The projectile
+        // model is unit tested with no socket, so nothing here proved the message
+        // was routed to it: the allow list and the dispatch name are the same two
+        // places the item claim and the shot were both wrong at.
+        ThrowGrenade("Cluster", dirX: 1f);
+        Pump(300);
+
+        Assert.Equal(1, ProjectileCount());
+
+        // The fuse has to run out, which only happens when the loop steps the
+        // simulation, and a test that drives the loop itself has to drive that.
+        RunProjectiles(4200);
+
+        Assert.Equal(0, ProjectileCount());
+        Assert.True(
+            VictimHealth() < before,
+            $"a grenade that went off beside the player did no damage: {before} -> {VictimHealth()}");
+    }
+
+    [Fact]
+    public void AGrenadeDoesNotHurtThePlayerWhoThrewIt()
+    {
+        SetUpRoom();
+        MoveTo(shooter, shooterId, 0f, 0f);
+        MoveTo(victim, victimId, 24f, 0f);
+
+        var before = ShooterHealth();
+
+        ThrowGrenade("Cluster", dirX: 1f);
+        Pump(300);
+        RunProjectiles(4200);
+
+        // The thrower is not a victim of their own throw. A grenade that is
+        // thrown rather than dropped starts at the hand, so including the owner
+        // means every throw costs the thrower health, which is its own kind of
+        // wrong: the blast damage code already skips the owner for bullets.
+        Assert.Equal(before, ShooterHealth());
+    }
+
+    [Fact]
+    public void AGrenadeThrownFromAPlayerWithNoPositionDoesNothing()
+    {
+        SetUpRoom();
+        MoveTo(victim, victimId, 24f, 0f);
+
+        var before = VictimHealth();
+
+        // The thrower has never reported a position, so its coordinates in the
+        // message are a claim about where it is standing, not a fact.
+        ThrowGrenade("Cluster", dirX: 1f);
+        Pump(300);
+
+        Assert.Equal(0, ProjectileCount());
         Assert.Equal(before, VictimHealth());
     }
 }

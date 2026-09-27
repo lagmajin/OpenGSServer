@@ -767,12 +767,18 @@ namespace OpenGSServer
                 return;
             }
 
+            // Only players the server has actually seen a position for are handed
+            // to the simulation. The lookup returns a plain point, so a player
+            // whose position was never established would read as the origin, and
+            // a grenade going off near the origin would damage them. That is the
+            // same "position unknown is not position zero" problem the pickup and
+            // the shot already had to be told about.
             Projectiles.PlayerPositionLookup = playerId =>
             {
                 var state = MatchServerV2.Instance.ServerLagCompensationManager.GetPlayerState(playerId);
                 return new Vector2(state.PositionX, state.PositionY);
             };
-            Projectiles.PlayerIds = () => GetActiveMatchPlayerIds();
+            Projectiles.PlayerIds = () => GetLocatedMatchPlayerIds();
             Projectiles.OnSpawn = (projectile, spawnType) => BroadcastProjectileSpawn(projectile, spawnType);
             Projectiles.OnExpire = projectile => BroadcastProjectileExpire(projectile);
             Projectiles.OnDamage = (targetId, attackerId, damage, hit) =>
@@ -780,14 +786,32 @@ namespace OpenGSServer
 
             Projectiles.Update(deltaSeconds);
         }
+
         /// <summary>
-        /// Every player currently in a live match, used to resolve projectile
-        /// hits. The simulator asks for this each tick rather than caching it,
-        /// so a player who joins or leaves is reflected immediately.
+        /// How many projectiles the live match is currently simulating.
+        /// <para>
+        /// Exposed so a test can ask whether a message that arrived over a socket
+        /// reached the simulation the match loop actually steps. Reading the
+        /// static here is the point: a test that built its own simulator would not
+        /// be asking whether the realtime route works.
+        /// </para>
         /// </summary>
-        private static List<string> GetActiveMatchPlayerIds()
+        public static int LiveProjectileCount()
+        {
+            return Projectiles.ActiveCount;
+        }
+        /// <summary>
+        /// Every player in a live match whose position the server actually has.
+        /// <para>
+        /// The simulator asks for this each tick rather than caching it, so a
+        /// player who joins or leaves is reflected immediately. A player with no
+        /// reported position is left out rather than included at the origin.
+        /// </para>
+        /// </summary>
+        private static List<string> GetLocatedMatchPlayerIds()
         {
             var ids = new List<string>();
+            var stateManager = MatchServerV2.Instance.ServerLagCompensationManager;
             foreach (var room in MatchRoomManager.Instance.AllRooms().OfType<MatchRoom>())
             {
                 if (!room.Playing)
@@ -797,7 +821,14 @@ namespace OpenGSServer
 
                 foreach (var player in room.Players)
                 {
-                    if (!string.IsNullOrWhiteSpace(player.Id))
+                    if (string.IsNullOrWhiteSpace(player.Id))
+                    {
+                        continue;
+                    }
+
+                    var state = stateManager.GetPlayerState(player.Id);
+                    if (string.Equals(state.PlayerId, player.Id, StringComparison.OrdinalIgnoreCase) &&
+                        state.HasAuthoritativePosition)
                     {
                         ids.Add(player.Id);
                     }
@@ -943,11 +974,11 @@ namespace OpenGSServer
 
             foreach (var key in keys)
             {
-                if (json[key] == null)
-                {
-                    continue;
-                }
-
+                // The two components are read by composing the name, so the
+                // prefix itself does not have to exist as a key. That matters
+                // because the client writes DirX and DirY and writes no "Dir",
+                // so requiring it here skipped the only pair the message has and
+                // every grenade arrived with no direction.
                 var x = GetFloat(json[key + "X"] ?? json[key + "x"], float.NaN);
                 var y = GetFloat(json[key + "Y"] ?? json[key + "y"], float.NaN);
                 if (!float.IsNaN(x) || !float.IsNaN(y))
@@ -987,7 +1018,37 @@ namespace OpenGSServer
                 ?? grenadeData.GetStringOrNull("WeaponType")
                 ?? "Normal";
             var origin = ReadVector2(grenadeData, "Position", "Origin");
-            var direction = ReadVector2(grenadeData, "Direction", "AimDirection");
+            // The client spells the direction DirX and DirY, as
+            // RUDPMessageTypes.CreateGrenadeThrow and ClientNetworkManager both
+            // write it. The reader was only asked for "Direction" and
+            // "AimDirection", which it expands to DirectionX and DirectionY, so
+            // every grenade a real client threw arrived with no direction at all
+            // and was simulated as a grenade that went nowhere.
+            var direction = ReadVector2(grenadeData, "Direction", "AimDirection", "Dir");
+
+            // The thrower has to have been seen somewhere. A registered player
+            // with no position still reads as the origin, so a client that never
+            // reported one could otherwise lob a grenade out of the middle of the
+            // map, or past the fight, and the blast would land wherever it said.
+            var throwerState = MatchServerV2.Instance.ServerLagCompensationManager.GetPlayerState(playerId);
+            if (!string.Equals(throwerState.PlayerId, playerId, StringComparison.OrdinalIgnoreCase) ||
+                !throwerState.HasAuthoritativePosition)
+            {
+                Console.WriteLine($"[Match] Ignored grenade throw from '{playerId}' with no authoritative origin");
+                return;
+            }
+
+            // The grenade leaves the hand, not wherever the message says the
+            // hand is. A client supplied origin would let a throw start on top of
+            // a target, which is the same thing a client naming its own target
+            // would buy.
+            origin = new Vector2(throwerState.PositionX, throwerState.PositionY);
+
+            if (direction == Vector2.Zero)
+            {
+                Console.WriteLine($"[Match] Ignored grenade throw with no direction from '{playerId}'");
+                return;
+            }
 
             // The server now owns the flight, the fuse, and the blast. The throw
             // used to be logged and echoed to the room, so the grenade existed
