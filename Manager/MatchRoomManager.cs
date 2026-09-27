@@ -331,6 +331,10 @@ namespace OpenGSServer
             lock (matchRoomsLock)
             {
                 matchRooms[room.Id] = room;
+                // Keep an existing bus so handlers subscribed by the caller
+                // survive a re-add, but never replace it with a fresh one:
+                // the room publishes to the bus it was constructed with, so a
+                // different instance would never receive those events.
                 if (!roomEventBuses.ContainsKey(room.Id))
                 {
                     roomEventBuses[room.Id] = new MatchRoomEventBus();
@@ -349,12 +353,17 @@ namespace OpenGSServer
 
         public CreateNewRoomResult CreateNewRoom(in string roomName, in string ownerID, AbstractMatchSetting setting)
         {
-            var room = MatchRoomFactory.CreateMatchRoom(roomNumberCount, roomName, ownerID, setting, this);
+            // The manager overload of MatchRoomFactory builds a throwaway event bus
+            // that nothing can subscribe to, because the manager keeps its own
+            // bus per room. Create the bus here and hand it to the room so
+            // the dictionary entry and the room share one instance.
+            var bus = new MatchRoomEventBus();
+            var room = MatchRoomFactory.CreateMatchRoom(roomNumberCount, roomName, ownerID, setting, bus);
             
             lock (matchRoomsLock)
             {
                 matchRooms.Add(room.Id, room);
-                roomEventBuses[room.Id] = new MatchRoomEventBus();
+                roomEventBuses[room.Id] = bus;
                 CreateFieldItemManager(room.Id);
                 IncreaseRoomCounter();
             }
@@ -452,13 +461,33 @@ namespace OpenGSServer
         return new EnterMatchRoomResult(false, "Room ID and player information missing");
     }
 
+        /// <summary>
+        /// Rooms are keyed by the hyphen free form of their id, because
+        /// AbstractGameRoom builds it with Guid.ToString("N"). An id arriving
+        /// from the network is a Guid, so it has to be reduced to the same
+        /// shape before it can be used as a lookup key.
+        /// </summary>
+        private static string NormalizeRoomKey(in Guid id)
+        {
+            return id.ToString("N");
+        }
+
     public EnterMatchRoomResult EnterRoom(in Guid id, PlayerAccount player)
     {
         string message = "";
 
         lock (matchRoomsLock)
         {
-            if (matchRooms.TryGetValue(id.ToString(), out var room))
+            
+                // Room ids are generated as Guid.NewGuid().ToString("N"), so they
+                // carry no hyphens. Looking the room up by id.ToString() used
+                // the hyphenated form and therefore never matched a real
+                // room, which made every entry attempt report "Room not
+                // found". Normalize the incoming id the same way the room id
+                // was built.
+                var roomKey = NormalizeRoomKey(id);
+
+                if (matchRooms.TryGetValue(roomKey, out var room))
             {
                 if (room.Playing)
                 {
