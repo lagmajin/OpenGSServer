@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -27,14 +27,20 @@ namespace OpenGSServer
 
     public class MatchRoomEventBus : OpenGSCore.MatchRoomEventBus
     {
+        // The base class declares these as non-virtual, so they can only be
+        // hidden, not overridden. The base implementations raise the events the
+        // manager subscribes to, so each method here has to reach them.
+        // PublishLoadingStart and PublishGameStart used to stop at a
+        // Console.WriteLine, which silently swallowed the event for anything
+        // holding a server typed bus reference.
         public new void PublishLoadingStart()
         {
-            Console.WriteLine("LoadingStart");
+            base.PublishLoadingStart();
         }
 
         public new void PublishGameStart()
         {
-            Console.WriteLine("GameStart");
+            base.PublishGameStart();
         }
 
         public new void PublishGameEnd()

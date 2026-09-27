@@ -580,23 +580,6 @@ namespace OpenGSServer
         return false;
     }
 
-    public bool StartMatchTest()
-    {
-        lock (matchRoomsLock)
-        {
-            foreach (var m in matchRooms)
-            {
-                
-                //m.Value.GameStart();
-            }
-        }
-
-
-
-
-        return false;
-    }
-
     public bool StartAllMatch()
     {
         lock (matchRoomsLock)

@@ -490,6 +490,48 @@ public sealed class MatchRoomManagerTests
         Assert.Equal(1, fired);
     }
 
+    // ---- Event bus hiding ----------------------------------------------
+
+    [Fact]
+    public void ServerBusPublishStillRaisesTheBaseEvent()
+    {
+        // The server bus hides PublishLoadingStart and PublishGameStart with
+        // `new`, because the base methods are not virtual. When the hidden
+        // version stopped at a Console.WriteLine the event was swallowed for
+        // anything holding a server typed reference, so assert that reaching
+        // the method through the derived type still notifies subscribers.
+        var loading = 0;
+        var started = 0;
+        var ended = 0;
+        MatchRoomEventBus bus = new MatchRoomEventBus();
+        bus.OnLoadingStarted += () => loading++;
+        bus.OnGameStarted += () => started++;
+        bus.OnGameEnded += () => ended++;
+
+        bus.PublishLoadingStart();
+        bus.PublishGameStart();
+        bus.PublishGameEnd();
+
+        Assert.Equal(1, loading);
+        Assert.Equal(1, started);
+        Assert.Equal(1, ended);
+    }
+
+    [Fact]
+    public void StartMatchTestWasRemovedBecauseItWasAlwaysFalse()
+    {
+        var manager = NewManager();
+        manager.CreateNewDeathMatchRoom("room", "owner-1");
+
+        // StartMatchTest used to iterate the rooms, start nothing, and return
+        // false unconditionally. It had no callers, so it is gone rather than
+        // left as a trap that looks like a way to start every match.
+        Assert.Empty(typeof(MatchRoomManager)
+            .GetMethods()
+            .Where(m => m.Name == "StartMatchTest"));
+    }
+
+    // ---- Wait room bridge ----------------------------------------------
     // ---- Wait room bridge ----------------------------------------------
 
     [Fact]
