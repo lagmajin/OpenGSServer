@@ -107,8 +107,24 @@ namespace OpenGSServer
         protected override void OnConnected()
         {
             // クライアントのIPアドレスを取得
-            var remoteEndPoint = Socket.RemoteEndPoint as IPEndPoint;
-            _clientIp = remoteEndPoint?.Address.ToString() ?? "Unknown";
+            // The socket can already be disposed by the time this runs, if the peer
+            // hung up between the accept and this callback. Reading it then throws
+            // on the accept thread and takes the process with it, so an address
+            // that could not be read is reported as unknown instead.
+            try
+            {
+                var remoteEndPoint = Socket.RemoteEndPoint as IPEndPoint;
+                _clientIp = remoteEndPoint?.Address.ToString() ?? "Unknown";
+            }
+            catch (ObjectDisposedException)
+            {
+                _clientIp = "Unknown";
+            }
+            catch (Exception)
+            {
+                _clientIp = "Unknown";
+            }
+
             _clientId = Guid.NewGuid().ToString("N");
             _sessionStartTime = DateTime.UtcNow;
 
@@ -116,9 +132,22 @@ namespace OpenGSServer
                 $"[Management] クライアント接続: IP={_clientIp}, SessionID={Id}", 
                 ConsoleColor.Cyan);
 
-            // ソケット設定
-            Socket.ReceiveTimeout = 30000; // 30秒
-            Socket.SendTimeout = 10000;    // 10秒
+            // Socket settings. Same reason as the address read above: the socket can
+            // already be disposed here, and these are tuning rather than required
+            // state, so failing to apply them must not take the process down.
+            try
+            {
+                Socket.ReceiveTimeout = 30000; // 30秒
+                Socket.SendTimeout = 10000;    // 10秒
+            }
+            catch (ObjectDisposedException)
+            {
+                // The peer left before this ran; there is nothing left to tune.
+            }
+            catch (Exception)
+            {
+                // Tuning is best effort.
+            }
 
             // 接続成功メッセージを送信
             var responseJson = new JObject

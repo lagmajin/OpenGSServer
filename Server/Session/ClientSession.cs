@@ -63,9 +63,22 @@ namespace OpenGSServer
 
         private void setIPAddress()
         {
-            if (Socket.RemoteEndPoint is IPEndPoint endpoint)
+            // The socket can already be disposed by the time this runs, if the peer
+            // hung up between the accept and this callback. Reading it then throws,
+            // and an address that could not be read is not a reason to fail.
+            try
             {
-                ip = endpoint.Address.ToString();
+                if (Socket.RemoteEndPoint is IPEndPoint endpoint)
+                {
+                    ip = endpoint.Address.ToString();
+                }
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+            catch (Exception)
+            {
+                // The address stays unset, which callers already treat as unknown.
             }
         }
         public string ClientIpAddress()
@@ -205,8 +218,22 @@ namespace OpenGSServer
 
             //Console.WriteLine(endpoint.ToString());
 
-            Socket.ReceiveTimeout = 6000;
-            //Socket.SendTimeout = 1000;
+            // Socket settings. Same reason as the address read: the socket can
+            // already be disposed here, and this is tuning rather than required
+            // state, so failing to apply it must not take the process down.
+            try
+            {
+                Socket.ReceiveTimeout = 6000;
+                //Socket.SendTimeout = 1000;
+            }
+            catch (ObjectDisposedException)
+            {
+                // The peer left before this ran; there is nothing left to tune.
+            }
+            catch (Exception)
+            {
+                // Tuning is best effort.
+            }
 
             var jobject = new JObject();
 

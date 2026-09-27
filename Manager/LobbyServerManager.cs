@@ -2192,8 +2192,36 @@ namespace OpenGSServer
         {
             if (session is ClientSession clientSession)
             {
-                var ip = clientSession.Socket.RemoteEndPoint;
-                ConsoleWrite.WriteMessage($"[LOBBY] Client connected from {ip}", ConsoleColor.Cyan);
+                // A socket can already be gone by the time this runs, when the peer
+                // hangs up between the accept and the callback. Reading it then
+                // throws, and the throw happens on the accept thread where nothing
+                // catches it, so one client disconnecting took the whole server
+                // down. A log line is not worth that.
+                ConsoleWrite.WriteMessage(
+                    $"[LOBBY] Client connected from {DescribeRemoteEndPoint(clientSession)}", ConsoleColor.Cyan);
+            }
+        }
+
+        /// <summary>
+        /// The peer's address, or a note that it is no longer readable.
+        /// <para>
+        /// Disposed is the expected outcome here rather than a failure: a client
+        /// that connected and left immediately is normal traffic.
+        /// </para>
+        /// </summary>
+        private static string DescribeRemoteEndPoint(ClientSession session)
+        {
+            try
+            {
+                return session.Socket.RemoteEndPoint?.ToString() ?? "unknown";
+            }
+            catch (ObjectDisposedException)
+            {
+                return "a peer that had already disconnected";
+            }
+            catch (Exception ex)
+            {
+                return $"unreadable ({ex.GetType().Name})";
             }
         }
 

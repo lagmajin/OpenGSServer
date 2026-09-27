@@ -597,24 +597,23 @@ namespace OpenGSServer
                 string.Equals(targetId, playerId, StringComparison.OrdinalIgnoreCase))
             {
                 Console.WriteLine($"[Match] Ignored self-targeted shot from '{playerId}'");
-                targetId = null;
             }
 
-            // A client reports where it was pointing, not who it hit. The shot
-            // message a real client builds carries a position, a direction and a
-            // weapon and no target at all, so a target taken from the message is
-            // only ever present when some other caller supplies one. Without this
-            // the shot was broadcast and applied to nobody: every shot a real
-            // client took did nothing.
-            if (string.IsNullOrWhiteSpace(targetId))
+            // The aim decides who was hit, not the message.
+            //
+            // A target named in the message used to be taken at face value, with
+            // only a distance check behind it. That let a client choose its target:
+            // it could name a player it was not pointing at, so long as the two
+            // were within range, and the shot landed. The direction in the message
+            // was not consulted at all on that path.
+            //
+            // The message a real client builds carries no target, so ignoring this
+            // one changes nothing for it. It matters for anyone who sends one,
+            // which is exactly the case that has to be server owned.
+            var resolved = ResolveShotTarget(room, playerId, shotData, weaponType);
+            if (resolved != null)
             {
-                targetId = ResolveShotTarget(room, playerId, shotData, weaponType);
-            }
-
-            if (!string.IsNullOrWhiteSpace(targetId))
-            {
-                // ヒット判定とダメージ処理
-                HandleShotHit(room, playerId, targetId, weaponType);
+                HandleShotHit(room, playerId, resolved, weaponType);
             }
 
             // 全プレイヤーに射撃イベントをブロードキャスト（UDP）

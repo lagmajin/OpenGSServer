@@ -213,6 +213,30 @@ public sealed class MatchRudpShotTests : IDisposable
         });
     }
 
+    /// <summary>
+    /// Fires, naming the player it wants to hit.
+    /// <para>
+    /// No client builds this: RUDPMessageTypes.CreatePlayerShot has no target
+    /// field, and the TCP smoke that does send one aims at "nobody". It exists
+    /// here to pin down what the server does when a message names a target, since
+    /// a target in the message is a claim about who was hit and that is the
+    /// server's call to make.
+    /// </para>
+    /// </summary>
+    private void FireAt(string targetId, string weaponType = "Pistol", float dirX = 1f, float dirY = 0f)
+    {
+        shooter.Send(shooterId, roomId, new JObject
+        {
+            ["MessageType"] = "PlayerShot",
+            ["PosX"] = 0f,
+            ["PosY"] = 0f,
+            ["DirX"] = dirX,
+            ["DirY"] = dirY,
+            ["TargetID"] = targetId,
+            ["WeaponType"] = weaponType
+        });
+    }
+
     private int VictimHealth()
     {
         Assert.True(room.TryGetPlayer(victimId, out var info), "the victim left the room");
@@ -334,6 +358,77 @@ public sealed class MatchRudpShotTests : IDisposable
         var before = VictimHealth();
 
         Fire("Pistol", dirX: 1f);
+        Pump(400);
+
+        Assert.Equal(before, VictimHealth());
+    }
+
+    [Fact]
+    public void NamingATargetDoesNotHitAPlayerTheShotIsNotPointedAt()
+    {
+        SetUpRoom();
+        MoveTo(shooter, shooterId, 0f, 0f);
+        // The victim is behind the shooter, and the shot is aimed the other way.
+        MoveTo(victim, victimId, -3f, 0f);
+
+        var before = VictimHealth();
+
+        // The message says who to hit. A client that can pick its target can hit
+        // someone it never aimed at, which is why the aim has to decide and not
+        // the message. The distance check alone would let this through: the
+        // victim is well inside a pistol's range.
+        FireAt(victimId, "Pistol", dirX: 1f);
+        Pump(400);
+
+        Assert.Equal(before, VictimHealth());
+    }
+
+    [Fact]
+    public void NamingATargetDoesNotHitAPlayerOffToTheSide()
+    {
+        SetUpRoom();
+        MoveTo(shooter, shooterId, 0f, 0f);
+        MoveTo(victim, victimId, 0f, 3f);
+
+        var before = VictimHealth();
+
+        FireAt(victimId, "Pistol", dirX: 1f);
+        Pump(400);
+
+        Assert.Equal(before, VictimHealth());
+    }
+
+    [Fact]
+    public void NamingAPlayerTheShotIsAimedAtStillLands()
+    {
+        SetUpRoom();
+        MoveTo(shooter, shooterId, 0f, 0f);
+        MoveTo(victim, victimId, 3f, 0f);
+
+        var before = VictimHealth();
+
+        // A named target that agrees with the aim is still a hit. Refusing every
+        // named target would break the caller that sends one, and the test that
+        // matters is that the aim decides, not that the field is always dropped.
+        FireAt(victimId, "Pistol", dirX: 1f);
+        Pump(400);
+
+        Assert.True(
+            VictimHealth() < before,
+            $"a shot aimed at a named target did no damage: {before} -> {VictimHealth()}");
+    }
+
+    [Fact]
+    public void NamingATargetDoesNotLetAShooterWithoutAPositionHit()
+    {
+        SetUpRoom();
+        MoveTo(victim, victimId, 3f, 0f);
+
+        var before = VictimHealth();
+
+        // The target is named and in range, but the shooter has never been seen
+        // at a position, so the server has no origin to measure a line from.
+        FireAt(victimId, "Pistol", dirX: 1f);
         Pump(400);
 
         Assert.Equal(before, VictimHealth());
