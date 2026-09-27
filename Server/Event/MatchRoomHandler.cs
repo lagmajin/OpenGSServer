@@ -600,6 +600,17 @@ namespace OpenGSServer
                 targetId = null;
             }
 
+            // A client reports where it was pointing, not who it hit. The shot
+            // message a real client builds carries a position, a direction and a
+            // weapon and no target at all, so a target taken from the message is
+            // only ever present when some other caller supplies one. Without this
+            // the shot was broadcast and applied to nobody: every shot a real
+            // client took did nothing.
+            if (string.IsNullOrWhiteSpace(targetId))
+            {
+                targetId = ResolveShotTarget(room, playerId, shotData, weaponType);
+            }
+
             if (!string.IsNullOrWhiteSpace(targetId))
             {
                 // ヒット判定とダメージ処理
@@ -608,6 +619,136 @@ namespace OpenGSServer
 
             // 全プレイヤーに射撃イベントをブロードキャスト（UDP）
             BroadcastShotEvent(room, playerId, shotData);
+        }
+
+        /// <summary>
+        /// How far off the shot line a player can be and still be hit.
+        /// <para>
+        /// This stands in for the width of a player. It is a world unit, matching
+        /// the unit the positions and the weapon ranges are already expressed in.
+        /// </para>
+        /// </summary>
+        private const float ShotHitRadius = 1.5f;
+
+        /// <summary>
+        /// Works out which player a shot reached, from the server's own positions.
+        /// <para>
+        /// This is the server's half of a server authoritative hit. The client
+        /// says where it aimed and the server decides who that was, using the
+        /// positions it has been tracking rather than anything in the message, so
+        /// a client cannot pick its target or a damage value.
+        /// </para>
+        /// <para>
+        /// A shooter the server has never seen a position for cannot aim, because
+        /// the origin it would project from is not a place the player was ever at.
+        /// A registered player with no position still reads as the origin, so
+        /// without this an unseen shooter would fire from the middle of the map.
+        /// </para>
+        /// </summary>
+        private static string? ResolveShotTarget(
+            MatchRoom room,
+            string shooterId,
+            JObject shotData,
+            string weaponType)
+        {
+            var stateManager = MatchServerV2.Instance.ServerLagCompensationManager;
+            var shooterState = stateManager.GetPlayerState(shooterId);
+            if (!string.Equals(shooterState.PlayerId, shooterId, StringComparison.OrdinalIgnoreCase) ||
+                !shooterState.HasAuthoritativePosition)
+            {
+                Console.WriteLine($"[Match] Ignored shot with no authoritative origin from '{shooterId}'");
+                return null;
+            }
+
+            var originX = shooterState.PositionX;
+            var originY = shooterState.PositionY;
+
+            // The direction is read from the message because aiming is the one
+            // thing a client is the authority on, but a degenerate one is refused
+            // rather than normalised: a zero vector is not an aim.
+            var direction = shotData.GetValue("Direction") as JObject;
+            var dirX = GetFloat(shotData.GetValue("DirX") ?? direction?.GetValue("X") ?? direction?.GetValue("x"), 0f);
+            var dirY = GetFloat(shotData.GetValue("DirY") ?? direction?.GetValue("Y") ?? direction?.GetValue("y"), 0f);
+            if (!IsFinite(dirX) || !IsFinite(dirY))
+            {
+                return null;
+            }
+
+            var length = MathF.Sqrt((dirX * dirX) + (dirY * dirY));
+            if (length < 0.001f)
+            {
+                Console.WriteLine($"[Match] Ignored shot with no usable direction from '{shooterId}'");
+                return null;
+            }
+
+            dirX /= length;
+            dirY /= length;
+
+            var range = WeaponRange(weaponType);
+            var rangeSquared = range * range;
+            var hitRadiusSquared = ShotHitRadius * ShotHitRadius;
+
+            string? bestId = null;
+            var bestDistanceSquared = float.MaxValue;
+
+            foreach (var candidate in room.Players)
+            {
+                if (string.Equals(candidate.Id, shooterId, StringComparison.OrdinalIgnoreCase) ||
+                    candidate.Health <= 0)
+                {
+                    continue;
+                }
+
+                var candidateState = stateManager.GetPlayerState(candidate.Id);
+                if (!string.Equals(candidateState.PlayerId, candidate.Id, StringComparison.OrdinalIgnoreCase) ||
+                    !candidateState.HasAuthoritativePosition)
+                {
+                    // A player the server has never seen is not anywhere in
+                    // particular, so it cannot be the answer.
+                    continue;
+                }
+
+                var dx = candidateState.PositionX - originX;
+                var dy = candidateState.PositionY - originY;
+                var along = (dx * dirX) + (dy * dirY);
+
+                // Behind the shooter, and past the weapon's reach.
+                if (along < 0f || along * along > rangeSquared)
+                {
+                    continue;
+                }
+
+                // The square of the miss distance, from the right triangle the
+                // projection and the offset form.
+                var offsetSquared = ((dx * dx) + (dy * dy)) - (along * along);
+                if (offsetSquared > hitRadiusSquared)
+                {
+                    continue;
+                }
+
+                // The closest one down the line is the one that was hit, so a
+                // player standing in front of another absorbs the shot.
+                if (along < bestDistanceSquared)
+                {
+                    bestDistanceSquared = along;
+                    bestId = candidate.Id;
+                }
+            }
+
+            return bestId;
+        }
+
+        private static float WeaponRange(string? weaponType)
+        {
+            return weaponType switch
+            {
+                "Pistol" => 45f,
+                "SMG" => 55f,
+                "Shotgun" => 25f,
+                "Rifle" => 90f,
+                "Sniper" => 180f,
+                _ => 60f
+            };
         }
 
         /// <summary>
@@ -961,15 +1102,10 @@ namespace OpenGSServer
             var dy = shooterState.PositionY - targetState.PositionY;
             var dz = shooterState.PositionZ - targetState.PositionZ;
             var distanceSquared = (dx * dx) + (dy * dy) + (dz * dz);
-            var range = weaponType switch
-            {
-                "Pistol" => 45f,
-                "SMG" => 55f,
-                "Shotgun" => 25f,
-                "Rifle" => 90f,
-                "Sniper" => 180f,
-                _ => 60f
-            };
+
+            // The same table the shot resolver reads, so a target picked from the
+            // message and one the server found are held to one reach.
+            var range = WeaponRange(weaponType);
 
             return !float.IsNaN(distanceSquared) &&
                    !float.IsInfinity(distanceSquared) &&

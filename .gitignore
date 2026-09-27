@@ -373,3 +373,7 @@ all.txt
 
 # written by the running server
 server_status.txt
+
+# logs written by a locally launched server
+srv.log
+srv.err
