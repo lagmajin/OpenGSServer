@@ -364,3 +364,8 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+# Smoke run output; the suite writes these next to the script.
+smoke*.txt
+smoke_server_*.log
+.err.log
