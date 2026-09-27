@@ -367,6 +367,10 @@ namespace OpenGSServer
                 ["AttackerId"] = attackerId,
                 ["Damage"] = damage,
                 ["RemainingHealth"] = remainingHealth,
+                // The client adopts this instead of its own prediction, so it
+                // needs the ceiling as well as the current value.
+                ["MaxHealth"] = room.TryGetPlayer(damagedPlayerId, out var damaged) ? damaged!.MaxHealth : 0,
+                ["IsDown"] = remainingHealth.HasValue && remainingHealth.Value <= 0,
                 ["HitPosition"] = hitPosition,
                 ["Timestamp"] = DateTime.UtcNow.ToString("o")
             });

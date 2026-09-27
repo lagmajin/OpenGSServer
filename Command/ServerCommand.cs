@@ -897,6 +897,51 @@ namespace OpenGSServer
         /// against what the clients were told.
         /// </para>
         /// </summary>
+        /// <summary>
+        /// Prints the realtime port and a connection token for a player.
+        /// <para>
+        /// The realtime channel refuses anything without a token, so anything
+        /// that wants to drive it from outside the game, a probe or a smoke
+        /// test, has no way in. Printing the port and a token makes that path
+        /// reachable without a Unity client.
+        /// </para>
+        /// </summary>
+        public static void RealtimeAccess(string playerId)
+        {
+            try
+            {
+                var matchServer = MatchServerV2.Instance;
+                if (!matchServer.IsRunning)
+                {
+                    ConsoleWrite.WriteMessage("[ERR] The match server is not running.", ConsoleColor.Red);
+                    return;
+                }
+
+                var port = matchServer.UdpPort;
+                if (port == null)
+                {
+                    ConsoleWrite.WriteMessage("[ERR] The realtime channel has no port.", ConsoleColor.Red);
+                    return;
+                }
+
+                var token = matchServer.IssueUdpConnectionToken(playerId);
+                if (string.IsNullOrWhiteSpace(token))
+                {
+                    ConsoleWrite.WriteMessage($"[ERR] No realtime token was issued for '{playerId}'.", ConsoleColor.Red);
+                    return;
+                }
+
+                // Parsed by the smoke client, so the shape is part of the
+                // contract: REALTIME port=<port> playerId=<id> token=<token>
+                ConsoleWrite.WriteMessage(
+                    $"[OK] REALTIME port={port.Value} playerId={playerId} token={token}",
+                    ConsoleColor.Green);
+            }
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage($"[ERR] Failed to issue a realtime token for '{playerId}': {ex.Message}", ConsoleColor.Red);
+            }
+        }
         public static void RoomStatus(string matchId)
         {
             try
