@@ -28,14 +28,70 @@ jobs:
       - name: Build
         run: dotnet build OpenGSServer.csproj --configuration Release --no-restore
 
+      # The trx logger writes a result file that the reporter step turns into a
+      # pull request comment, so a reviewer sees which tests ran and which
+      # failed without opening the raw log. A fixed file name keeps the upload
+      # step simple.
       - name: Test
-        run: dotnet test Tests/OpenGSServer.Tests.csproj --configuration Release --no-restore
+        run: >-
+          dotnet test Tests/OpenGSServer.Tests.csproj
+          --configuration Release
+          --no-restore
+          --logger "trx;LogFileName=server-tests.trx"
+          --results-directory TestResults
+
+      - name: Publish test report
+        if: always()
+        uses: dorny/test-reporter@v1
+        with:
+          name: Server tests
+          path: TestResults/*.trx
+          reporter: dotnet-trx
+          fail-on-error: true
+          fail-on-empty: true
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.x'
 
+      # The smoke suite covers the live lobby, loading, reconnect, and match
+      # end to end flow, which the unit tests cannot. Its PASS and FAIL lines
+      # are echoed into the job summary so both kinds of checks show up in one
+      # place.
+      #
+      # The script is launched as its own process and waited on so its exit code
+      # survives. Running it through a pipeline would lose it, because the last
+      # command in a pipeline sets $LASTEXITCODE and Tee-Object is not one of
+      # them, so a failing suite would be reported as a pass.
       - name: Lobby and mission smoke
         shell: pwsh
-        run: ./tools/run_smoke.ps1 -Configuration Release
+        run: |
+          $stdout = Join-Path $PWD 'smoke.log'
+          $stderr = Join-Path $PWD 'smoke.err.log'
+          $proc = Start-Process pwsh -PassThru -Wait -NoNewWindow `
+            -ArgumentList '-NoProfile', '-File', 'tools/run_smoke.ps1', '-Configuration', 'Release' `
+            -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+          Get-Content $stdout -Encoding utf8 | Out-Host
+          if (Test-Path $stderr) {
+            $err = Get-Content $stderr -Encoding utf8
+            if ($err) { $err | Out-Host; Add-Content $stdout $err }
+          }
+          $summary = $env:GITHUB_STEP_SUMMARY
+          if ($summary -and (Test-Path $summary)) {
+            '## Smoke suite' | Out-File -Append -FilePath $summary
+            '```' | Out-File -Append -FilePath $summary
+            Get-Content $stdout -Encoding utf8 |
+              Where-Object { $_ -match 'PASS|FAIL' } |
+              Out-File -Append -FilePath $summary
+            '```' | Out-File -Append -FilePath $summary
+          }
+          exit $proc.ExitCode
+
+      - name: Upload smoke log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-log
+          path: smoke.log
+          if-no-files-found: ignore
