@@ -55,9 +55,9 @@ namespace OpenGSServer
             itemManager.RegisterSpawnPoint(4, 0f, 0f, -8f, "South");
             itemManager.RegisterSpawnPoint(5, 6f, 0f, 6f, "Corner");
             itemManager.ConfigureDefaultSpawnRules();
-            itemManager.ConfigureSpawnRule("GranadeLauncher", 1, 45.0f, 5);
-            itemManager.ConfigureSpawnRule("FlameThrower", 1, 45.0f, 5);
-            itemManager.ConfigureSpawnRule("HealItem", 2, 25.0f, 1, 2, 3, 4);
+            itemManager.ConfigureSpawnRule(EFieldItemType.GranadeLauncher, 1, 45.0f, 5);
+            itemManager.ConfigureSpawnRule(EFieldItemType.FlameThrower, 1, 45.0f, 5);
+            itemManager.ConfigureSpawnRule(EFieldItemType.HealItem, 2, 25.0f, 1, 2, 3, 4);
             roomFieldItemManagers[roomId] = itemManager;
             return itemManager;
         }
@@ -180,7 +180,7 @@ namespace OpenGSServer
                 {
                     OpenGSServer.Network.FieldItemEventHandler.SpawnItem(
                         itemManager,
-                        type.ToString(),
+                        type,
                         id,
                         json => BroadcastToRoom(matchRoom, json));
                 };

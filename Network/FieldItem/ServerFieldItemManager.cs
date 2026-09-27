@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using Newtonsoft.Json.Linq;
+using OpenGSCore;
 
 #nullable enable
 
@@ -20,7 +21,7 @@ namespace OpenGSServer.Network
         public class FieldItem
         {
             public string ItemId { get; set; } = "";
-            public string ItemType { get; set; } = "PowerUp";
+            public EFieldItemType ItemType { get; set; } = EFieldItemType.PowerUpItem;
             public float PosX, PosY, PosZ;
             public int SpawnPointId { get; set; } = -1;
             public string SpawnPointName { get; set; } = "";
@@ -48,15 +49,15 @@ namespace OpenGSServer.Network
         /// </summary>
         public class FieldItemSpawnRule
         {
-            public string ItemType { get; set; } = "";
+            public EFieldItemType ItemType { get; set; }
             public int MaxActiveCount { get; set; } = 1;
-            public float RespawnDelaySec { get; set; } = 30.0f;
+            public float RespawnDelaySec { get; set; } = FieldItemDefaults.DurationSeconds;
             public List<int> PreferredSpawnPointIds { get; } = new List<int>();
         }
 
         private readonly ConcurrentDictionary<string, FieldItem> _items = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<int, FieldItemSpawnPoint> _spawnPoints = new();
-        private readonly Dictionary<string, FieldItemSpawnRule> _spawnRules = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<EFieldItemType, FieldItemSpawnRule> _spawnRules = new();
         private readonly Random _random = new();
         private readonly object _itemStateLock = new();
 
@@ -68,7 +69,7 @@ namespace OpenGSServer.Network
         /// <summary>
         /// アイテムを取得された時のアクション（ブロードキャスト用）
         /// </summary>
-        public Action<string, string, string>? OnItemPickedUp; // (itemId, playerId, itemType)
+        public Action<string, string, EFieldItemType>? OnItemPickedUp; // (itemId, playerId, itemType)
 
         /// <summary>
         /// マッチを開始
@@ -115,12 +116,8 @@ namespace OpenGSServer.Network
         /// <summary>
         /// アイテムごとの生成ルールを設定する
         /// </summary>
-        public void ConfigureSpawnRule(string itemType, int maxActiveCount, float respawnDelaySec, params int[] preferredSpawnPointIds)
+        public void ConfigureSpawnRule(EFieldItemType itemType, int maxActiveCount, float respawnDelaySec, params int[] preferredSpawnPointIds)
         {
-            if (string.IsNullOrWhiteSpace(itemType))
-            {
-                return;
-            }
 
             var rule = new FieldItemSpawnRule
             {
@@ -145,12 +142,12 @@ namespace OpenGSServer.Network
         /// </summary>
         public void ConfigureDefaultSpawnRules()
         {
-            ConfigureSpawnRule("PowerUpItem", 1, 30.0f, 0);
-            ConfigureSpawnRule("DefenceUpItem", 1, 30.0f, 1);
-            ConfigureSpawnRule("SpeedUpItem", 1, 30.0f, 2);
-            ConfigureSpawnRule("StealthItem", 1, 30.0f, 3);
-            ConfigureSpawnRule("GrenadePack", 1, 30.0f, 4);
-            ConfigureSpawnRule("HealItem", 1, 30.0f, 5);
+            ConfigureSpawnRule(EFieldItemType.PowerUpItem, 1, FieldItemDefaults.DurationSeconds, 0);
+            ConfigureSpawnRule(EFieldItemType.DefenceUpItem, 1, FieldItemDefaults.DurationSeconds, 1);
+            ConfigureSpawnRule(EFieldItemType.SpeedUpItem, 1, FieldItemDefaults.DurationSeconds, 2);
+            ConfigureSpawnRule(EFieldItemType.StealthItem, 1, FieldItemDefaults.DurationSeconds, 3);
+            ConfigureSpawnRule(EFieldItemType.GrenadePack, 1, FieldItemDefaults.DurationSeconds, 4);
+            ConfigureSpawnRule(EFieldItemType.HealItem, 1, FieldItemDefaults.DurationSeconds, 5);
         }
 
         /// <summary>
@@ -181,7 +178,7 @@ namespace OpenGSServer.Network
         /// <summary>
         /// 指定された生成ルールに従って新しいスポーン地点IDを選ぶ
         /// </summary>
-        private int PickSpawnPointId(string itemType)
+        private int PickSpawnPointId(EFieldItemType itemType)
         {
             if (_spawnRules.TryGetValue(itemType, out var rule))
             {
@@ -207,9 +204,9 @@ namespace OpenGSServer.Network
         /// <summary>
         /// アイテムを出現させる
         /// </summary>
-        public string SpawnItem(string itemType, float x, float y, float z)
+        public string SpawnItem(EFieldItemType itemType, float x, float y, float z)
         {
-            if (string.IsNullOrWhiteSpace(itemType) ||
+            if (
                 !IsFinite(x) || !IsFinite(y) || !IsFinite(z))
             {
                 return string.Empty;
@@ -242,7 +239,7 @@ namespace OpenGSServer.Network
         /// <summary>
         /// スポーン地点ベースでアイテムを出現させる
         /// </summary>
-        public string SpawnItem(string itemType, int spawnPointId)
+        public string SpawnItem(EFieldItemType itemType, int spawnPointId)
         {
             lock (_itemStateLock)
             {
@@ -274,17 +271,9 @@ namespace OpenGSServer.Network
         }
 
         /// <summary>
-        /// 列挙型ベースでアイテムを出現させる
-        /// </summary>
-        public string SpawnItem(OpenGSCore.EFieldItemType itemType, int spawnPointId = 0)
-        {
-            return SpawnItem(itemType.ToString(), spawnPointId);
-        }
-
-        /// <summary>
         /// 生成ルールがある場合に、現在の上限を考慮して自動生成する
         /// </summary>
-        public bool TrySpawnConfiguredItem(string itemType, out string itemId)
+        public bool TrySpawnConfiguredItem(EFieldItemType itemType, out string itemId)
         {
             itemId = "";
             itemId = SpawnItem(itemType, PickSpawnPointId(itemType));
@@ -294,12 +283,12 @@ namespace OpenGSServer.Network
         /// <summary>
         /// アイテム種別ごとのアクティブ数を取得する
         /// </summary>
-        public int GetActiveItemCountForType(string itemType)
+        public int GetActiveItemCountForType(EFieldItemType itemType)
         {
             return _items.Values.Count(item =>
                 item.IsActive &&
                 item.State == "Spawned" &&
-                string.Equals(item.ItemType, itemType, StringComparison.OrdinalIgnoreCase));
+                item.ItemType == itemType);
         }
 
         /// <summary>
@@ -313,6 +302,66 @@ namespace OpenGSServer.Network
         /// <summary>
         /// アイテムを拾う
         /// </summary>
+/// <summary>
+        /// How far from an item a player may stand and still claim it.
+        /// The client used to decide on its own that it had touched an item and
+        /// the server took that at face value, so any client could collect a
+        /// spawn on the far side of the map. The radius is generous because the
+        /// authoritative position lags the client by a round trip, but it is
+        /// small enough to stay local to the spawn point.
+        /// </summary>
+        public const float PickupRadius = 2.5f;
+
+        /// <summary>
+        /// Whether a pickup at the given position may be granted.
+        /// <para>
+        /// Used by the authoritative path, which already knows where the player
+        /// is. The overload without a position stays available for callers that
+        /// have no position to offer, but it cannot enforce the radius.
+        /// </para>
+        /// </summary>
+        public bool IsWithinPickupRange(string itemId, float x, float y, float z)
+        {
+            if (!_items.TryGetValue(itemId, out var item))
+            {
+                return false;
+            }
+
+            if (!IsFinite(x) || !IsFinite(y) || !IsFinite(z))
+            {
+                return false;
+            }
+
+            var dx = item.PosX - x;
+            var dy = item.PosY - y;
+            var dz = item.PosZ - z;
+            return (dx * dx) + (dy * dy) + (dz * dz) <= PickupRadius * PickupRadius;
+        }
+
+        /// <summary>
+        /// Claims an item for a player, optionally checking the distance from a
+        /// known player position. Pass a position for the authoritative path and
+        /// null when the caller has none.
+        /// </summary>
+        public bool PickupItem(string itemId, string playerId, float? playerX, float? playerY, float? playerZ)
+        {
+            if (playerX.HasValue || playerY.HasValue || playerZ.HasValue)
+            {
+                if (!playerX.HasValue || !playerY.HasValue || !playerZ.HasValue)
+                {
+                    // A half supplied position is a client bug, not a free pass.
+                    return false;
+                }
+
+                if (!IsWithinPickupRange(itemId, playerX.Value, playerY.Value, playerZ.Value))
+                {
+                    return false;
+                }
+            }
+
+            return PickupItem(itemId, playerId);
+        }
+
         public bool PickupItem(string itemId, string playerId)
         {
             if (string.IsNullOrWhiteSpace(itemId) || string.IsNullOrWhiteSpace(playerId))
@@ -320,7 +369,8 @@ namespace OpenGSServer.Network
                 return false;
             }
 
-            string? itemType = null;
+            EFieldItemType itemType = default;
+            bool picked = false;
             lock (_itemStateLock)
             {
                 if (_items.TryGetValue(itemId, out var item) && item.IsActive && item.State == "Spawned")
@@ -329,10 +379,11 @@ namespace OpenGSServer.Network
                     item.PickedUpByPlayerId = playerId;
                     item.IsActive = false;
                     itemType = item.ItemType;
+                    picked = true;
                 }
             }
 
-            if (itemType is null)
+            if (!picked)
             {
                 return false;
             }
@@ -407,7 +458,7 @@ namespace OpenGSServer.Network
                 var item = new JObject
                 {
                     ["ItemId"] = kvp.Value.ItemId,
-                    ["ItemType"] = kvp.Value.ItemType,
+                    ["ItemType"] = FieldItemTypeNames.ToWireName(kvp.Value.ItemType),
                     ["PositionX"] = kvp.Value.PosX,
                     ["PositionY"] = kvp.Value.PosY,
                     ["PositionZ"] = kvp.Value.PosZ,
@@ -440,10 +491,15 @@ namespace OpenGSServer.Network
                 var itemObj = token as JObject;
                 if (itemObj == null) continue;
 
+                if (!FieldItemTypeNames.TryParse(itemObj["ItemType"]?.ToString(), out var parsedType))
+                {
+                    continue;
+                }
+
                 var item = new FieldItem
                 {
                     ItemId = itemObj["ItemId"]?.ToString() ?? "",
-                    ItemType = itemObj["ItemType"]?.ToString() ?? "PowerUp",
+                    ItemType = parsedType,
                     PosX = itemObj["PositionX"]?.Value<float>() ?? 0,
                     PosY = itemObj["PositionY"]?.Value<float>() ?? 0,
                     PosZ = itemObj["PositionZ"]?.Value<float>() ?? 0,
@@ -455,7 +511,6 @@ namespace OpenGSServer.Network
                 };
 
                 if (string.IsNullOrWhiteSpace(item.ItemId) ||
-                    string.IsNullOrWhiteSpace(item.ItemType) ||
                     !IsFinite(item.PosX) || !IsFinite(item.PosY) || !IsFinite(item.PosZ))
                 {
                     continue;
