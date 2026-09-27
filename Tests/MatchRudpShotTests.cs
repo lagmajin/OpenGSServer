@@ -118,7 +118,49 @@ public sealed class MatchRudpShotTests : IDisposable
     }
 
     /// <summary>
-    /// Walks a player to a spot and lets the server settle on it.
+    /// The position the server currently holds for a player.
+    /// </summary>
+    private System.Numerics.Vector2 AuthoritativePosition(string playerId)
+    {
+        var state = MatchServerV2.Instance.ServerLagCompensationManager.GetPlayerState(playerId);
+        return new System.Numerics.Vector2(state.PositionX, state.PositionY);
+    }
+
+    /// <summary>
+    /// Waits until the server is holding a position the test can reason about.
+    /// <para>
+    /// Position packets are delivered unreliably and the listener is pumped on a
+    /// timer, so a fixed number of sends is a guess about how much of the walk
+    /// arrived. Firing before the walk landed meant aiming at where the victim was
+    /// meant to be rather than where it was, which failed intermittently. The
+    /// geometry these tests are about only means something once both positions are
+    /// the ones the test asked for, so that is waited for rather than assumed.
+    /// </para>
+    /// </summary>
+    private void WaitForPosition(MatchRudpProbe probe, string playerId, float x, float y)
+    {
+        byte sequence = 1;
+        var deadline = Environment.TickCount64 + 5000;
+        while (Environment.TickCount64 < deadline)
+        {
+            probe.SendPosition(playerId, roomId, x, y, 0f, 0f, 0.04f, sequence++);
+            Pump(60);
+
+            var held = AuthoritativePosition(playerId);
+            if (MathF.Abs(held.X - x) < 0.25f && MathF.Abs(held.Y - y) < 0.25f)
+            {
+                return;
+            }
+        }
+
+        var final = AuthoritativePosition(playerId);
+        Assert.Fail(
+            $"the server never adopted the position for {playerId}: " +
+            $"asked for ({x}, {y}) but hold ({final.X}, {final.Y})");
+    }
+
+    /// <summary>
+    /// Walks a player to a spot and waits for the server to be holding it.
     /// <para>
     /// It walks rather than teleports on purpose. The server only adopts a
     /// position within a tolerance of the one it holds, and a step of one unit at
@@ -151,13 +193,7 @@ public sealed class MatchRudpShotTests : IDisposable
             Pump(60);
         }
 
-        // Settle at the destination, so the last accepted packet is the spot the
-        // test is asserting about rather than one step short of it.
-        for (var i = 0; i < 3; i++)
-        {
-            probe.SendPosition(playerId, roomId, currentX, currentY, 0f, 0f, 0.04f, sequence++);
-            Pump(60);
-        }
+        WaitForPosition(probe, playerId, x, y);
     }
 
     /// <summary>
