@@ -92,7 +92,7 @@ public sealed class MatchRoomManagerTests
     }
 
     [Fact]
-    public void CreateNewCtfRoomUsesTeamDeathMatchSettings()
+    public void CreateNewCtfRoomUsesTheCaptureTheFlagSetting()
     {
         var manager = NewManager();
 
@@ -100,13 +100,52 @@ public sealed class MatchRoomManagerTests
 
         var room = manager.GetRoomById(result.RoomId);
         Assert.NotNull(room);
-        // The CTF factory has no CaptureTheFlagMatchSetting to build, because
-        // that setting type does not exist in the shared package. It hands the
-        // room a TDMMatchSetting instead, so a room created through the CTF
-        // entry point reports EGameMode.TeamDeathMatch. This assertion records
-        // the current behaviour so a future CaptureTheFlagMatchSetting becomes
-        // a visible, deliberate change rather than a silent one.
-        Assert.Equal(EGameMode.TeamDeathMatch, room!.Setting.Mode);
+        // The factory used to hand the room a TDMMatchSetting, which made a CTF
+        // room report EGameMode.TeamDeathMatch and gave it a team death match
+        // rule, so a flag capture ended the match the way a kill did.
+        Assert.Equal(EGameMode.CaptureTheFlag, room!.Setting.Mode);
+        Assert.IsType<CaptureTheFlagMatchSetting>(room.Setting);
+    }
+
+    [Fact]
+    public void CreateNewCtfRoomGetsAFlagRuleRatherThanAKillRule()
+    {
+        var manager = NewManager();
+
+        var result = manager.CreateNewCTFMatchRoom("ctf", "owner-1");
+
+        var room = manager.GetRoomById(result.RoomId);
+        Assert.NotNull(room);
+        var rule = MatchRuleFactory.CreateMatchRule(room!.Setting);
+        // The rule is what decides how a match ends, so this is the part that
+        // actually differed before.
+        Assert.IsType<CaptureTheFlagMatchRule>(rule);
+        Assert.IsNotType<TDMMatchRule>(rule);
+    }
+
+    [Fact]
+    public void CreateNewCtfRoomAppliesTheRequestedCapacity()
+    {
+        var manager = NewManager();
+
+        var result = manager.CreateNewCTFMatchRoom("ctf", "owner-1", capacity: 6);
+
+        var room = manager.GetRoomById(result.RoomId);
+        Assert.NotNull(room);
+        Assert.Equal(6, room!.Setting.MaxPlayerCount);
+    }
+
+    [Fact]
+    public void CreateNewCtfRoomCarriesTheFlagWinCondition()
+    {
+        var manager = NewManager();
+
+        var result = manager.CreateNewCTFMatchRoom("ctf", "owner-1");
+
+        var room = manager.GetRoomById(result.RoomId);
+        var setting = room!.Setting as CaptureTheFlagMatchSetting;
+        Assert.NotNull(setting);
+        Assert.Equal(3, setting!.WinConditionPoint);
     }
 
     // ---- Entry ----------------------------------------------------------
@@ -175,24 +214,37 @@ public sealed class MatchRoomManagerTests
     }
 
     [Fact]
-    public void SearchIsCaseInsensitiveButContainsPlayerIsNot()
+    public void RoomLookupsAgreeOnCasing()
     {
         var manager = NewManager();
         var roomId = manager.CreateNewDeathMatchRoom("room", "owner-1").RoomId;
         manager.EnterRoom(Guid.Parse(roomId), NewAccount("MixedCase-Id"));
 
-        // Room membership lookups and the room's own ContainsPlayer disagree
-        // about casing: SearchRoomByMemberID compares with OrdinalIgnoreCase
-        // while MatchRoom.ContainsPlayer uses a plain string equality. The
-        // asymmetric behaviour is recorded here so that unifying them later is
-        // a deliberate decision rather than an accident.
+        // The manager compared with OrdinalIgnoreCase while the room used a
+        // plain string equality, so the same player was found by one and missed
+        // by the other. Both now agree.
         Assert.NotNull(manager.SearchRoomByMemberID("mixedcase-id"));
 
         var room = manager.GetRoomById(roomId)!;
         Assert.True(room.ContainsPlayer("MixedCase-Id"));
-        Assert.False(room.ContainsPlayer("mixedcase-id"));
+        Assert.True(room.ContainsPlayer("mixedcase-id"));
     }
 
+    [Fact]
+    public void ExitRoomFindsThePlayerWhateverTheCasing()
+    {
+        var manager = NewManager();
+        var roomId = manager.CreateNewDeathMatchRoom("room", "owner-1", capacity: 4).RoomId;
+        manager.EnterRoom(Guid.Parse(roomId), NewAccount("MixedCase-Id"));
+        manager.EnterRoom(Guid.Parse(roomId), NewAccount("second"));
+
+        manager.ExitRoom("mixedcase-id");
+
+        var room = manager.GetRoomById(roomId);
+        Assert.NotNull(room);
+        Assert.False(room!.ContainsPlayer("MixedCase-Id"));
+        Assert.True(room.ContainsPlayer("second"));
+    }
     // ---- Leaving --------------------------------------------------------
 
     [Fact]

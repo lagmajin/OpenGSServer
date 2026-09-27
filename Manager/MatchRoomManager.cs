@@ -431,9 +431,14 @@ namespace OpenGSServer
 
     public CreateNewRoomResult CreateNewCTFMatchRoom(string roomName, string ownerID, int capacity = 10)
     {
-        // CTFモード - チームベースなのでTDM設定を使用
-        var matchSetting = new TDMMatchSetting(capacity, true);
-        matchSetting.MaxPlayerCount = capacity;
+        // CaptureTheFlagMatchSetting exists, so a CTF room now actually gets one.
+        // It used to be handed a TDMMatchSetting, which made the room report
+        // EGameMode.TeamDeathMatch: the rule was a team death match rule and a
+        // flag capture ended the match the way a kill did.
+        var matchSetting = new CaptureTheFlagMatchSetting(winCondition: 3, teamBalance: true)
+        {
+            MaxPlayerCount = capacity
+        };
 
         var result = CreateNewRoom(roomName, ownerID, matchSetting);
         return result;
