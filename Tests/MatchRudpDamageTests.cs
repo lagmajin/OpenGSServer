@@ -422,6 +422,38 @@ public sealed class MatchRudpDamageTests : IDisposable
     }
 
     [Fact]
+    public void ATeamDeathMatchScoresAKillForTheTeamThatMadeIt()
+    {
+        // The team totals were read by the rule that ends the match and by the
+        // result that names the winner, and nothing ever wrote them. So the rule
+        // compared two zeroes, the result found neither side ahead, and every
+        // team death match reported a draw whatever had happened in it.
+        var owner = "tdm-owner-" + Guid.NewGuid().ToString("N").Substring(0, 8);
+        var rival = "tdm-blue-" + Guid.NewGuid().ToString("N").Substring(0, 8);
+        var room = MatchRoomManager.Instance.CreateNewTeamDeathMatchRoom("tdm-kills", owner, capacity: 4);
+
+        try
+        {
+            var match = MatchRoomManager.Instance.GetRoomById(room.RoomId) as MatchRoom;
+            Assert.NotNull(match);
+            match!.AddNewPlayer(new PlayerInfo(owner, "Red") { Team = ETeam.Red });
+            match.AddNewPlayer(new PlayerInfo(rival, "Blue") { Team = ETeam.Blue });
+            match.GameStart();
+
+            match.RecordKill(rival);
+            match.RecordKill(rival);
+            match.RecordKill(owner);
+
+            Assert.Equal(2, match.TeamKillCount(ETeam.Blue));
+            Assert.Equal(1, match.TeamKillCount(ETeam.Red));
+        }
+        finally
+        {
+            MatchRoomManager.Instance.RemoveRoom(room.RoomId, forceShutdownNowPlayingRooms: true);
+        }
+    }
+
+    [Fact]
     public void AStatusQuestionIsAnsweredToThePlayerThatAsked()
     {
         SetUpRoom();
