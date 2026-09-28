@@ -132,6 +132,13 @@ namespace OpenGSServer
                 _udpServer.Listen(udpPort);
                 ConsoleWrite.WriteMessage($"[Match] UDP Server started on port {udpPort}", ConsoleColor.Green);
 
+                // The room state a client reads to learn what it is in. This was
+                // never started, so the snapshot the client waits for was never
+                // sent even though the server had everything it needed to build
+                // one. It is a timer rather than part of the match loop because
+                // the room state only changes when something in the room does.
+                _udpServer.StartSnapshotBroadcast(MatchUDPServer.SnapshotCheckIntervalMs);
+
                 // ゲームループ開始
                 _gameLoopTimer?.Start();
                 IsRunning = true;

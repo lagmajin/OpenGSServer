@@ -58,6 +58,31 @@ public sealed class MatchRudpDamageTests : IDisposable
         }
     }
 
+    /// <summary>
+    /// Pumps the server and both clients together.
+    /// <para>
+    /// A probe only processes what it has been sent while it is polled, so a
+    /// server-only pump leaves anything it sends sitting unread on the socket. An
+    /// assertion about a message the client received is an assertion about this
+    /// pump, not about the server, so the tests that make one use this.
+    /// </para>
+    /// </summary>
+    private void PumpBoth(int milliseconds)
+    {
+        var deadline = Environment.TickCount64 + milliseconds;
+        while (Environment.TickCount64 < deadline)
+        {
+            shooter?.Poll(1, () =>
+            {
+                victim?.Poll(1, () =>
+                {
+                    server.PollingEvent();
+                    server.Tick(0.04f);
+                });
+            });
+        }
+    }
+
     private static void PumpOnly(Action pump, int milliseconds)
     {
         var deadline = Environment.TickCount64 + milliseconds;
@@ -84,6 +109,12 @@ public sealed class MatchRudpDamageTests : IDisposable
         roomId = room.Id;
         room.AddNewPlayer(new PlayerInfo(shooterId, "Shooter"));
         room.AddNewPlayer(new PlayerInfo(victimId, "Victim"));
+
+        // The realtime listener finds a room through the shared manager, so a room
+        // built on a manager of its own is one the server cannot see. Registering
+        // it here is what makes the handshake, the room state and the system event
+        // path find the room these tests are about.
+        MatchRoomManager.Instance.AddRoom(room);
 
         // The damage path refuses a shot when either player has no position, so
         // both are registered before the handshake.
@@ -197,6 +228,121 @@ public sealed class MatchRudpDamageTests : IDisposable
         Assert.False(outcome.IsNowDown);
         Assert.True(room.TryGetPlayer(victimId, out var afterInfo));
         Assert.Equal(before - 1, afterInfo!.Health);
+    }
+
+    // ---- The room state a client reads ------------------------------------
+
+    [Fact]
+    public void AnAdmittedRealtimeClientIsToldWhichRoomItIsIn()
+    {
+        SetUpRoom();
+        PumpBoth(300);
+
+        // The handshake completes silently, so a client whose token was accepted
+        // and one whose packet was dropped look the same until something else
+        // fails. The admission is confirmed on the channel the match is played on.
+        Assert.True(
+            shooter.TryTake(
+                message => string.Equals(
+                    message["MessageType"]?.ToString(),
+                    MessageType.MatchJoined,
+                    StringComparison.Ordinal),
+                out var joined),
+            "the realtime client was admitted but never told which room it was in");
+
+        Assert.Equal(roomId, joined["RoomID"]?.ToString());
+        Assert.Equal(shooterId, joined["PlayerId"]?.ToString());
+    }
+
+    [Fact]
+    public void TheRoomStateIsSentSoAClientCanTellWhetherTheRoomIsPlaying()
+    {
+        SetUpRoom();
+        room.GameStart();
+
+        // The room state a client reads to learn IsPlaying was never sent: the
+        // line that built it was commented out and the timer that would have
+        // called it was started from nowhere. The shape was already there, so a
+        // client was waiting for a message the server had everything to send.
+        server.BroadcastRoomStateOnce();
+        PumpBoth(300);
+
+        Assert.True(
+            shooter.TryTake(
+                message => string.Equals(
+                    message["MessageType"]?.ToString(),
+                    MessageType.Snapshot,
+                    StringComparison.Ordinal),
+                out var snapshot),
+            "the server never published the room state a client reads");
+
+        Assert.Equal(roomId, snapshot["RoomID"]?.ToString());
+        Assert.True(snapshot["IsPlaying"]?.Value<bool>());
+    }
+
+    [Fact]
+    public void AnUnchangedRoomIsNotSentAgain()
+    {
+        SetUpRoom();
+        room.GameStart();
+
+        server.BroadcastRoomStateOnce();
+        PumpBoth(300);
+        Assert.True(shooter.TryTake(
+            message => string.Equals(
+                message["MessageType"]?.ToString(), MessageType.Snapshot, StringComparison.Ordinal),
+            out _));
+
+        // The room state is sent when it changes. Sending it on every tick is a
+        // message telling a client something it already knew, several times a
+        // second, for every room on the server.
+        server.BroadcastRoomStateOnce();
+        PumpBoth(300);
+        Assert.False(shooter.TryTake(
+            message => string.Equals(
+                message["MessageType"]?.ToString(), MessageType.Snapshot, StringComparison.Ordinal),
+            out _));
+    }
+
+    [Fact]
+    public void TheRulingNamesUseTheSharedContract()
+    {
+        // Both sides name a ruling in the shared package now. They used to be a
+        // literal on the server and a literal on the client, and the two did not
+        // match, so this is the assertion that stops them drifting apart again.
+        Assert.Equal(MessageType.PlayerDamaged, GameMessageTypes.PlayerDamaged);
+        Assert.Equal(MessageType.PlayerKilled, GameMessageTypes.PlayerKilled);
+        Assert.Equal(MessageType.WeaponReserved, GameMessageTypes.WeaponReserved);
+        Assert.Equal(MessageType.WeaponReleased, GameMessageTypes.WeaponReleased);
+        Assert.Equal(MessageType.WeaponDropped, GameMessageTypes.WeaponDropped);
+        Assert.Equal(MessageType.ItemUsed, GameMessageTypes.ItemUsed);
+        Assert.Equal(MessageType.ItemUseRefused, GameMessageTypes.ItemUseRefused);
+    }
+
+    [Fact]
+    public void AStatusQuestionIsAnsweredToThePlayerThatAsked()
+    {
+        SetUpRoom();
+
+        var recorder = new BroadcastRecorder();
+        BroadcastRecorder.During(() =>
+        {
+            GameMessageDispatcher.Initialize(recorder);
+            InGameMatchEventHandler.ParseTcpEvent(new JObject
+            {
+                ["MessageType"] = GameMessageTypes.MatchStatusRequest,
+                ["PlayerID"] = victimId,
+                ["RoomID"] = roomId
+            });
+        });
+
+        // The answer was broadcast to the whole room, so one player's question
+        // was answered into every other player's screen, and it went out under a
+        // name no client dispatched on, so it was dropped everywhere it landed.
+        // It is one player's answer, so it goes to that player alone.
+        Assert.Empty(recorder.RulingsOfType(MessageType.MatchStatus));
+        var answer = recorder.TheAnswerTo(victimId, MessageType.MatchStatus);
+        Assert.Equal(2, answer["PlayerCount"]?.Value<int>());
     }
 
     [Fact]

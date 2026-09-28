@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using LiteNetLib;
 using Newtonsoft.Json.Linq;
@@ -873,5 +875,260 @@ public sealed class MatchRudpItemPickupTests : IDisposable
         items.LoadFromJson(items.ToJson());
 
         Assert.Equal(playerId, ReservedBy());
+    }
+
+    // ---- The ruling the client reads back --------------------------------
+
+    [Fact]
+    public void AGrantedPickupIsAnsweredUnderTheNameTheClientReads()
+    {
+        SetUpRoom();
+        var items = MatchRoomManager.Instance.GetFieldItemManager(roomId)!;
+        var itemId = items.SpawnItem(EFieldItemType.PowerUpItem, 0f, 0f, 0f);
+
+        MoveTo(0f, 0f);
+
+        var recorder = new BroadcastRecorder();
+        BroadcastRecorder.During(() =>
+        {
+            GameMessageDispatcher.Initialize(recorder);
+            ClaimPickup(itemId);
+            Pump(400);
+        });
+
+        // The client applies a pickup before the server rules on it and keeps a
+        // revert for a refusal, so the ruling is the only thing that tells it
+        // whether the effect it applied should stand. It arrived under a second
+        // literal the client did not dispatch on, so every granted pickup was
+        // taken back by the client's own timeout.
+        var ruling = recorder.TheRuling(MessageType.FieldItemPickup);
+        Assert.Equal(itemId, ruling["ItemId"]?.ToString());
+        Assert.True(ruling["Success"]?.Value<bool>());
+    }
+
+    [Fact]
+    public void ARefusedPickupIsAnsweredRatherThanLeftInSilence()
+    {
+        SetUpRoom();
+        var items = MatchRoomManager.Instance.GetFieldItemManager(roomId)!;
+        var itemId = items.SpawnItem(EFieldItemType.PowerUpItem, 500f, 0f, 0f);
+
+        MoveTo(0f, 0f);
+
+        var recorder = new BroadcastRecorder();
+        BroadcastRecorder.During(() =>
+        {
+            GameMessageDispatcher.Initialize(recorder);
+            ClaimPickup(itemId);
+            Pump(400);
+        });
+
+        // A refusal used to be logged and dropped, so the client that had
+        // already applied the effect had to wait out its own timeout to find out
+        // the server had said no.
+        var ruling = recorder.TheRuling(MessageType.FieldItemPickup);
+        Assert.Equal(itemId, ruling["ItemId"]?.ToString());
+        Assert.False(ruling["Success"]?.Value<bool>());
+    }
+
+    [Fact]
+    public void AClaimedWeaponIsRuledOnSoTheOtherClientsCanHonourIt()
+    {
+        SetUpRoom();
+        MoveTo(3f, 0f);
+        DropWeapon("Rifle", magazine: 8);
+        Pump(400);
+
+        var recorder = new BroadcastRecorder();
+        BroadcastRecorder.During(() =>
+        {
+            GameMessageDispatcher.Initialize(recorder);
+            Reserve(probe, playerId);
+            Pump(400);
+        });
+
+        // The server holding the claim is not the same as anybody honouring it.
+        // The claim used to be relayed by the client that made it, and the ruling
+        // came back under a label no client dispatched on, so a reservation the
+        // server accepted changed nobody's behaviour and two players could still
+        // walk off with the same weapon.
+        var ruling = recorder.TheRuling(MessageType.WeaponReserved);
+        Assert.Equal(playerId, ruling["ReservedByPlayerId"]?.ToString());
+    }
+
+    [Fact]
+    public void AWeaponRulingNamesWhereTheWeaponIsSoAClientCanFindIt()
+    {
+        SetUpRoom();
+        MoveTo(3f, 0f);
+        DropWeapon("Rifle", magazine: 8);
+        Pump(400);
+
+        var recorder = new BroadcastRecorder();
+        BroadcastRecorder.During(() =>
+        {
+            GameMessageDispatcher.Initialize(recorder);
+            Reserve(probe, playerId);
+            Pump(400);
+        });
+
+        // A client matches a weapon to one on its screen by type and position,
+        // so a ruling without a position names a weapon nothing can locate and
+        // the claim is still not honoured.
+        var ruling = recorder.TheRuling(MessageType.WeaponReserved);
+        Assert.Equal("Rifle", ruling["WeaponType"]?.ToString());
+        Assert.Equal(3f, ruling["PosX"]?.Value<float>());
+    }
+
+    [Fact]
+    public void AReleasedWeaponIsRuledOnSoTheOthersStopHonouringTheClaim()
+    {
+        SetUpRoom();
+        MoveTo(3f, 0f);
+        DropWeapon("Rifle", magazine: 8);
+        Pump(400);
+
+        Reserve(probe, playerId);
+        Pump(400);
+
+        var recorder = new BroadcastRecorder();
+        BroadcastRecorder.During(() =>
+        {
+            GameMessageDispatcher.Initialize(recorder);
+            Reserve(probe, playerId, messageType: "WeaponRelease");
+            Pump(400);
+        });
+
+        // Without a ruling for the release the other clients keep the claim they
+        // were given, so a weapon nobody is holding stays locked to whoever
+        // reached for it first.
+        var ruling = recorder.TheRuling(MessageType.WeaponReleased);
+        Assert.Equal(playerId, ruling["ReservedByPlayerId"]?.ToString());
+    }
+
+    [Fact]
+    public void ADroppedWeaponIsAnnouncedSoTheRestOfTheRoomCanSeeIt()
+    {
+        SetUpRoom();
+        MoveTo(3f, 0f);
+
+        var recorder = new BroadcastRecorder();
+        BroadcastRecorder.During(() =>
+        {
+            GameMessageDispatcher.Initialize(recorder);
+            DropWeapon("Rifle", magazine: 8);
+            Pump(400);
+        });
+
+        // A dropped weapon used to be something the dropping client drew for
+        // itself, so it was on the ground for one player out of the room. The
+        // announcement is what makes it a weapon anybody can pick up, and it has
+        // to carry where it landed and what it is.
+        var ruling = recorder.TheRuling(MessageType.WeaponDropped);
+        Assert.Equal("Rifle", ruling["WeaponType"]?.ToString());
+        Assert.Equal(3f, ruling["PosX"]?.Value<float>());
+        Assert.Equal(8, ruling["MagazineAmmo"]?.Value<int>());
+    }
+
+    [Fact]
+    public void ASpentInstantItemIsRuledOnWithTheHealthTheServerDecided()
+    {
+        SetUpRoom();
+        MoveTo(0f, 0f);
+        Carry(EInstantItemType.HealthKit);
+        SetHealth(10);
+
+        var recorder = new BroadcastRecorder();
+        BroadcastRecorder.During(() =>
+        {
+            GameMessageDispatcher.Initialize(recorder);
+            UseItem(nameof(EInstantItemType.HealthKit), effect: "heal");
+            Pump(400);
+        });
+
+        // The client spends the item on its own screen, so it has already shown
+        // the heal it guessed at. The ruling carries what the server decided, and
+        // the client adopts that, which is the whole point of the server owning
+        // health. It used to be sent under the name the request used, so the
+        // client read its own request back instead.
+        var ruling = recorder.TheRuling(MessageType.ItemUsed);
+        Assert.Equal(10 + InstantItemRules.HealAmount, ruling["Health"]?.Value<int>());
+        Assert.Equal(InstantItemRules.HealAmount, ruling["RestoredHealth"]?.Value<int>());
+    }
+
+    [Fact]
+    public void ARefusedInstantItemIsAnsweredWithTheHealthTheServerHolds()
+    {
+        SetUpRoom();
+        MoveTo(0f, 0f);
+        SetHealth(10);
+
+        var recorder = new BroadcastRecorder();
+        BroadcastRecorder.During(() =>
+        {
+            GameMessageDispatcher.Initialize(recorder);
+
+            // The player is carrying nothing, so the spend is turned down. The
+            // client has already shown the heal on its own screen by this point.
+            UseItem(nameof(EInstantItemType.HealthKit), effect: "heal");
+            Pump(400);
+        });
+
+        // A refusal used to be logged only, so the client went on showing a heal
+        // that never happened until the next shot corrected it.
+        var ruling = recorder.TheRuling(MessageType.ItemUseRefused);
+        Assert.Equal(10, ruling["Health"]?.Value<int>());
+        Assert.Equal(0, ruling["RestoredHealth"]?.Value<int>());
+    }
+
+    [Fact]
+    public void AFieldItemSpawnIsAnnouncedUnderTheNameTheClientDispatchesOn()
+    {
+        SetUpRoom();
+
+        var recorder = new BroadcastRecorder();
+        BroadcastRecorder.During(() =>
+        {
+            GameMessageDispatcher.Initialize(recorder);
+            FieldItemEventHandler.SpawnItem(
+                MatchRoomManager.Instance.GetFieldItemManager(roomId)!,
+                EFieldItemType.PowerUpItem,
+                2f, 3f, 0f,
+                message => GameMessageDispatcher.BroadcastToRoom(roomId, message));
+        });
+
+        // A spawn and a despawn had three spellings across the two sides and
+        // neither pair matched, so an item the server put on the map reached a
+        // client under no name it dispatched on. The client finds an item by the
+        // name the server gave it, so the id has to travel with the announcement.
+        var ruling = recorder.TheRuling(MessageType.FieldItemSpawn);
+        Assert.False(string.IsNullOrWhiteSpace(ruling["ItemId"]?.ToString()));
+        Assert.Equal(nameof(EFieldItemType.PowerUpItem), ruling["ItemType"]?.ToString());
+        Assert.Equal(2f, ruling["PositionX"]?.Value<float>());
+    }
+
+    [Fact]
+    public void AFieldItemDespawnIsAnnouncedUnderTheNameTheClientDispatchesOn()
+    {
+        SetUpRoom();
+
+        var items = MatchRoomManager.Instance.GetFieldItemManager(roomId)!;
+        var itemId = items.SpawnItem(EFieldItemType.PowerUpItem, 0f, 0f, 0f);
+
+        var recorder = new BroadcastRecorder();
+        BroadcastRecorder.During(() =>
+        {
+            GameMessageDispatcher.Initialize(recorder);
+            FieldItemEventHandler.DespawnItem(
+                items,
+                itemId,
+                message => GameMessageDispatcher.BroadcastToRoom(roomId, message));
+        });
+
+        // The client removes the item by the name the server gave it, so the
+        // announcement has to carry that name. Removing it by position instead
+        // would take down whichever item happened to be nearest.
+        var ruling = recorder.TheRuling(MessageType.FieldItemDespawn);
+        Assert.Equal(itemId, ruling["ItemId"]?.ToString());
     }
 }

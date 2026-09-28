@@ -424,6 +424,84 @@ public sealed class MatchRudpShotTests : IDisposable
         Assert.Equal(before, VictimHealth());
     }
 
+    // ---- The ruling the client reads back --------------------------------
+
+    [Fact]
+    public void ALandedShotIsRuledOnUnderTheNameTheClientDispatchesOn()
+    {
+        SetUpRoom();
+        MoveTo(shooter, shooterId, 0f, 0f);
+        MoveTo(victim, victimId, 3f, 0f);
+
+        var recorder = new BroadcastRecorder();
+        BroadcastRecorder.During(() =>
+        {
+            GameMessageDispatcher.Initialize(recorder);
+            Fire("Pistol", dirX: 1f);
+            Pump(400);
+        });
+
+        // The health ruling is the only thing that tells a client what its health
+        // is. It went out under a label no client dispatched on, so the number a
+        // client showed was whatever it predicted and the server's copy was never
+        // adopted: the health the server owns was not the health anybody saw.
+        Assert.NotEmpty(recorder.RulingsOfType(MessageType.PlayerDamaged));
+    }
+
+    [Fact]
+    public void AHealthRulingCarriesTheHealthTheServerHolds()
+    {
+        SetUpRoom();
+        MoveTo(shooter, shooterId, 0f, 0f);
+        MoveTo(victim, victimId, 3f, 0f);
+
+        var recorder = new BroadcastRecorder();
+        BroadcastRecorder.During(() =>
+        {
+            GameMessageDispatcher.Initialize(recorder);
+            Fire("Pistol", dirX: 1f);
+            Pump(400);
+        });
+
+        // The client reads this and adopts it. It used to read a key the server
+        // never wrote, so a ruling that did arrive was read as zero health left,
+        // which reads as a player who is out of the match.
+        var ruling = recorder.TheRuling(MessageType.PlayerDamaged);
+        Assert.Equal(VictimHealth(), ruling["RemainingHealth"]?.Value<int>());
+
+        Assert.True(room.TryGetPlayer(victimId, out var victimInfo));
+        Assert.Equal(victimInfo!.MaxHealth, ruling["MaxHealth"]?.Value<int>());
+    }
+
+    [Fact]
+    public void APlayerWhoGoesDownIsRuledOnUnderTheNameTheClientDispatchesOn()
+    {
+        SetUpRoom();
+        MoveTo(shooter, shooterId, 0f, 0f);
+        MoveTo(victim, victimId, 3f, 0f);
+
+        var recorder = new BroadcastRecorder();
+        BroadcastRecorder.During(() =>
+        {
+            GameMessageDispatcher.Initialize(recorder);
+
+            // Repeated because a pistol does less than the victim starts with, and
+            // the death ruling is the one under test here.
+            var guard = 0;
+            while (VictimHealth() > 0 && guard++ < 12)
+            {
+                Fire("Pistol", dirX: 1f);
+                Pump(300);
+            }
+        });
+
+        // A death the server ruled has to reach the client that died. Without it
+        // the client settles its own death from its own claim, and the two sides
+        // disagree about whether the player is still in the match.
+        Assert.Equal(0, VictimHealth());
+        Assert.NotEmpty(recorder.RulingsOfType(MessageType.PlayerKilled));
+    }
+
     [Fact]
     public void NamingATargetDoesNotHitAPlayerTheShotIsNotPointedAt()
     {

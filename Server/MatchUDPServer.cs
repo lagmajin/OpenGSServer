@@ -423,13 +423,13 @@ namespace OpenGSServer
                 return;
             }
 
-            if (string.Equals(messageType, "PingRequest", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(messageType, MessageType.PingRequest, StringComparison.OrdinalIgnoreCase))
             {
                 HandleJsonPing(peer, playerId, message);
                 return;
             }
 
-            if (string.Equals(messageType, "PingResponse", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(messageType, MessageType.PingResponse, StringComparison.OrdinalIgnoreCase))
             {
                 return;
             }
@@ -488,7 +488,7 @@ namespace OpenGSServer
         {
             var response = new JObject
             {
-                ["MessageType"] = "PingResponse",
+                ["MessageType"] = MessageType.PingResponse,
                 ["PlayerID"] = playerId,
                 ["PlayerId"] = playerId,
                 ["ClientTimestamp"] = message["ClientTimestamp"] ?? JValue.CreateNull(),
@@ -621,6 +621,11 @@ namespace OpenGSServer
                 "FlagPickup" or
                 "FlagReturn" or
                 "FlagScoreUpdate" or
+                // A flag being destroyed. The client used to claim this about
+                // itself, and a client that could assert it could destroy a flag
+                // sitting safely on its own stand. The server says it instead, as
+                // part of the score.
+                "FlagBurst" or
                 "PlayerEliminated" or
                 "ObjectSpawned" or
                 "ObjectDestroyed" or
@@ -705,13 +710,24 @@ namespace OpenGSServer
             return messageType;
         }
 
+        /// <summary>
+        /// Admits a peer that has proved it holds a connection token.
+        /// <para>
+        /// The admission is confirmed to the peer that was admitted. A client
+        /// waited for a MatchJoined to learn it was in the room, and the server
+        /// only ever sent one to its own test harness: the handshake succeeded
+        /// silently, so a client whose token was accepted and one whose packet
+        /// happened to be dropped looked the same until something else failed.
+        /// </para>
+        /// </summary>
         private void RegisterJsonPeer(NetPeer peer, string playerId)
-    {
+        {
             if (_connectedPlayers.TryGetValue(playerId, out var existing))
             {
                 if (existing.PeerId == peer.Id)
                 {
                     peer.Tag = playerId;
+                    NotifyPeerJoined(peer, playerId);
                     return;
                 }
 
@@ -722,6 +738,38 @@ namespace OpenGSServer
             _pendingPeers.TryRemove(peer.Id, out _);
             _unauthorizedPacketCounts.TryRemove(peer.Id, out _);
             OnPeerConnected(peer);
+            NotifyPeerJoined(peer, playerId);
+        }
+
+        /// <summary>
+        /// Tells an admitted peer which room it is in, and where that room stands.
+        /// <para>
+        /// The room state travels with it so a client is not left waiting for the
+        /// snapshot to learn what it has just joined.
+        /// </para>
+        /// </summary>
+        private void NotifyPeerJoined(NetPeer peer, string playerId)
+        {
+            var room = GetMatchRoomForPlayer(playerId);
+            if (room == null)
+            {
+                return;
+            }
+
+            var joined = new JObject
+            {
+                ["MessageType"] = MessageType.MatchJoined,
+                ["PlayerID"] = playerId,
+                ["PlayerId"] = playerId,
+                ["RoomID"] = room.Id.ToString(),
+                ["RoomId"] = room.Id.ToString(),
+                ["RoomName"] = room.RoomName,
+                ["IsPlaying"] = room.Playing,
+                ["PlayerCount"] = room.PlayerCount,
+                ["Timestamp"] = DateTime.UtcNow.ToString("o")
+            };
+
+            SendJsonToPeer(peer, joined, DeliveryMethod.ReliableOrdered);
         }
 
         private void RegisterUnauthorizedPacket(NetPeer peer)
@@ -843,11 +891,15 @@ namespace OpenGSServer
         {
             var timestamp = reader.GetLong();
 
-            // Pong返信
+            // The client answers a PingRequest with a PingResponse and reads a
+            // PingResponse back, so the answer has to carry that name. It was
+            // sent as Pong, which no client has a case for, so every ping the
+            // binary path handled was answered into nothing.
             SendJsonToPeer(peer, new JObject
             {
-                ["MessageType"] = "Pong",
-                ["Timestamp"] = timestamp
+                ["MessageType"] = MessageType.PingResponse,
+                ["ClientTimestamp"] = timestamp,
+                ["ServerTimestamp"] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
             }, DeliveryMethod.Unreliable);
 
             // Ping統計を記録
@@ -1096,36 +1148,75 @@ namespace OpenGSServer
             _snapshotTimer = null;
         }
 
+        /// <summary>
+        /// How often the room state is looked at to see whether it changed.
+        /// <para>
+        /// The room state is sent when it changes rather than on every tick. A
+        /// snapshot for a room nobody has changed is a message telling a client
+        /// something it already knew, and at the rate the match loop runs that is
+        /// a lot of them.
+        /// </para>
+        /// </summary>
+        public const int SnapshotCheckIntervalMs = 200;
+
+        /// <summary>
+        /// Runs one pass of the room state publish now rather than on the timer.
+        /// <para>
+        /// The timer is what a running server uses. This exists so a test can
+        /// say when the pass happened, because a timer would make the assertion
+        /// about whether a message was ever sent a race with the test's own
+        /// clock rather than a fact about the server.
+        /// </para>
+        /// </summary>
+        public void BroadcastRoomStateOnce() => BroadcastSnapshots();
+
+        /// <summary>
+        /// Tells the room its state whenever that state has changed.
+        /// <para>
+        /// A client read a Snapshot to learn whether the room was playing and what
+        /// it contained, and the server never sent one: the line that built it was
+        /// commented out and the timer that would have called it was started from
+        /// nowhere. The shape was already there in MatchRoom.ToJSon, so the client
+        /// was waiting for a message the server had everything to send.
+        /// </para>
+        /// <para>
+        /// Per player transform state still goes out on its own path, through the
+        /// callback the lag compensation manager holds, because that changes every
+        /// tick and is not the same fact as the room state.
+        /// </para>
+        /// </summary>
         private void BroadcastSnapshots()
         {
             try
             {
-                var matchRoomManager = MatchRoomManager.Instance;
-                var rooms = matchRoomManager.AllRooms();
-
-                foreach (var abstractRoom in rooms)
+                foreach (var abstractRoom in MatchRoomManager.Instance.AllRooms())
                 {
-                    if (abstractRoom is MatchRoom room)
+                    if (abstractRoom is not MatchRoom room)
                     {
-                        // ISyncable インターフェースを使用してルーム全体の同期状態を取得
-                        // var syncState = room.ToJSon(); // Full MatchRoom snapshot
+                        continue;
+                    }
 
-                        // ラグ補償システムからプレイヤー状態を取得
-                        var lagCompManager = MatchServerV2.Instance.ServerLagCompensationManager;
-                        
-                        foreach (var player in room.Players)
+                    if (room.HasChanged())
+                    {
+                        BroadcastJsonToRoom(room, CreateRoomSnapshotMessage(room));
+                        room.SaveSyncState();
+                    }
+
+                    var lagCompManager = MatchServerV2.Instance.ServerLagCompensationManager;
+
+                    foreach (var player in room.Players)
+                    {
+                        var playerState = lagCompManager.GetPlayerState(player.Id);
+                        if (playerState.PlayerId != null &&
+                            _connectedPlayers.TryGetValue(player.Id, out var connectionInfo))
                         {
-                            var playerState = lagCompManager.GetPlayerState(player.Id);
-                            if (playerState.PlayerId != null) // デフォルト値でないことを確認
+                            var peerById = _server?.GetPeerById(connectionInfo.PeerId);
+                            if (peerById != null)
                             {
-                                if (_connectedPlayers.TryGetValue(player.Id, out var connectionInfo))
-                                {
-                                    var peerById = _server?.GetPeerById(connectionInfo.PeerId);
-                                    if (peerById != null)
-                                    {
-                                        SendJsonToPeer(peerById, CreateTransformStateMessage(playerState), DeliveryMethod.Unreliable);
-                                    }
-                                }
+                                SendJsonToPeer(
+                                    peerById,
+                                    CreateTransformStateMessage(playerState),
+                                    DeliveryMethod.Unreliable);
                             }
                         }
                     }
@@ -1135,6 +1226,17 @@ namespace OpenGSServer
             {
                 ConsoleWrite.WriteMessage($"[UDP] Error broadcasting snapshots: {ex.Message}", ConsoleColor.Red);
             }
+        }
+
+        /// <summary>
+        /// The room state as a client reads it: the room's own fields, plus the
+        /// scene's objects under the key MatchRoom.ToJSon already writes them to.
+        /// </summary>
+        private static JObject CreateRoomSnapshotMessage(MatchRoom room)
+        {
+            var message = room.ToJSon();
+            message["MessageType"] = MessageType.Snapshot;
+            return message;
         }
 
         /// <summary>
