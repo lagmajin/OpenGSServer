@@ -192,6 +192,8 @@ namespace OpenGSServer
                 };
                 bus.OnGameEndedWithResult += (result) =>
                 {
+                    RememberMatchResult(matchRoom.Id.ToString(), result);
+
                     var winners = ExtractWinnerIds(result);
                     foreach (var p in matchRoom.Players)
                     {
@@ -227,7 +229,22 @@ namespace OpenGSServer
                     var firstPlayer = matchRoom.Players.Find(p => !string.IsNullOrEmpty(p.Id));
                     if (firstPlayer != null)
                     {
-                        MatchServerV2.Instance.BroadcastToRoom(firstPlayer.Id, MessageType.MatchEndNotification);
+                        // The winner and the score travel with the notification.
+                        // It used to be a message type and a room and nothing
+                        // else, so a client that received it had to work out who
+                        // won from a score it had never been told and was holding
+                        // its own copy of. Both sides could finish a match
+                        // disagreeing about the result, and a mode whose result is
+                        // a score is the one where that matters most.
+                        var result = roomEventBuses[matchRoom.Id] != null
+                            ? LastMatchResult(matchRoom.Id)
+                            : null;
+
+                        MatchServerV2.Instance.BroadcastToRoom(
+                            firstPlayer.Id,
+                            MessageType.MatchEndNotification,
+                            result);
+
                         ConsoleWrite.WriteMessage($"[Match] Broadcasted {MessageType.MatchEndNotification} via UDP to Room: {matchRoom.RoomName}", ConsoleColor.Cyan);
                     }
 
@@ -553,6 +570,12 @@ namespace OpenGSServer
                             itemManager.EndMatch();
                         }
                         roomFieldItemManagers.Remove(room.Id);
+
+                        // The remembered result goes with the room. It is only
+                        // here to be repeated on the end notification, and a room
+                        // id is never reused, so keeping it would be a result per
+                        // room that has ever existed, for the life of the process.
+                        lastMatchResults.TryRemove(room.Id.ToString(), out _);
                     }
                     break;
                 }
@@ -640,6 +663,7 @@ namespace OpenGSServer
                 // behind would keep two flags alive for every room that has ever
                 // existed, for the lifetime of the process.
                 InGameMatchEventHandler.ClearRoomFlagState(room.Id);
+                lastMatchResults.TryRemove(roomId, out _);
                 foreach (var key in persistedMatchPlayers.Keys)
                 {
                     if (key.StartsWith($"{roomId}:", StringComparison.OrdinalIgnoreCase))
@@ -686,6 +710,8 @@ namespace OpenGSServer
                 {
                     matchRooms.Remove(roomId);
                     roomEventBuses.Remove(roomId);
+                    InGameMatchEventHandler.ClearRoomFlagState(roomId);
+                    lastMatchResults.TryRemove(roomId, out _);
                     if (roomFieldItemManagers.TryGetValue(roomId, out var itemManager))
                     {
                         itemManager.EndMatch();
@@ -722,6 +748,33 @@ namespace OpenGSServer
             }
             return null;
             }
+        }
+
+        /// <summary>
+        /// The last result the room's rule produced, kept so it can be repeated.
+        /// <para>
+        /// The end of a match is published twice: once with the result, and once
+        /// as the bare notification. The rule has already worked the answer out
+        /// by the time the first one goes out, and working it out again from a
+        /// room that has already been torn down is a way of getting a different
+        /// answer, so the first one is remembered instead.
+        /// </para>
+        /// </summary>
+        private static readonly ConcurrentDictionary<string, JObject> lastMatchResults = new();
+
+        private static void RememberMatchResult(string roomId, JObject result)
+        {
+            if (string.IsNullOrWhiteSpace(roomId) || result == null)
+            {
+                return;
+            }
+
+            lastMatchResults[roomId] = (JObject)result.DeepClone();
+        }
+
+        private static JObject? LastMatchResult(string roomId)
+        {
+            return lastMatchResults.TryGetValue(roomId, out var result) ? result : null;
         }
 
         private static JObject BuildMatchResultEnvelope(OpenGSCore.MatchRoom matchRoom, JObject result, PlayerInfo player)

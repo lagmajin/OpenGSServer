@@ -1039,7 +1039,7 @@ namespace OpenGSServer
                 EFlagReturnReason.CapturedAtBase));
 
             Console.WriteLine($"Team {scoringTeam} captured the flag");
-            room.AddFlagCapture(scoringTeam);
+            room.AddFlagCapture(scoringTeam, playerId);
 
             GameMessageDispatcher.SendFlagCaptured(room.Id.ToString(), scoringTeam.ToString());
 

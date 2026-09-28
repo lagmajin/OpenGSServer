@@ -944,6 +944,23 @@ namespace OpenGSServer
 
         public void BroadcastToRoom(string senderPlayerId, string messageType)
         {
+            BroadcastToRoom(senderPlayerId, messageType, null);
+        }
+
+        /// <summary>
+        /// Sends a message to everybody in the sender's room, with whatever else
+        /// the caller has to say in it.
+        /// <para>
+        /// The extras exist because a message with nothing in it cannot be acted
+        /// on. The match end notification used to be exactly that: a message type
+        /// and a room, so a client that received it had to work out the winner
+        /// from a score it had never been told, and the only score it had was its
+        /// own, which is a copy the client had been keeping. The two sides could
+        /// therefore finish a match disagreeing about who won.
+        /// </para>
+        /// </summary>
+        public void BroadcastToRoom(string senderPlayerId, string messageType, JObject? extras)
+        {
             var matchRoom = GetMatchRoomForPlayer(senderPlayerId);
             if (matchRoom == null) return;
 
@@ -955,6 +972,21 @@ namespace OpenGSServer
                 ["RoomID"] = matchRoom.Id.ToString(),
                 ["RoomId"] = matchRoom.Id.ToString()
             };
+
+            if (extras != null)
+            {
+                foreach (var property in extras.Properties())
+                {
+                    // The identity fields are set above and are not the caller's to
+                    // overwrite, or a message could claim to be from somebody else.
+                    if (property.Name is "MessageType" or "PlayerID" or "PlayerId" or "RoomID" or "RoomId")
+                    {
+                        continue;
+                    }
+
+                    message[property.Name] = property.Value;
+                }
+            }
 
             BroadcastJsonToRoom(matchRoom, message);
         }

@@ -438,7 +438,74 @@ public sealed class MatchRudpFlagTests : IDisposable
     }
 
     [Fact]
-    public void AScoredCaptureSaysWhoseFlagWasDestroyedAndPutsBothFlagsBack()
+    public void TheRoomStateSaysTheFlagLimitTheServerIsPlayingTo()
+    {
+        SetUpRoom();
+
+        // A client carried its own idea of this and the server carried another, so
+        // a scoreboard could say "first to five" on a match that ends at three.
+        // The rule ends the match, so the rule's number is the one worth sending
+        // and the one worth acting on.
+        var state = room!.ToJSon();
+
+        Assert.Equal(3, state["WinConditionPoint"]?.Value<int>());
+        Assert.NotNull(room.Rule);
+        Assert.Equal(3, ((CaptureTheFlagMatchRule)room.Rule!).FlagLimit);
+    }
+
+    [Fact]
+    public void AScoredCaptureEarnsThePlayerWhoMadeIt()
+        {
+            SetUpRoom();
+
+            Assert.True(room!.TryGetPlayer(RedPlayerId, out var red));
+            var before = red!.Score;
+
+            BroadcastRecorder.During(() =>
+            {
+                GameMessageDispatcher.Initialize(new BroadcastRecorder());
+                Claim(RedPlayerId, roomId, GameMessageTypes.FlagPickup, ETeam.Blue);
+                Claim(RedPlayerId, roomId, GameMessageTypes.FlagCaptured, ETeam.Blue);
+            });
+
+            // A capture used to move a team's tally and nothing else, so a match
+            // won entirely on captures persisted a score of zero and earned the
+            // player nothing. The score is what a player earns, and it is persisted
+            // with it, so a capture that did not touch it was a capture the player
+            // got nothing for however the match went.
+            Assert.Equal(before + MatchRoom.CaptureScore, red.Score);
+        }
+
+        [Fact]
+        public void ARefusedDeliveryEarnsNobodyAnything()
+        {
+            SetUpRoom();
+
+            BroadcastRecorder.During(() =>
+            {
+                GameMessageDispatcher.Initialize(new BroadcastRecorder());
+                Claim(BluePlayerId, roomId, GameMessageTypes.FlagPickup, ETeam.Red);
+            });
+
+            Assert.True(room!.TryGetPlayer(RedPlayerId, out var red));
+            var before = red!.Score;
+
+            BroadcastRecorder.During(() =>
+            {
+                GameMessageDispatcher.Initialize(new BroadcastRecorder());
+                Claim(RedPlayerId, roomId, GameMessageTypes.FlagPickup, ETeam.Blue);
+                Claim(RedPlayerId, roomId, GameMessageTypes.FlagCaptured, ETeam.Blue);
+            });
+
+            // The own flag is in blue's hands, so this is not a delivery. Crediting
+            // a score for a delivery the rule refused would let a team farm points
+            // by walking a flag to a stand they cannot score at.
+            Assert.Equal(before, red.Score);
+            Assert.Equal(0, room.GetFlagScore(ETeam.Red));
+        }
+
+        [Fact]
+        public void AScoredCaptureSaysWhoseFlagWasDestroyedAndPutsBothFlagsBack()
     {
         SetUpRoom();
 

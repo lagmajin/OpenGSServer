@@ -268,6 +268,21 @@ namespace OpenGSServer
             _udpServer?.BroadcastToRoom(senderPlayerId, messageType);
         }
 
+        /// <summary>
+        /// Sends a message to a room with a payload attached, for a message whose
+        /// meaning is in what it carries.
+        /// <para>
+        /// A match end notification used to go out as a type and a room and
+        /// nothing else, so a client had to work out the winner from a score it
+        /// had never been told. That is a message nobody can act on, and the two
+        /// sides could finish a match disagreeing about the result.
+        /// </para>
+        /// </summary>
+        public void BroadcastToRoom(string senderPlayerId, string messageType, Newtonsoft.Json.Linq.JObject? extras)
+        {
+            _udpServer?.BroadcastToRoom(senderPlayerId, messageType, extras);
+        }
+
         public void SendToPlayer(string playerId, JObject message)
         {
             if (!string.IsNullOrWhiteSpace(playerId) && message != null)
