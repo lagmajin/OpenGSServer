@@ -1693,6 +1693,19 @@ namespace OpenGSServer
                 return;
             }
 
+            // Whether a dead player comes back is the rule's call, and asking it
+            // is the only thing that makes the answer mean anything. A survival
+            // rule says a death is permanent, and it said so to nobody: this
+            // handler restored the health of anybody who asked, so the one mode
+            // where dying should end your participation was the one mode that
+            // would hand a player their life back on request.
+            if (room.Rule == null || !room.Rule.CanReSpawn())
+            {
+                Console.WriteLine(
+                    $"[Match] Refused a respawn for '{playerId}': {room.Setting?.Mode} does not respawn");
+                return;
+            }
+
             if (ServerManager.Instance.Settings.TryGetRespawnPoint(
                     respawnedPlayer.Team,
                     room.Players.IndexOf(respawnedPlayer),
@@ -2089,12 +2102,15 @@ namespace OpenGSServer
 
             // The health change is the authority for a kill now, not a client
             // claiming one. A self hit counts as a death without crediting an
-            // attacker.
-            target.Deaths++;
+            // attacker. Recording on the room as well as the player is what puts
+            // the best kill count in the match, which is the number the death
+            // match and survival rules end a match on: it was never written, so
+            // those rules could only ever end on the clock.
+            room.RecordDeath(targetId);
             var isSelfInflicted = string.Equals(attackerId, targetId, StringComparison.OrdinalIgnoreCase);
-            if (!isSelfInflicted && room.TryGetPlayer(attackerId, out var attacker) && attacker != null)
+            if (!isSelfInflicted)
             {
-                attacker.Kills++;
+                room.RecordKill(attackerId);
             }
 
             // A player who goes down leaves whatever they were carrying on the
@@ -2313,8 +2329,10 @@ namespace OpenGSServer
 
             if (target.Health <= 0)
             {
-                target.Deaths++;
-                shooter.Kills++;
+                // Same reason as the projectile path: the room is where the best
+                // kill count lives, and the rules end a match on it.
+                room.RecordDeath(targetId);
+                room.RecordKill(shooterId);
                 shooter.Score += 100;
 
                 // The same reason as the projectile path: a carrier who goes down

@@ -320,6 +320,108 @@ public sealed class MatchRudpDamageTests : IDisposable
     }
 
     [Fact]
+    public void ASurvivalMatchDoesNotEndTheMomentItIsLookedAt()
+    {
+        // A survival setting carried no time on it, so the rule was built with a
+        // zero duration, the room set its remaining time to zero, and the rule's
+        // clock check ended the match on the first tick. A match that ends before
+        // a shot has been fired is not a match.
+        var owner = "suv-owner-" + Guid.NewGuid().ToString("N").Substring(0, 8);
+        var survival = MatchRoomManager.Instance.CreateNewSuvRoom("suv-clock", owner, capacity: 4);
+
+        try
+        {
+            var room = MatchRoomManager.Instance.GetRoomById(survival.RoomId) as MatchRoom;
+            Assert.NotNull(room);
+            room!.GameStart();
+
+            Assert.False(
+                room.IsMatchFinished(),
+                "a survival match reported itself finished before a shot was fired");
+        }
+        finally
+        {
+            MatchRoomManager.Instance.RemoveRoom(survival.RoomId, forceShutdownNowPlayingRooms: true);
+        }
+    }
+
+    [Fact]
+    public void AKillRaisesTheBestKillCountTheSurvivalRuleJudgesOn()
+    {
+        // The rule ends a match on the best kill count, and nothing wrote it, so
+        // that half of the rule could never fire and those matches could only
+        // ever end on the clock.
+        var owner = "suv-kill-" + Guid.NewGuid().ToString("N").Substring(0, 8);
+        var rival = "suv-rival-" + Guid.NewGuid().ToString("N").Substring(0, 8);
+        var survival = MatchRoomManager.Instance.CreateNewSuvRoom("suv-kills", owner, capacity: 4);
+
+        try
+        {
+            var room = MatchRoomManager.Instance.GetRoomById(survival.RoomId) as MatchRoom;
+            Assert.NotNull(room);
+            room!.AddNewPlayer(new PlayerInfo(owner, "Shooter") { Team = ETeam.Red });
+            room.AddNewPlayer(new PlayerInfo(rival, "Rival") { Team = ETeam.Blue });
+            room.GameStart();
+
+            room.RecordKill(owner);
+            Assert.Equal(1, room.BestKillCount);
+
+            Assert.True(room.TryGetPlayer(owner, out var killer));
+            Assert.Equal(1, killer!.Kills);
+        }
+        finally
+        {
+            MatchRoomManager.Instance.RemoveRoom(survival.RoomId, forceShutdownNowPlayingRooms: true);
+        }
+    }
+
+    [Fact]
+    public void APlayerWhoDiedInSurvivalDoesNotComeBack()
+    {
+        var owner = "suv-dead-" + Guid.NewGuid().ToString("N").Substring(0, 8);
+        var survival = MatchRoomManager.Instance.CreateNewSuvRoom("suv-respawn", owner, capacity: 4);
+
+        try
+        {
+            var room = MatchRoomManager.Instance.GetRoomById(survival.RoomId) as MatchRoom;
+            Assert.NotNull(room);
+            room!.AddNewPlayer(new PlayerInfo(owner, "Shooter") { Team = ETeam.Red });
+            room.GameStart();
+            room.RecordDeath(owner);
+
+            Assert.True(room.TryGetPlayer(owner, out var dead));
+            dead!.Health = 0;
+
+            var lag = MatchServerV2.Instance.ServerLagCompensationManager;
+            lag.StartMatch(survival.RoomId);
+            lag.AddPlayer(owner);
+
+            BroadcastRecorder.During(() =>
+            {
+                GameMessageDispatcher.Initialize(new BroadcastRecorder());
+                InGameMatchEventHandler.HandleTcpSystemEvent(new JObject
+                {
+                    ["MessageType"] = GameMessageTypes.PlayerRespawn,
+                    ["PlayerID"] = owner,
+                    ["PlayerId"] = owner,
+                    ["RoomID"] = survival.RoomId,
+                    ["RoomId"] = survival.RoomId
+                });
+            });
+
+            // The rule says a survival death is permanent. It said so to nobody,
+            // because the respawn handler never asked: it restored the health of
+            // anybody who asked, which is the opposite of what the mode means.
+            Assert.True(room.TryGetPlayer(owner, out var after));
+            Assert.Equal(0, after!.Health);
+        }
+        finally
+        {
+            MatchRoomManager.Instance.RemoveRoom(survival.RoomId, forceShutdownNowPlayingRooms: true);
+        }
+    }
+
+    [Fact]
     public void AStatusQuestionIsAnsweredToThePlayerThatAsked()
     {
         SetUpRoom();
