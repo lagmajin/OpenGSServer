@@ -206,6 +206,28 @@ Done when:
 - server smoke tests only rely on core/server code and a lightweight client
 - Unity-specific assumptions are no longer required for backend validation
 
+Current status:
+- the property already held and nothing was holding it. OpenGSServer and
+  OpenGSCore contain no `UnityEngine` reference and the server project file
+  names no Unity package; the smoke clients import only the Python standard
+  library. A change that broke either would have failed nothing, which is the
+  gap: not the state but the absence of a check for it
+- `tools/check_headless.ps1` makes the three properties a gate. It fails on a
+  Unity reference in the server, the shared package or either project file, on
+  a third party import in a smoke client, and on a smoke script the run script
+  drives that does not exist. Each failure names the file and the line, so it
+  is actionable rather than something to disable
+- the check runs in `.github/workflows/server-build.yml` before the smoke suite,
+  and takes the shared package as a parameter so this repository can still be
+  validated without its sibling
+- the smoke suite is already the headless validation path S5 describes: it is
+  driven by `tools/run_smoke.ps1`, it needs a Python install and nothing else,
+  and it covers login, room lifecycle, the loading handshake, a reconnect and a
+  match played to its end
+- what S5 does not yet cover is the shared package being validated on its own.
+  The core tests run in the client workflow against a checkout of OpenGSCore, so
+  the package has no build of its own to fail
+
 ## Suggested Order
 
 1. `S0`

@@ -55,6 +55,16 @@ jobs:
         with:
           python-version: '3.x'
 
+      # S5 asks for a backend that can be built, run and validated without the
+      # Unity client. That is true today because nothing in the server, the
+      # shared package or the smoke clients reaches for Unity, and this is what
+      # keeps it true: a change that added a Unity reference or a third party
+      # import to a smoke client would otherwise fail nothing until the client
+      # was gone and the path could not be run at all.
+      - name: Check the backend stays headless
+        shell: pwsh
+        run: ./tools/check_headless.ps1
+
       # The smoke suite covers the live lobby, loading, reconnect, and match
       # end to end flow, which the unit tests cannot. Its PASS and FAIL lines
       # are echoed into the job summary so both kinds of checks show up in one
