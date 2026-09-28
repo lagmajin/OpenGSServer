@@ -43,7 +43,82 @@ namespace OpenGSServer
     internal class InGameMatchEventHandler:IInGameMatchRoomHandler
     {
         private static readonly ConcurrentDictionary<string, DateTime> LastFlagEvents = new();
-        private static readonly ConcurrentDictionary<string, byte> FlagCarriers = new();
+
+        /// <summary>
+        /// Where each room's flags are, and who is carrying them.
+        /// <para>
+        /// This was a set of carrier records keyed by the carrier, which could
+        /// answer who was holding something and nothing else. A flag belongs to a
+        /// team, and the capture rule is a question about a team's own flag, so
+        /// the state has to be held per team. A record of carriers cannot answer
+        /// "is this team's flag still home", which is why a team could score
+        /// while its own flag was in the other side's hands.
+        /// </para>
+        /// </summary>
+        private static readonly ConcurrentDictionary<string, FlagRoomState> FlagRooms = new();
+
+        /// <summary>
+        /// The flag state of one room.
+        /// </summary>
+        private sealed class FlagRoomState
+        {
+            private readonly object sync = new();
+            private readonly Dictionary<ETeam, TeamFlag> flags = new()
+            {
+                [ETeam.Red] = new TeamFlag(ETeam.Red),
+                [ETeam.Blue] = new TeamFlag(ETeam.Blue)
+            };
+
+            /// <summary>
+            /// Hands out a snapshot, so a caller reads a consistent set of flags
+            /// rather than one flag at a time while another thread moves one.
+            /// </summary>
+            public Dictionary<ETeam, TeamFlag> Snapshot()
+            {
+                lock (sync)
+                {
+                    return flags.ToDictionary(entry => entry.Key, entry => entry.Value);
+                }
+            }
+
+            public T WithFlags<T>(Func<Dictionary<ETeam, TeamFlag>, T> action)
+            {
+                lock (sync)
+                {
+                    return action(flags);
+                }
+            }
+        }
+
+        private static FlagRoomState FlagStateFor(MatchRoom room)
+        {
+            return FlagRooms.GetOrAdd(room.Id.ToString(), _ => new FlagRoomState());
+        }
+
+        /// <summary>
+        /// Where each of a room's flags is, for a caller that has to reason about
+        /// the flags rather than move them.
+        /// <para>
+        /// The flags themselves are shared, so this is a view rather than a copy
+        /// of the state. It exists so a test can assert on where a flag is without
+        /// the assertion itself being a second implementation of the rules.
+        /// </para>
+        /// </summary>
+        public static IReadOnlyDictionary<ETeam, TeamFlag> GetFlagStates(string roomId)
+        {
+            if (string.IsNullOrWhiteSpace(roomId))
+            {
+                return new Dictionary<ETeam, TeamFlag>();
+            }
+
+            // A room has had two flags since it was created, so asking about them
+            // creates them if nothing has touched one yet. Anything else would make
+            // a caller conclude a room had no flags rather than that nobody had
+            // claimed one.
+            return FlagRooms
+                .GetOrAdd(roomId, _ => new FlagRoomState())
+                .Snapshot();
+        }
         private static readonly ConcurrentDictionary<string, DateTime> LastShots = new();
 
         public InGameMatchEventHandler() { }
@@ -173,20 +248,24 @@ namespace OpenGSServer
                     Console.WriteLine($"[Match] Ignored client-supplied kill event from '{playerId}'; kills are server-authoritative");
                     break;
 
-                case "PlayerDamaged":
+                // A client asserting its own damage, and a client reporting a
+                // ruling it was told about, are told apart by the trailing d the
+                // same way a kill and a death are. Only the client's assertion is
+                // refused: a ruling the server itself sent is not a claim.
+                case GameMessageTypes.PlayerDamaged:
                     Console.WriteLine($"[Match] Ignored client-supplied damage event from '{playerId}'; damage is server-authoritative");
                     break;
 
                 case GameMessageTypes.FlagCaptured:
-                    HandleFlagCaptured(room, playerId);
+                    HandleFlagCaptured(room, playerId, json);
                     break;
 
                 case GameMessageTypes.FlagLost:
-                    HandleFlagLost(room, playerId);
+                    HandleFlagLost(room, playerId, json);
                     break;
 
                 case GameMessageTypes.FlagPickup:
-                    HandleFlagPickup(room, playerId);
+                    HandleFlagPickup(room, playerId, json);
                     break;
 
                 case GameMessageTypes.FlagReturn:
@@ -198,7 +277,14 @@ namespace OpenGSServer
                         break;
                     }
 
-                    HandleFlagReturn(room, playerId);
+                    HandleFlagReturn(room, playerId, json);
+                    break;
+
+                // A client asserting a flag it destroyed. A flag going is a rule
+                // outcome, so the server decides it and says so instead of
+                // believing a client about its own flag.
+                case GameMessageTypes.FlagBurst:
+                    Console.WriteLine($"[Match] Ignored client-supplied flag burst from '{playerId}'; a flag going is the server's call");
                     break;
 
                 case GameMessageTypes.FlagScoreUpdate:
@@ -329,6 +415,22 @@ namespace OpenGSServer
             if (!granted)
             {
                 Console.WriteLine($"[Match] Refused field item pickup of '{itemId}' by '{playerId}'");
+
+                // A refusal is told as well as a grant. The client applies the
+                // pickup before the server rules on it, so a claim answered only
+                // by silence leaves the effect in place until the client's own
+                // timeout takes it back. The player should not have to wait out a
+                // timer to find out the server said no.
+                GameMessageDispatcher.BroadcastToRoom(room.Id.ToString(), new JObject
+                {
+                    ["MessageType"] = GameMessageTypes.FieldItemPickup,
+                    ["RoomID"] = room.Id.ToString(),
+                    ["ItemId"] = itemId,
+                    ["PlayerID"] = playerId,
+                    ["Success"] = false,
+                    ["Reason"] = "OutOfReachOrTaken",
+                    ["Timestamp"] = DateTime.UtcNow.ToString("o")
+                });
                 return;
             }
 
@@ -424,9 +526,10 @@ namespace OpenGSServer
             // dropper can see is not a weapon anybody can pick up.
             GameMessageDispatcher.BroadcastToRoom(room.Id.ToString(), new JObject
             {
-                ["MessageType"] = "WeaponDropped",
+                ["MessageType"] = GameMessageTypes.WeaponDropped,
                 ["RoomID"] = room.Id.ToString(),
                 ["ItemId"] = itemId,
+                ["ItemType"] = FieldItemTypeNames.ToWireName(EFieldItemType.WeaponItem),
                 ["PlayerID"] = playerId,
                 ["PlayerId"] = playerId,
                 ["WeaponType"] = weaponType,
@@ -490,6 +593,7 @@ namespace OpenGSServer
             if (!player.EquipInstantItems.Contains(itemType))
             {
                 Console.WriteLine($"[Match] Refused item use of {itemType} by '{playerId}': not carried");
+                RefuseItemUse(room, playerId, itemType, "NotCarried");
                 return;
             }
 
@@ -497,6 +601,7 @@ namespace OpenGSServer
             if (effect == null)
             {
                 Console.WriteLine($"[Match] Ignored item use of {itemType} by '{playerId}': it does nothing");
+                RefuseItemUse(room, playerId, itemType, "NoEffect");
                 return;
             }
 
@@ -518,13 +623,45 @@ namespace OpenGSServer
 
             GameMessageDispatcher.BroadcastToRoom(room.Id.ToString(), new JObject
             {
-                ["MessageType"] = "ItemUsed",
+                ["MessageType"] = GameMessageTypes.ItemUsed,
                 ["RoomID"] = room.Id.ToString(),
                 ["PlayerID"] = playerId,
                 ["PlayerId"] = playerId,
                 ["ItemType"] = itemType.ToString(),
                 ["Effect"] = effect.Value.ToString(),
                 ["RestoredHealth"] = restored,
+                ["Health"] = player.Health,
+                ["MaxHealth"] = player.MaxHealth,
+                ["Timestamp"] = DateTime.UtcNow.ToString("o")
+            });
+        }
+
+        /// <summary>
+        /// Answers a claim to spend an instant item that the server turned down.
+        /// <para>
+        /// A client spends the item on its own screen the moment the key is
+        /// pressed, so a refusal that is only written to the log leaves the
+        /// client believing it healed when nothing happened. The answer carries
+        /// the health the server actually holds, which is what the client should
+        /// have shown all along.
+        /// </para>
+        /// </summary>
+        private static void RefuseItemUse(MatchRoom room, string playerId, EInstantItemType itemType, string reason)
+        {
+            if (!room.TryGetPlayer(playerId, out var player) || player == null)
+            {
+                return;
+            }
+
+            GameMessageDispatcher.BroadcastToRoom(room.Id.ToString(), new JObject
+            {
+                ["MessageType"] = GameMessageTypes.ItemUseRefused,
+                ["RoomID"] = room.Id.ToString(),
+                ["PlayerID"] = playerId,
+                ["PlayerId"] = playerId,
+                ["ItemType"] = itemType.ToString(),
+                ["Reason"] = reason,
+                ["RestoredHealth"] = 0,
                 ["Health"] = player.Health,
                 ["MaxHealth"] = player.MaxHealth,
                 ["Timestamp"] = DateTime.UtcNow.ToString("o")
@@ -660,11 +797,22 @@ namespace OpenGSServer
             Console.WriteLine(
                 $"[Match] {playerId} {(reserved ? "claimed" : "released")} weapon '{itemId}' in room {room.Id}");
 
+            if (!itemManager.TryGetItem(itemId, out var item) || item == null)
+            {
+                return;
+            }
+
             // Everyone is told, because a claim only works if the other players
-            // are the ones honouring it.
+            // are the ones honouring it. Where the weapon is comes from the item
+            // the server holds rather than from the claim, for the same reason
+            // the position in the claim was not used: a client finds the weapon
+            // it is being told about by type and position, so a ruling without
+            // one names a weapon nobody can locate.
             GameMessageDispatcher.BroadcastToRoom(room.Id.ToString(), new JObject
             {
-                ["MessageType"] = reserved ? "WeaponReserved" : "WeaponReleased",
+                ["MessageType"] = reserved
+                    ? GameMessageTypes.WeaponReserved
+                    : GameMessageTypes.WeaponReleased,
                 ["RoomID"] = room.Id.ToString(),
                 ["ItemId"] = itemId,
                 ["WeaponId"] = itemId,
@@ -672,6 +820,9 @@ namespace OpenGSServer
                 ["PlayerId"] = playerId,
                 ["ReservedByPlayerId"] = playerId,
                 ["WeaponType"] = weaponType,
+                ["PosX"] = item.PosX,
+                ["PosY"] = item.PosY,
+                ["PosZ"] = item.PosZ,
                 ["Timestamp"] = DateTime.UtcNow.ToString("o")
             });
         }
@@ -750,7 +901,10 @@ namespace OpenGSServer
 
             GameMessageDispatcher.BroadcastToRoom(room.Id.ToString(), new JObject
             {
-                ["MessageType"] = "PlayerDamaged",
+                // The same name the projectile path uses. A client that adopts the
+                // health on one of them and not the other would show two different
+                // numbers for the same hit depending on which weapon landed it.
+                ["MessageType"] = GameMessageTypes.PlayerDamaged,
                 ["RoomID"] = room.Id.ToString(),
                 ["DamagedPlayerID"] = damagedPlayerId,
                 ["TargetId"] = damagedPlayerId,
@@ -767,88 +921,301 @@ namespace OpenGSServer
             });
         }
 
-        private static void HandleFlagCaptured(MatchRoom room, string playerId)
+        /// <summary>
+        /// Reads which team's flag a claim is about.
+        /// <para>
+        /// A flag belongs to a team, and the team's flag is what the claim is
+        /// about, so the message has to name that team. A client that only sends
+        /// the carrier's own team is saying which side it is on, which is not the
+        /// same fact: a red player picks up the blue flag. Without the flag's own
+        /// team the server has to guess, and guessing which flag somebody is
+        /// holding is how a team ends up carrying a flag it does not own.
+        /// </para>
+        /// </summary>
+        private static ETeam ResolveFlagTeam(JObject json, string playerId)
         {
-            var team = ResolvePlayerTeam(room, playerId);
-            if (team == ETeam.NoTeam || !AcceptFlagEvent(room, playerId, GameMessageTypes.FlagCaptured, TimeSpan.FromSeconds(2)) ||
-                !FlagCarriers.TryRemove(GetFlagCarrierKey(room, playerId), out _))
+            var named = ReadString(json, "FlagTeam", "FlagOwnerTeam", "FlagOwner");
+            if (!string.IsNullOrWhiteSpace(named) && Enum.TryParse(named, ignoreCase: true, out ETeam namedTeam))
             {
-                Console.WriteLine($"[Match] Ignored flag capture without a server-tracked carrier '{playerId}'");
+                if (namedTeam == ETeam.Red || namedTeam == ETeam.Blue)
+                {
+                    return namedTeam;
+                }
+            }
+
+            // Older clients did not name the flag, and the only team in the
+            // message was the carrier's. A pickup is then the other side's flag,
+            // which is the only flag a player may pick up.
+            var carrierTeam = ResolvePlayerTeam(MatchRoomManager.Instance.SearchRoomByMemberID(playerId), playerId);
+            return carrierTeam == ETeam.NoTeam ? ETeam.NoTeam : CaptureTheFlagRules.OpposingTeam(carrierTeam);
+        }
+
+        private static void HandleFlagCaptured(MatchRoom room, string playerId, JObject json)
+        {
+            var scoringTeam = ResolvePlayerTeam(room, playerId);
+            if (scoringTeam == ETeam.NoTeam)
+            {
                 return;
             }
 
-            Console.WriteLine($"Team {team} captured the flag");
-            room.AddFlagCapture(team);
+            var flagState = FlagStateFor(room);
 
-            GameMessageDispatcher.SendFlagCaptured(room.Id.ToString(), team.ToString());
+            // The claim is judged against the flags the server holds, not against
+            // anything the message says. The own flag has to be home, which is
+            // the half of the rule that was missing, and the enemy flag has to be
+            // in the claimant's hands rather than merely somewhere in the room.
+            var refusal = flagState.WithFlags(flags => CaptureTheFlagRules.RefusalFor(scoringTeam, flags));
+            if (refusal != EFlagRefusal.None)
+            {
+                Console.WriteLine(
+                    $"[Match] Refused a capture by {scoringTeam} in room {room.Id}: {refusal}");
+                GameMessageDispatcher.SendFlagCaptureRefused(
+                    playerId,
+                    room.Id.ToString(),
+                    scoringTeam.ToString(),
+                    refusal.ToString());
+                return;
+            }
+
+            var enemyFlag = flagState.WithFlags(flags => CaptureTheFlagRules.OpposingFlag(scoringTeam, flags));
+            if (enemyFlag == null || !enemyFlag.IsCarried ||
+                !string.Equals(enemyFlag.CarrierId, playerId, StringComparison.OrdinalIgnoreCase))
+            {
+                // The flag exists and is carried, but not by this player. A
+                // delivery is a statement about who is holding it, and a message
+                // from somebody who is not holding it is not that statement.
+                Console.WriteLine(
+                    $"[Match] Ignored a capture claim from '{playerId}', who is not carrying the flag");
+                return;
+            }
+
+            flagState.WithFlags(flags => flags[CaptureTheFlagRules.OpposingTeam(scoringTeam)].Return(
+                EFlagReturnReason.CapturedAtBase));
+
+            Console.WriteLine($"Team {scoringTeam} captured the flag");
+            room.AddFlagCapture(scoringTeam);
+
+            GameMessageDispatcher.SendFlagCaptured(room.Id.ToString(), scoringTeam.ToString());
+
+            // The flag that was carried is the one that is now gone, and it
+            // belonged to the other team. A client cannot say which flag it
+            // destroyed: a flag going is the rule's outcome, so the server says
+            // whose flag it was and everyone is told.
+            GameMessageDispatcher.SendFlagBurst(
+                room.Id.ToString(),
+                CaptureTheFlagRules.OpposingTeam(scoringTeam).ToString());
+
+            // The rule resets the flag state when a team scores, so both flags go
+            // back to their stands. Without this the captured flag is still gone
+            // and the next delivery has nothing to carry.
+            FlagStateReset(room);
+
             GameMessageDispatcher.SendFlagScoreUpdate(
                 room.Id.ToString(),
                 room.GetFlagScore(ETeam.Red),
                 room.GetFlagScore(ETeam.Blue));
         }
 
-        private static void HandleFlagLost(MatchRoom room, string playerId)
+        /// <summary>
+        /// Puts both flags back on their stands and tells the room, because a
+        /// flag that is home again is something every player can see.
+        /// </summary>
+        private static void FlagStateReset(MatchRoom room)
         {
-            var team = ResolvePlayerTeam(room, playerId);
-            if (team == ETeam.NoTeam || !AcceptFlagEvent(room, playerId, GameMessageTypes.FlagLost, TimeSpan.FromMilliseconds(500)))
+            var flagState = FlagStateFor(room);
+            flagState.WithFlags(flags =>
             {
-                return;
-            }
+                CaptureTheFlagRules.ResetAll(flags);
+                return true;
+            });
 
-            Console.WriteLine($"Team {team} lost the flag");
-            FlagCarriers.TryRemove(GetFlagCarrierKey(room, playerId), out _);
-            GameMessageDispatcher.SendFlagLost(room.Id.ToString(), team.ToString(), playerId);
+            foreach (var team in new[] { ETeam.Red, ETeam.Blue })
+            {
+                GameMessageDispatcher.SendFlagReturned(
+                    room.Id.ToString(),
+                    team.ToString(),
+                    string.Empty,
+                    EFlagReturnReason.AutoReturn.ToString());
+            }
         }
 
-        private static void HandleFlagPickup(MatchRoom room, string playerId)
+        private static void HandleFlagLost(MatchRoom room, string playerId, JObject json)
         {
-            var team = ResolvePlayerTeam(room, playerId);
-            if (team == ETeam.NoTeam || !AcceptFlagEvent(room, playerId, GameMessageTypes.FlagPickup, TimeSpan.FromMilliseconds(500)))
+            var flagTeam = ResolveFlagTeam(json, playerId);
+            if (flagTeam == ETeam.NoTeam)
             {
                 return;
             }
 
-            Console.WriteLine($"Team {team} picked up the flag");
-            FlagCarriers[GetFlagCarrierKey(room, playerId)] = 0;
-            GameMessageDispatcher.SendFlagPickup(room.Id.ToString(), team.ToString(), playerId);
+            var flagState = FlagStateFor(room);
+
+            // Only the flag this player is actually holding can be dropped. A
+            // claim that a flag was lost is a claim about a carrier, so a player
+            // holding nothing has nothing to drop.
+            var dropped = flagState.WithFlags(flags =>
+                flags.TryGetValue(flagTeam, out var flag) && flag.IsCarried &&
+                string.Equals(flag.CarrierId, playerId, StringComparison.OrdinalIgnoreCase) &&
+                flag.Drop());
+
+            if (!dropped)
+            {
+                Console.WriteLine(
+                    $"[Match] Ignored a lost claim from '{playerId}', who is not carrying the {flagTeam} flag");
+                return;
+            }
+
+            Console.WriteLine($"The {flagTeam} flag was dropped by {playerId}");
+            GameMessageDispatcher.SendFlagLost(room.Id.ToString(), flagTeam.ToString(), playerId);
         }
 
-        private static void HandleFlagReturn(MatchRoom room, string playerId)
+        private static void HandleFlagPickup(MatchRoom room, string playerId, JObject json)
         {
-            var team = ResolvePlayerTeam(room, playerId);
-            if (team == ETeam.NoTeam || !AcceptFlagEvent(room, playerId, GameMessageTypes.FlagReturn, TimeSpan.FromMilliseconds(500)))
+            var flagTeam = ResolveFlagTeam(json, playerId);
+            if (flagTeam == ETeam.NoTeam)
             {
                 return;
             }
 
-            Console.WriteLine($"Team {team} returned the flag");
-            FlagCarriers.TryRemove(GetFlagCarrierKey(room, playerId), out _);
-            GameMessageDispatcher.SendFlagReturn(room.Id.ToString(), team.ToString(), playerId);
+            var carrierTeam = ResolvePlayerTeam(room, playerId);
+
+            // A player takes the other side's flag. A claim naming its own team's
+            // flag is not a pickup: a team recovering its own flag is a return,
+            // which is a different rule and a different event.
+            if (CaptureTheFlagRules.OpposingTeam(carrierTeam) != flagTeam)
+            {
+                Console.WriteLine(
+                    $"[Match] Refused a pickup by '{playerId}': a {carrierTeam} player cannot pick up the {flagTeam} flag");
+                return;
+            }
+
+            var flagState = FlagStateFor(room);
+            var picked = flagState.WithFlags(flags =>
+                flags.TryGetValue(flagTeam, out var flag) && flag.PickUp(playerId));
+
+            if (!picked)
+            {
+                // A flag that is already carried is one object, so the second
+                // claim names a flag that is not on the ground.
+                Console.WriteLine(
+                    $"[Match] Refused a pickup of the {flagTeam} flag by '{playerId}': it is not available");
+                return;
+            }
+
+            Console.WriteLine($"{playerId} picked up the {flagTeam} flag");
+            GameMessageDispatcher.SendFlagPickup(room.Id.ToString(), carrierTeam.ToString(), playerId);
+        }
+
+        private static void HandleFlagReturn(MatchRoom room, string playerId, JObject json)
+        {
+            var flagTeam = ResolveFlagTeam(json, playerId);
+            if (flagTeam == ETeam.NoTeam)
+            {
+                return;
+            }
+
+            var reason = ParseFlagReturnReason(ReadString(json, "ReturnReason"));
+
+            var flagState = FlagStateFor(room);
+            var returned = flagState.WithFlags(flags =>
+            {
+                if (!flags.TryGetValue(flagTeam, out var flag))
+                {
+                    return false;
+                }
+
+                // A team recovering its own flag is a return. A player of the
+                // other side returning it is not: that flag is theirs to carry
+                // and theirs to deliver, and a return would hand it back home for
+                // free.
+                var carrierTeam = ResolvePlayerTeam(room, playerId);
+                if (CaptureTheFlagRules.OpposingTeam(carrierTeam) == flagTeam)
+                {
+                    return false;
+                }
+
+                return flag.Return(reason);
+            });
+
+            if (!returned)
+            {
+                // A flag that is already home is not put back, a flag in no state
+                // this player can return is not put back, and the other side's flag
+                // is not the returning player's to put back.
+                Console.WriteLine(
+                    $"[Match] Ignored a return of the {flagTeam} flag by '{playerId}': it is not off its stand");
+                return;
+            }
+
+            Console.WriteLine($"The {flagTeam} flag was returned by {playerId} ({reason})");
+
+            // A return restores state and is not a score, which is what the mode
+            // rule says. The score is not touched here on purpose.
+            GameMessageDispatcher.SendFlagReturned(
+                room.Id.ToString(),
+                flagTeam.ToString(),
+                playerId,
+                reason.ToString());
+        }
+
+        private static EFlagReturnReason ParseFlagReturnReason(string? named)
+        {
+            if (!string.IsNullOrWhiteSpace(named) && Enum.TryParse(named, ignoreCase: true, out EFlagReturnReason reason))
+            {
+                return reason;
+            }
+
+            // A client that does not say why is recovering a flag its own team
+            // owns, which is the one return a player can actually perform.
+            return EFlagReturnReason.FriendlyRecovered;
         }
 
         private static ETeam ResolvePlayerTeam(MatchRoom room, string playerId)
         {
-            return room.Players.FirstOrDefault(player =>
+            return room?.Players.FirstOrDefault(player =>
                 string.Equals(player.Id, playerId, StringComparison.OrdinalIgnoreCase))?.Team ?? ETeam.NoTeam;
         }
 
-        private static bool AcceptFlagEvent(MatchRoom room, string playerId, string eventType, TimeSpan cooldown)
+        /// <summary>
+        /// No per event cooldown is applied to a flag claim.
+        /// <para>
+        /// There used to be one, and it blocked legitimate play: a carrier who
+        /// dropped a flag and picked it straight back up was refused, because the
+        /// second pickup was the same message type inside half a second. The
+        /// state machine now decides every one of these claims on its own terms,
+        /// and a claim that changes nothing returns before anything is broadcast,
+        /// so a repeating message costs one dictionary lookup. The transport
+        /// already rate limits a player to a fixed number of match events a
+        /// second, which is the bound that actually matters.
+        /// </para>
+        /// </summary>
+        private static void RememberFlagEvent(MatchRoom room, string playerId, string eventType)
         {
-            var key = $"{room.Id}:{playerId}:{eventType}";
-            var now = DateTime.UtcNow;
-            if (LastFlagEvents.TryGetValue(key, out var lastEvent) && now - lastEvent < cooldown)
-            {
-                Console.WriteLine($"[Match] Ignored repeated {eventType} from '{playerId}' in room '{room.Id}'");
-                return false;
-            }
-
-            LastFlagEvents[key] = now;
-            return true;
+            LastFlagEvents[$"{room.Id}:{playerId}:{eventType}"] = DateTime.UtcNow;
         }
 
-        private static string GetFlagCarrierKey(MatchRoom room, string playerId)
+        private static void ClearFlagStateForRoom(MatchRoom room)
         {
-            return $"{room.Id}:{playerId}";
+            FlagRooms.TryRemove(room.Id.ToString(), out _);
+        }
+
+        /// <summary>
+        /// Forgets a room's flags, for use when the room itself is going away.
+        /// </summary>
+        public static void ClearRoomFlagState(string roomId)
+        {
+            if (string.IsNullOrWhiteSpace(roomId))
+            {
+                return;
+            }
+
+            FlagRooms.TryRemove(roomId, out _);
+
+            foreach (var key in LastFlagEvents.Keys
+                .Where(key => key.StartsWith($"{roomId}:", StringComparison.OrdinalIgnoreCase))
+                .ToList())
+            {
+                LastFlagEvents.TryRemove(key, out _);
+            }
         }
 
         public static void ClearPlayerState(string playerId)
@@ -858,9 +1225,41 @@ namespace OpenGSServer
                 return;
             }
 
-            foreach (var entry in FlagCarriers.Keys.Where(key => key.EndsWith($":{playerId}", StringComparison.OrdinalIgnoreCase)))
+            // A player who left cannot be holding a flag, so the flag they were
+            // holding goes back to its stand rather than staying in the air. This
+            // used to drop the carrier record, which left the flag itself with no
+            // state at all: it was neither home, nor dropped, nor carried.
+            foreach (var entry in FlagRooms)
             {
-                FlagCarriers.TryRemove(entry, out _);
+                var room = MatchRoomManager.Instance.GetRoomById(entry.Key);
+                if (room == null)
+                {
+                    continue;
+                }
+
+                var released = entry.Value.WithFlags(flags =>
+                {
+                    foreach (var flag in flags.Values)
+                    {
+                        if (flag.IsCarried &&
+                            string.Equals(flag.CarrierId, playerId, StringComparison.OrdinalIgnoreCase) &&
+                            flag.Return(EFlagReturnReason.AutoReturn))
+                        {
+                            return flag.Team;
+                        }
+                    }
+
+                    return ETeam.NoTeam;
+                });
+
+                if (released != ETeam.NoTeam)
+                {
+                    GameMessageDispatcher.SendFlagReturned(
+                        room.Id.ToString(),
+                        released.ToString(),
+                        playerId,
+                        EFlagReturnReason.AutoReturn.ToString());
+                }
             }
 
             foreach (var entry in LastFlagEvents.Keys.Where(key => key.Contains($":{playerId}:", StringComparison.OrdinalIgnoreCase)))
@@ -885,11 +1284,26 @@ namespace OpenGSServer
             Console.WriteLine($"Player {playerId} was eliminated");
         }
 
+        /// <summary>
+        /// Answers the player who asked, rather than the room.
+        /// <para>
+        /// The status was broadcast to the whole room, so a question about one
+        /// player's view of the match was answered into every other player's
+        /// screen. A client also had no case for the label, so the answer was
+        /// dropped everywhere it went. It is one player's answer, so it goes to
+        /// that player.
+        /// </para>
+        /// </summary>
         private static void SendMatchStatus(MatchRoom room, string requestingPlayerId)
         {
             var status = $"Match Active - Players: {room.Players.Count}";
             Console.WriteLine($"Sending status to {requestingPlayerId}: {status}");
-            GameMessageDispatcher.SendMatchStatus(room.Id.ToString(), status);
+            GameMessageDispatcher.SendMatchStatus(
+                requestingPlayerId,
+                room.Id.ToString(),
+                status,
+                room.Playing,
+                room.PlayerCount);
         }
 
         private static void HandlePositionUpdate(MatchRoom room, string playerId, JObject position)
@@ -1290,7 +1704,12 @@ namespace OpenGSServer
 
             GameMessageDispatcher.BroadcastToRoom(room.Id.ToString(), new JObject
             {
-                ["MessageType"] = "PlayerDamaged",
+                // The projectile path and the shot path both land a hit on the
+                // same player, so they have to answer under the same name. They did
+                // not: this one said PlayerDamage, which is the name a client sends
+                // to claim damage about itself, so a client reading the ruling
+                // could not tell the two apart.
+                ["MessageType"] = GameMessageTypes.PlayerDamaged,
                 ["RoomID"] = room.Id.ToString(),
                 ["DamagedPlayerID"] = targetId,
                 ["AttackerID"] = attackerId,

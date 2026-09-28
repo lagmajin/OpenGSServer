@@ -634,6 +634,12 @@ namespace OpenGSServer
 
                 matchRooms.Remove(roomId);
                 roomEventBuses.Remove(roomId);
+
+                // The flag state is held beside the room rather than in it, and
+                // it is keyed by room id. A room id is never reused, so leaving it
+                // behind would keep two flags alive for every room that has ever
+                // existed, for the lifetime of the process.
+                InGameMatchEventHandler.ClearRoomFlagState(room.Id);
                 foreach (var key in persistedMatchPlayers.Keys)
                 {
                     if (key.StartsWith($"{roomId}:", StringComparison.OrdinalIgnoreCase))
