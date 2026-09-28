@@ -38,7 +38,7 @@ namespace OpenGSServer.Network
                 // 成功したら全クライアントにブロードキャスト
                 var response = new JObject
                 {
-                    ["MessageType"] = "FieldItemPickup",
+                    ["MessageType"] = MessageType.FieldItemPickup,
                     ["ItemId"] = itemId,
                     ["PlayerID"] = playerId,
                     ["Success"] = true
@@ -53,7 +53,7 @@ namespace OpenGSServer.Network
                 // 失敗
                 var errorResponse = new JObject
                 {
-                    ["MessageType"] = "FieldItemPickup",
+                    ["MessageType"] = MessageType.FieldItemPickup,
                     ["ItemId"] = itemId,
                     ["PlayerID"] = playerId,
                     ["Success"] = false,
@@ -76,7 +76,7 @@ namespace OpenGSServer.Network
 
             var response = new JObject
             {
-                ["MessageType"] = "FieldItemStateSync",
+                ["MessageType"] = MessageType.FieldItemStateSync,
                 ["Items"] = itemsJson
             };
 
@@ -121,7 +121,7 @@ namespace OpenGSServer.Network
             // 全クライアントにスポーンを通知
             var spawnMessage = new JObject
             {
-                ["MessageType"] = MessageType.ItemSpawnNotification,
+                ["MessageType"] = GameMessageTypes.FieldItemSpawn,
                 ["ItemId"] = itemId,
                 ["ItemType"] = FieldItemTypeNames.ToWireName(itemType),
                 ["PositionX"] = x,
@@ -154,7 +154,7 @@ namespace OpenGSServer.Network
 
             var spawnMessage = new JObject
             {
-                ["MessageType"] = MessageType.ItemSpawnNotification,
+                ["MessageType"] = GameMessageTypes.FieldItemSpawn,
                 ["ItemId"] = itemId,
                 ["ItemType"] = FieldItemTypeNames.ToWireName(itemType),
                 ["SpawnPointId"] = item.SpawnPointId,
@@ -183,7 +183,7 @@ namespace OpenGSServer.Network
 
             var despawnMessage = new JObject
             {
-                ["MessageType"] = MessageType.ItemDespawnNotification,
+                ["MessageType"] = GameMessageTypes.FieldItemDespawn,
                 ["ItemId"] = itemId
             };
 
@@ -203,7 +203,7 @@ namespace OpenGSServer.Network
 
             var despawnMessage = new JObject
             {
-                ["MessageType"] = MessageType.ItemDespawnNotification
+                ["MessageType"] = GameMessageTypes.FieldItemDespawn
             };
 
             broadcast(despawnMessage);

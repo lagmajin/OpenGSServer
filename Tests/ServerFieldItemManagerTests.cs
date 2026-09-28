@@ -575,15 +575,26 @@ public sealed class ServerFieldItemManagerTests
         Assert.False(FieldItemTypeNames.IsTimedBuff(type));
     }
 
+    [Fact]
+    public void ThePickupRulingUsesTheSharedName()
+    {
+        // The server used to carry its own copy of this string, so it could
+        // answer under a label the client does not read and nothing would
+        // notice: the ruling is the only thing that tells a client whether the
+        // pickup it applied optimistically stands. Both sides now name the fact
+        // in the shared contract, and this fails if the server drifts from it.
+        Assert.Equal(MessageType.FieldItemPickup, GameMessageTypes.FieldItemPickup);
+    }
+
     [Theory]
     [InlineData("ItemPickup")]
     [InlineData("FieldItemPickup")]
-    public void BothPickupMessageNamesAreRoutable(string messageType)
+    public void BothPickupMessageNamesReachTheSameHandler(string messageType)
     {
-        // The client sends ItemPickup over the realtime channel and
-        // FieldItemPickup over the reliable one; the dispatch accepts both so
-        // either route reaches the same authoritative check.
-        Assert.False(string.IsNullOrWhiteSpace(messageType));
+        // A claim arrives on the realtime channel and on the reliable one, and
+        // both routes have to land on the same authoritative check, so the
+        // legacy name is normalized rather than dropped.
+        Assert.Equal(MessageType.FieldItemPickup, MessageType.Normalize(messageType));
     }
 
     // ---- Pickup rate limit ---------------------------------------------
