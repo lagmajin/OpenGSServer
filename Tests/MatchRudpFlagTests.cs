@@ -438,6 +438,76 @@ public sealed class MatchRudpFlagTests : IDisposable
     }
 
     [Fact]
+    public void ACaptureTheFlagRoomIsCreatedOnAMapWithFlagStands()
+    {
+        // The create-room dialog has no map field, so the request that builds a
+        // room names a mode and nothing else. The room used to be left on an
+        // unknown map and the client fell back to a stage of its own choosing,
+        // which for this mode is a map with no flag stands on it: a capture the
+        // flag match that nobody can win. A room is given a map its mode can
+        // actually be played on.
+        // The shape a create-room request arrives in, read the way the lobby
+        // reads it, so this exercises the path rather than a hand-built setting.
+        var setting = WaitRoomSetting.FromJson(new JObject
+        {
+            ["RoomName"] = "ctf-map",
+            ["GameMode"] = nameof(EGameMode.CaptureTheFlag),
+            ["Capacity"] = 4
+        });
+
+        var created = WaitRoomManager.Instance().CreateNewWaitRoom(setting);
+
+        try
+        {
+            var room = created.Room;
+            Assert.NotNull(room);
+            Assert.NotEqual(EMap.Unknown, room!.Map);
+            Assert.Contains(room.Map, OpenGSCore.GameMode.MapsFor(EGameMode.CaptureTheFlag));
+        }
+        finally
+        {
+            WaitRoomManager.Instance().CloseRoom(created.Room.RoomId);
+        }
+    }
+
+    [Fact]
+    public void ARespawnedPlayerCanBeHitAgain()
+    {
+        SetUpRoom();
+
+        Assert.True(room!.TryGetPlayer(RedPlayerId, out var red));
+        red!.Health = 0;
+
+        var lag = MatchServerV2.Instance.ServerLagCompensationManager;
+        lag.AddPlayer(RedPlayerId);
+
+        // A respawn is a system event rather than a realtime one, so it is
+        // routed the way the realtime listener routes it. A test that took the
+        // other path would never reach the handler and would pass for the wrong
+        // reason, which is how the original gap stayed invisible.
+        BroadcastRecorder.During(() =>
+        {
+            GameMessageDispatcher.Initialize(new BroadcastRecorder());
+            InGameMatchEventHandler.HandleTcpSystemEvent(new JObject
+            {
+                ["MessageType"] = GameMessageTypes.PlayerRespawn,
+                ["PlayerID"] = RedPlayerId,
+                ["PlayerId"] = RedPlayerId,
+                ["RoomID"] = roomId,
+                ["RoomId"] = roomId
+            });
+        });
+
+        // A respawn used to be entirely local: the client rebuilt its player and
+        // the server kept the health it had already been reduced to, which is
+        // zero. The hit path refuses a target whose health is not above zero, so
+        // from then on nobody could shoot this player at all and they were
+        // untouchable for the rest of the match while walking around the map.
+        Assert.True(room.TryGetPlayer(RedPlayerId, out var after));
+        Assert.True(after!.Health > 0, "a respawned player is still at no health and cannot be hit");
+    }
+
+    [Fact]
     public void TheRoomStateSaysTheFlagLimitTheServerIsPlayingTo()
     {
         SetUpRoom();

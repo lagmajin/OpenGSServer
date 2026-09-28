@@ -83,6 +83,13 @@ namespace OpenGSServer
                 case EGameMode.TeamSurvival:
                     account.LifeTimeScore.RecordSurvivalResult(won, true);
                     break;
+                case EGameMode.CaptureTheFlag:
+                    // A capture the flag result used to land in the death match
+                    // branch below, because there was no case for it. A player's
+                    // lifetime record then counted their capture the flag wins as
+                    // death match wins: a number they can see, and simply wrong.
+                    account.LifeTimeScore.RecordCaptureTheFlagResult(won);
+                    break;
                 default:
                     account.LifeTimeScore.RecordDeathMatchResult(won);
                     break;
