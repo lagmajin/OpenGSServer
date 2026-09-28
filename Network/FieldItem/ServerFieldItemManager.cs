@@ -49,6 +49,19 @@ namespace OpenGSServer.Network
             /// and the weapon is taken at its own value.
             /// </summary>
             public int MagazineAmmo { get; set; } = -1;
+
+            /// <summary>
+            /// The player who has laid claim to this item, if any.
+            /// <para>
+            /// A reservation is not a pickup: it stops anybody else taking the
+            /// item while somebody is reaching for it, and it lapses when the
+            /// player disconnects or lets go. It used to be a field on the client
+            /// that the client relayed to other clients, so who had laid claim to
+            /// a weapon was whatever each client had been told, and a client that
+            /// heard nothing had no claim to honour.
+            /// </para>
+            /// </summary>
+            public string ReservedByPlayerId { get; set; } = "";
         }
 
         /// <summary>
@@ -389,6 +402,14 @@ namespace OpenGSServer.Network
                 return false;
             }
 
+            // Somebody else is reaching for this. Taking it now would leave two
+            // players who both believe they have the weapon, and only one of them
+            // does.
+            if (IsReservedByAnother(itemId, playerId))
+            {
+                return false;
+            }
+
             EFieldItemType itemType = default;
             bool picked = false;
             lock (_itemStateLock)
@@ -491,12 +512,98 @@ namespace OpenGSServer.Network
                     // or a dropped weapon comes back empty after a state sync.
                     ["WeaponType"] = kvp.Value.WeaponType,
                     ["WeaponSlot"] = kvp.Value.WeaponSlot,
-                    ["MagazineAmmo"] = kvp.Value.MagazineAmmo
+                    ["MagazineAmmo"] = kvp.Value.MagazineAmmo,
+                    ["ReservedByPlayerId"] = kvp.Value.ReservedByPlayerId
                 };
                 array.Add(item);
             }
 
             return array;
+        }
+
+        /// <summary>
+        /// Lays claim to an item for a player, or reports that they let go.
+        /// <para>
+        /// A reservation stops anybody else taking the item while somebody is
+        /// reaching for it. It is not a lock: the player who holds it can still
+        /// take it, and anybody else is refused while it stands, which is what
+        /// stops two players reaching for the same weapon and both believing they
+        /// have it.
+        /// </para>
+        /// <para>
+        /// A player cannot displace somebody else's claim. The message that set
+        /// it said who, and a second message saying something else does not get to
+        /// take it over.
+        /// </para>
+        /// </summary>
+        /// <returns>True when the claim changed, false when it was refused or already stood.</returns>
+        public bool TrySetReservation(string itemId, string playerId, bool reserved)
+        {
+            if (string.IsNullOrWhiteSpace(itemId) || string.IsNullOrWhiteSpace(playerId))
+            {
+                return false;
+            }
+
+            lock (_itemStateLock)
+            {
+                if (!_items.TryGetValue(itemId, out var item) || !item.IsActive || item.State != "Spawned")
+                {
+                    return false;
+                }
+
+                if (reserved)
+                {
+                    if (string.IsNullOrEmpty(item.ReservedByPlayerId))
+                    {
+                        item.ReservedByPlayerId = playerId;
+                        return true;
+                    }
+
+                    // Their own claim again, which is not a change.
+                    return string.Equals(item.ReservedByPlayerId, playerId, StringComparison.OrdinalIgnoreCase);
+                }
+
+                if (string.IsNullOrEmpty(item.ReservedByPlayerId))
+                {
+                    return false;
+                }
+
+                // Only the holder lets go. A release naming somebody else would
+                // otherwise be a way to clear a claim you do not own.
+                if (!string.Equals(item.ReservedByPlayerId, playerId, StringComparison.OrdinalIgnoreCase))
+                {
+                    return false;
+                }
+
+                item.ReservedByPlayerId = string.Empty;
+                return true;
+            }
+        }
+
+        /// <summary>
+        /// Whether somebody other than the player has laid claim to the item.
+        /// <para>
+        /// This is what a pickup consults, so a claim stops the item being taken
+        /// out from under whoever is reaching for it.
+        /// </para>
+        /// </summary>
+        public bool IsReservedByAnother(string itemId, string playerId)
+        {
+            if (string.IsNullOrWhiteSpace(itemId))
+            {
+                return false;
+            }
+
+            lock (_itemStateLock)
+            {
+                if (!_items.TryGetValue(itemId, out var item))
+                {
+                    return false;
+                }
+
+                return !string.IsNullOrEmpty(item.ReservedByPlayerId) &&
+                       !string.Equals(item.ReservedByPlayerId, playerId ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+            }
         }
 
         /// <summary>
@@ -580,7 +687,8 @@ namespace OpenGSServer.Network
                     IsActive = itemObj["IsActive"]?.Value<bool>() ?? true,
                     WeaponType = itemObj["WeaponType"]?.ToString() ?? "",
                     WeaponSlot = itemObj["WeaponSlot"]?.Value<int>() ?? -1,
-                    MagazineAmmo = itemObj["MagazineAmmo"]?.Value<int>() ?? -1
+                    MagazineAmmo = itemObj["MagazineAmmo"]?.Value<int>() ?? -1,
+                    ReservedByPlayerId = itemObj["ReservedByPlayerId"]?.ToString() ?? ""
                 };
 
                 if (string.IsNullOrWhiteSpace(item.ItemId) ||

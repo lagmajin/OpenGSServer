@@ -636,6 +636,13 @@ namespace OpenGSServer
                 // spender's.
                 "ItemUse" or
                 "ItemUseRequest" or
+                // A reservation is who is reaching for a weapon, and it used to be
+                // a field the client relayed to other clients. The server has to
+                // hold it, or who holds a claim is whatever each client was told
+                // and a client that heard nothing has nothing to honour.
+                "WeaponReserve" or
+                "WeaponRelease" or
+                "WeaponPickup" or
                 // A dropped weapon leaves the player's hands, so the server has to
                 // be told or the weapon is not really on the ground for anyone.
                 "WeaponDrop";

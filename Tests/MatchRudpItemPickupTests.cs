@@ -664,4 +664,214 @@ public sealed class MatchRudpItemPickupTests : IDisposable
         Assert.Null(InstantItemRules.EffectOf(EInstantItemType.None));
         Assert.False(InstantItemRules.IsUsable(EInstantItemType.None));
     }
+
+    // ---- Weapon reservation ---------------------------------------------
+
+    /// <summary>
+    /// A second realtime client, for the cases where one player has to be kept
+    /// out of something another player is doing.
+    /// <para>
+    /// A reservation is only meaningful between players: the whole point of one
+    /// is that somebody else is refused. A test with a single client could not
+    /// tell a reservation that works from one that does nothing.
+    /// </para>
+    /// </summary>
+    private MatchRudpProbe JoinSecondPlayer(out string secondId)
+    {
+        secondId = "rival-" + Guid.NewGuid().ToString("N").Substring(0, 8);
+        room!.AddNewPlayer(new PlayerInfo(secondId, "Rival"));
+        MatchServerV2.Instance.ServerLagCompensationManager.AddPlayer(secondId);
+
+        var token = server.IssueConnectionToken(secondId);
+        Assert.False(string.IsNullOrWhiteSpace(token), $"no token was issued for {secondId}");
+
+        var rival = new MatchRudpProbe();
+        rival.Listener.NetworkReceiveEvent += (peer, reader, method) =>
+        {
+            var payload = reader.GetString();
+            reader.Recycle();
+            try
+            {
+                rival.Offer(JObject.Parse(payload));
+            }
+            catch (Exception)
+            {
+                // Test only; malformed payloads are ignored.
+            }
+        };
+
+        Assert.True(
+            rival.Connect("127.0.0.1", server.UdpPort ?? 0, secondId, token, roomId, 5000, () => server.PollingEvent()),
+            $"the second realtime client for {secondId} did not connect");
+
+        return rival;
+    }
+
+    /// <summary>
+    /// Claims a weapon, as FieldWeaponController does, naming it by type.
+    /// </summary>
+    private void Reserve(MatchRudpProbe from, string actorId, string messageType = "WeaponReserve")
+    {
+        from.Send(actorId, roomId, new JObject
+        {
+            ["MessageType"] = messageType,
+            ["WeaponType"] = "Rifle"
+        });
+    }
+
+    private string ReservedBy()
+    {
+        var weapon = WeaponItem();
+        return weapon?["ReservedByPlayerId"]?.ToString() ?? "";
+    }
+
+    [Fact]
+    public void AWeaponClaimedOverRealtimeIsRecordedOnTheServer()
+    {
+        SetUpRoom();
+        MoveTo(3f, 0f);
+        DropWeapon("Rifle", magazine: 8);
+        Pump(400);
+
+        Assert.Equal("", ReservedBy());
+
+        Reserve(probe, playerId);
+        Pump(400);
+
+        // A claim used to be a field the client set on its own copy and relayed
+        // to the other clients, so the server never knew who had laid claim to
+        // anything. This is the assertion that it does now.
+        Assert.Equal(playerId, ReservedBy());
+    }
+
+    [Fact]
+    public void AClaimedWeaponCannotBeTakenByAnotherPlayer()
+    {
+        SetUpRoom();
+        MoveTo(3f, 0f);
+        DropWeapon("Rifle", magazine: 8);
+        Pump(400);
+
+        var rival = JoinSecondPlayer(out var rivalId);
+        try
+        {
+            // Both standing where the weapon is, which is the case the claim is
+            // for: two players reaching for the same thing.
+            for (var i = 0; i < 5; i++)
+            {
+                rival.SendPosition(rivalId, roomId, 3f, 0f, 0f, 0f, 0.04f, (byte)(i + 1));
+                Pump(60);
+            }
+
+            Reserve(probe, playerId);
+            Pump(400);
+            Assert.Equal(playerId, ReservedBy());
+
+            var weaponId = WeaponItem()?["ItemId"]?.ToString() ?? "";
+
+            // The rival claims it too, and then tries to take it. A client could
+            // previously do this because there was no claim to honour: two
+            // players would both end up believing they had the weapon.
+            Reserve(rival, rivalId);
+            Pump(400);
+            rival.Send(rivalId, roomId, new JObject
+            {
+                ["MessageType"] = "ItemPickup",
+                ["ItemId"] = weaponId
+            });
+            Pump(400);
+
+            Assert.True(
+                MatchRoomManager.Instance.GetFieldItemManager(roomId)!.TryGetItem(weaponId, out var taken),
+                "the claimed weapon vanished");
+            Assert.Equal("Spawned", taken!.State);
+        }
+        finally
+        {
+            rival.Dispose();
+        }
+    }
+
+    [Fact]
+    public void AClaimCanBeReleasedSoTheWeaponIsFreeAgain()
+    {
+        SetUpRoom();
+        MoveTo(3f, 0f);
+        DropWeapon("Rifle", magazine: 8);
+        Pump(400);
+
+        Reserve(probe, playerId);
+        Pump(400);
+        Assert.Equal(playerId, ReservedBy());
+
+        Reserve(probe, playerId, "WeaponRelease");
+        Pump(400);
+
+        Assert.Equal("", ReservedBy());
+    }
+
+    [Fact]
+    public void AClaimFromAPlayerWithNoPositionIsRefused()
+    {
+        SetUpRoom();
+        DropWeapon("Rifle", magazine: 8);
+        Pump(400);
+
+        // The claim says which weapon, but standing next to it is the server's
+        // half of the claim, and there is nowhere the player is standing.
+        Reserve(probe, playerId);
+        Pump(400);
+
+        Assert.Equal("", ReservedBy());
+    }
+
+    [Fact]
+    public void AClaimOnAWeaponAcrossTheMapIsRefused()
+    {
+        SetUpRoom();
+        MoveTo(3f, 0f);
+        DropWeapon("Rifle", magazine: 8);
+        Pump(400);
+
+        // A weapon elsewhere entirely. Without the reach check, a player could
+        // claim one on the far side of the map and lock it for everybody standing
+        // there, so walk away from it and then try to claim it.
+        MoveTo(30f, 0f);
+        Reserve(probe, playerId);
+        Pump(400);
+
+        Assert.Equal("", ReservedBy());
+    }
+
+    [Fact]
+    public void AClaimOnAWeaponThatIsNotThereIsInert()
+    {
+        SetUpRoom();
+        MoveTo(3f, 0f);
+
+        Reserve(probe, playerId);
+        Pump(400);
+
+        Assert.Null(WeaponItem());
+    }
+
+    [Fact]
+    public void AClaimSurvivesAStateRoundTrip()
+    {
+        SetUpRoom();
+        MoveTo(3f, 0f);
+        DropWeapon("Rifle", magazine: 8);
+        Pump(400);
+
+        Reserve(probe, playerId);
+        Pump(400);
+
+        // The claim is state the server holds, so it has to survive a sync like
+        // the magazine does. A claim that came back empty would leave a weapon
+        // anybody could walk off with.
+        var items = MatchRoomManager.Instance.GetFieldItemManager(roomId)!;
+        items.LoadFromJson(items.ToJson());
+
+        Assert.Equal(playerId, ReservedBy());
+    }
 }

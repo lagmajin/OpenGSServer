@@ -236,6 +236,15 @@ namespace OpenGSServer
                     HandleWeaponDrop(room, playerId, json);
                     break;
 
+                // Reserve, release, and the client's own view of having taken it.
+                // All three are the same fact about who is reaching for a weapon,
+                // so they share one handler.
+                case "WeaponReserve":
+                case "WeaponRelease":
+                case "WeaponPickup":
+                    HandleWeaponReservation(room, playerId, json);
+                    break;
+
                 // The client sends ItemUse on one path and ItemUseRequest on the
                 // other. Both arrive here, and both are treated the same, because
                 // the client is the only one that distinguishes them and the
@@ -604,6 +613,123 @@ namespace OpenGSServer
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// Records, or drops, the claim a player has on a weapon lying about.
+        /// <para>
+        /// The client names the weapon by its type and where it says the weapon
+        /// is, because that is how it identifies one locally. The position in the
+        /// message is a claim about where the weapon is, so it is not used: the
+        /// item is found by its type among the weapons the server knows about, and
+        /// the nearest one wins, which is what the client does for itself.
+        /// </para>
+        /// </summary>
+        private static void HandleWeaponReservation(MatchRoom room, string playerId, JObject json)
+        {
+            var messageType = json["MessageType"]?.ToString() ?? "WeaponReserve";
+            var reserved = !string.Equals(messageType, "WeaponRelease", StringComparison.OrdinalIgnoreCase);
+
+            var weaponType = ReadString(json, "WeaponType", "WeaponID", "WeaponId");
+            if (string.IsNullOrWhiteSpace(weaponType))
+            {
+                Console.WriteLine($"[Match] Ignored weapon reservation with no weapon type from '{playerId}'");
+                return;
+            }
+
+            var itemManager = MatchRoomManager.Instance.GetFieldItemManager(room.Id);
+            if (itemManager == null)
+            {
+                Console.WriteLine($"[Match] Weapon reservation for '{playerId}' with no item manager in room '{room.Id}'");
+                return;
+            }
+
+            var itemId = FindWeaponItem(itemManager, weaponType, playerId);
+            if (string.IsNullOrEmpty(itemId))
+            {
+                Console.WriteLine($"[Match] No weapon of type '{weaponType}' for '{playerId}' to claim in room {room.Id}");
+                return;
+            }
+
+            if (!itemManager.TrySetReservation(itemId, playerId, reserved))
+            {
+                Console.WriteLine($"[Match] Refused weapon {(reserved ? "reservation" : "release")} of '{itemId}' by '{playerId}'");
+                return;
+            }
+
+            Console.WriteLine(
+                $"[Match] {playerId} {(reserved ? "claimed" : "released")} weapon '{itemId}' in room {room.Id}");
+
+            // Everyone is told, because a claim only works if the other players
+            // are the ones honouring it.
+            GameMessageDispatcher.BroadcastToRoom(room.Id.ToString(), new JObject
+            {
+                ["MessageType"] = reserved ? "WeaponReserved" : "WeaponReleased",
+                ["RoomID"] = room.Id.ToString(),
+                ["ItemId"] = itemId,
+                ["WeaponId"] = itemId,
+                ["PlayerID"] = playerId,
+                ["PlayerId"] = playerId,
+                ["ReservedByPlayerId"] = playerId,
+                ["WeaponType"] = weaponType,
+                ["Timestamp"] = DateTime.UtcNow.ToString("o")
+            });
+        }
+
+        /// <summary>
+        /// Finds the weapon of a type that the claiming player is standing next to.
+        /// <para>
+        /// The claim only means something next to the weapon, so the search is
+        /// limited to what the player could actually be reaching for. Without
+        /// that, a player could claim a weapon on the far side of the map and lock
+        /// it for everybody standing there.
+        /// </para>
+        /// </summary>
+        private static string FindWeaponItem(
+            OpenGSServer.Network.ServerFieldItemManager itemManager,
+            string weaponType,
+            string playerId)
+        {
+            var state = MatchServerV2.Instance.ServerLagCompensationManager.GetPlayerState(playerId);
+            if (string.IsNullOrEmpty(state.PlayerId) || !state.HasAuthoritativePosition)
+            {
+                return string.Empty;
+            }
+
+            // How far a player can be from a weapon and still be reaching for it.
+            // The client matches a weapon to itself within half a unit, so this is
+            // the same neighbourhood widened for the lag.
+            const float reach = 2.5f;
+
+            string? bestId = null;
+            var bestDistance = float.MaxValue;
+
+            foreach (var item in itemManager.ToJson())
+            {
+                if (item["ItemType"]?.ToString() != nameof(EFieldItemType.WeaponItem) ||
+                    item["State"]?.ToString() != "Spawned")
+                {
+                    continue;
+                }
+
+                if (!string.Equals(item["WeaponType"]?.ToString(), weaponType, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var dx = (item["PositionX"]?.Value<float>() ?? 0f) - state.PositionX;
+                var dy = (item["PositionY"]?.Value<float>() ?? 0f) - state.PositionY;
+                var distance = MathF.Sqrt((dx * dx) + (dy * dy));
+                if (distance > reach || distance >= bestDistance)
+                {
+                    continue;
+                }
+
+                bestDistance = distance;
+                bestId = item["ItemId"]?.ToString();
+            }
+
+            return bestId ?? string.Empty;
         }
 
         private static void HandlePlayerKilled(MatchRoom room, string killerId, string killedPlayerId)
