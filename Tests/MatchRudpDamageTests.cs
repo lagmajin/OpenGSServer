@@ -454,6 +454,42 @@ public sealed class MatchRudpDamageTests : IDisposable
     }
 
     [Fact]
+    public void APlayerWhoLeavesIsNoLongerCountedInTheirRoom()
+    {
+        // A disconnected player was cleared of their flag and their rate limiters
+        // and left in the room. The room kept counting them, so a team whose
+        // players had all left still read as having somebody standing in it, and
+        // the wipe that ends a team survival match could not arrive. It also let
+        // the result name somebody who had gone as the winner.
+        var owner = "leaving-" + Guid.NewGuid().ToString("N").Substring(0, 8);
+        var rival = "leaving-blue-" + Guid.NewGuid().ToString("N").Substring(0, 8);
+        var created = MatchRoomManager.Instance.CreateNewTSuvRoom("leavers", owner, capacity: 4);
+
+        try
+        {
+            var room = MatchRoomManager.Instance.GetRoomById(created.RoomId) as MatchRoom;
+            Assert.NotNull(room);
+            room!.AddNewPlayer(new PlayerInfo(owner, "Red") { Team = ETeam.Red, Health = 100 });
+            room.AddNewPlayer(new PlayerInfo(rival, "Blue") { Team = ETeam.Blue, Health = 100 });
+            room.GameStart();
+
+            Assert.True(room.ContainsPlayer(owner));
+            Assert.Equal(1, room.AliveCountOn(ETeam.Red));
+
+            InGameMatchEventHandler.ClearPlayerState(owner);
+
+            Assert.False(
+                room.ContainsPlayer(owner),
+                "a player who left is still in the room and still being counted as standing in it");
+            Assert.Equal(0, room.AliveCountOn(ETeam.Red));
+        }
+        finally
+        {
+            MatchRoomManager.Instance.RemoveRoom(created.RoomId, forceShutdownNowPlayingRooms: true);
+        }
+    }
+
+    [Fact]
     public void AStatusQuestionIsAnsweredToThePlayerThatAsked()
     {
         SetUpRoom();

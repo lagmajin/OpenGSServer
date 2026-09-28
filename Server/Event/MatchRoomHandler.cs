@@ -1621,6 +1621,14 @@ namespace OpenGSServer
                 }
             }
 
+            // A player who has gone is not in the room any more. They were left
+            // in it, so the room kept counting them as a team that still had
+            // somebody standing in it, and a wipe that ends a team survival match
+            // could never arrive while a ghost was holding a team up. It also let
+            // the result name somebody who had left as the winner.
+            var matchRoom = MatchRoomManager.Instance.SearchRoomByMemberID(playerId);
+            matchRoom?.RemovePlayer(playerId);
+
             foreach (var entry in LastFlagEvents.Keys.Where(key => key.Contains($":{playerId}:", StringComparison.OrdinalIgnoreCase)))
             {
                 LastFlagEvents.TryRemove(entry, out _);
