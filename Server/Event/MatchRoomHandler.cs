@@ -96,6 +96,52 @@ namespace OpenGSServer
         }
 
         /// <summary>
+        /// A clock the client cannot set, for how long a flag has been lying
+        /// about.
+        /// </summary>
+        private static double ServerNowSeconds() => (double)DateTime.UtcNow.TimeOfDay.TotalSeconds;
+
+        /// <summary>
+        /// Puts back any flag that has been on the ground long enough.
+        /// <para>
+        /// The client has a timer for this and the client was the only side that
+        /// had one, so a dropped flag came back only if some client lived long
+        /// enough to say so. A flag whose return message never arrived stayed on
+        /// the ground for the rest of the match, and the team that owned it could
+        /// never pick it up again, so it could never score. The server holds the
+        /// flag, so the server keeps the time.
+        /// </para>
+        /// <para>
+        /// This runs from the match loop rather than from a claim, because a flag
+        /// sitting on the ground waiting is not an event; it is a state that
+        /// becomes untrue on a timer.
+        /// </para>
+        /// </summary>
+        public static void ReturnTimedOutFlags(MatchRoom room)
+        {
+            if (room == null)
+            {
+                return;
+            }
+
+            var now = ServerNowSeconds();
+            var team = FlagStateFor(room).WithFlags(flags =>
+                CaptureTheFlagRules.ReturnTimedOutFlags(flags, now));
+
+            if (team == ETeam.NoTeam)
+            {
+                return;
+            }
+
+            Console.WriteLine($"[Match] The {team} flag had been on the ground long enough to go home");
+            GameMessageDispatcher.SendFlagReturned(
+                room.Id.ToString(),
+                team.ToString(),
+                string.Empty,
+                EFlagReturnReason.AutoReturn.ToString());
+        }
+
+        /// <summary>
         /// Where each of a room's flags is, for a caller that has to reason about
         /// the flags rather than move them.
         /// <para>
@@ -1039,8 +1085,94 @@ namespace OpenGSServer
             }
         }
 
+        /// <summary>
+        /// Puts a flag a player was carrying onto the ground, because that player
+        /// is out of the match.
+        /// <para>
+        /// The rule says a carrier who dies drops the flag, so the server does it
+        /// from the death it has already ruled on rather than waiting to be told.
+        /// A client can still report it, and that report is refused because the
+        /// player is no longer the carrier, which keeps one drop from becoming
+        /// two.
+        /// </para>
+        /// </summary>
+        private static void DropFlagCarriedBy(MatchRoom room, string playerId)
+        {
+            var now = ServerNowSeconds();
+            var dropped = FlagStateFor(room).WithFlags(flags =>
+            {
+                foreach (var flag in flags.Values)
+                {
+                    if (flag.IsCarried &&
+                        string.Equals(flag.CarrierId, playerId, StringComparison.OrdinalIgnoreCase) &&
+                        flag.Drop(now))
+                    {
+                        return flag.Team;
+                    }
+                }
+
+                return ETeam.NoTeam;
+            });
+
+            if (dropped == ETeam.NoTeam)
+            {
+                return;
+            }
+
+            // A carrier who went down is where the flag lands, so the position
+            // comes from the place the server already holds for them rather than
+            // from anything the client said.
+            if (TryGetAuthoritativePosition(playerId, out var x, out var y, out var z))
+            {
+                NoteFlagPosition(room, dropped, x, y, z);
+            }
+
+            Console.WriteLine($"[Match] {playerId} went down carrying the {dropped} flag");
+            GameMessageDispatcher.SendFlagLost(room.Id.ToString(), dropped.ToString(), playerId);
+        }
+
+        /// <summary>
+        /// Whether a claim about a flag came from the player it names as the one
+        /// holding it.
+        /// <para>
+        /// Every client simulates every player, so a flag standing in the world
+        /// fires its trigger on each client in the room, not only on the one whose
+        /// player touched it. That means several clients report the same pickup
+        /// and each names whoever their own copy says is carrying it. Without
+        /// this check the first report to arrive wins and the flag is recorded
+        /// against a player who never went near it, which then makes that player
+        /// the carrier the server believes: their own death drops nothing, and a
+        /// team can be denied a capture for the rest of the match by a claim made
+        /// on its behalf.
+        /// </para>
+        /// </summary>
+        private static bool IsClaimFromTheCarrier(MatchRoom room, string playerId, JObject json)
+        {
+            var named = ReadString(json, "CarrierId", "CarrierID", "PickedUpByPlayerId");
+            if (string.IsNullOrWhiteSpace(named))
+            {
+                // Nothing named a carrier. The player speaking is the only
+                // evidence there is, and that is the claim this is about.
+                return true;
+            }
+
+            if (string.Equals(named, playerId, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            Console.WriteLine(
+                $"[Match] Ignored a flag claim from '{playerId}' naming carrier '{named}': a client reports on behalf of its own player");
+            return false;
+        }
+
         private static void HandleFlagLost(MatchRoom room, string playerId, JObject json)
         {
+            if (!IsClaimFromTheCarrier(room, playerId, json))
+            {
+                return;
+            }
+
             var flagTeam = ResolveFlagTeam(json, playerId);
             if (flagTeam == ETeam.NoTeam)
             {
@@ -1051,11 +1183,15 @@ namespace OpenGSServer
 
             // Only the flag this player is actually holding can be dropped. A
             // claim that a flag was lost is a claim about a carrier, so a player
-            // holding nothing has nothing to drop.
+            // holding nothing has nothing to drop. The server drops it itself when
+            // it rules the carrier down, so a report that arrives after that is
+            // refused here rather than counting the drop twice.
+            var now = ServerNowSeconds();
+            var reported = ReadReportedPosition(json);
             var dropped = flagState.WithFlags(flags =>
                 flags.TryGetValue(flagTeam, out var flag) && flag.IsCarried &&
                 string.Equals(flag.CarrierId, playerId, StringComparison.OrdinalIgnoreCase) &&
-                flag.Drop());
+                flag.Drop(now));
 
             if (!dropped)
             {
@@ -1064,12 +1200,32 @@ namespace OpenGSServer
                 return;
             }
 
+            // Where a flag lands is where it lies. A client that says where is
+            // believed, because it is the client whose player dropped it, and one
+            // that does not is answered from the place the server already holds
+            // for the carrier. Without a position the server would know the flag
+            // was loose and not where, so a later pickup has nothing to be
+            // measured against and is taken on trust.
+            if (reported != null)
+            {
+                NoteFlagPosition(room, flagTeam, reported.Value.X, reported.Value.Y, 0f);
+            }
+            else if (TryGetAuthoritativePosition(playerId, out var dx, out var dy, out var dz))
+            {
+                NoteFlagPosition(room, flagTeam, dx, dy, dz);
+            }
+
             Console.WriteLine($"The {flagTeam} flag was dropped by {playerId}");
             GameMessageDispatcher.SendFlagLost(room.Id.ToString(), flagTeam.ToString(), playerId);
         }
 
         private static void HandleFlagPickup(MatchRoom room, string playerId, JObject json)
         {
+            if (!IsClaimFromTheCarrier(room, playerId, json))
+            {
+                return;
+            }
+
             var flagTeam = ResolveFlagTeam(json, playerId);
             if (flagTeam == ETeam.NoTeam)
             {
@@ -1085,6 +1241,16 @@ namespace OpenGSServer
             {
                 Console.WriteLine(
                     $"[Match] Refused a pickup by '{playerId}': a {carrierTeam} player cannot pick up the {flagTeam} flag");
+                return;
+            }
+
+            // A flag sitting on its own stand is the one thing a player must be
+            // standing next to in order to take. The other two claims are checked
+            // against state the server already holds, and this one was the only
+            // flag message that was not, so a client could assert that it had
+            // picked up a flag it had never walked to.
+            if (!IsStandingAtAFlag(room, playerId, flagTeam))
+            {
                 return;
             }
 
@@ -1105,15 +1271,208 @@ namespace OpenGSServer
             GameMessageDispatcher.SendFlagPickup(room.Id.ToString(), carrierTeam.ToString(), playerId);
         }
 
+        /// <summary>
+        /// Where each team's flag is when it is on the ground or being carried.
+        /// <para>
+        /// A flag on its own stand is not placed here: the stand is a thing in the
+        /// scene, and a room with no flag stand registered has no known position
+        /// for a flag to be on. That is a real state for a headless room, so a
+        /// claim in one is judged on the carrier check alone rather than refused
+        /// for want of a position nobody has.
+        /// </para>
+        /// </summary>
+        private static readonly ConcurrentDictionary<string, System.Numerics.Vector3> FlagPositions =
+            new();
+
+        private static string FlagPositionKey(MatchRoom room, ETeam team) => $"{room.Id}:{team}";
+
+        /// <summary>
+        /// Where a message says a thing is, or null when it says nothing usable.
+        /// <para>
+        /// A position in a message is a claim about where something is, so both
+        /// coordinates have to be present and finite. A missing one would place a
+        /// flag at the origin, and the origin is where nothing is.
+        /// </para>
+        /// </summary>
+        private static (float X, float Y)? ReadReportedPosition(JObject json)
+        {
+            if (json == null)
+            {
+                return null;
+            }
+
+            if (!TryReadFiniteFloat(json, new[] { "PosX", "PositionX", "X" }, out var x) ||
+                !TryReadFiniteFloat(json, new[] { "PosY", "PositionY", "Y" }, out var y))
+            {
+                return null;
+            }
+
+            return (x, y);
+        }
+
+        private static bool TryReadFiniteFloat(JObject json, string[] keys, out float value)
+        {
+            value = 0f;
+            if (json == null || keys == null)
+            {
+                return false;
+            }
+
+            foreach (var key in keys)
+            {
+                if (string.IsNullOrWhiteSpace(key))
+                {
+                    continue;
+                }
+
+                var token = json.GetValue(key);
+                if (token == null)
+                {
+                    continue;
+                }
+
+                if (!float.TryParse(
+                        token.ToString(),
+                        System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        out var parsed) ||
+                    !float.IsFinite(parsed))
+                {
+                    continue;
+                }
+
+                value = parsed;
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Records where a team's flag is, from a report that a flag is on the
+        /// ground or in somebody's hands.
+        /// <para>
+        /// A dropped flag is a position like any other, and this is where it comes
+        /// from. A client saying where its own copy of a flag is cannot create one,
+        /// so a flag whose position nobody has reported is judged on the carrier
+        /// check alone.
+        /// </para>
+        /// </summary>
+        public static void NoteFlagPosition(MatchRoom room, ETeam team, float x, float y, float z)
+        {
+            if (room == null || team == ETeam.NoTeam)
+            {
+                return;
+            }
+
+            FlagPositions[FlagPositionKey(room, team)] = new System.Numerics.Vector3(x, y, z);
+        }
+
+        private static void ForgetFlagPosition(MatchRoom room, ETeam team)
+        {
+            FlagPositions.TryRemove(FlagPositionKey(room, team), out _);
+        }
+
+        /// <summary>
+        /// Whether a player is close enough to a flag to be reaching for it.
+        /// <para>
+        /// A flag on its own stand is not checked here, because a stand is scenery
+        /// and its position is not something the server was told. A flag on the
+        /// ground or in somebody's hands has a position the server holds, and that
+        /// is the one a claim is measured against.
+        /// </para>
+        /// </summary>
+        private static bool IsStandingAtAFlag(MatchRoom room, string playerId, ETeam flagTeam)
+        {
+            if (!TryGetAuthoritativePosition(playerId, out var px, out var py, out var pz))
+            {
+                Console.WriteLine(
+                    $"[Match] Refused a {flagTeam} flag pickup by '{playerId}': no authoritative position");
+                return false;
+            }
+
+            var flagState = FlagStateFor(room);
+            var isOnItsStand = flagState.WithFlags(flags =>
+                !flags.TryGetValue(flagTeam, out var flag) || flag.IsAtBase);
+
+            if (isOnItsStand)
+            {
+                return true;
+            }
+
+            if (!FlagPositions.TryGetValue(FlagPositionKey(room, flagTeam), out var position))
+            {
+                // A flag whose position nobody has reported cannot be measured
+                // against, so the carrier check stands on its own rather than a
+                // claim being refused for the lack of a number.
+                return true;
+            }
+
+            var dx = position.X - px;
+            var dy = position.Y - py;
+            if (MathF.Sqrt((dx * dx) + (dy * dy)) > FlagPickupReach)
+            {
+                Console.WriteLine(
+                    $"[Match] Refused a {flagTeam} flag pickup by '{playerId}': they are not next to it");
+                return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// How close a player has to be to a flag to be able to pick it up.
+        /// <para>
+        /// A pickup claim is the one flag message with nothing to check it against:
+        /// a field item is refused unless the server's own position for the player
+        /// is near the spawn, and a shot is re-derived rather than taken from the
+        /// message. Without the same here, a client can assert that it picked up a
+        /// flag sitting safely on the other team's stand, and that team can then
+        /// never score.
+        /// </para>
+        /// </summary>
+        public const float FlagPickupReach = 3.0f;
+
+        /// <summary>
+        /// Whether the server holds a position for a player, and where.
+        /// <para>
+        /// A player who has never reported a position still reads as the origin,
+        /// so checking an id alone would treat "position unknown" as "standing at
+        /// 0,0,0" and hand out a flag that is spawning there.
+        /// </para>
+        /// </summary>
+        private static bool TryGetAuthoritativePosition(string playerId, out float x, out float y, out float z)
+        {
+            var state = MatchServerV2.Instance.ServerLagCompensationManager.GetPlayerState(playerId);
+            if (string.IsNullOrEmpty(state.PlayerId) || !state.HasAuthoritativePosition)
+            {
+                x = y = z = 0f;
+                return false;
+            }
+
+            x = state.PositionX;
+            y = state.PositionY;
+            z = state.PositionZ;
+            return true;
+        }
+
         private static void HandleFlagReturn(MatchRoom room, string playerId, JObject json)
         {
+            // A flag that came back by itself is not a player's claim at all, so
+            // there is no carrier to check. A friendly recovery names one, and it
+            // has to be the player speaking: every client simulates every player,
+            // so a claim naming somebody else is one of them reporting for a peer.
+            var reason = ParseFlagReturnReason(ReadString(json, "ReturnReason"));
+            if (reason != EFlagReturnReason.AutoReturn && !IsClaimFromTheCarrier(room, playerId, json))
+            {
+                return;
+            }
+
             var flagTeam = ResolveFlagTeam(json, playerId);
             if (flagTeam == ETeam.NoTeam)
             {
                 return;
             }
-
-            var reason = ParseFlagReturnReason(ReadString(json, "ReturnReason"));
 
             var flagState = FlagStateFor(room);
             var returned = flagState.WithFlags(flags =>
@@ -1738,6 +2097,15 @@ namespace OpenGSServer
                 attacker.Kills++;
             }
 
+            // A player who goes down leaves whatever they were carrying on the
+            // ground. The server has to do this itself: a client used to report
+            // it, and a message that never arrived, because the link was down or
+            // the claim was refused for want of a carrier, left the flag recorded
+            // as carried by somebody who was out of the match. That team could
+            // then never score, because the capture rule asks whether a flag is
+            // still in the room and the server's answer was permanently no.
+            DropFlagCarriedBy(room, targetId);
+
             Console.WriteLine(
                 $"[Match] {targetId} is down in room {room.Id} (hit by {attackerId})");
 
@@ -1948,6 +2316,11 @@ namespace OpenGSServer
                 target.Deaths++;
                 shooter.Kills++;
                 shooter.Score += 100;
+
+                // The same reason as the projectile path: a carrier who goes down
+                // leaves the flag on the ground, and the server is the one that
+                // knows the player went down.
+                DropFlagCarriedBy(room, targetId);
                 HandlePlayerKilled(room, shooterId, targetId);
             }
         }

@@ -40,7 +40,7 @@ public sealed class MatchRudpFlagTests : IDisposable
         }
     }
 
-    private void SetUpRoom()
+    private void SetUpRoom(bool redHasPosition = true)
     {
         var created = MatchRoomManager.Instance.CreateNewCTFMatchRoom("rudp-flag", RedPlayerId, capacity: 4);
         roomId = created.RoomId;
@@ -50,6 +50,22 @@ public sealed class MatchRudpFlagTests : IDisposable
         room!.AddNewPlayer(new PlayerInfo(RedPlayerId, "Red") { Team = ETeam.Red });
         room.AddNewPlayer(new PlayerInfo(BluePlayerId, "Blue") { Team = ETeam.Blue });
         room.GameStart();
+
+        // A pickup is measured against the server's own record of where the
+        // player is, so a player needs a position the server will accept. One who
+        // has never reported one still reads as the origin, which is where the
+        // flag is, so a reach check would pass by accident and hide the one that
+        // should fail.
+        var lag = MatchServerV2.Instance.ServerLagCompensationManager;
+        lag.StartMatch(roomId);
+        lag.AddPlayer(RedPlayerId);
+        lag.AddPlayer(BluePlayerId);
+        if (redHasPosition)
+        {
+            lag.SetPlayerPosition(RedPlayerId, 0f, 0f, 0f);
+        }
+
+        lag.SetPlayerPosition(BluePlayerId, 0f, 0f, 0f);
     }
 
     /// <summary>
@@ -63,6 +79,25 @@ public sealed class MatchRudpFlagTests : IDisposable
     /// </para>
     /// </summary>
     private static void Claim(string playerId, string roomId, string messageType, ETeam? flagTeam = null)
+    {
+        ClaimClaiming(playerId, roomId, messageType, flagTeam, carrierId: null);
+    }
+
+    /// <summary>
+    /// The same claim, naming the player it says is the one holding the flag.
+    /// <para>
+    /// A client that does not name a carrier is claiming for itself, which is
+    /// the only evidence there is. A client that names one is claiming on behalf
+    /// of somebody, which is what a client reporting its own copy of a peer's
+    /// player looks like, and the two are not the same statement.
+    /// </para>
+    /// </summary>
+    private static void ClaimClaiming(
+        string playerId,
+        string roomId,
+        string messageType,
+        ETeam? flagTeam,
+        string? carrierId)
     {
         var json = new JObject
         {
@@ -78,6 +113,11 @@ public sealed class MatchRudpFlagTests : IDisposable
             json["FlagTeam"] = flagTeam.Value.ToString();
         }
 
+        if (!string.IsNullOrWhiteSpace(carrierId))
+        {
+            json["CarrierId"] = carrierId;
+        }
+
         InGameMatchEventHandler.HandleUdpGameEvent(
             Encoding.UTF8.GetBytes(json.ToString(Newtonsoft.Json.Formatting.None)),
             "127.0.0.1:0");
@@ -85,6 +125,30 @@ public sealed class MatchRudpFlagTests : IDisposable
 
     private IReadOnlyDictionary<ETeam, TeamFlag> Flags() =>
         InGameMatchEventHandler.GetFlagStates(roomId);
+
+    /// <summary>
+    /// Walks the red player away from the origin, one unit at a time.
+    /// <para>
+    /// The server only adopts a position within a tolerance of the one it holds,
+    /// and a large jump at a fixed delta is outside that while a small step is
+    /// inside it. Setting the position directly would skip the code the transport
+    /// runs, and a test that skips it is not testing the path.
+    /// </para>
+    /// </summary>
+    private void MoveAway(float x, float y)
+    {
+        var lag = MatchServerV2.Instance.ServerLagCompensationManager;
+        var state = lag.GetPlayerState(RedPlayerId);
+        var steps = Math.Max(1, (int)MathF.Ceiling(MathF.Sqrt(
+            ((x - state.PositionX) * (x - state.PositionX)) +
+            ((y - state.PositionY) * (y - state.PositionY)))));
+
+        for (var i = 1; i <= steps; i++)
+        {
+            var t = (float)i / steps;
+            lag.SetPlayerPosition(RedPlayerId, state.PositionX + ((x - state.PositionX) * t), state.PositionY, 0f);
+        }
+    }
 
     // ---- The flag itself -------------------------------------------------
 
@@ -416,6 +480,171 @@ public sealed class MatchRudpFlagTests : IDisposable
         Assert.Single(recorder.RulingsOfType(GameMessageTypes.FlagCaptured));
         Assert.Single(recorder.RulingsOfType(GameMessageTypes.FlagBurst));
         Assert.Equal(1, room!.GetFlagScore(ETeam.Red));
+    }
+
+    [Fact]
+    public void AClientCannotClaimAPickupOnBehalfOfSomebodyElse()
+    {
+        SetUpRoom();
+
+        BroadcastRecorder.During(() =>
+        {
+            GameMessageDispatcher.Initialize(new BroadcastRecorder());
+            Claim(RedPlayerId, roomId, GameMessageTypes.FlagPickup, ETeam.Blue);
+        });
+
+        var recorder = new BroadcastRecorder();
+        BroadcastRecorder.During(() =>
+        {
+            GameMessageDispatcher.Initialize(recorder);
+            ClaimClaiming(RedPlayerId, roomId, GameMessageTypes.FlagPickup, ETeam.Blue, "other-red");
+        });
+
+        // Every client simulates every player, so a flag standing in the world
+        // fires its trigger on each of them and each names whoever their own copy
+        // says is carrying it. Whichever report landed first used to win, so a
+        // player who never went near the flag ended up recorded as carrying it,
+        // and the flag the server then believed in was one a real carrier's death
+        // could not drop.
+        Assert.Equal(RedPlayerId, Flags()[ETeam.Blue].CarrierId);
+        Assert.Empty(recorder.RulingsOfType(GameMessageTypes.FlagPickup));
+    }
+
+    [Fact]
+    public void ADroppedFlagGoesHomeByItselfSoNobodyIsStuckWithoutOne()
+    {
+        SetUpRoom();
+
+        BroadcastRecorder.During(() =>
+        {
+            GameMessageDispatcher.Initialize(new BroadcastRecorder());
+            Claim(RedPlayerId, roomId, GameMessageTypes.FlagPickup, ETeam.Blue);
+            Claim(RedPlayerId, roomId, GameMessageTypes.FlagLost, ETeam.Blue);
+        });
+
+        Assert.Equal(EFlagState.FlagOnGround, Flags()[ETeam.Blue].State);
+
+        // The server holds the flag, so the server keeps the time. It used to be
+        // the only side with a timer, so a dropped flag came back only if some
+        // client lived long enough to say so, and one that did not stayed on the
+        // ground for the rest of the match with its team unable to score.
+        var flags = InGameMatchEventHandler.GetFlagStates(roomId);
+        var blue = flags[ETeam.Blue];
+        blue.AutoReturnSeconds = 0.1f;
+
+        System.Threading.Thread.Sleep(200);
+        InGameMatchEventHandler.ReturnTimedOutFlags(room!);
+
+        Assert.Equal(EFlagState.FlagOnStand, Flags()[ETeam.Blue].State);
+    }
+
+    [Fact]
+    public void AFlagPickedUpBeforeItsDeadlineKeepsIt()
+    {
+        SetUpRoom();
+
+        BroadcastRecorder.During(() =>
+        {
+            GameMessageDispatcher.Initialize(new BroadcastRecorder());
+            Claim(RedPlayerId, roomId, GameMessageTypes.FlagPickup, ETeam.Blue);
+            Claim(RedPlayerId, roomId, GameMessageTypes.FlagLost, ETeam.Blue);
+        });
+
+        var flags = InGameMatchEventHandler.GetFlagStates(roomId);
+        flags[ETeam.Blue].AutoReturnSeconds = 0.1f;
+
+        BroadcastRecorder.During(() =>
+        {
+            GameMessageDispatcher.Initialize(new BroadcastRecorder());
+            Claim(RedPlayerId, roomId, GameMessageTypes.FlagPickup, ETeam.Blue);
+        });
+
+        System.Threading.Thread.Sleep(200);
+        InGameMatchEventHandler.ReturnTimedOutFlags(room!);
+
+        // The clock stops when the flag is taken again, so a carrier who gets to
+        // it in time keeps it rather than losing it to a timer that never noticed
+        // it had moved.
+        Assert.Equal(EFlagState.FlagCapturedPlayer, Flags()[ETeam.Blue].State);
+        Assert.Equal(RedPlayerId, Flags()[ETeam.Blue].CarrierId);
+    }
+
+    [Fact]
+    public void AFlagOnTheGroundCannotBeTakenFromAcrossTheMap()
+    {
+        SetUpRoom();
+
+        BroadcastRecorder.During(() =>
+        {
+            GameMessageDispatcher.Initialize(new BroadcastRecorder());
+            Claim(RedPlayerId, roomId, GameMessageTypes.FlagPickup, ETeam.Blue);
+            Claim(RedPlayerId, roomId, GameMessageTypes.FlagLost, ETeam.Blue);
+        });
+
+        // The flag lies where the carrier was standing, which is the server's
+        // own record of the position rather than anything the client said.
+        Assert.Equal(EFlagState.FlagOnGround, Flags()[ETeam.Blue].State);
+
+        MoveAway(200f, 0f);
+
+        var recorder = new BroadcastRecorder();
+        BroadcastRecorder.During(() =>
+        {
+            GameMessageDispatcher.Initialize(recorder);
+            Claim(RedPlayerId, roomId, GameMessageTypes.FlagPickup, ETeam.Blue);
+        });
+
+        // A pickup is the one flag message with nothing to check it against: a
+        // field item is refused unless the server's position for the player is
+        // near the spawn, and a shot is re-derived rather than believed. Without
+        // the same here, a client can assert that it picked up a flag standing
+        // safely on the other team's stand, and that team can never score.
+        Assert.Equal(EFlagState.FlagOnGround, Flags()[ETeam.Blue].State);
+        Assert.Empty(recorder.RulingsOfType(GameMessageTypes.FlagPickup));
+    }
+
+    [Fact]
+    public void AFlagNextToThePlayerCanBeTaken()
+    {
+        SetUpRoom();
+
+        BroadcastRecorder.During(() =>
+        {
+            GameMessageDispatcher.Initialize(new BroadcastRecorder());
+            Claim(RedPlayerId, roomId, GameMessageTypes.FlagPickup, ETeam.Blue);
+            Claim(RedPlayerId, roomId, GameMessageTypes.FlagLost, ETeam.Blue);
+        });
+
+        var recorder = new BroadcastRecorder();
+        BroadcastRecorder.During(() =>
+        {
+            GameMessageDispatcher.Initialize(recorder);
+            Claim(RedPlayerId, roomId, GameMessageTypes.FlagPickup, ETeam.Blue);
+        });
+
+        // The reach check must not stop the ordinary case, or the flag can never
+        // be picked up again and the mode is unplayable in the other direction.
+        Assert.Equal(EFlagState.FlagCapturedPlayer, Flags()[ETeam.Blue].State);
+        Assert.Single(recorder.RulingsOfType(GameMessageTypes.FlagPickup));
+    }
+
+    [Fact]
+    public void APlayerWithNoPositionCannotClaimAFlag()
+    {
+        // Nothing has reported a position for red, so red still reads as the
+        // origin, which is where the flag is. Checking the claim on that would
+        // let a player the server has never seen take a flag off its stand.
+        SetUpRoom(redHasPosition: false);
+
+        var recorder = new BroadcastRecorder();
+        BroadcastRecorder.During(() =>
+        {
+            GameMessageDispatcher.Initialize(recorder);
+            Claim(RedPlayerId, roomId, GameMessageTypes.FlagPickup, ETeam.Blue);
+        });
+
+        Assert.Equal(EFlagState.FlagOnStand, Flags()[ETeam.Blue].State);
+        Assert.Empty(recorder.RulingsOfType(GameMessageTypes.FlagPickup));
     }
 
     [Fact]

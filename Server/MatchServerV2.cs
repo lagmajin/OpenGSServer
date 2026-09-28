@@ -212,6 +212,16 @@ namespace OpenGSServer
                 // on the server at all.
                 InGameMatchEventHandler.UpdateProjectiles(tickSeconds);
 
+                // A flag lying on the ground becomes due back on a timer, and the
+                // server is the side that holds it. The client had the only timer,
+                // so a dropped flag came back only if some client lived long
+                // enough to say so, and one that did not stayed on the ground for
+                // the rest of the match with its team unable to score.
+                foreach (var matchRoom in matchRoomManager.AllRooms().OfType<MatchRoom>())
+                {
+                    InGameMatchEventHandler.ReturnTimedOutFlags(matchRoom);
+                }
+
                 _serverLagCompensationManager.Update((_gameLoopTimer?.IntervalMs ?? 40) / 1000.0f);
 
                 // TCPフレームカウント更新
