@@ -407,4 +407,261 @@ public sealed class MatchRudpItemPickupTests : IDisposable
         Assert.False(FieldItemTypeNames.IsTimedBuff(EFieldItemType.WeaponItem));
         Assert.True(FieldItemTypeNames.IsCarriedEquipment(EFieldItemType.WeaponItem));
     }
+
+    // ---- Instant item use -----------------------------------------------
+
+    /// <summary>
+    /// Uses an instant item the way a client does, over the realtime channel.
+    /// <para>
+    /// The effect name is included because the client sends one. It is there to
+    /// be ignored, and the test that passes a generous amount is the one that
+    /// proves it is.
+    /// </para>
+    /// </summary>
+    private void UseItem(string itemType, string effect = "heal", int? amount = null)
+    {
+        var payload = new JObject
+        {
+            ["MessageType"] = "ItemUseRequest",
+            ["PlayerId"] = playerId,
+            ["ItemType"] = itemType,
+            ["Effect"] = effect
+        };
+        if (amount.HasValue)
+        {
+            payload["Amount"] = amount.Value;
+        }
+
+        probe.Send(playerId, roomId, payload);
+    }
+
+    private void Carry(EInstantItemType type)
+    {
+        Assert.True(room.TryGetPlayer(playerId, out var player), "the player left the room");
+        player!.EquipInstantItems.Add(type);
+    }
+
+    private void SetHealth(int health)
+    {
+        Assert.True(room.TryGetPlayer(playerId, out var player), "the player left the room");
+        player!.Health = health;
+    }
+
+    private int PlayerHealth()
+    {
+        Assert.True(room.TryGetPlayer(playerId, out var player), "the player left the room");
+        return player!.Health;
+    }
+
+    private bool StillCarrying(EInstantItemType type)
+    {
+        Assert.True(room.TryGetPlayer(playerId, out var player), "the player left the room");
+        return player!.EquipInstantItems.Contains(type);
+    }
+
+    [Fact]
+    public void UsingAHealthKitOverRealtimeRaisesTheHealthTheServerHolds()
+    {
+        SetUpRoom();
+        MoveTo(0f, 0f);
+
+        SetHealth(40);
+        Carry(EInstantItemType.HealthKit);
+
+        // The message was dropped before the dispatcher ever saw it, so a spent
+        // item did nothing on the server at all and only the spender's own screen
+        // changed. The health the server holds is what is asserted here.
+        UseItem("HealthKit");
+        Pump(400);
+
+        Assert.Equal(70, PlayerHealth());
+    }
+
+    [Fact]
+    public void AHealthKitIsSpentWhenItIsUsed()
+    {
+        SetUpRoom();
+        MoveTo(0f, 0f);
+
+        SetHealth(40);
+        Carry(EInstantItemType.HealthKit);
+
+        UseItem("HealthKit");
+        Pump(400);
+
+        // Using an item and asking for one are different. Without the spend, a
+        // client could use the same kit for the rest of the match.
+        Assert.False(StillCarrying(EInstantItemType.HealthKit));
+    }
+
+    [Fact]
+    public void TheAmountTheMessageClaimsIsNotWhatHeals()
+    {
+        SetUpRoom();
+        MoveTo(0f, 0f);
+
+        SetHealth(10);
+        Carry(EInstantItemType.HealthKit);
+
+        // The client used to name the effect and apply it to itself, so how much
+        // a kit healed was whatever the sender said. A claim for a full heal from
+        // ten health would have been granted.
+        UseItem("HealthKit", effect: "heal", amount: 9999);
+        Pump(400);
+
+        Assert.Equal(40, PlayerHealth());
+    }
+
+    [Fact]
+    public void AHealthKitCannotTakeHealthPastTheMaximum()
+    {
+        SetUpRoom();
+        MoveTo(0f, 0f);
+
+        SetHealth(90);
+        Carry(EInstantItemType.HealthKit);
+
+        UseItem("HealthKit");
+        Pump(400);
+
+        Assert.True(room.TryGetPlayer(playerId, out var player));
+        Assert.Equal(player!.MaxHealth, PlayerHealth());
+    }
+
+    [Fact]
+    public void AHealthKitIsSpentEvenAtFullHealth()
+    {
+        SetUpRoom();
+        MoveTo(0f, 0f);
+
+        Carry(EInstantItemType.HealthKit);
+        var before = PlayerHealth();
+
+        UseItem("HealthKit");
+        Pump(400);
+
+        // It did nothing, and it is still gone. A kit held in reserve is a kit the
+        // player can use when they are hurt.
+        Assert.Equal(before, PlayerHealth());
+        Assert.False(StillCarrying(EInstantItemType.HealthKit));
+    }
+
+    [Fact]
+    public void UsingAnItemThePlayerIsNotCarryingIsRefused()
+    {
+        SetUpRoom();
+        MoveTo(0f, 0f);
+
+        SetHealth(10);
+
+        // Nothing carried. A client could otherwise spend an item it never picked
+        // up, and the message is the only thing claiming it has one.
+        UseItem("HealthKit");
+        Pump(400);
+
+        Assert.Equal(10, PlayerHealth());
+        Assert.False(StillCarrying(EInstantItemType.HealthKit));
+    }
+
+    [Fact]
+    public void TheSameItemCannotBeSpentTwice()
+    {
+        SetUpRoom();
+        MoveTo(0f, 0f);
+
+        SetHealth(10);
+        Carry(EInstantItemType.HealthKit);
+
+        UseItem("HealthKit");
+        Pump(300);
+        UseItem("HealthKit");
+        Pump(300);
+
+        // One kit, one heal. The second message arrives with nothing left to
+        // spend, so it is refused rather than healing again.
+        Assert.Equal(40, PlayerHealth());
+    }
+
+    [Fact]
+    public void AnItemUseForAnotherPlayerIsSettledAsTheSender()
+    {
+        SetUpRoom();
+        MoveTo(0f, 0f);
+
+        SetHealth(10);
+        Carry(EInstantItemType.HealthKit);
+
+        // The message names somebody else, in both spellings the client uses.
+        // The server stamps the connection's own player over both before the
+        // handler sees them, so there is no field left to forge: an item is
+        // always spent by the player whose connection carried the message.
+        probe.Send(playerId, roomId, new JObject
+        {
+            ["MessageType"] = "ItemUseRequest",
+            ["PlayerId"] = "someone-else",
+            ["ItemType"] = "HealthKit",
+            ["Effect"] = "heal"
+        });
+        Pump(400);
+
+        // The sender's own kit was spent and the sender's own health moved. The
+        // other player is not in the room, and nothing was taken from them.
+        Assert.Equal(40, PlayerHealth());
+        Assert.False(StillCarrying(EInstantItemType.HealthKit));
+    }
+
+    [Fact]
+    public void TheSenderCannotSpendAnItemAnotherPlayerIsCarrying()
+    {
+        SetUpRoom();
+        MoveTo(0f, 0f);
+
+        SetHealth(10);
+        // Nothing carried here, but the message claims a different player who,
+        // if this were taken at face value, would have one.
+        var otherId = "other-" + Guid.NewGuid().ToString("N").Substring(0, 8);
+        room!.AddNewPlayer(new PlayerInfo(otherId, "Other"));
+        Assert.True(room.TryGetPlayer(otherId, out var other));
+        other!.EquipInstantItems.Add(EInstantItemType.HealthKit);
+
+        probe.Send(playerId, roomId, new JObject
+        {
+            ["MessageType"] = "ItemUseRequest",
+            ["PlayerId"] = otherId,
+            ["ItemType"] = "HealthKit",
+            ["Effect"] = "heal"
+        });
+        Pump(400);
+
+        // The named player keeps their kit and their health, and the sender, who
+        // has none, gets nothing.
+        Assert.Equal(10, PlayerHealth());
+        Assert.Contains(EInstantItemType.HealthKit, other.EquipInstantItems);
+        Assert.Equal(100, other.Health);
+    }
+
+    [Fact]
+    public void AnUnknownItemIsInert()
+    {
+        SetUpRoom();
+        MoveTo(0f, 0f);
+
+        SetHealth(10);
+
+        UseItem("NotAnItem");
+        Pump(400);
+
+        Assert.Equal(10, PlayerHealth());
+    }
+
+    [Fact]
+    public void TheEffectIsWhatTheItemIsRatherThanWhatTheMessageSays()
+    {
+        // A kit heals. The message does not get to say otherwise, which is the
+        // point of the rules living in the shared package.
+        Assert.Equal(EInstantItemEffect.Heal, InstantItemRules.EffectOf(EInstantItemType.HealthKit));
+        Assert.Equal(EInstantItemEffect.Ammo, InstantItemRules.EffectOf(EInstantItemType.FireBullet));
+        Assert.Null(InstantItemRules.EffectOf(EInstantItemType.None));
+        Assert.False(InstantItemRules.IsUsable(EInstantItemType.None));
+    }
 }

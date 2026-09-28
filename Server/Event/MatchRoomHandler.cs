@@ -236,6 +236,15 @@ namespace OpenGSServer
                     HandleWeaponDrop(room, playerId, json);
                     break;
 
+                // The client sends ItemUse on one path and ItemUseRequest on the
+                // other. Both arrive here, and both are treated the same, because
+                // the client is the only one that distinguishes them and the
+                // server has no reason to.
+                case "ItemUse":
+                case "ItemUseRequest":
+                    HandleItemUse(room, playerId, json);
+                    break;
+
                 default:
                     Console.WriteLine($"Unknown realtime game event type: {eventType}");
                     break;
@@ -419,6 +428,182 @@ namespace OpenGSServer
                 ["PosZ"] = state.PositionZ,
                 ["Timestamp"] = DateTime.UtcNow.ToString("o")
             });
+        }
+
+        /// <summary>
+        /// Spends an instant item the player is carrying.
+        /// <para>
+        /// The message names the item and nothing else. It used to name the effect
+        /// too, as a free form string, and the client applied it to itself, so how
+        /// much a kit healed was a claim by whoever sent the message. The effect
+        /// and its strength are now looked up from the item type, and no amount in
+        /// the message is read at all.
+        /// </para>
+        /// <para>
+        /// The item has to be one the player is actually carrying, and it is
+        /// spent whether or not it did anything: a full health player who uses a
+        /// kit has used it.
+        /// </para>
+        /// </summary>
+        private static void HandleItemUse(MatchRoom room, string playerId, JObject json)
+        {
+            // A player id in the message is a claim about who is spending it, and
+            // the connection's own player is the one that counts. Both spellings
+            // are checked: the message carries PlayerId and PlayerID for the same
+            // value, and honouring one while ignoring the other would let a
+            // message name somebody else in the field that is not consulted.
+            foreach (var claimed in new[] { json["PlayerID"], json["PlayerId"] })
+            {
+                var claimedText = claimed?.ToString();
+                if (string.IsNullOrWhiteSpace(claimedText) ||
+                    string.Equals(claimedText, playerId, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                Console.WriteLine($"[Match] Ignored item use for '{claimedText}' sent by '{playerId}'");
+                return;
+            }
+
+            if (!TryParseInstantItem(ReadString(json, "ItemType", "ItemId"), out var itemType))
+            {
+                Console.WriteLine($"[Match] Ignored item use with an unknown item from '{playerId}'");
+                return;
+            }
+
+            if (!room.TryGetPlayer(playerId, out var player) || player == null)
+            {
+                return;
+            }
+
+            // Carrying it is the difference between using an item and asking for
+            // one. Without this a client could spend an item it never picked up.
+            if (!player.EquipInstantItems.Contains(itemType))
+            {
+                Console.WriteLine($"[Match] Refused item use of {itemType} by '{playerId}': not carried");
+                return;
+            }
+
+            var effect = InstantItemRules.EffectOf(itemType);
+            if (effect == null)
+            {
+                Console.WriteLine($"[Match] Ignored item use of {itemType} by '{playerId}': it does nothing");
+                return;
+            }
+
+            var healthBefore = player.Health;
+            var restored = 0;
+            if (effect.Value == EInstantItemEffect.Heal)
+            {
+                restored = HealPlayer(player);
+            }
+
+            // What a shot carries is a property of the weapon, and the server does
+            // not track a magazine yet, so an ammo item is spent and reported here
+            // rather than pretended for.
+            player.EquipInstantItems.Remove(itemType);
+
+            Console.WriteLine(
+                $"[Match] {playerId} used {itemType} ({effect.Value}), " +
+                $"health {healthBefore} -> {player.Health}");
+
+            GameMessageDispatcher.BroadcastToRoom(room.Id.ToString(), new JObject
+            {
+                ["MessageType"] = "ItemUsed",
+                ["RoomID"] = room.Id.ToString(),
+                ["PlayerID"] = playerId,
+                ["PlayerId"] = playerId,
+                ["ItemType"] = itemType.ToString(),
+                ["Effect"] = effect.Value.ToString(),
+                ["RestoredHealth"] = restored,
+                ["Health"] = player.Health,
+                ["MaxHealth"] = player.MaxHealth,
+                ["Timestamp"] = DateTime.UtcNow.ToString("o")
+            });
+        }
+
+        /// <summary>
+        /// Restores health up to the maximum, and reports how much went in.
+        /// </summary>
+        private static int HealPlayer(PlayerInfo player)
+        {
+            if (player.Health >= player.MaxHealth)
+            {
+                // Already full. The item is still spent by the caller; there is
+                // simply nothing to restore, and saying so is what stops a client
+                // topping off early and banking the difference.
+                return 0;
+            }
+
+            var missing = player.MaxHealth - player.Health;
+            var restored = Math.Min(missing, InstantItemRules.HealAmount);
+            player.Health += restored;
+            return restored;
+        }
+
+        /// <summary>
+        /// Parses an item name into a typed instant item.
+        /// <para>
+        /// Both spellings are accepted because the client and the shared enum do
+        /// not agree on them: the client writes BandAid where the enum calls it
+        /// HealthKit, and PowerGrenade where the enum calls it PowerGrenadePack,
+        /// among others. Rejecting a name the client actually sends would refuse
+        /// every use, so the alias is part of the wire contract rather than a
+        /// concession to it.
+        /// </para>
+        /// </summary>
+        private static bool TryParseInstantItem(string? name, out EInstantItemType type)
+        {
+            type = EInstantItemType.None;
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                return false;
+            }
+
+            switch (name.Trim().ToLowerInvariant())
+            {
+                case "bandaid":
+                case "healthkit":
+                case "heal":
+                    type = EInstantItemType.HealthKit;
+                    return true;
+
+                case "firebullet":
+                case "fire_bullet":
+                    type = EInstantItemType.FireBullet;
+                    return true;
+
+                case "poisonbullet":
+                case "poison_bullet":
+                    type = EInstantItemType.PoisonBullet;
+                    return true;
+
+                case "powergrenade":
+                case "powergrenadepack":
+                case "power_grenade_pack":
+                    type = EInstantItemType.PowerGrenadePack;
+                    return true;
+
+                case "clustergrenade":
+                case "clustergrenadepack":
+                case "cluster_grenade_pack":
+                    type = EInstantItemType.ClusterGrenadePack;
+                    return true;
+
+                case "magneticgrenade":
+                case "magnetgrenadepack":
+                case "magnet_grenade_pack":
+                    type = EInstantItemType.MagnetGrenadePack;
+                    return true;
+
+                case "landminegrenade":
+                case "minegrenadepack":
+                case "mine_grenade_pack":
+                    type = EInstantItemType.MineGrenadePack;
+                    return true;
+            }
+
+            return false;
         }
 
         private static void HandlePlayerKilled(MatchRoom room, string killerId, string killedPlayerId)

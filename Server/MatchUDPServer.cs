@@ -629,6 +629,13 @@ namespace OpenGSServer
                 // dropped before the dispatcher ever saw it.
                 "ItemPickup" or
                 "FieldItemPickup" or
+                // An instant item is spent by naming it, and the client used to
+                // name the effect along with it, so the message has to be read for
+                // the server to decide anything about it. It was dropped here, so
+                // a spent item did nothing at all on anyone's screen but the
+                // spender's.
+                "ItemUse" or
+                "ItemUseRequest" or
                 // A dropped weapon leaves the player's hands, so the server has to
                 // be told or the weapon is not really on the ground for anyone.
                 "WeaponDrop";
