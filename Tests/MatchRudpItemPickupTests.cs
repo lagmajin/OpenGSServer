@@ -58,6 +58,20 @@ public sealed class MatchRudpItemPickupTests : IDisposable
         });
     }
 
+    /// <summary>
+    /// Makes the server hold no position at all for this room's player.
+    /// <para>
+    /// A player connects on a spawn point now, so "has never been seen" is not
+    /// something a test gets by not sending anything. Unregistering is what
+    /// expresses it: there is nowhere the server believes the player is standing,
+    /// which is the condition these tests are about.
+    /// </para>
+    /// </summary>
+    private void ForgetPlayerPosition()
+    {
+        MatchServerV2.Instance.ServerLagCompensationManager.RemovePlayer(playerId);
+    }
+
     private void SetUpRoom()
     {
         playerId = "picker-" + Guid.NewGuid().ToString("N").Substring(0, 8);
@@ -132,10 +146,23 @@ public sealed class MatchRudpItemPickupTests : IDisposable
         const float stepSize = 1f;
         byte sequence = 1;
 
-        float currentX = 0f;
-        float currentY = 0f;
+        // The walk starts from wherever the server already holds the player. A
+        // server with no spawn table used to leave everybody at the origin and this
+        // helper walked from there; a room with real spawn points now connects a
+        // player somewhere else, and starting at zero would make the first step a
+        // teleport the server refuses.
+        var held = MatchServerV2.Instance.ServerLagCompensationManager.GetPlayerState(playerId);
+        float currentX = held.PositionX;
+        float currentY = held.PositionY;
+        var steps = 0;
         while (MathF.Abs(currentX - x) > 0.001f || MathF.Abs(currentY - y) > 0.001f)
         {
+            if (steps++ >= 256)
+            {
+                throw new InvalidOperationException(
+                    $"The server did not accept the movement path to ({x}, {y}) within 256 steps; last attempted position was ({currentX}, {currentY}).");
+            }
+
             var dx = x - currentX;
             var dy = y - currentY;
             var distance = MathF.Sqrt((dx * dx) + (dy * dy));
@@ -379,6 +406,7 @@ public sealed class MatchRudpItemPickupTests : IDisposable
     public void ADropFromAPlayerWithNoPositionIsRefused()
     {
         SetUpRoom();
+        ForgetPlayerPosition();
 
         // Nowhere to put it. A registered player with no position reads as the
         // origin, so this is the case where a drop would land in the middle of
@@ -818,6 +846,7 @@ public sealed class MatchRudpItemPickupTests : IDisposable
         SetUpRoom();
         DropWeapon("Rifle", magazine: 8);
         Pump(400);
+        ForgetPlayerPosition();
 
         // The claim says which weapon, but standing next to it is the server's
         // half of the claim, and there is nowhere the player is standing.

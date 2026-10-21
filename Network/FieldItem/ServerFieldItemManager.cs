@@ -16,6 +16,18 @@ namespace OpenGSServer.Network
     public class ServerFieldItemManager
     {
         /// <summary>
+        /// A clock that does not wrap.
+        /// <para>
+        /// Item timing used to be read off DateTime.UtcNow.TimeOfDay, which is a
+        /// 24 hour clock that goes back to zero at midnight. A respawn delay
+        /// measured on it goes from "just taken" to "due in twenty seconds" across
+        /// midnight, so an item taken at 23:59:55 came straight back.
+        /// </para>
+        /// </summary>
+        private static readonly System.Diagnostics.Stopwatch Clock = System.Diagnostics.Stopwatch.StartNew();
+
+        public static double NowSeconds => Clock.Elapsed.TotalSeconds;
+        /// <summary>
         /// アイテムデータ
         /// </summary>
         public class FieldItem
@@ -61,6 +73,14 @@ namespace OpenGSServer.Network
             /// heard nothing had no claim to honour.
             /// </para>
             /// </summary>
+            /// <summary>
+            /// When the item was last taken, on the server's own clock. An item that
+            /// was picked up stays in the map in this state and comes back once the
+            /// rule's delay has passed, which is what stops a taken spawn from being
+            /// gone for the rest of the match.
+            /// </summary>
+            public double ConsumedAtSeconds { get; set; }
+
             public string ReservedByPlayerId { get; set; } = "";
         }
 
@@ -258,7 +278,7 @@ namespace OpenGSServer.Network
                 SpawnPointName = "",
                 State = "Spawned",
                 IsActive = true,
-                SpawnTime = (float)DateTime.UtcNow.TimeOfDay.TotalSeconds
+                SpawnTime = (float)NowSeconds
             };
 
             lock (_itemStateLock)
@@ -311,6 +331,74 @@ namespace OpenGSServer.Network
             itemId = "";
             itemId = SpawnItem(itemType, PickSpawnPointId(itemType));
             return !string.IsNullOrEmpty(itemId);
+        }
+
+        /// <summary>
+        /// Brings the item map up to what the rules ask for.
+        /// <para>
+        /// The spawn rules and the spawn points were both configured when the room
+        /// was created and nothing ever asked this, so a live match had an item map
+        /// that only ever held whatever an older, unrelated system put at the
+        /// origin. Spawning is server owned for the same reason damage is: a client
+        /// that decided what appeared on the map, and where, would have been playing
+        /// a different match from everyone else.
+        /// </para>
+        /// <para>
+        /// A taken item comes back to its own spawn point once its rule's delay has
+        /// passed. It used to stay gone for the rest of the match, so a map with one
+        /// health item ran out of health items after the first person reached it.
+        /// </para>
+        /// </summary>
+        /// <param name="onSpawned">Called for every item that appears or comes back.</param>
+        public void TickSpawns(Action<FieldItem>? onSpawned)
+        {
+            var now = NowSeconds;
+
+            foreach (var item in _items.Values
+                .Where(item => !item.IsActive && item.State == "PickedUp")
+                .ToList())
+            {
+                if (!_spawnRules.TryGetValue(item.ItemType, out var rule) ||
+                    now - item.ConsumedAtSeconds < rule.RespawnDelaySec)
+                {
+                    continue;
+                }
+
+                var point = item.SpawnPointId >= 0
+                    ? item.SpawnPointId
+                    : PickSpawnPointId(item.ItemType);
+                if (!TryResolveSpawnPoint(point, out var spawnPoint))
+                {
+                    continue;
+                }
+
+                RespawnItem(item.ItemId, spawnPoint.PosX, spawnPoint.PosY, spawnPoint.PosZ);
+                item.SpawnPointId = spawnPoint.SpawnPointId;
+                item.SpawnPointName = spawnPoint.Name;
+                Console.WriteLine(
+                    $"[FieldItem] Respawned {item.ItemId} ({item.ItemType}) " +
+                    $"at spawn point {spawnPoint.SpawnPointId}");
+                onSpawned?.Invoke(item);
+            }
+
+            foreach (var rule in _spawnRules.Values.ToList())
+            {
+                for (var missing = rule.MaxActiveCount - GetActiveItemCountForType(rule.ItemType);
+                     missing > 0;
+                     missing--)
+                {
+                    if (!TrySpawnConfiguredItem(rule.ItemType, out var itemId) ||
+                        !TryGetItem(itemId, out var item))
+                    {
+                        break;
+                    }
+
+                    Console.WriteLine(
+                        $"[FieldItem] Spawned {itemId} ({rule.ItemType}) " +
+                        $"at spawn point {item.SpawnPointId}");
+                    onSpawned?.Invoke(item);
+                }
+            }
         }
 
         /// <summary>
@@ -419,6 +507,7 @@ namespace OpenGSServer.Network
                     item.State = "PickedUp";
                     item.PickedUpByPlayerId = playerId;
                     item.IsActive = false;
+                    item.ConsumedAtSeconds = NowSeconds;
                     itemType = item.ItemType;
                     picked = true;
                 }
@@ -482,7 +571,7 @@ namespace OpenGSServer.Network
                     item.State = "Spawned";
                     item.IsActive = true;
                     item.PickedUpByPlayerId = "";
-                    item.SpawnTime = (float)DateTime.UtcNow.TimeOfDay.TotalSeconds;
+                    item.SpawnTime = (float)NowSeconds;
                 }
             }
         }

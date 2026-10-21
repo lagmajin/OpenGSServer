@@ -88,6 +88,23 @@ namespace OpenGSServer.Network
         /// </summary>
         public Action<string, string, int, Vector2>? OnDamage { get; set; }
 
+        /// <summary>
+        /// Asked, for each bullet, whether the point it has reached is inside an
+        /// enemy. It is a question rather than a hit report because the simulator
+        /// owns the flight and the caller owns what an enemy is.
+        /// <para>
+        /// A bullet used to be resolved against players only, so in a mission it
+        /// went through every enemy on its line and hit whatever was behind.
+        /// </para>
+        /// </summary>
+        public Func<Vector2, bool>? IsPointInsideEnemy { get; set; }
+
+        /// <summary>
+        /// Called when a bullet reaches an enemy, so the caller can settle the
+        /// damage against it. The owner, the hit point and the damage.
+        /// </summary>
+        public Action<string, Vector2, int>? OnBulletHitEnemy { get; set; }
+
         public int ActiveCount => _projectiles.Count;
 
         public static int CalculateGrenadeDamage(string? grenadeType)
@@ -194,6 +211,7 @@ namespace OpenGSServer.Network
             List<ServerProjectileState> spawned = new();
             List<ServerProjectileState> expired = new();
             List<(ServerProjectileState Grenade, string TargetId, int Damage, Vector2 Hit)> hits = new();
+            List<(string OwnerId, Vector2 Hit, int Damage)> enemyHits = new();
 
             lock (_lock)
             {
@@ -209,6 +227,16 @@ namespace OpenGSServer.Network
 
                     if (projectile.Kind == ServerProjectileKind.Bullet)
                     {
+                        // An enemy before a player, because a mission is a fight
+                        // with the enemies and a shot that reached an enemy should
+                        // stop there rather than carry on to somebody behind it.
+                        if (IsPointInsideEnemy?.Invoke(projectile.Position) == true)
+                        {
+                            enemyHits.Add((projectile.OwnerId, projectile.Position, projectile.Damage));
+                            Retire(projectile, expired);
+                            continue;
+                        }
+
                         if (TryResolveBulletHit(projectile, out var bulletHit))
                         {
                             hits.Add((projectile, bulletHit, projectile.Damage, projectile.Position));
@@ -248,6 +276,11 @@ namespace OpenGSServer.Network
             foreach (var hit in hits)
             {
                 OnDamage?.Invoke(hit.TargetId, hit.Grenade.OwnerId, hit.Damage, hit.Hit);
+            }
+
+            foreach (var enemyHit in enemyHits)
+            {
+                OnBulletHitEnemy?.Invoke(enemyHit.OwnerId, enemyHit.Hit, enemyHit.Damage);
             }
         }
 

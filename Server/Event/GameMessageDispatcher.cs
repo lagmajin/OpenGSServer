@@ -42,6 +42,13 @@ namespace OpenGSServer
         public const string LoadingProgress = "LoadingProgress";
         public const string LoadingCompleted = "LoadingCompleted";
         public const string MatchEnd = "MatchEnd";
+
+        // A client reporting that it reached a mission's clear gate. It is a
+        // report and not a ruling: the server decides what it means, through the
+        // mission's own rule. It had a name in the shared contract and nothing
+        // read it on either side, so reaching a gate online could not finish a
+        // mission.
+        public const string MissionComplete = MessageType.MissionCompleteNotification;
         // The pickup ruling, and a field item appearing and disappearing. All
         // three have a name in the shared contract so the server cannot answer
         // under a label the client does not read. Each used to carry its own copy
@@ -71,6 +78,14 @@ namespace OpenGSServer
         // literal was not the name the client dispatched on, so a client was
         // never told what its health was.
         public const string PlayerDamaged = MessageType.PlayerDamaged;
+
+        // A reload the client asked for and the magazine the server decided it
+        // left behind. The client had a builder for the request and never sent it,
+        // and the server had no name for the answer, so both sides of the reload
+        // existed and neither was on the wire.
+        public const string PlayerReload = MessageType.PlayerReload;
+        public const string PlayerReloaded = MessageType.PlayerReloaded;
+        public const string AmmoUpdate = MessageType.AmmoUpdate;
     }
 
     public interface IGameMessageSender
@@ -105,7 +120,9 @@ namespace OpenGSServer
         }
 
         // Shared helpers for broadcasting match events.
-        public static void SendPlayerKilled(string roomId, string killerId, string killedPlayerId)
+        public static void SendPlayerKilled(
+            string roomId, string killerId, string killedPlayerId, int killerKills,
+            bool isTeamMode, int redTeamKills, int blueTeamKills)
         {
             var message = new JObject
             {
@@ -113,6 +130,10 @@ namespace OpenGSServer
                 ["RoomID"] = roomId,
                 ["KillerID"] = killerId,
                 ["KilledPlayerID"] = killedPlayerId,
+                ["KillerKills"] = killerKills,
+                ["IsTeamMode"] = isTeamMode,
+                ["RedTeamKills"] = redTeamKills,
+                ["BlueTeamKills"] = blueTeamKills,
                 ["Timestamp"] = DateTime.UtcNow.ToString("o")
             };
 
@@ -286,7 +307,18 @@ namespace OpenGSServer
             string roomId,
             string status,
             bool playing,
-            int playerCount)
+            int playerCount,
+            int currentHealth,
+            int maxHealth,
+            int playerKills,
+            bool isTeamMode,
+            int redTeamKills,
+            int blueTeamKills,
+            string[] carriedItems,
+            string weaponType,
+            int currentAmmo,
+            int maxAmmo,
+            int reserveAmmo)
         {
             var message = new JObject
             {
@@ -297,13 +329,25 @@ namespace OpenGSServer
                 ["Status"] = status,
                 ["IsPlaying"] = playing,
                 ["PlayerCount"] = playerCount,
+                ["CurrentHealth"] = currentHealth,
+                ["MaxHealth"] = maxHealth,
+                ["PlayerKills"] = playerKills,
+                ["IsTeamMode"] = isTeamMode,
+                ["RedTeamKills"] = redTeamKills,
+                ["BlueTeamKills"] = blueTeamKills,
+                ["CarriedItems"] = new JArray(carriedItems),
+                ["WeaponType"] = weaponType,
+                ["CurrentAmmo"] = currentAmmo,
+                ["MaxAmmo"] = maxAmmo,
+                ["ReserveAmmo"] = reserveAmmo,
                 ["Timestamp"] = DateTime.UtcNow.ToString("o")
             };
 
             SendToPlayer(playerId, message);
         }
 
-        public static void SendPlayerRespawn(string roomId, string playerId, JObject spawnPosition)
+        public static void SendPlayerRespawn(
+            string roomId, string playerId, JObject spawnPosition, int currentHealth, int maxHealth)
         {
             var message = new JObject
             {
@@ -314,6 +358,8 @@ namespace OpenGSServer
                 ["SpawnPosition"] = spawnPosition,
                 ["PosX"] = spawnPosition.GetValue("X") ?? spawnPosition.GetValue("x") ?? 0f,
                 ["PosY"] = spawnPosition.GetValue("Y") ?? spawnPosition.GetValue("y") ?? 0f,
+                ["CurrentHealth"] = currentHealth,
+                ["MaxHealth"] = maxHealth,
                 ["Timestamp"] = DateTime.UtcNow.ToString("o")
             };
 
@@ -330,6 +376,67 @@ namespace OpenGSServer
                 ["PlayerID"] = playerId,
                 ["PlayerId"] = playerId,
                 ["PoseState"] = poseState,
+                ["Timestamp"] = DateTime.UtcNow.ToString("o")
+            };
+
+            BroadcastToRoom(roomId, message);
+        }
+
+        public static void SendPlayerReloaded(
+            string roomId,
+            string playerId,
+            string weaponType,
+            int currentAmmo,
+            int maxAmmo,
+            int reserveAmmo,
+            bool accepted,
+            string reason,
+            float reloadSeconds)
+        {
+            var message = new JObject
+            {
+                ["MessageType"] = GameMessageTypes.PlayerReloaded,
+                ["RoomID"] = roomId,
+                ["RoomId"] = roomId,
+                ["PlayerID"] = playerId,
+                ["PlayerId"] = playerId,
+                ["WeaponType"] = weaponType,
+                ["CurrentAmmo"] = currentAmmo,
+                ["MaxAmmo"] = maxAmmo,
+                ["ReserveAmmo"] = reserveAmmo,
+                ["Accepted"] = accepted,
+                ["Reason"] = reason,
+                ["ReloadSeconds"] = reloadSeconds,
+                ["Timestamp"] = DateTime.UtcNow.ToString("o")
+            };
+
+            BroadcastToRoom(roomId, message);
+        }
+
+        /// <summary>
+        /// Publishes what a magazine now holds. Used for a refusal and for a reload
+        /// that finished on the server's clock, so a client that fired dry is told
+        /// the count the server holds rather than keeping the one it guessed.
+        /// </summary>
+        public static void SendAmmoUpdate(
+            string roomId,
+            string playerId,
+            string weaponType,
+            int currentAmmo,
+            int maxAmmo,
+            int reserveAmmo = -1)
+        {
+            var message = new JObject
+            {
+                ["MessageType"] = GameMessageTypes.AmmoUpdate,
+                ["RoomID"] = roomId,
+                ["RoomId"] = roomId,
+                ["PlayerID"] = playerId,
+                ["PlayerId"] = playerId,
+                ["WeaponType"] = weaponType,
+                ["CurrentAmmo"] = currentAmmo,
+                ["MaxAmmo"] = maxAmmo,
+                ["ReserveAmmo"] = reserveAmmo,
                 ["Timestamp"] = DateTime.UtcNow.ToString("o")
             };
 

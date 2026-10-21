@@ -25,7 +25,7 @@ namespace OpenGSServer
         {
             "LoadingStarted", "LoadingProgress", "LoadingCompleted", "LoadingFinished",
             "MatchStatusRequest", "PlayerRespawn", "PlayerPose", "GrenadeThrow", "PlayerShot",
-            "ShootRequest", "FlagCaptured", "FlagLost", "FlagPickup", "FlagReturn",
+            "ShootRequest", "PlayerReload", "FlagCaptured", "FlagLost", "FlagPickup", "FlagReturn",
             "FlagScoreUpdate", "PlayerEliminated", "ObjectSpawned", "ObjectDestroyed"
         };
         
@@ -604,18 +604,27 @@ namespace OpenGSServer
                 "MatchStatusRequest")
             {
                 ConsoleWrite.WriteMessage(
-                    $"[UDP] Ignoring TCP control message '{messageType}' from {playerId}; use the match TCP session.",
+                    $"[UDP] Ignoring TCP control message '{messageType}' from {playerId}; use an authenticated TCP session.",
                     ConsoleColor.Yellow);
                 return true;
             }
 
             var isSystemEvent = messageType is
                 "PlayerRespawn" or
-                "PlayerPose";
+                "PlayerPose" or
+                // A client reaching a mission's clear gate. It is a claim about the
+                // match, so it belongs on the match channel with the rest of them,
+                // and it has to reach the room: the mission rule ends a match on
+                // its objective, and this is the only thing that ever moves it.
+                MessageType.MissionCompleteNotification;
 
             var isRealtimeEvent = messageType is
                 "GrenadeThrow" or
                 "PlayerShot" or
+                // A reload is a claim about the player's own magazine. It was
+                // dropped here, so the request never reached the dispatcher and
+                // nothing on the server knew a reload had been asked for.
+                "PlayerReload" or
                 "FlagCaptured" or
                 "FlagLost" or
                 "FlagPickup" or

@@ -167,6 +167,9 @@ namespace OpenGSServer
         }
         private static readonly ConcurrentDictionary<string, DateTime> LastShots = new();
 
+        /// <summary>What one kill is worth in the standings, on either damage path.</summary>
+        private const int KillScore = 100;
+
         public InGameMatchEventHandler() { }
 
         /// <summary>
@@ -265,6 +268,10 @@ namespace OpenGSServer
                     HandlePlayerPose(room, playerId, json);
                     break;
 
+                case GameMessageTypes.MissionComplete:
+                    HandleMissionComplete(room, playerId, json);
+                    break;
+
                 case GameMessageTypes.ObjectSpawned:
                     Console.WriteLine($"[Match] Ignored client-supplied object spawn from '{playerId}'; objects are server-authoritative");
                     break;
@@ -351,6 +358,10 @@ namespace OpenGSServer
 
                 case GameMessageTypes.PlayerShot:
                     HandlePlayerShot(room, playerId, json);
+                    break;
+
+                case GameMessageTypes.PlayerReload:
+                    HandlePlayerReload(room, playerId, json);
                     break;
 
                 case GameMessageTypes.GrenadeThrow:
@@ -490,6 +501,21 @@ namespace OpenGSServer
                 ? FieldItemDefaults.DurationSeconds
                 : 0f;
 
+            // A pickup has to put something in the player's hands. It used to grant
+            // the pickup and nothing else, so the item left the map and the player
+            // was no closer to being able to spend the one thing a health item is
+            // for: the server checks that a kit is carried before it lets a kit be
+            // spent, and nothing a player walked into ever made it carried.
+            var grantedItem = EInstantItemType.None;
+            if (room.TryGetPlayer(playerId, out var carrier) && carrier != null)
+            {
+                grantedItem = FieldItemTypeNames.GrantsInstantItem(type);
+                if (grantedItem != EInstantItemType.None)
+                {
+                    carrier.EquipInstantItems.Add(grantedItem);
+                }
+            }
+
             // The duration is decided here rather than taken from the client.
             // A timed item used to carry its own thirty second lifetime that
             // only the client knew about, so the server could neither shorten
@@ -501,6 +527,7 @@ namespace OpenGSServer
                 ["ItemId"] = itemId,
                 ["PlayerID"] = playerId,
                 ["ItemType"] = FieldItemTypeNames.ToWireName(type),
+                ["GrantedInstantItem"] = grantedItem.ToString(),
                 ["Duration"] = duration,
                 ["IsTimedBuff"] = FieldItemTypeNames.IsTimedBuff(type),
                 ["ExpiresAtSeconds"] = duration > 0f
@@ -653,19 +680,26 @@ namespace OpenGSServer
 
             var healthBefore = player.Health;
             var restored = 0;
+            var roundsAdded = 0;
             if (effect.Value == EInstantItemEffect.Heal)
             {
                 restored = HealPlayer(player);
             }
+            else if (effect.Value == EInstantItemEffect.Ammo)
+            {
+                // An ammo pack used to be spent and did nothing at all, because the
+                // server held no magazine for it to refill. It tops the reserve up
+                // across every weapon the player is carrying, which is the thing a
+                // player reaching for the pack is asking for.
+                roundsAdded = ServerWeaponMagazineStore.RefillAllReserve(playerId, AmmoReservePerPack);
+                BroadcastAmmoForAllWeapons(room, playerId);
+            }
 
-            // What a shot carries is a property of the weapon, and the server does
-            // not track a magazine yet, so an ammo item is spent and reported here
-            // rather than pretended for.
             player.EquipInstantItems.Remove(itemType);
 
             Console.WriteLine(
                 $"[Match] {playerId} used {itemType} ({effect.Value}), " +
-                $"health {healthBefore} -> {player.Health}");
+                $"health {healthBefore} -> {player.Health}, rounds added {roundsAdded}");
 
             GameMessageDispatcher.BroadcastToRoom(room.Id.ToString(), new JObject
             {
@@ -676,11 +710,40 @@ namespace OpenGSServer
                 ["ItemType"] = itemType.ToString(),
                 ["Effect"] = effect.Value.ToString(),
                 ["RestoredHealth"] = restored,
+                ["RoundsAdded"] = roundsAdded,
                 ["Health"] = player.Health,
                 ["MaxHealth"] = player.MaxHealth,
                 ["Timestamp"] = DateTime.UtcNow.ToString("o")
             });
         }
+
+        /// <summary>How much reserve ammo one ammo pack is worth.</summary>
+        private const int AmmoReservePerPack = 90;
+
+        /// <summary>
+        /// Publishes the magazine of every weapon a player holds, so a client that
+        /// spent an ammo pack is told what it now has rather than having to ask.
+        /// </summary>
+        private static void BroadcastAmmoForAllWeapons(MatchRoom room, string playerId)
+        {
+            foreach (var weaponType in TrackedWeaponTypes)
+            {
+                if (!ServerWeaponMagazineStore.TryPeek(playerId, weaponType, out var magazine))
+                {
+                    continue;
+                }
+
+                GameMessageDispatcher.SendAmmoUpdate(
+                    room.Id.ToString(),
+                    playerId,
+                    weaponType,
+                    magazine.ReadRemaining(),
+                    magazine.Capacity,
+                    magazine.ReadReserve());
+            }
+        }
+
+        private static readonly string[] TrackedWeaponTypes = { "Pistol", "SMG", "Shotgun", "Rifle", "Sniper" };
 
         /// <summary>
         /// Answers a claim to spend an instant item that the server turned down.
@@ -932,7 +995,14 @@ namespace OpenGSServer
         private static void HandlePlayerKilled(MatchRoom room, string killerId, string killedPlayerId)
         {
             Console.WriteLine($"Player {killedPlayerId} was killed by {killerId}");
-            GameMessageDispatcher.SendPlayerKilled(room.Id.ToString(), killerId, killedPlayerId);
+            var killerKills = room.TryGetPlayer(killerId, out var killer) && killer != null
+                ? killer.Kills
+                : 0;
+            var isTeamMode = room.Setting.Mode is
+                EGameMode.TeamDeathMatch or EGameMode.CaptureTheFlag or EGameMode.TeamSurvival;
+            GameMessageDispatcher.SendPlayerKilled(
+                room.Id.ToString(), killerId, killedPlayerId, killerKills, isTeamMode,
+                room.TeamKillCount(ETeam.Red), room.TeamKillCount(ETeam.Blue));
         }
 
         private static void HandlePlayerDamaged(
@@ -1584,6 +1654,12 @@ namespace OpenGSServer
                 return;
             }
 
+            // A player who left takes their magazines with them. Keeping them would
+            // mean a player who reconnects comes back to a half spent gun, or to a
+            // gun that was mid reload that nobody is going to finish.
+            ServerWeaponMagazineStore.ResetPlayer(playerId);
+            LastShots.TryRemove(playerId, out _);
+
             // A player who left cannot be holding a flag, so the flag they were
             // holding goes back to its stand rather than staying in the air. This
             // used to drop the carrier record, which left the flag itself with no
@@ -1663,6 +1739,9 @@ namespace OpenGSServer
         /// </summary>
         private static void SendMatchStatus(MatchRoom room, string requestingPlayerId)
         {
+            if (!room.TryGetPlayer(requestingPlayerId, out var player) || player == null)
+                return;
+            var pistolMagazine = ServerWeaponMagazineStore.GetOrCreate(requestingPlayerId, "Pistol");
             var status = $"Match Active - Players: {room.Players.Count}";
             Console.WriteLine($"Sending status to {requestingPlayerId}: {status}");
             GameMessageDispatcher.SendMatchStatus(
@@ -1670,7 +1749,18 @@ namespace OpenGSServer
                 room.Id.ToString(),
                 status,
                 room.Playing,
-                room.PlayerCount);
+                room.PlayerCount,
+                player.Health,
+                player.MaxHealth,
+                player.Kills,
+                room.Setting.Mode is EGameMode.TeamDeathMatch or EGameMode.CaptureTheFlag or EGameMode.TeamSurvival,
+                room.TeamKillCount(ETeam.Red),
+                room.TeamKillCount(ETeam.Blue),
+                player.EquipInstantItems.Select(item => item.ToString()).ToArray(),
+                pistolMagazine.WeaponType,
+                pistolMagazine.ReadRemaining(),
+                pistolMagazine.Capacity,
+                pistolMagazine.ReadReserve());
         }
 
         private static void HandlePositionUpdate(MatchRoom room, string playerId, JObject position)
@@ -1735,7 +1825,14 @@ namespace OpenGSServer
 
             respawnedPlayer.Health = Math.Max(1, respawnedPlayer.MaxHealth);
 
-            GameMessageDispatcher.SendPlayerRespawn(room.Id.ToString(), playerId, spawnPosition);
+            // Coming back with the gun that was on its last round would make a
+            // respawn a way to dodge a reload, so a respawn refills what the
+            // player is holding.
+            ServerWeaponMagazineStore.RefillAllMagazines(playerId);
+
+            GameMessageDispatcher.SendPlayerRespawn(
+                room.Id.ToString(), playerId, spawnPosition,
+                respawnedPlayer.Health, Math.Max(1, respawnedPlayer.MaxHealth));
         }
 
         private static void HandlePlayerPose(MatchRoom room, string playerId, JObject json)
@@ -1754,6 +1851,71 @@ namespace OpenGSServer
             GameMessageDispatcher.SendPlayerPose(room.Id.ToString(), playerId, canonicalPose);
         }
 
+        /// <summary>
+        /// A player reported reaching a mission's clear gate.
+        /// <para>
+        /// The report is recorded on the room, not acted on. A mission ends when its
+        /// own rule says it is over, and that check already runs every tick, so the
+        /// objective reaching its target is all this has to do — the client does not
+        /// get to say the mission is over, only that something in the level was done.
+        /// </para>
+        /// <para>
+        /// Nothing was recording it. The rule, the situation, the result evaluator
+        /// and the finish check were all in place and the progress counter they all
+        /// read stayed at zero, so an online mission could only ever end on the
+        /// clock or on running out of lives.
+        /// </para>
+        /// </summary>
+        private static void HandleMissionComplete(MatchRoom room, string playerId, JObject json)
+        {
+            if (room == null)
+            {
+                return;
+            }
+
+            if (!room.Playing)
+            {
+                Console.WriteLine($"[Match] Ignored a mission clear from '{playerId}' outside a running match");
+                return;
+            }
+
+            var missionSituation = room.CurrentSituation as MissionMatchSituation;
+            if (missionSituation == null)
+            {
+                Console.WriteLine(
+                    $"[Match] Ignored a mission clear from '{playerId}' in room {room.Id}, " +
+                    $"which is playing {room.Setting?.Mode}");
+                return;
+            }
+
+            var steps = ReadInt(json, 1, "Steps", "Step");
+            if (steps <= 0)
+            {
+                Console.WriteLine($"[Match] Ignored a mission clear from '{playerId}' with no progress in it");
+                return;
+            }
+
+            // A report from somebody who is not in this room is not a claim about
+            // this room. ParseTcpEvent and ParseUdpEvent both resolve the room from
+            // the player, so this only guards a caller that hands one over directly.
+            var isMember = room.Players.Any(player =>
+                string.Equals(player.Id, playerId, StringComparison.OrdinalIgnoreCase));
+            if (!isMember)
+            {
+                Console.WriteLine($"[Match] Ignored a mission clear from '{playerId}', who is not in room {room.Id}");
+                return;
+            }
+
+            var before = missionSituation.ObjectiveProgress;
+            var completed = room.RecordObjectiveProgress(steps);
+
+            Console.WriteLine(
+                completed
+                    ? $"[Match] '{playerId}' completed the mission objective: {missionSituation.ObjectiveProgress}/{missionSituation.ObjectiveCount}"
+                    : $"[Match] '{playerId}' reported mission progress but the objective did not move: " +
+                      $"{missionSituation.ObjectiveProgress}/{missionSituation.ObjectiveCount} (was {before})");
+        }
+
         private static void HandlePlayerShot(MatchRoom room, string playerId, JObject shotData)
         {
             // 射撃処理 - ヒット判定、ダメージ計算など
@@ -1766,10 +1928,18 @@ namespace OpenGSServer
                 return;
             }
 
-            if (!AcceptShot(playerId, weaponType))
+            if (!AcceptShot(room, playerId, weaponType, out var remainingAmmo))
             {
                 return;
             }
+
+            var magazineCapacity = ServerWeaponMagazineStore.Spec(weaponType).Capacity;
+            var reserveAmmo = ServerWeaponMagazineStore.TryPeek(playerId, weaponType, out var magazine)
+                ? magazine.ReadReserve()
+                : 0;
+            GameMessageDispatcher.SendAmmoUpdate(
+                room.Id.ToString(), playerId, weaponType,
+                remainingAmmo, magazineCapacity, reserveAmmo);
 
             Console.WriteLine($"Player {playerId} shot with {weaponType}");
 
@@ -1914,6 +2084,17 @@ namespace OpenGSServer
                 }
             }
 
+            // An enemy on the line is a target like any other. The resolver walked
+            // the player list only, so in a mission every shot went through an
+            // enemy standing in it and hit whatever was behind, and the objective
+            // could only ever be moved by a shot that happened to miss.
+            if (bestId == null &&
+                MissionEnemyRegistry.TryResolveOnShotLine(
+                    room.Id.ToString(), originX, originY, dirX, dirY, range, out var enemyId))
+            {
+                bestId = enemyId;
+            }
+
             return bestId;
         }
 
@@ -1928,6 +2109,47 @@ namespace OpenGSServer
                 "Sniper" => 180f,
                 _ => 60f
             };
+        }
+
+        /// <summary>
+        /// Advances every room's enemies.
+        /// <para>
+        /// A mission's enemies are server owned, so they are stepped from the match
+        /// loop like the projectiles are. Nothing else moves them: the client
+        /// brain classes that exist are a local sandbox and know nothing about a
+        /// room.
+        /// </para>
+        /// </summary>
+        public static void UpdateEnemies(float deltaSeconds)
+        {
+            if (deltaSeconds <= 0f || !float.IsFinite(deltaSeconds))
+            {
+                return;
+            }
+
+            var now = ServerFieldItemManager.NowSeconds;
+            MissionEnemyRegistry.Update(deltaSeconds, now);
+        }
+
+        /// <summary>
+        /// Starts a mission's objective off with a wave of enemies, so there is
+        /// something to fight.
+        /// <para>
+        /// The wave is placed away from the party rather than on top of it, and
+        /// its size comes from the room's own objective count so a mission that
+        /// asks for five is a fight with five things in it rather than a number
+        /// that moves when somebody remembers to move it.
+        /// </para>
+        /// </summary>
+        public static void BeginMissionEnemies(MatchRoom room, int count, System.Numerics.Vector2 centre)
+        {
+            if (room == null || count <= 0)
+            {
+                return;
+            }
+
+            MissionEnemyRegistry.Attach(room.Id, room);
+            MissionEnemyRegistry.BeginMissionWave(room.Id.ToString(), centre, count);
         }
 
         /// <summary>
@@ -1964,7 +2186,38 @@ namespace OpenGSServer
             Projectiles.OnDamage = (targetId, attackerId, damage, hit) =>
                 HandleProjectileDamage(targetId, attackerId, damage, hit);
 
+            // A bullet in a mission stops at an enemy. It used to be resolved
+            // against players only, so it went through every enemy on its line.
+            Projectiles.IsPointInsideEnemy = point =>
+                MissionEnemyRegistry.TryResolveAnyEnemyAt(point, 0.35f, out _);
+            Projectiles.OnBulletHitEnemy = (ownerId, hit, damage) =>
+                HandleBulletHitEnemy(ownerId, hit, damage);
+
             Projectiles.Update(deltaSeconds);
+        }
+
+        /// <summary>
+        /// Settles a simulated bullet that reached an enemy.
+        /// </summary>
+        private static void HandleBulletHitEnemy(string ownerId, Vector2 hit, int damage)
+        {
+            var room = MatchRoomManager.Instance.SearchRoomByMemberID(ownerId);
+            if (room == null)
+            {
+                return;
+            }
+
+            if (!MissionEnemyRegistry.TryResolveAnyEnemyAt(hit, 0.35f, out var enemyId))
+            {
+                return;
+            }
+
+            var applied = MissionEnemyRegistry.ApplyPlayerDamageToEnemy(
+                room.Id.ToString(), enemyId, ownerId, damage, hit);
+            if (applied > 0)
+            {
+                LobbyServerManager.Instance.RecordDamageDailyProgress(ownerId, applied);
+            }
         }
 
         /// <summary>
@@ -2119,6 +2372,14 @@ namespace OpenGSServer
             if (!isSelfInflicted)
             {
                 room.RecordKill(attackerId);
+
+                // The shot path awards score on a kill and this one did not, so a
+                // grenade kill was worth nothing in the standings while a bullet
+                // was worth a hundred. One kill is one kill.
+                if (room.TryGetPlayer(attackerId, out var attacker) && attacker != null)
+                {
+                    attacker.Score += KillScore;
+                }
             }
 
             // A player who goes down leaves whatever they were carrying on the
@@ -2305,6 +2566,24 @@ namespace OpenGSServer
         {
             var shooter = room.Players.FirstOrDefault(player =>
                 string.Equals(player.Id, shooterId, StringComparison.OrdinalIgnoreCase));
+
+            if (shooter == null)
+            {
+                Console.WriteLine($"[Match] Ignored shot by non-member '{shooterId}' in room '{room.Id}");
+                return;
+            }
+
+            // An enemy is a target, and a different kind of one. The shot resolver
+            // can name either, and the two settle differently: an enemy has health
+            // the simulator holds and a kill moves a mission's objective, while a
+            // player has health on the room and a kill is scored.
+            if (MissionEnemyRegistry.TryGet(room.Id) is { } enemySimulator &&
+                enemySimulator.TryPeek(targetId, out var enemy))
+            {
+                ApplyShotToEnemy(room, shooter, enemy, weaponType);
+                return;
+            }
+
             var target = room.Players.FirstOrDefault(player =>
                 string.Equals(player.Id, targetId, StringComparison.OrdinalIgnoreCase));
 
@@ -2322,10 +2601,23 @@ namespace OpenGSServer
             }
 
             // ダメージ計算（武器タイプによる）
-            int damage = CalculateWeaponDamage(weaponType);
-            LobbyServerManager.Instance.RecordDamageDailyProgress(shooterId, damage);
+            //
+            // The arithmetic goes through the resolver rather than being done here,
+            // because the projectile path already did and the two paths did not
+            // agree: this one subtracted the raw number, so a player who was lying
+            // down or sitting took full damage from a shot and reduced damage from
+            // the grenade that hit them harder.
+            var pose = room.GetPlayerPoseState(targetId);
+            var outcome = ServerDamageResolver.Apply(target, CalculateWeaponDamage(weaponType), pose);
+            LobbyServerManager.Instance.RecordDamageDailyProgress(shooterId, outcome.Applied);
+            if (outcome.Applied <= 0)
+            {
+                Console.WriteLine(
+                    $"[Match] Ignored hit on an already downed player {targetId} from '{shooterId}'");
+                return;
+            }
 
-            target.Health = Math.Max(0, target.Health - damage);
+            var damage = outcome.Applied;
             var targetState = MatchServerV2.Instance.ServerLagCompensationManager.GetPlayerState(targetId);
             var authoritativeHitPosition = new JObject
             {
@@ -2335,13 +2627,13 @@ namespace OpenGSServer
             };
             HandlePlayerDamaged(room, targetId, damage, shooterId, authoritativeHitPosition, target.Health);
 
-            if (target.Health <= 0)
+            if (outcome.IsNowDown)
             {
                 // Same reason as the projectile path: the room is where the best
                 // kill count lives, and the rules end a match on it.
                 room.RecordDeath(targetId);
                 room.RecordKill(shooterId);
-                shooter.Score += 100;
+                shooter.Score += KillScore;
 
                 // The same reason as the projectile path: a carrier who goes down
                 // leaves the flag on the ground, and the server is the one that
@@ -2349,6 +2641,42 @@ namespace OpenGSServer
                 DropFlagCarriedBy(room, targetId);
                 HandlePlayerKilled(room, shooterId, targetId);
             }
+        }
+
+        /// <summary>
+        /// Settles a shot that landed on an enemy.
+        /// <para>
+        /// The damage is the weapon's, taken by the simulator, and the kill that
+        /// follows moves the room's mission objective through the same room that
+        /// owns the rule. The client is told what happened but never decides it.
+        /// </para>
+        /// </summary>
+        private static void ApplyShotToEnemy(
+            MatchRoom room,
+            PlayerInfo shooter,
+            ServerEnemyState enemy,
+            string? weaponType)
+        {
+            if (shooter == null || enemy == null || shooter.Health <= 0)
+            {
+                return;
+            }
+
+            var damage = CalculateWeaponDamage(weaponType);
+            var applied = MissionEnemyRegistry.ApplyPlayerDamageToEnemy(
+                room.Id.ToString(), enemy.EnemyId, shooter.Id, damage, enemy.Position);
+
+            if (applied <= 0)
+            {
+                // The enemy was already down, which is a shot that landed on
+                // nothing. Counting it would let a player farm the objective by
+                // firing at a corpse.
+                Console.WriteLine(
+                    $"[Match] Ignored a shot on an enemy that was already down in room '{room.Id}'");
+                return;
+            }
+
+            LobbyServerManager.Instance.RecordDamageDailyProgress(shooter.Id, applied);
         }
 
         private static bool IsServerValidatedShot(string shooterId, string targetId, string? weaponType)
@@ -2389,26 +2717,199 @@ namespace OpenGSServer
             };
         }
 
-        private static bool AcceptShot(string playerId, string weaponType)
+        /// <summary>
+        /// Decides whether a shot is allowed, and takes the round out of the
+        /// magazine if it is.
+        /// <para>
+        /// The rate check alone used to be the whole economy, so the only limit on
+        /// how much a player could fire was how fast they could press the key. The
+        /// magazine is the answer to the other half: what a player may fire is the
+        /// server's count, and a client that claims a shot it has no round for is
+        /// refused the same way a client aiming at somebody it is not pointing at
+        /// is.
+        /// </para>
+        /// </summary>
+        private static bool AcceptShot(
+            MatchRoom room, string playerId, string weaponType, out int remainingAmmo)
         {
-            var cooldown = weaponType switch
-            {
-                "Pistol" => TimeSpan.FromMilliseconds(200),
-                "SMG" => TimeSpan.FromMilliseconds(80),
-                "Shotgun" => TimeSpan.FromMilliseconds(800),
-                "Rifle" => TimeSpan.FromMilliseconds(150),
-                "Sniper" => TimeSpan.FromSeconds(1),
-                _ => TimeSpan.FromMilliseconds(200)
-            };
+            remainingAmmo = 0;
             var now = DateTime.UtcNow;
+            var cooldown = TimeSpan.FromSeconds(ServerWeaponMagazineStore.Spec(weaponType).IntervalSeconds);
             if (LastShots.TryGetValue(playerId, out var lastShot) && now - lastShot < cooldown)
             {
                 Console.WriteLine($"[Match] Ignored rapid {weaponType} shot from '{playerId}'");
                 return false;
             }
 
+            if (!ServerWeaponMagazineStore.TryFire(playerId, weaponType, now, out remainingAmmo))
+            {
+                Console.WriteLine(
+                    $"[Match] Ignored {weaponType} shot from '{playerId}': " +
+                    $"magazine holds {remainingAmmo}");
+                RefuseShot(room, playerId, weaponType, remainingAmmo);
+                return false;
+            }
+
             LastShots[playerId] = now;
             return true;
+        }
+
+        /// <summary>
+        /// Tells a player what its magazine holds after a refused shot, so a client
+        /// that keeps pressing an empty gun learns it is empty rather than being
+        /// silently ignored.
+        /// </summary>
+        private static void RefuseShot(MatchRoom room, string playerId, string weaponType, int remaining)
+        {
+            var capacity = ServerWeaponMagazineStore.Spec(weaponType).Capacity;
+            var reserve = ServerWeaponMagazineStore.TryPeek(playerId, weaponType, out var magazine)
+                ? magazine.ReadReserve()
+                : 0;
+            GameMessageDispatcher.SendAmmoUpdate(
+                room.Id.ToString(), playerId, weaponType, remaining, capacity, reserve);
+        }
+
+        /// <summary>
+        /// Handles a client's request to reload.
+        /// <para>
+        /// The request used to have no route on the server, so a client that
+        /// reloaded changed nothing anywhere: the server's idea of ammunition did
+        /// not exist to change, and the answer had no name to arrive under. The
+        /// server decides here whether a reload starts, how long it takes, and
+        /// what the magazine holds afterwards; the client's request for a duration
+        /// is honoured only up to the weapon's own reload time so a client cannot
+        /// shorten a reload into a rate limit bypass.
+        /// </para>
+        /// </summary>
+        private static void HandlePlayerReload(MatchRoom room, string playerId, JObject json)
+        {
+            var weaponType = NormalizeWeaponType(
+                ReadString(json, "WeaponType", "WeaponId", "Weapon"));
+            if (weaponType == null || !ServerWeaponMagazineStore.IsKnownWeapon(weaponType))
+            {
+                Console.WriteLine($"[Match] Ignored reload with unknown weapon from '{playerId}'");
+                return;
+            }
+
+            if (!room.TryGetPlayer(playerId, out var player) || player == null)
+            {
+                Console.WriteLine($"[Match] Ignored reload from unknown player '{playerId}'");
+                return;
+            }
+
+            if (player.Health <= 0)
+            {
+                Console.WriteLine($"[Match] Ignored reload from a player that is down: '{playerId}'");
+                return;
+            }
+
+            var requestedWindow = TimeSpan.Zero;
+            var requestedSeconds = json.GetFloatAny("ReloadSeconds", "DurationSeconds", "ReloadTime");
+            if (requestedSeconds.HasValue && requestedSeconds.Value > 0f &&
+                IsFinite(requestedSeconds.Value))
+            {
+                requestedWindow = TimeSpan.FromSeconds(requestedSeconds.Value);
+            }
+
+            var result = ServerWeaponMagazineStore.TryReload(
+                playerId, weaponType, DateTime.UtcNow, requestedWindow);
+
+            Console.WriteLine(
+                $"[Match] {playerId} reload {weaponType}: {result.Kind} " +
+                $"({result.Remaining}/{result.Reserve})");
+
+            GameMessageDispatcher.SendPlayerReloaded(
+                room.Id.ToString(),
+                playerId,
+                weaponType,
+                result.Remaining,
+                ServerWeaponMagazineStore.Spec(weaponType).Capacity,
+                result.Reserve,
+                result.Kind == ReloadResultKind.Started,
+                result.Kind.ToString(),
+                result.Seconds);
+        }
+
+        /// <summary>
+        /// Keeps every playing room's item map stocked and says what appeared.
+        /// <para>
+        /// The server configured six spawn points and six spawn rules when a room
+        /// was created, and then nothing asked for a spawn, so a live match had an
+        /// item map that only ever held whatever an older system put at the origin.
+        /// Spawning is advanced from the match loop rather than from a message,
+        /// because what is on the map is a state rather than something a client
+        /// reports.
+        /// </para>
+        /// </summary>
+        public static void UpdateFieldItemSpawns(float deltaSeconds)
+        {
+            foreach (var room in MatchRoomManager.Instance.AllRooms().OfType<MatchRoom>())
+            {
+                if (!room.Playing || room.Finished)
+                {
+                    continue;
+                }
+
+                var itemManager = MatchRoomManager.Instance.GetFieldItemManager(room.Id);
+                if (itemManager == null)
+                {
+                    continue;
+                }
+
+                var roomId = room.Id.ToString();
+                itemManager.TickSpawns(item => GameMessageDispatcher.BroadcastToRoom(roomId, new JObject
+                {
+                    ["MessageType"] = GameMessageTypes.FieldItemSpawn,
+                    ["RoomID"] = roomId,
+                    ["RoomId"] = roomId,
+                    ["ItemId"] = item.ItemId,
+                    ["ItemType"] = FieldItemTypeNames.ToWireName(item.ItemType),
+                    ["SpawnPointId"] = item.SpawnPointId,
+                    ["SpawnPointName"] = item.SpawnPointName,
+                    ["PositionX"] = item.PosX,
+                    ["PositionY"] = item.PosY,
+                    ["PositionZ"] = item.PosZ,
+                    ["Timestamp"] = DateTime.UtcNow.ToString("o")
+                }));
+            }
+        }
+
+        /// <summary>
+        /// Finishes the reloads that are due and tells their owners. A reload is a
+        /// state that becomes true on a timer rather than an event anybody reports,
+        /// so it is advanced from the match loop.
+        /// </summary>
+        public static void UpdateReloads()
+        {
+            var roomByPlayer = new Dictionary<string, MatchRoom>(StringComparer.OrdinalIgnoreCase);
+            foreach (var room in MatchRoomManager.Instance.AllRooms())
+            {
+                if (room is not MatchRoom matchRoom)
+                {
+                    continue;
+                }
+
+                foreach (var player in matchRoom.Players)
+                {
+                    roomByPlayer[player.Id] = matchRoom;
+                }
+            }
+
+            ServerWeaponMagazineStore.TickReloads(DateTime.UtcNow, (playerId, magazine) =>
+            {
+                if (!roomByPlayer.TryGetValue(playerId, out var room))
+                {
+                    return;
+                }
+
+                GameMessageDispatcher.SendAmmoUpdate(
+                    room.Id.ToString(),
+                    playerId,
+                    magazine.WeaponType,
+                    magazine.ReadRemaining(),
+                    magazine.Capacity,
+                    magazine.ReadReserve());
+            });
         }
 
         // UDPブロードキャストメソッド群

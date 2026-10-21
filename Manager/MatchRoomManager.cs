@@ -221,6 +221,8 @@ namespace OpenGSServer
                             perPlayerResult["IsLevelUp"] = persisted.IsLevelUp;
                             session.SendAsyncJsonWithTimeStamp(perPlayerResult);
                         }
+
+                        RecordStanding(matchRoom, p);
                     }
                 };
                 bus.OnGameEnded += () => {
@@ -325,6 +327,17 @@ namespace OpenGSServer
             }
 
             matchRoom.GameStart();
+
+            // A mission needs something to fight. Its objective count is how many
+            // things, so the wave is the number the rule will judge the mission
+            // on rather than a fixed handful that has nothing to do with it.
+            if (matchRoom.Setting?.Mode == EGameMode.Mission &&
+                matchRoom.Setting is MissionMatchSetting missionSetting)
+            {
+                InGameMatchEventHandler.BeginMissionEnemies(
+                    matchRoom, missionSetting.ObjectiveCount, new System.Numerics.Vector2(0f, 0f));
+            }
+
             ConsoleWrite.WriteMessage(
                 $"[Match] Room {matchRoom.Id} ({matchRoom.RoomName}) is now playing",
                 ConsoleColor.Green);
@@ -858,8 +871,40 @@ namespace OpenGSServer
             return result;
         }
 
-        private static PlayerInfo PreparePlayerForMatch(PlayerInfo source, float healthMultiplier)
+        /// <summary>
+        /// Adds a finished match to the leaderboard.
+        /// <para>
+        /// The standing used to be written nowhere. The ranking store existed and
+        /// every one of its methods fetched a collection and dropped it, so a
+        /// player's record lasted exactly as long as the process did.
+        /// </para>
+        /// <para>
+        /// A failure here must not fail the match. Everyone has already been told
+        /// their result and their experience by this point, and a leaderboard that
+        /// is not written is worth less than a match that still ends.
+        /// </para>
+        /// </summary>
+        private static void RecordStanding(MatchRoom room, PlayerInfo player)
         {
+            if (room?.Setting == null || player == null || string.IsNullOrWhiteSpace(player.Id))
+            {
+                return;
+            }
+
+            try
+            {
+                RankingDatabase.Instance.Record(
+                    player.Id, player.Name, room.Setting.Mode, player.Score);
+            }
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage(
+                    $"[Ranking] Could not record {player.Id} in room {room.Id}: {ex.Message}",
+                    ConsoleColor.Yellow);
+            }
+        }
+
+        private static PlayerInfo PreparePlayerForMatch(PlayerInfo source, float healthMultiplier)        {
             if (source == null)
             {
                 return new PlayerInfo();
@@ -879,13 +924,22 @@ namespace OpenGSServer
                 IsBot = source.IsBot
             };
 
+            var maxHealth = clone.MaxHealth > 0 ? clone.MaxHealth : 100;
             if (healthMultiplier > 1.0f)
             {
-                var maxHealth = Math.Max(1, (int)Math.Round(clone.MaxHealth * healthMultiplier));
-                clone.MaxHealth = maxHealth;
-                clone.Health = maxHealth;
+                maxHealth = Math.Max(1, (int)Math.Round(maxHealth * healthMultiplier));
             }
 
+            // A player enters every match at full health, not at whatever they
+            // finished the last one with. This used to apply the multiplier only
+            // when it was above one, so with the default multiplier nothing here
+            // touched health at all and a player who died in the previous match
+            // entered this one already dead: the survival rules read alive straight
+            // off the health, so they could end the match having counted a player
+            // who never took part in it.
+            clone.MaxHealth = Math.Max(1, maxHealth);
+            clone.Health = clone.MaxHealth;
+            clone.Score = 0;
             return clone;
         }
 

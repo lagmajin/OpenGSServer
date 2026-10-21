@@ -179,7 +179,7 @@ Current status:
 - `test_client.py` drives the management listener
 - `tools/run_smoke.ps1` builds, boots a throwaway server, and runs
   `lobby_smoke_client.py`, `two_player_loading_smoke.py`,
-  `mission_room_lifecycle_smoke.py`, `reconnect_smoke.py`,`r`n  `loading_timeout_smoke.py`, and `match_playthrough_smoke.py` in one command
+  `mission_room_lifecycle_smoke.py`, `reconnect_smoke.py`, `loading_timeout_smoke.py`, and `match_playthrough_smoke.py` in one command
 - the same command runs in `.github/workflows/server-build.yml`
 - `ServerHostTests` and `ServerPlayerStateManagerTests` cover the
   regression-prone server rules
@@ -225,8 +225,11 @@ Current status:
   and it covers login, room lifecycle, the loading handshake, a reconnect and a
   match played to its end
 - what S5 does not yet cover is the shared package being validated on its own.
-  The core tests run in the client workflow against a checkout of OpenGSCore, so
-  the package has no build of its own to fail
+  `OpenGSCore/.github/workflows/core-build.yml` now builds the package and runs
+  its tests, so the shared package fails its own build rather than only failing
+  downstream. That workflow runs in the OpenGSCore repository, not this one, so
+  it still does not gate a server change that needs a matching core change;
+  that pairing is what the smoke suite and the client workflow cover today
 
 ## Suggested Order
 

@@ -86,6 +86,41 @@ namespace OpenGSServer
             return _rooms.Values.Where(r => r != null && !r.NowPlaying && (mode == EGameMode.Unknown || r.GameMode == mode || (r.setting != null && r.setting.Mode == mode))).ToList();
         }
 
+        /// <summary>
+        /// Puts a room this manager did not create into the list.
+        /// <para>
+        /// The room list a client browses is built from this manager, so a room
+        /// living anywhere else could be joined by id but never appeared in the
+        /// list. A mission room was one of those: it could be created, joined,
+        /// played, and was never once on offer.
+        /// </para>
+        /// </summary>
+        public bool RegisterExternalRoom(WaitRoom room)
+        {
+            if (room == null || string.IsNullOrWhiteSpace(room.RoomId))
+            {
+                return false;
+            }
+
+            lock (_lockObj)
+            {
+                if (_rooms.Count >= RoomLimit && !_rooms.ContainsKey(room.RoomId))
+                {
+                    ConsoleWrite.WriteMessage(
+                        $"[WAITROOM] Refused an external room: the limit of {RoomLimit} is reached.",
+                        ConsoleColor.Yellow);
+                    return false;
+                }
+
+                _rooms[room.RoomId] = room;
+            }
+
+            ConsoleWrite.WriteMessage(
+                $"[WAITROOM] Published an externally created room: {room.RoomName} ({room.RoomId})",
+                ConsoleColor.DarkCyan);
+            return true;
+        }
+
         public bool CloseRoom(string roomId)
         {
             if (_rooms.TryRemove(roomId, out var room))

@@ -30,6 +30,27 @@ namespace OpenGSServer
                 EGameMode.TeamSurvival,
                 EGameMode.CaptureTheFlag
             });
+
+            // A respawn that does not move the player is not a respawn.
+            //
+            // The handler falls back to the position the player died at when no
+            // table is configured, and the class default used to configure none,
+            // so on a server with no settings file everybody came back exactly
+            // where they fell: a free spawn with no risk of being shot coming out
+            // of it. These defaults are rough, symmetric and separated, so a team
+            // respawns into its own half rather than into its own grave. A settings
+            // file replaces them.
+            _respawnPoints.AddRange(new[]
+            {
+                new ServerRespawnPoint(ETeam.NoTeam, -6f, 0f, 0f),
+                new ServerRespawnPoint(ETeam.NoTeam, 6f, 0f, 0f),
+                new ServerRespawnPoint(ETeam.NoTeam, 0f, 0f, -6f),
+                new ServerRespawnPoint(ETeam.NoTeam, 0f, 0f, 6f),
+                new ServerRespawnPoint(ETeam.Red, -12f, 0f, -12f),
+                new ServerRespawnPoint(ETeam.Red, -12f, 0f, 12f),
+                new ServerRespawnPoint(ETeam.Blue, 12f, 0f, -12f),
+                new ServerRespawnPoint(ETeam.Blue, 12f, 0f, 12f)
+            });
         }
 
         public void SetMaxRoom(int value) => MaxRoom = Math.Max(1, value);
@@ -109,9 +130,9 @@ namespace OpenGSServer
             }
         }
 
-        public bool TryGetRespawnPoint(ETeam team, int slot, out ServerRespawnPoint point)
+public bool TryGetRespawnPoint(ETeam team, int slot, out ServerRespawnPoint point)
         {
-            var candidates = _respawnPoints.Where(candidate => candidate.Team == team).ToList();
+            var candidates = CandidatesFor(team);
             if (candidates.Count == 0)
             {
                 point = null!;
@@ -120,6 +141,30 @@ namespace OpenGSServer
 
             point = candidates[Math.Abs(slot) % candidates.Count];
             return true;
+        }
+
+        /// <summary>
+        /// The spawn points a player on this team may come back at.
+        /// <para>
+        /// A team's own points come first, then the neutral ones, then anything at
+        /// all. Matching on the team alone meant a team the settings file had no
+        /// points for had none to choose from even though the map was covered in
+        /// neutral ones, so a red player who had no red spawn came back where the
+        /// server already had them rather than on a spawn at all.
+        /// </para>
+        /// </summary>
+        private List<ServerRespawnPoint> CandidatesFor(ETeam team)
+        {
+            var own = _respawnPoints.Where(candidate => candidate.Team == team).ToList();
+            if (own.Count > 0)
+            {
+                return own;
+            }
+
+            var neutral = _respawnPoints
+                .Where(candidate => candidate.Team == ETeam.NoTeam)
+                .ToList();
+            return neutral.Count > 0 ? neutral : _respawnPoints.ToList();
         }
 
         private static int ReadInt(JObject json, string propertyName, int fallback, int minimum)
@@ -253,6 +298,18 @@ public sealed class ServerRespawnPoint
     public float Y { get; init; }
     public float Z { get; init; }
 
+    public ServerRespawnPoint()
+    {
+    }
+
+    public ServerRespawnPoint(ETeam team, float x, float y, float z)
+    {
+        Team = team;
+        X = x;
+        Y = y;
+        Z = z;
+    }
+
     public JObject ToJson() => new()
     {
         ["Team"] = Team.ToString(),
@@ -264,7 +321,13 @@ public sealed class ServerRespawnPoint
     public static bool TryParse(JObject json, out ServerRespawnPoint point)
     {
         point = null!;
-        if (!Enum.TryParse(json["Team"]?.ToString(), true, out ETeam team) || team == ETeam.NoTeam)
+
+        // A neutral point is a real kind of point. It was rejected here, so a
+        // settings file could only ever describe team spawns, and the neutral
+        // defaults below were the only ones that could never be configured,
+        // replaced, or reasoned about.
+        if (!Enum.TryParse(json["Team"]?.ToString(), true, out ETeam team) ||
+            !Enum.IsDefined(typeof(ETeam), team))
         {
             return false;
         }

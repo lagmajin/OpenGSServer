@@ -215,10 +215,23 @@ public sealed class MatchRudpShotTests : IDisposable
         const float StepSize = 1f;
         byte sequence = 1;
 
-        float currentX = 0f;
-        float currentY = 0f;
+        // The walk starts from wherever the server already holds the player, not
+        // from the origin. A server with no spawn table used to leave every player
+        // at zero, and this helper walked from there; now that a room has real spawn
+        // points a player connects somewhere else, and starting the walk at zero
+        // would mean the first step is a teleport the server refuses.
+        var held = AuthoritativePosition(playerId);
+        float currentX = held.X;
+        float currentY = held.Y;
+        var steps = 0;
         while (MathF.Abs(currentX - x) > 0.001f || MathF.Abs(currentY - y) > 0.001f)
         {
+            if (steps++ >= 256)
+            {
+                throw new InvalidOperationException(
+                    $"The server did not accept the movement path to ({x}, {y}) within 256 steps; last attempted position was ({currentX}, {currentY}).");
+            }
+
             var dx = x - currentX;
             var dy = y - currentY;
             var distance = MathF.Sqrt((dx * dx) + (dy * dy));
@@ -407,14 +420,29 @@ public sealed class MatchRudpShotTests : IDisposable
         Assert.True(ShooterKills() >= 1, "the shot that landed did not raise a kill");
     }
 
+    /// <summary>
+    /// Makes the server hold no position at all for a player.
+    /// <para>
+    /// A player connects on a spawn point now, so "has never been seen" is not
+    /// something a test gets by not sending anything. Unregistering is what
+    /// expresses it: the server has no origin to measure a line from, which is the
+    /// condition these tests are about.
+    /// </para>
+    /// </summary>
+    private void ForgetShooterPosition()
+    {
+        MatchServerV2.Instance.ServerLagCompensationManager.RemovePlayer(shooterId);
+    }
+
     [Fact]
     public void AShotFromAPlayerWithNoPositionDoesNothing()
     {
         SetUpRoom();
-        // The victim moves so the geometry would reach it, but the shooter never
-        // reports a position. A shooter that has never been seen cannot aim, and
-        // its coordinates would otherwise read as the origin.
+        // The victim moves so the geometry would reach it, but the shooter is
+        // never seen at a place. A shooter the server has no position for cannot
+        // aim, and its coordinates would otherwise read as the origin.
         MoveTo(victim, victimId, 3f, 0f);
+        ForgetShooterPosition();
 
         var before = VictimHealth();
 
@@ -562,6 +590,7 @@ public sealed class MatchRudpShotTests : IDisposable
     {
         SetUpRoom();
         MoveTo(victim, victimId, 3f, 0f);
+        ForgetShooterPosition();
 
         var before = VictimHealth();
 
@@ -629,11 +658,13 @@ public sealed class MatchRudpShotTests : IDisposable
     {
         SetUpRoom();
         MoveTo(victim, victimId, 24f, 0f);
+        ForgetShooterPosition();
 
         var before = VictimHealth();
 
-        // The thrower has never reported a position, so its coordinates in the
-        // message are a claim about where it is standing, not a fact.
+        // The thrower is at a place the server has never recorded, so the
+        // coordinates in the message are a claim about where it is standing
+        // rather than a fact.
         ThrowGrenade("Cluster", dirX: 1f);
         Pump(300);
 

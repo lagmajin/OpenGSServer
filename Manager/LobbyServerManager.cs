@@ -1077,6 +1077,23 @@ namespace OpenGSServer
                 case MessageType.MatchServerInfoRequest:
                     HandleMatchServerInfoRequest(clientSession, data);
                     break;
+                case GameMessageTypes.MatchStatusRequest:
+                {
+                    var authenticatedPlayerId = clientSession?.PlayerID;
+                    if (string.IsNullOrWhiteSpace(authenticatedPlayerId))
+                    {
+                        ConsoleWrite.WriteMessage("[LOBBY] Ignoring match status request from an unauthenticated session.", ConsoleColor.Yellow);
+                        break;
+                    }
+
+                    // Match status is a TCP control request. Bind the identity
+                    // to the authenticated lobby session before routing it to
+                    // the match handler, which also validates room membership.
+                    data["PlayerID"] = authenticatedPlayerId;
+                    data["PlayerId"] = authenticatedPlayerId;
+                    InGameMatchEventHandler.HandleTcpSystemEvent(data);
+                    break;
+                }
                 case MessageType.RoomListUpdateRequest:
                     LobbyEventHandler.UpdateRoom(clientSession, data);
                     break;

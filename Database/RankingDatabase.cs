@@ -1,89 +1,195 @@
 ﻿using LiteDB;
 using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 
 using OpenGSCore;
 
 namespace OpenGSServer
 {
-
-    struct DeathMatchKillRanking
+    /// <summary>
+    /// One player's standing in one mode.
+    /// <para>
+    /// The key is the account, so a second match adds to the same row rather than
+    /// adding another one. That is what makes it a standing rather than a history:
+    /// a leaderboard that kept every match would rank players by how long they had
+    /// been playing rather than by how well.
+    /// </para>
+    /// </summary>
+    public class RankingEntry
     {
-        public string AccountID { get; set; }
-        public string DisplayName { get; set; }
-        public DeathMatchKillRanking(in string AccountID,in string DisplayName,int Kill)
-        {
-            this.AccountID = AccountID;
+        /// <summary>
+        /// The row's key: the mode and the account together.
+        /// <para>
+        /// LiteDB keys on a property called Id. The key used to be the account
+        /// alone, stored in a field the store has no mapping for, so FindById found
+        /// nothing and every second match started a fresh standing from zero: the
+        /// best score stayed at the last result and the match count never rose
+        /// above one.
+        /// </para>
+        /// </summary>
+        public string Id { get; set; } = string.Empty;
 
-            this.DisplayName = DisplayName;
-        }
+        public string AccountId { get; set; } = string.Empty;
+        public string DisplayName { get; set; } = string.Empty;
+        public string Mode { get; set; } = string.Empty;
 
+        /// <summary>The best single result, which is what the board ranks on.</summary>
+        public int BestScore { get; set; }
+
+        public int TotalScore { get; set; }
+
+        public int Matches { get; set; }
+
+        public DateTime LastPlayedUtc { get; set; } = DateTime.MinValue;
     }
 
-    public class RankingDatabase:IDisposable
+    /// <summary>
+    /// The leaderboard store.
+    /// <para>
+    /// Every method here used to fetch a collection and drop it on the floor, so
+    /// the database file was created and nothing was ever written or read from it:
+    /// a player's standing survived exactly as long as the process did, which is
+    /// to say not at all. A ranking that is not persisted is not a ranking.
+    /// </para>
+    /// </summary>
+    public sealed class RankingDatabase : IDisposable
     {
-        private LiteDatabase rankingDB = null!;
+        private const string CollectionName = "rankings";
+
+        private LiteDatabase? rankingDB;
 
         public static string rankingDBfileName = "ranking.db";
 
+        /// <summary>
+        /// One store for the server. It is opened lazily and kept open, because a
+        /// leaderboard is read on every result and reopening a file database for
+        /// each one costs more than the write does.
+        /// </summary>
+        public static RankingDatabase Instance { get; } = new RankingDatabase();
+
         public void ConnectRankingDB()
         {
+            if (rankingDB != null)
+            {
+                return;
+            }
+
+            var directory = Path.GetDirectoryName(Path.GetFullPath(rankingDBfileName));
+            if (!string.IsNullOrEmpty(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
             rankingDB = new LiteDatabase(rankingDBfileName);
-
-           
         }
 
-        public void AddDMKillRanking(in string AccountID,in string DisplayName,int kill)
+        private ILiteCollection<RankingEntry> Entries()
         {
-            if(rankingDB==null)
-            {
-                ConnectRankingDB();
-
-            }
-
-            //rankingDB.GetCollection<>
-
+            ConnectRankingDB();
+            return rankingDB!.GetCollection<RankingEntry>(CollectionName);
         }
 
-        
-
-        public void AddTDMKillRanking(in string AccountID, in string DisplayName,int kill)
+        /// <summary>
+        /// Records a result, keeping the best and adding to the total.
+        /// </summary>
+        /// <returns>The stored row, or null when there is nothing to record.</returns>
+        public RankingEntry? Record(
+            string accountId,
+            string displayName,
+            EGameMode mode,
+            int score,
+            DateTime? playedUtc = null)
         {
-            if (rankingDB == null)
+            if (string.IsNullOrWhiteSpace(accountId) || mode == EGameMode.Unknown)
             {
-
-                ConnectRankingDB();
+                return null;
             }
 
+            var key = BuildKey(accountId, mode);
+            var entries = Entries();
 
-            var col = rankingDB!.GetCollection<DBTDMKillRankingData>("");
+            var existing = entries.FindById(key);
+            if (existing == null)
+            {
+                existing = new RankingEntry
+                {
+                    Id = key,
+                    AccountId = accountId,
+                    Mode = mode.ToString()
+                };
+            }
+
+            existing.DisplayName = string.IsNullOrWhiteSpace(displayName) ? accountId : displayName;
+            existing.TotalScore += Math.Max(0, score);
+            existing.BestScore = Math.Max(existing.BestScore, Math.Max(0, score));
+            existing.Matches += 1;
+            existing.LastPlayedUtc = playedUtc ?? DateTime.UtcNow;
+
+            entries.Upsert(existing);
+            return existing;
         }
 
-        public void AddSuvKillRanking(in string AccountID, in string DisplayName)
-        {
-            if (rankingDB == null)
-            {
+        public void AddDMKillRanking(string accountId, string displayName, int kill)
+            => Record(accountId, displayName, EGameMode.DeathMatch, kill);
 
-                ConnectRankingDB();
+        public void AddTDMKillRanking(string accountId, string displayName, int kill)
+            => Record(accountId, displayName, EGameMode.TeamDeathMatch, kill);
+
+        public void AddSuvKillRanking(string accountId, string displayName, int place)
+            => Record(accountId, displayName, EGameMode.Survival, place);
+
+        public void AddTSuvKillRanking(string accountId, string displayName, int score)
+            => Record(accountId, displayName, EGameMode.TeamSurvival, score);
+
+        public void AddCTFCaptureRanking(string accountId, string displayName, int captures)
+            => Record(accountId, displayName, EGameMode.CaptureTheFlag, captures);
+
+        /// <summary>
+        /// The board, best first.
+        /// <para>
+        /// Sorted in memory rather than by an index because the total has to keep
+        /// being read and written by every result; an index over a mutable running
+        /// total would go stale the moment the next match landed.
+        /// </para>
+        /// </summary>
+        public IReadOnlyList<RankingEntry> Top(EGameMode mode, int limit = 20)
+        {
+            if (limit <= 0)
+            {
+                return Array.Empty<RankingEntry>();
             }
 
-            var col = rankingDB!.GetCollection<DBTDMKillRankingData>("");
+            return Entries()
+                .Find(Query.EQ("Mode", mode.ToString()))
+                .OrderByDescending(entry => entry.BestScore)
+                .ThenByDescending(entry => entry.Matches)
+                .ThenBy(entry => entry.DisplayName, StringComparer.Ordinal)
+                .Take(limit)
+                .ToList();
         }
 
-        public void AddTSuvKillRanking(in string AccountID, in string DisplayName)
+        public RankingEntry? Find(string accountId, EGameMode mode)
         {
-            if (rankingDB == null)
+            if (string.IsNullOrWhiteSpace(accountId))
             {
-                ConnectRankingDB();
-
+                return null;
             }
+
+            return Entries().FindById(BuildKey(accountId, mode));
+        }
+
+        private static string BuildKey(string accountId, EGameMode mode)
+        {
+            // One row per account per mode, so the key has to carry both.
+            return $"{mode}:{accountId}";
         }
 
         public void Dispose()
         {
             rankingDB?.Dispose();
-
-            //Dispose(true); 
-
+            rankingDB = null;
         }
     }
 }
