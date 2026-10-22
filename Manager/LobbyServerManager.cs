@@ -1063,14 +1063,42 @@ namespace OpenGSServer
 
         private void HandleMissionCompleteNotification(ClientSession? session, JObject data)
         {
-            if (session == null) return;
-            session.SendAsyncJsonWithTimeStamp(new JObject { ["MessageType"] = MessageType.MissionCompleteNotification, ["Success"] = true });
+            HandleMissionOutcome(session, data, true);
         }
 
         private void HandleMissionFailedNotification(ClientSession? session, JObject data)
         {
-            if (session == null) return;
-            session.SendAsyncJsonWithTimeStamp(new JObject { ["MessageType"] = MessageType.MissionFailedNotification, ["Success"] = false });
+            HandleMissionOutcome(session, data, false);
+        }
+
+        private void HandleMissionOutcome(ClientSession? session, JObject data, bool succeeded)
+        {
+            if (session == null || string.IsNullOrWhiteSpace(session.PlayerID)) return;
+            var requestedRoomId = data["RoomID"]?.ToString() ?? data["RoomId"]?.ToString() ?? string.Empty;
+            var matchRoom = FindActiveMissionMatch(session.PlayerID, requestedRoomId);
+            var reason = data["Reason"]?.ToString();
+            var accepted = matchRoom != null && matchRoom.TryFinishMission(succeeded, reason);
+            session.SendAsyncJsonWithTimeStamp(new JObject
+            {
+                ["MessageType"] = succeeded
+                    ? MessageType.MissionCompleteNotification
+                    : MessageType.MissionFailedNotification,
+                ["Success"] = accepted,
+                ["RoomID"] = matchRoom?.Id ?? requestedRoomId,
+                ["Error"] = accepted ? null : "Active mission match was not found or has already ended"
+            });
+        }
+
+        private static MatchRoom? FindActiveMissionMatch(string playerId, string requestedRoomId)
+        {
+            if (string.IsNullOrWhiteSpace(playerId)) return null;
+            return MatchRoomManager.Instance.AllRooms()
+                .OfType<MatchRoom>()
+                .FirstOrDefault(room => room.Playing && !room.Finished &&
+                    room.Setting is MissionMatchSetting && room.ContainsPlayer(playerId) &&
+                    (string.IsNullOrWhiteSpace(requestedRoomId) ||
+                        string.Equals(room.Id, requestedRoomId, StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(room.WaitRoomLink?.RoomId, requestedRoomId, StringComparison.OrdinalIgnoreCase)));
         }
         private void HandleMatchServerInfoRequest(ClientSession? session, JObject data)
         {
