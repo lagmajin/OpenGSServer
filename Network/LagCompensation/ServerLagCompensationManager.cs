@@ -74,6 +74,7 @@ namespace OpenGSServer.Network
         /// </summary>
         public void SuspendPlayer(string playerId)
         {
+            m_PlayerStateManager.SuspendPlayer(playerId);
             m_StateBroadcaster.UnregisterClient(playerId);
             Log.Info($"[ServerLagCompensation] Player {playerId} suspended from match {m_MatchId}");
         }

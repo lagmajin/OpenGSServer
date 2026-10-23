@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 
 namespace OpenGSServer.Network
@@ -28,6 +29,7 @@ namespace OpenGSServer.Network
         /// </summary>
         private class PlayerServerState
         {
+            public readonly object SyncRoot = new();
             public string PlayerId = string.Empty;
             public float PosX, PosY, PosZ;
             public float RotX, RotY, RotZ, RotW;
@@ -38,14 +40,24 @@ namespace OpenGSServer.Network
             public byte LastAcceptedSequence;
             public bool HasAcceptedSequence;
             public bool HasAuthoritativePosition;
+            public bool IsSuspended;
             public Queue<ClientInputData> InputQueue = new Queue<ClientInputData>();
             public DateTime LastUpdateTime = DateTime.UtcNow;
             public bool IsGrounded = true;
             public float ViolationScore = 0f;
-            public int PendingInputs => InputQueue.Count;
+            public int PendingInputs
+            {
+                get
+                {
+                    lock (SyncRoot)
+                    {
+                        return InputQueue.Count;
+                    }
+                }
+            }
         }
 
-        private readonly Dictionary<string, PlayerServerState> m_PlayerStates = new Dictionary<string, PlayerServerState>();
+        private readonly ConcurrentDictionary<string, PlayerServerState> m_PlayerStates = new();
 
         /// <summary>最大入力キューサイズ</summary>
         private const int MaxInputQueueSize = 128;
@@ -58,14 +70,14 @@ namespace OpenGSServer.Network
         /// </summary>
         public void RegisterPlayer(string playerId)
         {
-            if (string.IsNullOrWhiteSpace(playerId) || m_PlayerStates.ContainsKey(playerId))
+            if (string.IsNullOrWhiteSpace(playerId))
             {
                 return;
             }
 
-            m_PlayerStates[playerId] = new PlayerServerState
+            var state = m_PlayerStates.GetOrAdd(playerId, id => new PlayerServerState
             {
-                PlayerId = playerId,
+                PlayerId = id,
                 PosX = 0,
                 PosY = 0,
                 PosZ = GroundHeight,
@@ -80,7 +92,12 @@ namespace OpenGSServer.Network
                 // player who never reported a position redeem an item spawning on
                 // the origin, so this stays false until an update arrives.
                 HasAuthoritativePosition = false
-            };
+            });
+
+            lock (state.SyncRoot)
+            {
+                state.IsSuspended = false;
+            }
         }
 
         /// <summary>
@@ -88,7 +105,14 @@ namespace OpenGSServer.Network
         /// </summary>
         public void UnregisterPlayer(string playerId)
         {
-            m_PlayerStates.Remove(playerId);
+            if (m_PlayerStates.TryRemove(playerId, out var state))
+            {
+                lock (state.SyncRoot)
+                {
+                    state.IsSuspended = true;
+                    state.InputQueue.Clear();
+                }
+            }
         }
 
         /// <summary>
@@ -106,69 +130,105 @@ namespace OpenGSServer.Network
 
             if (m_PlayerStates.TryGetValue(input.PlayerId, out var state))
             {
-                if (!IsFiniteInput(input))
+                lock (state.SyncRoot)
                 {
-                    rejectionReason = "Input contains invalid numeric values";
-                    RecordViolation(state, rejectionReason);
-                    return false;
-                }
-
-                if (input.DeltaTime < 0f || input.DeltaTime > MaxInputDeltaTime * 2f)
-                {
-                    rejectionReason = $"DeltaTime out of range: {input.DeltaTime:F3}";
-                    RecordViolation(state, rejectionReason);
-                    return false;
-                }
-
-                if (state.HasAcceptedSequence && input.Timestamp + 0.001f < state.LastClientTimestamp)
-                {
-                    rejectionReason = $"Client timestamp moved backwards: {input.Timestamp:F3} < {state.LastClientTimestamp:F3}";
-                    RecordViolation(state, rejectionReason);
-                    return false;
-                }
-
-                // シーケンスが古ければスキップ
-                if (!state.HasAcceptedSequence || IsSequenceNewer(input.SequenceNumber, state.LastAcceptedSequence))
-                {
-                    NormalizeClientInput(ref input, out var clampedReason);
-                    if (!string.IsNullOrWhiteSpace(clampedReason))
+                    if (state.IsSuspended)
                     {
-                        rejectionReason = clampedReason;
+                        rejectionReason = "Player input is suspended";
+                        return false;
                     }
 
-                    // The first position a client offers still has to survive the same
-                    // check as every later one. Adopting it here made the distance test
-                    // measure the claim against itself, so a first input could place a
-                    // player anywhere and every later check would accept it as home.
-                    if (!state.HasAuthoritativePosition && input.HasClientPosition &&
-                        IsFinite(input.ClientPosX) && IsFinite(input.ClientPosY) && IsFinite(input.ClientPosZ) &&
-                        IsWithinFirstPositionTolerance(state, input))
+                    if (!IsFiniteInput(input))
                     {
-                        state.PosX = input.ClientPosX;
-                        state.PosY = input.ClientPosY;
-                        state.PosZ = input.ClientPosZ;
-                        state.HasAuthoritativePosition = true;
+                        rejectionReason = "Input contains invalid numeric values";
+                        RecordViolation(state, rejectionReason);
+                        return false;
                     }
 
-                    state.InputQueue.Enqueue(input);
-                    state.LastAcceptedSequence = input.SequenceNumber;
-                    state.HasAcceptedSequence = true;
-
-                    // キューサイズ制限
-                    while (state.InputQueue.Count > MaxInputQueueSize)
+                    if (input.DeltaTime < 0f || input.DeltaTime > MaxInputDeltaTime * 2f)
                     {
-                        state.InputQueue.Dequeue();
+                        rejectionReason = $"DeltaTime out of range: {input.DeltaTime:F3}";
+                        RecordViolation(state, rejectionReason);
+                        return false;
                     }
 
-                    return true;
+                    if (state.HasAcceptedSequence && input.Timestamp + 0.001f < state.LastClientTimestamp)
+                    {
+                        rejectionReason = $"Client timestamp moved backwards: {input.Timestamp:F3} < {state.LastClientTimestamp:F3}";
+                        RecordViolation(state, rejectionReason);
+                        return false;
+                    }
+
+                    // シーケンスが古ければスキップ
+                    if (!state.HasAcceptedSequence || IsSequenceNewer(input.SequenceNumber, state.LastAcceptedSequence))
+                    {
+                        NormalizeClientInput(ref input, out var clampedReason);
+                        if (!string.IsNullOrWhiteSpace(clampedReason))
+                        {
+                            rejectionReason = clampedReason;
+                        }
+
+                        // The first position a client offers still has to survive the same
+                        // check as every later one. Adopting it here made the distance test
+                        // measure the claim against itself, so a first input could place a
+                        // player anywhere and every later check would accept it as home.
+                        if (!state.HasAuthoritativePosition && input.HasClientPosition &&
+                            IsFinite(input.ClientPosX) && IsFinite(input.ClientPosY) && IsFinite(input.ClientPosZ) &&
+                            IsWithinFirstPositionTolerance(state, input))
+                        {
+                            state.PosX = input.ClientPosX;
+                            state.PosY = input.ClientPosY;
+                            state.PosZ = input.ClientPosZ;
+                            state.HasAuthoritativePosition = true;
+                        }
+
+                        state.InputQueue.Enqueue(input);
+                        state.LastAcceptedSequence = input.SequenceNumber;
+                        state.HasAcceptedSequence = true;
+
+                        // キューサイズ制限
+                        while (state.InputQueue.Count > MaxInputQueueSize)
+                        {
+                            state.InputQueue.Dequeue();
+                        }
+
+                        return true;
+                    }
+
+                    rejectionReason = $"Stale sequence ignored: {input.SequenceNumber} <= {state.LastProcessedSequence}";
+                    return false;
                 }
-
-                rejectionReason = $"Stale sequence ignored: {input.SequenceNumber} <= {state.LastProcessedSequence}";
-                return false;
             }
 
             rejectionReason = $"Unknown player '{input.PlayerId}'";
             return false;
+        }
+
+        /// <summary>
+        /// Drops input from a disconnected peer while retaining the last
+        /// authoritative position for a reconnect in the same match.
+        /// </summary>
+        public void SuspendPlayer(string playerId)
+        {
+            if (string.IsNullOrWhiteSpace(playerId) || !m_PlayerStates.TryGetValue(playerId, out var state))
+            {
+                return;
+            }
+
+            lock (state.SyncRoot)
+            {
+                state.InputQueue.Clear();
+                state.LastInputTimestamp = 0f;
+                state.LastClientTimestamp = 0f;
+                state.LastAcceptedSequence = 0;
+                state.LastProcessedSequence = 0;
+                state.HasAcceptedSequence = false;
+                state.IsSuspended = true;
+                state.VelX = 0f;
+                state.VelY = 0f;
+                state.VelZ = 0f;
+                state.IsGrounded = state.PosZ <= GroundHeight;
+            }
         }
 
         /// <summary>
@@ -205,41 +265,49 @@ namespace OpenGSServer.Network
         /// </summary>
         private void ProcessPlayerInputs(PlayerServerState state, float idleDeltaTime, float simulationBudget)
         {
-            var processedInput = false;
-            var simulatedTime = 0f;
-            while (state.InputQueue.Count > 0)
+            lock (state.SyncRoot)
             {
-                var remainingBudget = simulationBudget - simulatedTime;
-                if (remainingBudget <= 0f)
+                if (state.IsSuspended)
                 {
-                    break;
+                    return;
                 }
 
-                var input = state.InputQueue.Dequeue();
-                var effectiveDeltaTime = MathF.Min(input.DeltaTime, remainingBudget);
-                input.DeltaTime = effectiveDeltaTime;
-
-                // 予測移動を適用（実際のゲームロジックに置き換えが必要）
-                ApplyServerMovement(state, input);
-                processedInput = true;
-                simulatedTime += effectiveDeltaTime;
-
-                state.LastProcessedSequence = input.SequenceNumber;
-                state.LastInputTimestamp = input.Timestamp;
-                state.LastClientTimestamp = input.Timestamp;
-                state.LastUpdateTime = DateTime.UtcNow;
-            }
-
-            if (!processedInput && idleDeltaTime > 0f)
-            {
-                ApplyServerMovement(state, new ClientInputData
+                var processedInput = false;
+                var simulatedTime = 0f;
+                while (state.InputQueue.Count > 0)
                 {
-                    PlayerId = state.PlayerId,
-                    DeltaTime = idleDeltaTime,
-                    SequenceNumber = state.LastProcessedSequence,
-                    Timestamp = state.LastClientTimestamp
-                });
-                state.LastUpdateTime = DateTime.UtcNow;
+                    var remainingBudget = simulationBudget - simulatedTime;
+                    if (remainingBudget <= 0f)
+                    {
+                        break;
+                    }
+
+                    var input = state.InputQueue.Dequeue();
+                    var effectiveDeltaTime = MathF.Min(input.DeltaTime, remainingBudget);
+                    input.DeltaTime = effectiveDeltaTime;
+
+                    // 予測移動を適用（実際のゲームロジックに置き換えが必要）
+                    ApplyServerMovement(state, input);
+                    processedInput = true;
+                    simulatedTime += effectiveDeltaTime;
+
+                    state.LastProcessedSequence = input.SequenceNumber;
+                    state.LastInputTimestamp = input.Timestamp;
+                    state.LastClientTimestamp = input.Timestamp;
+                    state.LastUpdateTime = DateTime.UtcNow;
+                }
+
+                if (!processedInput && idleDeltaTime > 0f)
+                {
+                    ApplyServerMovement(state, new ClientInputData
+                    {
+                        PlayerId = state.PlayerId,
+                        DeltaTime = idleDeltaTime,
+                        SequenceNumber = state.LastProcessedSequence,
+                        Timestamp = state.LastClientTimestamp
+                    });
+                    state.LastUpdateTime = DateTime.UtcNow;
+                }
             }
         }
 
@@ -362,31 +430,34 @@ namespace OpenGSServer.Network
                 return false;
             }
 
-            if (!IsFinite(clientX) || !IsFinite(clientY) || !IsFinite(clientZ) || !IsFinite(deltaTime))
+            lock (state.SyncRoot)
             {
-                RecordViolation(state, "Position contains invalid numeric values");
-                return false;
+                if (!IsFinite(clientX) || !IsFinite(clientY) || !IsFinite(clientZ) || !IsFinite(deltaTime))
+                {
+                    RecordViolation(state, "Position contains invalid numeric values");
+                    return false;
+                }
+
+                if (deltaTime < 0f || deltaTime > MaxInputDeltaTime)
+                {
+                    RecordViolation(state, $"Position delta time out of range: {deltaTime:F3}");
+                    return false;
+                }
+
+                float dx = state.PosX - clientX;
+                float dy = state.PosY - clientY;
+                float dz = state.PosZ - clientZ;
+                float distance = MathF.Sqrt(dx * dx + dy * dy + dz * dz);
+                float allowed = PositionTolerance + TeleportAllowancePerSecond * MathF.Max(0f, deltaTime);
+
+                if (distance > allowed)
+                {
+                    RecordViolation(state, $"Position validation failed: {distance:F2} > {allowed:F2}");
+                    return false;
+                }
+
+                return true;
             }
-
-            if (deltaTime < 0f || deltaTime > MaxInputDeltaTime)
-            {
-                RecordViolation(state, $"Position delta time out of range: {deltaTime:F3}");
-                return false;
-            }
-
-            float dx = state.PosX - clientX;
-            float dy = state.PosY - clientY;
-            float dz = state.PosZ - clientZ;
-            float distance = MathF.Sqrt(dx * dx + dy * dy + dz * dz);
-            float allowed = PositionTolerance + TeleportAllowancePerSecond * MathF.Max(0f, deltaTime);
-
-            if (distance > allowed)
-            {
-                RecordViolation(state, $"Position validation failed: {distance:F2} > {allowed:F2}");
-                return false;
-            }
-
-            return true;
         }
 
         /// <summary>
@@ -396,23 +467,26 @@ namespace OpenGSServer.Network
         {
             if (m_PlayerStates.TryGetValue(playerId, out var state))
             {
-                return new ServerTransformState
+                lock (state.SyncRoot)
                 {
-                    PlayerId = playerId,
-                    PositionX = state.PosX,
-                    PositionY = state.PosY,
-                    PositionZ = state.PosZ,
-                    RotationX = state.RotX,
-                    RotationY = state.RotY,
-                    RotationZ = state.RotZ,
-                    RotationW = state.RotW,
-                    VelocityX = state.VelX,
-                    VelocityY = state.VelY,
-                    VelocityZ = state.VelZ,
-                    Timestamp = (float)(DateTime.UtcNow - state.LastUpdateTime).TotalSeconds,
-                    SequenceNumber = state.LastProcessedSequence,
-                    HasAuthoritativePosition = state.HasAuthoritativePosition
-                };
+                    return new ServerTransformState
+                    {
+                        PlayerId = playerId,
+                        PositionX = state.PosX,
+                        PositionY = state.PosY,
+                        PositionZ = state.PosZ,
+                        RotationX = state.RotX,
+                        RotationY = state.RotY,
+                        RotationZ = state.RotZ,
+                        RotationW = state.RotW,
+                        VelocityX = state.VelX,
+                        VelocityY = state.VelY,
+                        VelocityZ = state.VelZ,
+                        Timestamp = (float)(DateTime.UtcNow - state.LastUpdateTime).TotalSeconds,
+                        SequenceNumber = state.LastProcessedSequence,
+                        HasAuthoritativePosition = state.HasAuthoritativePosition
+                    };
+                }
             }
 
             return default;
@@ -425,17 +499,20 @@ namespace OpenGSServer.Network
         {
             if (m_PlayerStates.TryGetValue(playerId, out var state))
             {
-                state.PosX = x;
-                state.PosY = y;
-                state.PosZ = z;
-                state.VelX = 0f;
-                state.VelY = 0f;
-                state.VelZ = 0f;
-                state.IsGrounded = MathF.Abs(z - GroundHeight) < 0.01f;
-                state.LastUpdateTime = DateTime.UtcNow;
-                // The server has been told where this player is, so the state can now
-                // be treated as a position to measure a pickup against.
-                state.HasAuthoritativePosition = true;
+                lock (state.SyncRoot)
+                {
+                    state.PosX = x;
+                    state.PosY = y;
+                    state.PosZ = z;
+                    state.VelX = 0f;
+                    state.VelY = 0f;
+                    state.VelZ = 0f;
+                    state.IsGrounded = MathF.Abs(z - GroundHeight) < 0.01f;
+                    state.LastUpdateTime = DateTime.UtcNow;
+                    // The server has been told where this player is, so the state can now
+                    // be treated as a position to measure a pickup against.
+                    state.HasAuthoritativePosition = true;
+                }
             }
         }
 
@@ -473,6 +550,15 @@ namespace OpenGSServer.Network
         /// </summary>
         public void ClearAll()
         {
+            foreach (var state in m_PlayerStates.Values)
+            {
+                lock (state.SyncRoot)
+                {
+                    state.IsSuspended = true;
+                    state.InputQueue.Clear();
+                }
+            }
+
             m_PlayerStates.Clear();
         }
 
