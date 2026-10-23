@@ -872,6 +872,10 @@ namespace OpenGSServer
             try
             {
                 var won = ExtractWinnerIds(result).Contains(player.Id);
+                // Build all room/player payload data before committing XP. If
+                // serialization fails here, the next reconnect can retry the
+                // whole settlement without risking duplicate progression.
+                var perPlayerResult = BuildMatchResultEnvelope(room, result, player);
                 var persisted = LobbyServerManager.Instance.RecordMatchResult(
                     player.Id,
                     player.Score,
@@ -888,7 +892,6 @@ namespace OpenGSServer
                 // Keep the idempotency marker after the durable XP update, so
                 // retrying delivery or reconnect recovery cannot award it twice.
                 matchResultPersisted = true;
-                var perPlayerResult = BuildMatchResultEnvelope(room, result, player);
                 perPlayerResult["XpGained"] = persisted.XpGained;
                 perPlayerResult["TotalExp"] = persisted.NewTotalXp;
                 perPlayerResult["NewLevel"] = persisted.NewLevel;
