@@ -2547,9 +2547,8 @@ namespace OpenGSServer
 
                 foreach (var magazine in ServerWeaponMagazineStore.ForPlayer(roomPlayer.Id))
                 {
-                    var timestamp = DateTime.UtcNow;
                     if (!ServerWeaponMagazineStore.TryReadReloadSnapshot(roomPlayer.Id,
-                        magazine.WeaponType, timestamp, out var currentMagazine,
+                        magazine.WeaponType, out var currentMagazine, out var timestamp,
                         out var remainingSeconds, out var currentAmmo, out var reserveAmmo))
                         continue;
 

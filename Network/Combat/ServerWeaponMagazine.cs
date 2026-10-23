@@ -88,11 +88,13 @@ namespace OpenGSServer.Network
         }
 
         public bool TryReadReloadSnapshot(
-            DateTime nowUtc, out float seconds, out int remainingAmmo, out int reserveAmmo)
+            out DateTime timestamp, out float seconds,
+            out int remainingAmmo, out int reserveAmmo)
         {
             lock (Sync)
             {
-                var remaining = ReloadCompletesUtc - nowUtc;
+                timestamp = DateTime.UtcNow;
+                var remaining = ReloadCompletesUtc - timestamp;
                 if (ReloadCompletesUtc <= DateTime.MinValue || remaining <= TimeSpan.Zero)
                 {
                     seconds = 0f;
@@ -551,18 +553,19 @@ namespace OpenGSServer.Network
         }
 
         public static bool TryReadReloadSnapshot(
-            string playerId, string weaponType, DateTime nowUtc,
-            out ServerMagazine magazine, out float seconds,
+            string playerId, string weaponType, out ServerMagazine magazine,
+            out DateTime timestamp, out float seconds,
             out int remainingAmmo, out int reserveAmmo)
         {
             lock (OwnershipLock)
             {
                 if (TryPeek(playerId, weaponType, out magazine))
-                    return magazine.TryReadReloadSnapshot(nowUtc,
+                    return magazine.TryReadReloadSnapshot(out timestamp,
                         out seconds, out remainingAmmo, out reserveAmmo);
             }
 
             magazine = null!;
+            timestamp = DateTime.UtcNow;
             seconds = 0f;
             remainingAmmo = 0;
             reserveAmmo = 0;
