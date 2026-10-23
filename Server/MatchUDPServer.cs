@@ -44,8 +44,12 @@ namespace OpenGSServer
             new(StringComparer.OrdinalIgnoreCase);
         private readonly ConcurrentDictionary<string, TokenBucket> _matchEventRateLimiters =
             new(StringComparer.OrdinalIgnoreCase);
+        private readonly ConcurrentDictionary<string, TokenBucket> _positionRateLimiters =
+            new(StringComparer.OrdinalIgnoreCase);
         private const double MatchEventBurstCapacity = 30;
         private const double MatchEventRatePerSecond = 20;
+        private const double PositionUpdateBurstCapacity = 90;
+        private const double PositionUpdateRatePerSecond = 60;
         private const int UnauthorizedPacketLimit = 8;
         private const int PendingPeerTimeoutSeconds = 10;
         private const int ConnectionTokenLifetimeMinutes = 10;
@@ -490,6 +494,12 @@ namespace OpenGSServer
 
             if (string.Equals(messageType, "PlayerPositionUpdate", StringComparison.OrdinalIgnoreCase))
             {
+                var positionRateLimiter = _positionRateLimiters.GetOrAdd(
+                    playerId,
+                    _ => new TokenBucket(PositionUpdateBurstCapacity, PositionUpdateRatePerSecond));
+                if (!positionRateLimiter.TryConsume(1))
+                    return;
+
                 HandleJsonPositionUpdate(playerId, message);
                 return;
             }
@@ -1218,6 +1228,7 @@ namespace OpenGSServer
             _connectedPlayers.TryRemove(playerId, out var connection);
             _pendingInputs.TryRemove(playerId, out _);
             _matchEventRateLimiters.TryRemove(playerId, out _);
+            _positionRateLimiters.TryRemove(playerId, out _);
             _connectionTokenInfo.TryRemove(playerId, out _);
 
             if (connection != null)
@@ -1485,6 +1496,7 @@ namespace OpenGSServer
                 _unauthorizedPacketCounts.Clear();
                 _pendingInputs.Clear();
                 _matchEventRateLimiters.Clear();
+                _positionRateLimiters.Clear();
                 return;
             }
 
@@ -1511,6 +1523,7 @@ namespace OpenGSServer
             _unauthorizedPacketCounts.Clear();
             _pendingInputs.Clear();
             _matchEventRateLimiters.Clear();
+            _positionRateLimiters.Clear();
 
             ConsoleWrite.WriteMessage("[UDP] Server shutdown complete", ConsoleColor.Green);
         }
