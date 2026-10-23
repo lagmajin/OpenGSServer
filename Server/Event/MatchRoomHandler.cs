@@ -2154,6 +2154,7 @@ namespace OpenGSServer
             {
                 matchRoom?.RemovePlayer(playerId);
                 MatchServerV2.Instance.ServerLagCompensationManager.RemovePlayer(playerId);
+                MatchServerV2.Instance.ForgetPlayerLeft(playerId);
             }
 
             foreach (var entry in LastFlagEvents.Keys.Where(key => key.Contains($":{playerId}:", StringComparison.OrdinalIgnoreCase)))

@@ -33,6 +33,8 @@ namespace OpenGSServer
         private readonly EventBasedNetListener _listener = new();
         private readonly ConcurrentDictionary<string, PlayerConnectionInfo> _connectedPlayers =
             new(StringComparer.OrdinalIgnoreCase); // PlayerIDをstringに
+        private readonly ConcurrentDictionary<string, byte> _playersNotifiedLeft =
+            new(StringComparer.OrdinalIgnoreCase);
         private readonly ConcurrentDictionary<string, string> _connectionTokens =
             new(StringComparer.OrdinalIgnoreCase);
         private readonly ConcurrentDictionary<string, ConnectionTokenInfo> _connectionTokenInfo =
@@ -159,6 +161,7 @@ namespace OpenGSServer
             };
 
             _connectedPlayers[playerId] = playerInfo; // Dictionaryのキーをstringに
+            _playersNotifiedLeft.TryRemove(playerId, out _);
 
             ConsoleWrite.WriteMessage($"[UDP] Player connected: {playerId} ({peer.Id}) from {peer.EndPoint}", ConsoleColor.Green);
             ConsoleWrite.WriteMessage($"[UDP] Total players: {_connectedPlayers.Count}", ConsoleColor.Cyan);
@@ -1098,7 +1101,7 @@ namespace OpenGSServer
         public void NotifyPlayerLeft(string playerId)
         {
             var room = GetMatchRoomForPlayer(playerId);
-            if (room == null) return;
+            if (room == null || !_playersNotifiedLeft.TryAdd(playerId, 0)) return;
 
             var message = new JObject
             {
@@ -1111,6 +1114,14 @@ namespace OpenGSServer
             };
 
             BroadcastJsonToRoom(room, message);
+        }
+
+        public void ForgetPlayerLeft(string playerId)
+        {
+            if (!string.IsNullOrWhiteSpace(playerId))
+            {
+                _playersNotifiedLeft.TryRemove(playerId, out _);
+            }
         }
 
         /// <summary>

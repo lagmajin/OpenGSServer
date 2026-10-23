@@ -317,6 +317,14 @@ namespace OpenGSServer
             }
         }
 
+        public void ForgetPlayerLeft(string playerId)
+        {
+            if (!string.IsNullOrWhiteSpace(playerId))
+            {
+                _udpServer?.ForgetPlayerLeft(playerId);
+            }
+        }
+
         public void SendToPlayer(string playerId, JObject message)
         {
             if (!string.IsNullOrWhiteSpace(playerId) && message != null)
