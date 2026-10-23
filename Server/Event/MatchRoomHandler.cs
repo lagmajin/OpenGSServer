@@ -1727,7 +1727,10 @@ namespace OpenGSServer
             // the result name somebody who had left as the winner.
             var matchRoom = MatchRoomManager.Instance.SearchRoomByMemberID(playerId);
             if (!preserveRoomMembership)
+            {
                 matchRoom?.RemovePlayer(playerId);
+                MatchServerV2.Instance.ServerLagCompensationManager.RemovePlayer(playerId);
+            }
 
             foreach (var entry in LastFlagEvents.Keys.Where(key => key.Contains($":{playerId}:", StringComparison.OrdinalIgnoreCase)))
             {

@@ -218,8 +218,6 @@ namespace OpenGSServer
                 ConsoleColor.Yellow);
             ConsoleWrite.WriteMessage($"[UDP] Total players: {_connectedPlayers.Count}", ConsoleColor.Cyan);
 
-            // ラグ補償システムからクライアントを解除
-            MatchServerV2.Instance.ServerLagCompensationManager.RemovePlayer(playerId);
 
             NotifyPlayerLeft(playerId);
         }
