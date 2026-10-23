@@ -72,6 +72,9 @@ namespace OpenGSServer.Network
         /// </summary>
         public Func<IEnumerable<string>>? PlayerIds { get; set; }
 
+        /// <summary>Whether a projectile's match is still accepting combat.</summary>
+        public Func<string, bool>? IsRoomActive { get; set; }
+
         /// <summary>
         /// Called when a projectile enters play, so the room can be told.
         /// </summary>
@@ -253,6 +256,12 @@ namespace OpenGSServer.Network
                 {
                     if (!projectile.IsActive)
                     {
+                        continue;
+                    }
+
+                    if (IsRoomActive != null && !IsRoomActive(projectile.RoomId))
+                    {
+                        Retire(projectile, expired);
                         continue;
                     }
 

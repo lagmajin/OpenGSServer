@@ -2209,6 +2209,8 @@ namespace OpenGSServer
                 return new Vector2(state.PositionX, state.PositionY);
             };
             Projectiles.PlayerIds = () => GetLocatedMatchPlayerIds();
+            Projectiles.IsRoomActive = roomId =>
+                MatchRoomManager.Instance.GetRoomById(roomId)?.Playing == true;
             Projectiles.OnSpawn = (projectile, spawnType) => BroadcastProjectileSpawn(projectile, spawnType);
             Projectiles.OnExpire = projectile => BroadcastProjectileExpire(projectile);
             Projectiles.OnDamage = (targetId, attackerId, damage, hit) =>
@@ -2258,7 +2260,7 @@ namespace OpenGSServer
         private static void HandleBulletHitEnemy(string ownerId, Vector2 hit, int damage)
         {
             var room = MatchRoomManager.Instance.SearchRoomByMemberID(ownerId);
-            if (room == null)
+            if (room == null || !room.Playing)
             {
                 return;
             }
@@ -2374,7 +2376,7 @@ namespace OpenGSServer
             Vector2 hitPosition)
         {
             var room = MatchRoomManager.Instance.SearchRoomByMemberID(targetId);
-            if (room == null)
+            if (room == null || !room.Playing)
             {
                 return;
             }
