@@ -78,8 +78,14 @@ namespace OpenGSServer
 
         public bool IsRunning { get; private set; }
         public int? TcpPort => _tcpServer?.Endpoint.Port;
+        public int? UdpPort { get; private set; }
         public double AverageFrameTime => _averageFrameTime;
         public ServerLagCompensationManager ServerLagCompensationManager => _serverLagCompensationManager;
+
+        public string GetOrCreateUdpToken(string roomId, string playerId) =>
+            _udpServer?.GetOrCreateUdpToken(roomId, playerId) ?? string.Empty;
+
+        public void ClearUdpRoomState(string roomId) => _udpServer?.ClearRoomState(roomId);
 
         private MatchServerV2()
         {
@@ -118,6 +124,7 @@ namespace OpenGSServer
                 // UDPサーバー起動
                 _udpServer = new MatchUDPServer();
                 _udpServer.Listen(udpPort);
+                UdpPort = udpPort;
                 ConsoleWrite.WriteMessage($"[Match] UDP Server started on port {udpPort}", ConsoleColor.Green);
 
                 // ゲームループ開始

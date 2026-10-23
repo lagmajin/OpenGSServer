@@ -167,13 +167,21 @@ namespace OpenGSServer
                         itemManager,
                         type.ToString(),
                         id,
-                        json => BroadcastToRoom(matchRoom, json));
+                        json =>
+                        {
+                            json["RoomID"] = matchRoom.Id;
+                            BroadcastToRoom(matchRoom, json);
+                        });
                 };
                 bus.OnItemDespawned += () =>
                 {
                     OpenGSServer.Network.FieldItemEventHandler.DespawnAllItems(
                         itemManager,
-                        json => BroadcastToRoom(matchRoom, json));
+                        json =>
+                        {
+                            json["RoomID"] = matchRoom.Id;
+                            BroadcastToRoom(matchRoom, json);
+                        });
                 };
                 bus.OnGameEndedWithResult += (result) =>
                 {
@@ -189,6 +197,7 @@ namespace OpenGSServer
                 };
                 bus.OnGameEnded += () => {
                     itemManager.EndMatch();
+                    MatchServerV2.Instance.ClearUdpRoomState(matchRoom.Id);
                     // UDPで全プレイヤーにMatchEndedを通知
                     var firstPlayer = matchRoom.Players.Find(p => !string.IsNullOrEmpty(p.Id));
                     if (firstPlayer != null && int.TryParse(firstPlayer.Id, out var peerId))
@@ -263,6 +272,69 @@ namespace OpenGSServer
         public AbstractGameRoom? FindRoom(string roomId)
         {
             return GetRoomById(roomId);
+        }
+
+        public JArray GetFieldItemSnapshot(string roomId)
+        {
+            lock (matchRoomsLock)
+            {
+                return roomFieldItemManagers.TryGetValue(roomId, out var itemManager)
+                    ? itemManager.ToJson()
+                    : new JArray();
+            }
+        }
+
+        public bool TryGetFieldItem(string roomId, string itemId,
+            out OpenGSServer.Network.ServerFieldItemManager.FieldItem item)
+        {
+            lock (matchRoomsLock)
+            {
+                item = null!;
+                return roomFieldItemManagers.TryGetValue(roomId, out var itemManager) &&
+                    itemManager.TryGetItem(itemId, out item);
+            }
+        }
+
+        public bool TryPickupFieldItem(
+            string roomId, string itemId, string playerId, float playerX, float playerY,
+            out OpenGSServer.Network.ServerFieldItemManager.FieldItem item)
+        {
+            lock (matchRoomsLock)
+            {
+                item = null!;
+                if (!matchRooms.TryGetValue(roomId, out var room) || !room.Playing || room.Finished ||
+                    !room.TryGetPlayer(playerId, out var player) || player == null || player.Health <= 0 ||
+                    !roomFieldItemManagers.TryGetValue(roomId, out var itemManager) ||
+                    !itemManager.TryGetItem(itemId, out var foundItem) ||
+                    !foundItem.IsActive || foundItem.State != "Spawned" ||
+                    !float.IsFinite(playerX) || !float.IsFinite(playerY) ||
+                    MathF.Abs(foundItem.PosX - playerX) > 1.5f ||
+                    MathF.Abs(foundItem.PosY - playerY) > 1.5f ||
+                    (foundItem.PosX - playerX) * (foundItem.PosX - playerX) +
+                    (foundItem.PosY - playerY) * (foundItem.PosY - playerY) > 2.25f ||
+                    !itemManager.PickupItem(itemId, playerId))
+                    return false;
+                item = foundItem;
+                return true;
+            }
+        }
+
+        public bool TryDropWeapon(
+            string roomId, string playerId, string weaponType, int magazineAmmo, int slotIndex,
+            float playerX, float playerY, out string itemId)
+        {
+            lock (matchRoomsLock)
+            {
+                itemId = string.Empty;
+                if (!matchRooms.TryGetValue(roomId, out var room) || !room.Playing || room.Finished ||
+                    !room.TryGetPlayer(playerId, out var player) || player == null || player.Health <= 0 ||
+                    !float.IsFinite(playerX) || !float.IsFinite(playerY) ||
+                    !roomFieldItemManagers.TryGetValue(roomId, out var itemManager))
+                    return false;
+                itemId = itemManager.SpawnWeaponDrop(
+                    weaponType, magazineAmmo, playerId, slotIndex, playerX, playerY);
+                return !string.IsNullOrEmpty(itemId);
+            }
         }
 
         public CreateNewRoomResult CreateNewRoom(in string roomName, in string ownerID, AbstractMatchSetting setting)

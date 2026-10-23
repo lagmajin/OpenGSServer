@@ -275,6 +275,20 @@ namespace OpenGSServer
             }
         }
 
+        public IReadOnlyDictionary<string, LobbyPlayerInfo> GetAllConnectedPlayers()
+        {
+            _lobbyLock.EnterReadLock();
+            try
+            {
+                return new Dictionary<string, LobbyPlayerInfo>(
+                    _connectedPlayers, StringComparer.OrdinalIgnoreCase);
+            }
+            finally
+            {
+                _lobbyLock.ExitReadLock();
+            }
+        }
+
         #endregion
 
         #region ルーム管理
@@ -1103,13 +1117,44 @@ namespace OpenGSServer
         private void HandleMatchServerInfoRequest(ClientSession? session, JObject data)
         {
             if (session == null) return;
+            string playerId = session.PlayerID ?? string.Empty;
+            string requestedRoomId = data["RoomID"]?.ToString() ?? data["RoomId"]?.ToString() ?? string.Empty;
+            var matchRoom = MatchRoomManager.Instance.AllRooms()
+                .OfType<MatchRoom>()
+                .FirstOrDefault(candidate => !candidate.Finished && candidate.ContainsPlayer(playerId) &&
+                    (string.Equals(candidate.Id, requestedRoomId, StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(candidate.WaitRoomLink?.RoomId, requestedRoomId, StringComparison.OrdinalIgnoreCase)));
+            if (string.IsNullOrWhiteSpace(playerId) || matchRoom == null)
+            {
+                session.SendAsyncJsonWithTimeStamp(new JObject
+                {
+                    ["MessageType"] = "ErrorNotification",
+                    ["ErrorMessage"] = "An authenticated player in the requested match room is required"
+                });
+                return;
+            }
 
-            var infoJson = new JObject();
             var matchServer = MatchServerV2.Instance; // Instanceプロパティを使用
+            string udpToken = matchServer.GetOrCreateUdpToken(matchRoom.Id, playerId);
+            if (string.IsNullOrEmpty(udpToken))
+            {
+                session.SendAsyncJsonWithTimeStamp(new JObject
+                {
+                    ["MessageType"] = "ErrorNotification",
+                    ["ErrorMessage"] = "Match UDP server is not ready"
+                });
+                return;
+            }
 
-            infoJson["MessageType"] = "MatchServerInformationNotification";
+            var infoJson = new JObject
+            {
+                ["MessageType"] = "MatchServerInformationNotification",
+                ["UdpToken"] = udpToken,
+                ["RoomID"] = requestedRoomId
+            };
             infoJson["Port"] = matchServer.TcpPort; // TcpPortプロパティを使用
-            infoJson["SubPort"] = 2000;
+            infoJson["UdpPort"] = matchServer.UdpPort;
+            infoJson["SubPort"] = matchServer.UdpPort;
 
             var str = infoJson.ToString(Formatting.None);
             ConsoleWrite.WriteMessage(str);

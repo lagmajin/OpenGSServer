@@ -429,7 +429,9 @@ namespace OpenGSServer
             {
                 var jsonString = message.ToString(Newtonsoft.Json.Formatting.None);
                 var bytes = System.Text.Encoding.UTF8.GetBytes(jsonString);
-                peer.Send(bytes);
+                var writer = new NetDataWriter();
+                writer.Put(bytes);
+                peer.Send(writer, DeliveryMethod.ReliableOrdered);
             }
             catch (Exception ex)
             {

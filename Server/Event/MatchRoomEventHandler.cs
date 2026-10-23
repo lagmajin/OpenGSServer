@@ -21,14 +21,19 @@ namespace OpenGSServer
                 session.SendAsyncJsonWithTimeStamp(new JObject { ["MessageType"] = "MatchRoomUpdateResponse", ["Success"] = false, ["ErrorMessage"] = "Room not found" });
                 return;
             }
+            if (room is not MatchRoom matchRoom)
+            {
+                session.SendAsyncJsonWithTimeStamp(new JObject { ["MessageType"] = "MatchRoomUpdateResponse", ["Success"] = false, ["ErrorMessage"] = "Room is not a match room" });
+                return;
+            }
 
             session.SendAsyncJsonWithTimeStamp(new JObject
             {
                 ["MessageType"] = "MatchRoomUpdateResponse",
                 ["Success"] = true,
                 ["RoomID"] = roomId,
-                ["PlayerCount"] = room.PlayerCount,
-                ["NowPlaying"] = room.Playing
+                ["PlayerCount"] = matchRoom.PlayerCount,
+                ["NowPlaying"] = matchRoom.Playing
             });
         }
 

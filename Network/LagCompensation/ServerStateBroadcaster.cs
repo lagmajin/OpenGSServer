@@ -20,6 +20,7 @@ namespace OpenGSServer.Network
 
         /// <summary>アクティブなクライアントセッション</summary>
         private readonly Dictionary<string, Action<ServerTransformState>> m_ClientCallbacks = new Dictionary<string, Action<ServerTransformState>>();
+        private readonly object m_ClientCallbacksLock = new object();
 
         /// <summary>ブロードキャスト回数</summary>
         private int m_BroadcastCount = 0;
@@ -48,11 +49,10 @@ namespace OpenGSServer.Network
         /// <param name="callback">状態送信コールバック</param>
         public void RegisterClient(string clientId, Action<ServerTransformState> callback)
         {
-            if (!m_ClientCallbacks.ContainsKey(clientId))
-            {
-                m_ClientCallbacks[clientId] = callback;
-            }
-            else
+            if (string.IsNullOrWhiteSpace(clientId) || callback == null)
+                return;
+
+            lock (m_ClientCallbacksLock)
             {
                 m_ClientCallbacks[clientId] = callback;
             }
@@ -63,7 +63,8 @@ namespace OpenGSServer.Network
         /// </summary>
         public void UnregisterClient(string clientId)
         {
-            m_ClientCallbacks.Remove(clientId);
+            lock (m_ClientCallbacksLock)
+                m_ClientCallbacks.Remove(clientId);
         }
 
         /// <summary>
@@ -86,8 +87,12 @@ namespace OpenGSServer.Network
         /// </summary>
         private void BroadcastState()
         {
+            List<KeyValuePair<string, Action<ServerTransformState>>> callbacks;
+            lock (m_ClientCallbacksLock)
+                callbacks = new List<KeyValuePair<string, Action<ServerTransformState>>>(m_ClientCallbacks);
+
             // 全プレイヤーの状態を取得して送信
-            foreach (var callback in m_ClientCallbacks)
+            foreach (var callback in callbacks)
             {
                 string clientId = callback.Key;
                 var state = m_PlayerStateManager.GetPlayerState(clientId);
@@ -127,14 +132,21 @@ namespace OpenGSServer.Network
         /// <summary>
         /// 登録されているクライアント数を取得
         /// </summary>
-        public int ClientCount => m_ClientCallbacks.Count;
+        public int ClientCount
+        {
+            get
+            {
+                lock (m_ClientCallbacksLock)
+                    return m_ClientCallbacks.Count;
+            }
+        }
 
         /// <summary>
         /// 統計情報を取得（デバッグ用）
         /// </summary>
         public string GetDebugInfo()
         {
-            return $"[ServerBroadcaster] Clients:{m_ClientCallbacks.Count} " +
+            return $"[ServerBroadcaster] Clients:{ClientCount} " +
                    $"Interval:{m_BroadcastInterval:F3}s " +
                    $"Broadcasts:{m_BroadcastCount}";
         }

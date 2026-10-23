@@ -18,6 +18,11 @@ namespace OpenGSServer.Network
             public string ItemId { get; set; } = "";
             public string ItemType { get; set; } = "PowerUp";
             public float PosX, PosY, PosZ;
+            public bool IsPlayerDroppedWeapon { get; set; }
+            public string WeaponType { get; set; } = "";
+            public int MagazineAmmo { get; set; } = -1;
+            public string DroppedByPlayerId { get; set; } = "";
+            public int DroppedFromSlotIndex { get; set; } = -1;
             public int SpawnPointId { get; set; } = -1;
             public string SpawnPointName { get; set; } = "";
             public string State { get; set; } = "Spawned";
@@ -54,6 +59,7 @@ namespace OpenGSServer.Network
         private readonly Dictionary<int, FieldItemSpawnPoint> _spawnPoints = new();
         private readonly Dictionary<string, FieldItemSpawnRule> _spawnRules = new(StringComparer.OrdinalIgnoreCase);
         private readonly Random _random = new();
+        private readonly object _sync = new();
 
         /// <summary>
         /// マッチID
@@ -70,8 +76,11 @@ namespace OpenGSServer.Network
         /// </summary>
         public void StartMatch(string matchId)
         {
-            _matchId = matchId;
-            _items.Clear();
+            lock (_sync)
+            {
+                _matchId = matchId;
+                _items.Clear();
+            }
         }
 
         /// <summary>
@@ -79,7 +88,8 @@ namespace OpenGSServer.Network
         /// </summary>
         public void EndMatch()
         {
-            _items.Clear();
+            lock (_sync)
+                _items.Clear();
         }
 
         /// <summary>
@@ -87,15 +97,18 @@ namespace OpenGSServer.Network
         /// </summary>
         public void RegisterSpawnPoint(int spawnPointId, float x, float y, float z, string name = "", bool isEnabled = true)
         {
-            _spawnPoints[spawnPointId] = new FieldItemSpawnPoint
+            lock (_sync)
             {
-                SpawnPointId = spawnPointId,
-                Name = name,
-                PosX = x,
-                PosY = y,
-                PosZ = z,
-                IsEnabled = isEnabled
-            };
+                _spawnPoints[spawnPointId] = new FieldItemSpawnPoint
+                {
+                    SpawnPointId = spawnPointId,
+                    Name = name,
+                    PosX = x,
+                    PosY = y,
+                    PosZ = z,
+                    IsEnabled = isEnabled
+                };
+            }
         }
 
         /// <summary>
@@ -103,27 +116,30 @@ namespace OpenGSServer.Network
         /// </summary>
         public void ConfigureSpawnRule(string itemType, int maxActiveCount, float respawnDelaySec, params int[] preferredSpawnPointIds)
         {
-            if (string.IsNullOrWhiteSpace(itemType))
+            lock (_sync)
             {
-                return;
-            }
-
-            var rule = new FieldItemSpawnRule
-            {
-                ItemType = itemType,
-                MaxActiveCount = Math.Max(1, maxActiveCount),
-                RespawnDelaySec = Math.Max(0.1f, respawnDelaySec)
-            };
-
-            if (preferredSpawnPointIds != null)
-            {
-                foreach (var id in preferredSpawnPointIds)
+                if (string.IsNullOrWhiteSpace(itemType))
                 {
-                    rule.PreferredSpawnPointIds.Add(id);
+                    return;
                 }
-            }
 
-            _spawnRules[itemType] = rule;
+                var rule = new FieldItemSpawnRule
+                {
+                    ItemType = itemType,
+                    MaxActiveCount = Math.Max(1, maxActiveCount),
+                    RespawnDelaySec = Math.Max(0.1f, respawnDelaySec)
+                };
+
+                if (preferredSpawnPointIds != null)
+                {
+                    foreach (var id in preferredSpawnPointIds)
+                    {
+                        rule.PreferredSpawnPointIds.Add(id);
+                    }
+                }
+
+                _spawnRules[itemType] = rule;
+            }
         }
 
         /// <summary>
@@ -195,25 +211,28 @@ namespace OpenGSServer.Network
         /// </summary>
         public string SpawnItem(string itemType, float x, float y, float z)
         {
-            string itemId = Guid.NewGuid().ToString("N").Substring(0, 8);
-
-            var item = new FieldItem
+            lock (_sync)
             {
-                ItemId = itemId,
-                ItemType = itemType,
-                PosX = x,
-                PosY = y,
-                PosZ = z,
-                SpawnPointId = -1,
-                SpawnPointName = "",
-                State = "Spawned",
-                IsActive = true,
-                SpawnTime = (float)DateTime.UtcNow.TimeOfDay.TotalSeconds
-            };
+                string itemId = Guid.NewGuid().ToString("N");
 
-            _items[itemId] = item;
+                var item = new FieldItem
+                {
+                    ItemId = itemId,
+                    ItemType = itemType,
+                    PosX = x,
+                    PosY = y,
+                    PosZ = z,
+                    SpawnPointId = -1,
+                    SpawnPointName = "",
+                    State = "Spawned",
+                    IsActive = true,
+                    SpawnTime = (float)DateTime.UtcNow.TimeOfDay.TotalSeconds
+                };
 
-            return itemId;
+                _items[itemId] = item;
+
+                return itemId;
+            }
         }
 
         /// <summary>
@@ -221,30 +240,33 @@ namespace OpenGSServer.Network
         /// </summary>
         public string SpawnItem(string itemType, int spawnPointId)
         {
-            if (_spawnRules.TryGetValue(itemType, out var rule) &&
-                GetActiveItemCountForType(itemType) >= rule.MaxActiveCount)
+            lock (_sync)
             {
-                return "";
-            }
+                if (_spawnRules.TryGetValue(itemType, out var rule) &&
+                    GetActiveItemCountForType(itemType) >= rule.MaxActiveCount)
+                {
+                    return "";
+                }
 
-            if (spawnPointId < 0)
-            {
-                spawnPointId = PickSpawnPointId(itemType);
-            }
+                if (spawnPointId < 0)
+                {
+                    spawnPointId = PickSpawnPointId(itemType);
+                }
 
-            if (!TryResolveSpawnPoint(spawnPointId, out var spawnPoint))
-            {
-                return SpawnItem(itemType, 0, 0, 0);
-            }
+                if (!TryResolveSpawnPoint(spawnPointId, out var spawnPoint))
+                {
+                    return SpawnItem(itemType, 0, 0, 0);
+                }
 
-            var itemId = SpawnItem(itemType, spawnPoint.PosX, spawnPoint.PosY, spawnPoint.PosZ);
-            if (_items.TryGetValue(itemId, out var item))
-            {
-                item.SpawnPointId = spawnPoint.SpawnPointId;
-                item.SpawnPointName = spawnPoint.Name;
-            }
+                var itemId = SpawnItem(itemType, spawnPoint.PosX, spawnPoint.PosY, spawnPoint.PosZ);
+                if (_items.TryGetValue(itemId, out var item))
+                {
+                    item.SpawnPointId = spawnPoint.SpawnPointId;
+                    item.SpawnPointName = spawnPoint.Name;
+                }
 
-            return itemId;
+                return itemId;
+            }
         }
 
         /// <summary>
@@ -260,9 +282,11 @@ namespace OpenGSServer.Network
         /// </summary>
         public bool TrySpawnConfiguredItem(string itemType, out string itemId)
         {
-            itemId = "";
-            itemId = SpawnItem(itemType, PickSpawnPointId(itemType));
-            return !string.IsNullOrEmpty(itemId);
+            lock (_sync)
+            {
+                itemId = SpawnItem(itemType, PickSpawnPointId(itemType));
+                return !string.IsNullOrEmpty(itemId);
+            }
         }
 
         /// <summary>
@@ -270,10 +294,13 @@ namespace OpenGSServer.Network
         /// </summary>
         public int GetActiveItemCountForType(string itemType)
         {
-            return _items.Values.Count(item =>
-                item.IsActive &&
-                item.State == "Spawned" &&
-                string.Equals(item.ItemType, itemType, StringComparison.OrdinalIgnoreCase));
+            lock (_sync)
+            {
+                return _items.Values.Count(item =>
+                    item.IsActive &&
+                    item.State == "Spawned" &&
+                    string.Equals(item.ItemType, itemType, StringComparison.OrdinalIgnoreCase));
+            }
         }
 
         /// <summary>
@@ -281,7 +308,55 @@ namespace OpenGSServer.Network
         /// </summary>
         public bool TryGetItem(string itemId, out FieldItem item)
         {
-            return _items.TryGetValue(itemId, out item);
+            lock (_sync)
+            {
+                if (!_items.TryGetValue(itemId, out var found))
+                {
+                    item = null!;
+                    return false;
+                }
+
+                item = CopyFieldItem(found);
+                return true;
+            }
+        }
+
+        private static FieldItem CopyFieldItem(FieldItem item) => new()
+        {
+            ItemId = item.ItemId,
+            ItemType = item.ItemType,
+            PosX = item.PosX,
+            PosY = item.PosY,
+            PosZ = item.PosZ,
+            IsPlayerDroppedWeapon = item.IsPlayerDroppedWeapon,
+            WeaponType = item.WeaponType,
+            MagazineAmmo = item.MagazineAmmo,
+            DroppedByPlayerId = item.DroppedByPlayerId,
+            DroppedFromSlotIndex = item.DroppedFromSlotIndex,
+            SpawnPointId = item.SpawnPointId,
+            SpawnPointName = item.SpawnPointName,
+            State = item.State,
+            PickedUpByPlayerId = item.PickedUpByPlayerId,
+            IsActive = item.IsActive,
+            SpawnTime = item.SpawnTime
+        };
+
+        public string SpawnWeaponDrop(string weaponType, int magazineAmmo, string playerId,
+            int slotIndex, float x, float y, float z = 0f)
+        {
+            lock (_sync)
+            {
+                var itemId = SpawnItem("WeaponItem", x, y, z);
+                if (_items.TryGetValue(itemId, out var item))
+                {
+                    item.IsPlayerDroppedWeapon = true;
+                    item.WeaponType = weaponType;
+                    item.MagazineAmmo = magazineAmmo;
+                    item.DroppedByPlayerId = playerId;
+                    item.DroppedFromSlotIndex = slotIndex;
+                }
+                return itemId;
+            }
         }
 
         /// <summary>
@@ -289,21 +364,23 @@ namespace OpenGSServer.Network
         /// </summary>
         public bool PickupItem(string itemId, string playerId)
         {
-            if (_items.TryGetValue(itemId, out var item))
+            string itemType;
+            Action<string, string, string>? pickedUpHandler;
+            lock (_sync)
             {
-                if (item.IsActive && item.State == "Spawned")
-                {
-                    item.State = "PickedUp";
-                    item.PickedUpByPlayerId = playerId;
-                    item.IsActive = false;
+                if (!_items.TryGetValue(itemId, out var item) || !item.IsActive || item.State != "Spawned")
+                    return false;
 
-                    OnItemPickedUp?.Invoke(itemId, playerId, item.ItemType);
-
-                    Console.WriteLine($"[FieldItem] Picked up: {itemId} by {playerId}");
-                    return true;
-                }
+                item.State = "PickedUp";
+                item.PickedUpByPlayerId = playerId;
+                item.IsActive = false;
+                itemType = item.ItemType;
+                pickedUpHandler = OnItemPickedUp;
             }
-            return false;
+
+            pickedUpHandler?.Invoke(itemId, playerId, itemType);
+            Console.WriteLine($"[FieldItem] Picked up: {itemId} by {playerId}");
+            return true;
         }
 
         /// <summary>
@@ -311,10 +388,13 @@ namespace OpenGSServer.Network
         /// </summary>
         public void DespawnItem(string itemId)
         {
-            if (_items.TryGetValue(itemId, out var item))
+            lock (_sync)
             {
-                item.State = "Despawned";
-                item.IsActive = false;
+                if (_items.TryGetValue(itemId, out var item))
+                {
+                    item.State = "Despawned";
+                    item.IsActive = false;
+                }
             }
         }
 
@@ -323,12 +403,15 @@ namespace OpenGSServer.Network
         /// </summary>
         public void DespawnAllItems()
         {
-            foreach (var item in _items.Values)
+            lock (_sync)
             {
-                if (item.IsActive && item.State == "Spawned")
+                foreach (var item in _items.Values)
                 {
-                    item.State = "Despawned";
-                    item.IsActive = false;
+                    if (item.IsActive && item.State == "Spawned")
+                    {
+                        item.State = "Despawned";
+                        item.IsActive = false;
+                    }
                 }
             }
         }
@@ -338,15 +421,18 @@ namespace OpenGSServer.Network
         /// </summary>
         public void RespawnItem(string itemId, float x, float y, float z)
         {
-            if (_items.TryGetValue(itemId, out var item))
+            lock (_sync)
             {
-                item.PosX = x;
-                item.PosY = y;
-                item.PosZ = z;
-                item.State = "Spawned";
-                item.IsActive = true;
-                item.PickedUpByPlayerId = "";
-                item.SpawnTime = (float)DateTime.UtcNow.TimeOfDay.TotalSeconds;
+                if (_items.TryGetValue(itemId, out var item))
+                {
+                    item.PosX = x;
+                    item.PosY = y;
+                    item.PosZ = z;
+                    item.State = "Spawned";
+                    item.IsActive = true;
+                    item.PickedUpByPlayerId = "";
+                    item.SpawnTime = (float)DateTime.UtcNow.TimeOfDay.TotalSeconds;
+                }
             }
         }
 
@@ -355,27 +441,38 @@ namespace OpenGSServer.Network
         /// </summary>
         public JArray ToJson()
         {
-            var array = new JArray();
-
-            foreach (var kvp in _items)
+            lock (_sync)
             {
-                var item = new JObject
-                {
-                    ["ItemId"] = kvp.Value.ItemId,
-                    ["ItemType"] = kvp.Value.ItemType,
-                    ["PositionX"] = kvp.Value.PosX,
-                    ["PositionY"] = kvp.Value.PosY,
-                    ["PositionZ"] = kvp.Value.PosZ,
-                    ["SpawnPointId"] = kvp.Value.SpawnPointId,
-                    ["SpawnPointName"] = kvp.Value.SpawnPointName,
-                    ["State"] = kvp.Value.State,
-                    ["PickedUpByPlayerId"] = kvp.Value.PickedUpByPlayerId,
-                    ["IsActive"] = kvp.Value.IsActive
-                };
-                array.Add(item);
-            }
+                var array = new JArray();
 
-            return array;
+                foreach (var kvp in _items)
+                {
+                    var item = new JObject
+                    {
+                        ["ItemId"] = kvp.Value.ItemId,
+                        ["ItemType"] = kvp.Value.ItemType,
+                        ["PositionX"] = kvp.Value.PosX,
+                        ["PositionY"] = kvp.Value.PosY,
+                        ["PositionZ"] = kvp.Value.PosZ,
+                        ["SpawnPointId"] = kvp.Value.SpawnPointId,
+                        ["SpawnPointName"] = kvp.Value.SpawnPointName,
+                        ["State"] = kvp.Value.State,
+                        ["PickedUpByPlayerId"] = kvp.Value.PickedUpByPlayerId,
+                        ["IsActive"] = kvp.Value.IsActive
+                    };
+                    if (kvp.Value.IsPlayerDroppedWeapon)
+                    {
+                        item["IsPlayerDroppedWeapon"] = true;
+                        item["WeaponType"] = kvp.Value.WeaponType;
+                        item["MagazineAmmo"] = kvp.Value.MagazineAmmo;
+                        item["PlayerID"] = kvp.Value.DroppedByPlayerId;
+                        item["SlotIndex"] = kvp.Value.DroppedFromSlotIndex;
+                    }
+                    array.Add(item);
+                }
+
+                return array;
+            }
         }
 
         /// <summary>
@@ -383,28 +480,31 @@ namespace OpenGSServer.Network
         /// </summary>
         public void LoadFromJson(JArray array)
         {
-            _items.Clear();
-
-            foreach (var token in array)
+            lock (_sync)
             {
-                var itemObj = token as JObject;
-                if (itemObj == null) continue;
+                _items.Clear();
 
-                var item = new FieldItem
+                foreach (var token in array)
                 {
-                    ItemId = itemObj["ItemId"]?.ToString() ?? "",
-                    ItemType = itemObj["ItemType"]?.ToString() ?? "PowerUp",
-                    PosX = itemObj["PositionX"]?.Value<float>() ?? 0,
-                    PosY = itemObj["PositionY"]?.Value<float>() ?? 0,
-                    PosZ = itemObj["PositionZ"]?.Value<float>() ?? 0,
-                    SpawnPointId = itemObj["SpawnPointId"]?.Value<int>() ?? -1,
-                    SpawnPointName = itemObj["SpawnPointName"]?.ToString() ?? "",
-                    State = itemObj["State"]?.ToString() ?? "Spawned",
-                    PickedUpByPlayerId = itemObj["PickedUpByPlayerId"]?.ToString() ?? "",
-                    IsActive = itemObj["IsActive"]?.Value<bool>() ?? true
-                };
+                    var itemObj = token as JObject;
+                    if (itemObj == null) continue;
 
-                _items[item.ItemId] = item;
+                    var item = new FieldItem
+                    {
+                        ItemId = itemObj["ItemId"]?.ToString() ?? "",
+                        ItemType = itemObj["ItemType"]?.ToString() ?? "PowerUp",
+                        PosX = itemObj["PositionX"]?.Value<float>() ?? 0,
+                        PosY = itemObj["PositionY"]?.Value<float>() ?? 0,
+                        PosZ = itemObj["PositionZ"]?.Value<float>() ?? 0,
+                        SpawnPointId = itemObj["SpawnPointId"]?.Value<int>() ?? -1,
+                        SpawnPointName = itemObj["SpawnPointName"]?.ToString() ?? "",
+                        State = itemObj["State"]?.ToString() ?? "Spawned",
+                        PickedUpByPlayerId = itemObj["PickedUpByPlayerId"]?.ToString() ?? "",
+                        IsActive = itemObj["IsActive"]?.Value<bool>() ?? true
+                    };
+
+                    _items[item.ItemId] = item;
+                }
             }
         }
 
@@ -413,13 +513,16 @@ namespace OpenGSServer.Network
         /// </summary>
         public int GetActiveItemCount()
         {
-            int count = 0;
-            foreach (var item in _items.Values)
+            lock (_sync)
             {
-                if (item.IsActive && item.State == "Spawned")
-                    count++;
+                int count = 0;
+                foreach (var item in _items.Values)
+                {
+                    if (item.IsActive && item.State == "Spawned")
+                        count++;
+                }
+                return count;
             }
-            return count;
         }
     }
 }

@@ -4,22 +4,23 @@ using System.Linq;
 using System.Text;
 
 using OpenGSCore;
+using CoreChat = OpenGSCore.Chat;
 
 namespace OpenGSServer
 {
     public class ChatManager
     {
-        private List<Chat> log = new();
+        private List<CoreChat> log = new();
         private readonly int maxLogSize;
 
-        public List<Chat> Log { get => log; }
+        public List<CoreChat> Log { get => log; }
 
         public ChatManager(int maxLogSize = 1000)
         {
             this.maxLogSize = maxLogSize;
         }
 
-        public void AddChat(Chat chat)
+        public void AddChat(CoreChat chat)
         {
             Log.Add(chat);
             // ログサイズ上限を超えたら古いものを削除
@@ -29,39 +30,39 @@ namespace OpenGSServer
             }
         }
 
-        public Chat NewChat(string playerId, string playerName, string message, ChatType type = ChatType.All)
+        public CoreChat NewChat(string playerId, string playerName, string message, ChatType type = ChatType.All)
         {
-            var chat = new Chat(playerId, playerName, message, type);
+            var chat = new CoreChat(playerId, playerName, message, type);
             AddChat(chat);
             return chat;
         }
 
-        public List<Chat> AllChat()
+        public List<CoreChat> AllChat()
         {
             return Log.Where(c => c.Type == ChatType.All).ToList();
         }
 
-        public List<Chat> TeamChat()
+        public List<CoreChat> TeamChat()
         {
             return Log.Where(c => c.Type == ChatType.Team).ToList();
         }
 
-        public List<Chat> GetChatsByPlayer(string playerName)
+        public List<CoreChat> GetChatsByPlayer(string playerName)
         {
             return Log.Where(c => c.PlayerName == playerName).ToList();
         }
 
-        public List<Chat> GetChatsByPlayerId(string playerId)
+        public List<CoreChat> GetChatsByPlayerId(string playerId)
         {
             return Log.Where(c => c.PlayerId == playerId).ToList();
         }
 
-        public Chat? GetChatById(string chatId)
+        public CoreChat? GetChatById(string chatId)
         {
             return Log.FirstOrDefault(c => c.Id == chatId);
         }
 
-        public List<Chat> GetRecentChats(int count)
+        public List<CoreChat> GetRecentChats(int count)
         {
             return Log.TakeLast(count).ToList();
         }

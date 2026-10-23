@@ -94,7 +94,7 @@ namespace OpenGSServer.Network
             // 全クライアントにスポーンを通知
             var spawnMessage = new JObject
             {
-                ["MessageType"] = MessageType.ItemSpawnNotification,
+                ["MessageType"] = "FieldItemSpawn",
                 ["ItemId"] = itemId,
                 ["ItemType"] = itemType,
                 ["PositionX"] = x,
@@ -127,7 +127,7 @@ namespace OpenGSServer.Network
 
             var spawnMessage = new JObject
             {
-                ["MessageType"] = MessageType.ItemSpawnNotification,
+                ["MessageType"] = "FieldItemSpawn",
                 ["ItemId"] = itemId,
                 ["ItemType"] = itemType,
                 ["SpawnPointId"] = item.SpawnPointId,
@@ -156,7 +156,7 @@ namespace OpenGSServer.Network
 
             var despawnMessage = new JObject
             {
-                ["MessageType"] = MessageType.ItemDespawnNotification,
+                ["MessageType"] = "FieldItemDespawn",
                 ["ItemId"] = itemId
             };
 
@@ -176,7 +176,7 @@ namespace OpenGSServer.Network
 
             var despawnMessage = new JObject
             {
-                ["MessageType"] = MessageType.ItemDespawnNotification
+                ["MessageType"] = "FieldItemDespawn"
             };
 
             broadcast(despawnMessage);
