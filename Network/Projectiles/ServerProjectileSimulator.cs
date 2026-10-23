@@ -328,7 +328,7 @@ namespace OpenGSServer.Network
                     {
                         var enemyHit = ResolveEnemyOnSegment?.Invoke(
                             projectile.RoomId, previousPosition, projectile.Position) ??
-                            (string.Empty, projectile.Position);
+                            (EnemyId: string.Empty, HitPosition: projectile.Position);
                         var hitEnemy = !string.IsNullOrEmpty(enemyHit.EnemyId);
                         var enemyHitPosition = enemyHit.HitPosition;
                         var hitPlayer = TryResolveBulletHit(
