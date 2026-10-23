@@ -2068,6 +2068,17 @@ namespace OpenGSServer
 
             var before = missionSituation.ObjectiveProgress;
             var completed = room.RecordObjectiveProgress(steps);
+            if (missionSituation.ObjectiveProgress != before)
+            {
+                GameMessageDispatcher.BroadcastToRoom(room.Id.ToString(), new JObject
+                {
+                    ["MessageType"] = GameMessageTypes.MissionObjectiveProgress,
+                    ["RoomID"] = room.Id.ToString(),
+                    ["ObjectiveCount"] = missionSituation.ObjectiveCount,
+                    ["ObjectiveProgress"] = missionSituation.ObjectiveProgress,
+                    ["Timestamp"] = DateTime.UtcNow.ToString("o")
+                });
+            }
 
             Console.WriteLine(
                 completed
