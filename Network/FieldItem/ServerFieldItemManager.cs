@@ -271,22 +271,7 @@ namespace OpenGSServer.Network
                 return string.Empty;
             }
 
-            string itemId = Guid.NewGuid().ToString("N").Substring(0, 8);
-
-            var item = new FieldItem
-            {
-                ItemId = itemId,
-                ItemType = itemType,
-                PosX = x,
-                PosY = y,
-                PosZ = z,
-                SpawnPointId = -1,
-                SpawnPointName = "",
-                State = "Spawned",
-                IsActive = true,
-                SpawnTime = (float)NowSeconds
-            };
-
+            string itemId;
             lock (_itemStateLock)
             {
                 if (_items.Values.Count(existing => existing.IsActive && existing.State == "Spawned") >=
@@ -295,7 +280,25 @@ namespace OpenGSServer.Network
                     return string.Empty;
                 }
 
-                _items[itemId] = item;
+                do
+                {
+                    itemId = Guid.NewGuid().ToString("N");
+                }
+                while (_items.ContainsKey(itemId));
+
+                _items.TryAdd(itemId, new FieldItem
+                {
+                    ItemId = itemId,
+                    ItemType = itemType,
+                    PosX = x,
+                    PosY = y,
+                    PosZ = z,
+                    SpawnPointId = -1,
+                    SpawnPointName = "",
+                    State = "Spawned",
+                    IsActive = true,
+                    SpawnTime = (float)NowSeconds
+                });
             }
 
             return itemId;
