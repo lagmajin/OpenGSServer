@@ -216,6 +216,10 @@ namespace OpenGSServer
             new(StringComparer.OrdinalIgnoreCase);
         private static readonly ConcurrentDictionary<string, DateTime> DefenseBuffExpires =
             new(StringComparer.OrdinalIgnoreCase);
+        private static readonly ConcurrentDictionary<string, DateTime> SpeedBuffExpires =
+            new(StringComparer.OrdinalIgnoreCase);
+        private static readonly ConcurrentDictionary<string, DateTime> StealthBuffExpires =
+            new(StringComparer.OrdinalIgnoreCase);
         private static readonly ConcurrentDictionary<string, (string DamageType, DateTime ExpiresAt)>
             ElementalBulletEffects = new(StringComparer.OrdinalIgnoreCase);
         private static readonly ConcurrentDictionary<string, DateTime> LastMatchTimeBroadcasts =
@@ -252,6 +256,8 @@ namespace OpenGSServer
             var now = DateTime.UtcNow;
             AddRemaining(AttackBuffExpires, "PowerUpItem");
             AddRemaining(DefenseBuffExpires, "DefenceUpItem");
+            AddRemaining(SpeedBuffExpires, "SpeedUpItem");
+            AddRemaining(StealthBuffExpires, "StealthItem");
             GameMessageDispatcher.SendToPlayer(playerId, new JObject
             {
                 ["MessageType"] = "TimedBuffSnapshot",
@@ -290,6 +296,8 @@ namespace OpenGSServer
             var key = TimedBuffKey(roomId, playerId);
             AttackBuffExpires.TryRemove(key, out _);
             DefenseBuffExpires.TryRemove(key, out _);
+            SpeedBuffExpires.TryRemove(key, out _);
+            StealthBuffExpires.TryRemove(key, out _);
             ElementalBulletEffects.TryRemove(key, out _);
         }
 
@@ -326,6 +334,12 @@ namespace OpenGSServer
             foreach (var key in DefenseBuffExpires.Keys.Where(key =>
                 key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
                 DefenseBuffExpires.TryRemove(key, out _);
+            foreach (var key in SpeedBuffExpires.Keys.Where(key =>
+                key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
+                SpeedBuffExpires.TryRemove(key, out _);
+            foreach (var key in StealthBuffExpires.Keys.Where(key =>
+                key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
+                StealthBuffExpires.TryRemove(key, out _);
             foreach (var key in ElementalBulletEffects.Keys.Where(key =>
                 key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
                 ElementalBulletEffects.TryRemove(key, out _);
@@ -723,6 +737,10 @@ namespace OpenGSServer
                     AttackBuffExpires[buffKey] = expiresAt;
                 else if (string.Equals(itemType, "DefenceUpItem", StringComparison.OrdinalIgnoreCase))
                     DefenseBuffExpires[buffKey] = expiresAt;
+                else if (string.Equals(itemType, "SpeedUpItem", StringComparison.OrdinalIgnoreCase))
+                    SpeedBuffExpires[buffKey] = expiresAt;
+                else if (string.Equals(itemType, "StealthItem", StringComparison.OrdinalIgnoreCase))
+                    StealthBuffExpires[buffKey] = expiresAt;
             }
 
             // Field healing applies on contact in Unity, while grenade packs are
