@@ -1423,6 +1423,7 @@ namespace OpenGSServer
         public void Shutdown()
         {
             StopSnapshotBroadcast();
+            SuspendConnectedPlayers();
 
             if (_server == null)
             {
@@ -1432,6 +1433,7 @@ namespace OpenGSServer
                 _pendingPeers.Clear();
                 _unauthorizedPacketCounts.Clear();
                 _pendingInputs.Clear();
+                _matchEventRateLimiters.Clear();
                 return;
             }
 
@@ -1460,6 +1462,38 @@ namespace OpenGSServer
             _matchEventRateLimiters.Clear();
 
             ConsoleWrite.WriteMessage("[UDP] Server shutdown complete", ConsoleColor.Green);
+        }
+
+        private void SuspendConnectedPlayers()
+        {
+            foreach (var connection in _connectedPlayers.Values)
+            {
+                var playerId = connection.PlayerId;
+                if (string.IsNullOrWhiteSpace(playerId)) continue;
+
+                try
+                {
+                    InGameMatchEventHandler.ClearPlayerState(
+                        playerId, preserveMagazines: true, preserveRoomMembership: true);
+                }
+                catch (Exception ex)
+                {
+                    ConsoleWrite.WriteMessage(
+                        $"[UDP] Match state cleanup failed during shutdown for {playerId}: {ex.Message}",
+                        ConsoleColor.Red);
+                }
+
+                try
+                {
+                    MatchServerV2.Instance.ServerLagCompensationManager.SuspendPlayer(playerId);
+                }
+                catch (Exception ex)
+                {
+                    ConsoleWrite.WriteMessage(
+                        $"[UDP] Lag compensation suspension failed during shutdown for {playerId}: {ex.Message}",
+                        ConsoleColor.Red);
+                }
+            }
         }
 
         public void Dispose()
