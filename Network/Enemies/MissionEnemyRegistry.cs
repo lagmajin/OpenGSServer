@@ -416,6 +416,7 @@ namespace OpenGSServer
                 return;
             }
 
+            var damageTimestamp = DateTime.UtcNow;
             GameMessageDispatcher.BroadcastToRoom(enemy.RoomId, new JObject
             {
                 ["MessageType"] = GameMessageTypes.PlayerDamaged,
@@ -433,7 +434,7 @@ namespace OpenGSServer
                     ["X"] = playerState.PositionX,
                     ["Y"] = playerState.PositionY
                 },
-                ["Timestamp"] = DateTime.UtcNow.ToString("o")
+                ["Timestamp"] = damageTimestamp.ToString("o")
             });
 
             if (!outcome.IsNowDown)
@@ -443,6 +444,9 @@ namespace OpenGSServer
 
             InGameMatchEventHandler.ClearPlayerCombatEffects(enemy.RoomId, playerId);
             room.RecordDeath(playerId);
+            var deathTimestamp = DateTime.UtcNow;
+            if (deathTimestamp <= damageTimestamp)
+                deathTimestamp = damageTimestamp.AddTicks(1);
 
             GameMessageDispatcher.BroadcastToRoom(enemy.RoomId, new JObject
             {
@@ -452,7 +456,7 @@ namespace OpenGSServer
                 ["KilledPlayerID"] = playerId,
                 ["DeadPlayerID"] = playerId,
                 ["IsSelfInflicted"] = false,
-                ["Timestamp"] = DateTime.UtcNow.ToString("o")
+                ["Timestamp"] = deathTimestamp.ToString("o")
             });
         }
 
