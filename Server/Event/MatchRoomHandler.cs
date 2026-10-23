@@ -2286,8 +2286,11 @@ namespace OpenGSServer
                 if (finalResult != null)
                 {
                     GameMessageDispatcher.SendToPlayer(requestingPlayerId, finalResult);
-                    return;
                 }
+                // A status refresh after match end must not create a fresh
+                // starting magazine in the completed room when result data is
+                // unavailable or has already expired.
+                return;
             }
             var pistolMagazine = ServerWeaponMagazineStore.GetOrCreateStartingWeapon(
                 requestingPlayerId, "Pistol");

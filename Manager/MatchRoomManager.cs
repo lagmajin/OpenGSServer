@@ -216,6 +216,12 @@ namespace OpenGSServer
                         matchRoom.Id.ToString());
                     OpenGSServer.Network.InGameMatchEventHandler.ClearRoomCombatEffects(
                         matchRoom.Id.ToString());
+                    OpenGSServer.Network.InGameMatchEventHandler.ClearRoomFlagState(
+                        matchRoom.Id.ToString());
+                    foreach (var player in matchRoom.Players)
+                    {
+                        OpenGSServer.Network.ServerWeaponMagazineStore.ResetPlayer(player.Id);
+                    }
                     // UDPで全プレイヤーに正規のマッチ終了通知を送る
                     var firstPlayer = matchRoom.Players.Find(p => !string.IsNullOrEmpty(p.Id));
                     if (firstPlayer != null)
