@@ -2200,6 +2200,13 @@ namespace OpenGSServer
                 return;
             }
 
+            if (!IsStandingAtAFlag(room, playerId, flagTeam))
+            {
+                Console.WriteLine(
+                    $"[Match] Refused a return of the {flagTeam} flag by '{playerId}': they are not next to it");
+                return;
+            }
+
             var flagState = FlagStateFor(room);
             var returned = flagState.WithFlags(flags =>
             {
