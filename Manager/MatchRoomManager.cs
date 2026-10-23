@@ -305,11 +305,11 @@ namespace OpenGSServer
         /// <summary>
         /// Starts the match room linked to a wait room, if there is one.
         /// </summary>
-        public void BeginMatchForWaitRoom(WaitRoom waitRoom)
+        public bool BeginMatchForWaitRoom(WaitRoom waitRoom)
         {
             if (waitRoom == null || string.IsNullOrWhiteSpace(waitRoom.RoomId))
             {
-                return;
+                return false;
             }
 
             var matchRoom = AllRooms()
@@ -318,7 +318,7 @@ namespace OpenGSServer
                     candidate.WaitRoomLink != null &&
                     string.Equals(candidate.WaitRoomLink.RoomId, waitRoom.RoomId, StringComparison.OrdinalIgnoreCase));
 
-            BeginMatch(matchRoom);
+            return matchRoom != null && (matchRoom.Playing || matchRoom.IsStarting || BeginMatch(matchRoom));
         }
 
         public bool DiscardPendingMatchForWaitRoom(string waitRoomId)

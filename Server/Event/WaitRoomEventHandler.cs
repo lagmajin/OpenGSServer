@@ -263,6 +263,70 @@ namespace OpenGSServer
             }
         }
 
+        private static bool TryApproveLoadingAfterPlayerRemoved(WaitRoom waitRoom, string playerId)
+        {
+            if (!waitRoom.NowPlaying)
+            {
+                return false;
+            }
+
+            lock (LoadingStateLock)
+            {
+                if (!LoadingRooms.Contains(waitRoom.RoomId) ||
+                    !LoadingCompletedPlayers.TryGetValue(waitRoom.RoomId, out var completedPlayers))
+                {
+                    return false;
+                }
+
+                completedPlayers.Remove(playerId);
+                var remainingPlayers = waitRoom.AllPlayers();
+                if (remainingPlayers.Count == 0 || remainingPlayers.Any(player => !completedPlayers.Contains(player.Id)))
+                {
+                    return false;
+                }
+
+                LoadingRooms.Remove(waitRoom.RoomId);
+                LoadingCompletedPlayers.Remove(waitRoom.RoomId);
+                LoadingApprovedRooms.Add(waitRoom.RoomId);
+            }
+
+            LoadingTimeouts.Forget(waitRoom.RoomId);
+            if (!MatchRoomManager.Instance.BeginMatchForWaitRoom(waitRoom))
+            {
+                FailPendingMatchStart(waitRoom);
+                return false;
+            }
+
+            BroadcastAllowEnterMap(waitRoom);
+            return true;
+        }
+
+        private static void FailPendingMatchStart(WaitRoom waitRoom)
+        {
+            if (!MatchRoomManager.Instance.DiscardPendingMatchForWaitRoom(waitRoom.RoomId))
+            {
+                return;
+            }
+
+            waitRoom.CancelPendingMatch();
+            lock (LoadingStateLock)
+            {
+                LoadingApprovedRooms.Remove(waitRoom.RoomId);
+                LoadingTimedOutRooms.Add(waitRoom.RoomId);
+            }
+
+            BroadcastLoadingNotification(waitRoom, new JObject
+            {
+                ["MessageType"] = MessageType.LoadingFailed,
+                ["RoomID"] = waitRoom.RoomId,
+                ["RoomId"] = waitRoom.RoomId,
+                ["Success"] = false,
+                ["Message"] = "The server could not start the match. Please try again."
+            });
+            BroadcastRoomUpdate(waitRoom, MessageType.WaitRoomUpdateNotification);
+            LobbyEventHandler.BroadcastRoomListUpdate();
+        }
+
         private static void ClearLoadingState(string roomId)
         {
             if (string.IsNullOrWhiteSpace(roomId))
@@ -397,6 +461,8 @@ namespace OpenGSServer
                     continue;
                 }
 
+                TryApproveLoadingAfterPlayerRemoved(waitRoom, playerId);
+
                 if (!string.Equals(previousOwnerId, newOwnerId, StringComparison.OrdinalIgnoreCase))
                 {
                     var ownerChange = new JObject
@@ -434,6 +500,7 @@ namespace OpenGSServer
                 }
                 else
                 {
+                    TryApproveLoadingAfterPlayerRemoved(missionRoom, playerId);
                     BroadcastRoomUpdate(missionRoom, MessageType.WaitRoomUpdateNotification);
                 }
 
@@ -662,29 +729,36 @@ namespace OpenGSServer
                 }
             }
 
-            if (!changed)
+            if (changed)
             {
-                return;
+                BroadcastLoadingNotification(waitRoom, new JObject
+                {
+                    ["MessageType"] = MessageType.LoadingCompletedNotification,
+                    ["PlayerID"] = playerId,
+                    ["RoomInfo"] = BuildRoomInfoJson(waitRoom)
+                });
             }
-
-            BroadcastLoadingNotification(waitRoom, new JObject
-            {
-                ["MessageType"] = MessageType.LoadingCompletedNotification,
-                ["PlayerID"] = playerId,
-                ["RoomInfo"] = BuildRoomInfoJson(waitRoom)
-            });
 
             if (completion.AllPlayersCompleted && waitRoom.AllPlayers().Count > 0)
             {
                 // S2: entry is approved, so the match room can actually start
                 // running. Without this the game loop skipped the room because
                 // Playing was never set.
-                MatchRoomManager.Instance.BeginMatchForWaitRoom(waitRoom);
-                BroadcastAllowEnterMap(waitRoom);
+                if (MatchRoomManager.Instance.BeginMatchForWaitRoom(waitRoom))
+                {
+                    BroadcastAllowEnterMap(waitRoom);
+                }
+                else
+                {
+                    FailPendingMatchStart(waitRoom);
+                }
             }
 
-            BroadcastRoomUpdate(waitRoom, MessageType.WaitRoomUpdateNotification);
-            LobbyEventHandler.BroadcastRoomListUpdate();
+            if (changed)
+            {
+                BroadcastRoomUpdate(waitRoom, MessageType.WaitRoomUpdateNotification);
+                LobbyEventHandler.BroadcastRoomListUpdate();
+            }
         }
 
         public static void LoadingProgressRequest(in ClientSession session, IDictionary<string, JToken> dic)
@@ -878,6 +952,8 @@ namespace OpenGSServer
                 });
                 return;
             }
+
+            TryApproveLoadingAfterPlayerRemoved(waitRoom, playerId);
 
             var newOwnerId = waitRoom.GetFirstPlayerId();
             if (string.Equals(previousOwnerId, playerId, StringComparison.OrdinalIgnoreCase) &&
