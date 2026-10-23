@@ -776,6 +776,7 @@ namespace OpenGSServer
                 ["PlayerId"] = playerId,
                 ["WeaponType"] = weaponType,
                 ["MagazineAmmo"] = magazine,
+                ["ReserveAmmo"] = reserveAmmo,
                 ["PickupDelaySeconds"] = 1.0f,
                 ["SlotIndex"] = slot,
                 ["PosX"] = state.PositionX,
@@ -1269,7 +1270,7 @@ namespace OpenGSServer
                 }
                 BroadcastDroppedWeaponPickup(
                     room, playerId, itemId, item.WeaponType, true,
-                    item.MagazineAmmo, item.WeaponSlot);
+                    item.MagazineAmmo, item.WeaponSlot, item.ReserveAmmo);
                 return;
             }
 
@@ -1300,7 +1301,7 @@ namespace OpenGSServer
 
         private static void BroadcastDroppedWeaponPickup(
             MatchRoom room, string playerId, string itemId, string weaponType,
-            bool success, int magazineAmmo = -1, int slotIndex = -1)
+            bool success, int magazineAmmo = -1, int slotIndex = -1, int reserveAmmo = -1)
         {
             GameMessageDispatcher.BroadcastToRoom(room.Id.ToString(), new JObject
             {
@@ -1312,6 +1313,7 @@ namespace OpenGSServer
                 ["WeaponType"] = weaponType,
                 ["IsPlayerDroppedWeapon"] = true,
                 ["MagazineAmmo"] = magazineAmmo,
+                ["ReserveAmmo"] = reserveAmmo,
                 ["SlotIndex"] = slotIndex,
                 ["Success"] = success,
                 ["Timestamp"] = DateTime.UtcNow.ToString("o")
