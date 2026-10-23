@@ -1422,7 +1422,7 @@ namespace OpenGSServer
 
             var accountId = ResolveGuildPlayerId(session, data, "PlayerID", "PlayerId", "AccountID", "AccountId");
             var itemId = data?["ItemId"]?.ToString() ?? string.Empty;
-            var category = data?["Category"]?.ToString() ?? "Weapon";
+            var category = (data?["Category"]?.ToString() ?? "Weapon").Trim();
             var slot = ReadInt(data?["Slot"]);
             var db = AccountDatabaseManager.GetInstance();
             var shopItem = ResolveShopItem(itemId);
@@ -1441,7 +1441,13 @@ namespace OpenGSServer
                 return;
             }
 
-            if (shopItem == null || !db.IsPurchased(accountId, shopItem.Value.ItemId))
+            var expectedCategory = shopItem == null
+                ? string.Empty
+                : ResolveShopCategory(shopItem.Value.ItemId);
+            if (shopItem == null ||
+                !category.Equals(expectedCategory, StringComparison.OrdinalIgnoreCase) ||
+                (expectedCategory.Equals("InstantItem", StringComparison.OrdinalIgnoreCase) && !IsValidInstantItemSlot(slot)) ||
+                !db.IsPurchased(accountId, shopItem.Value.ItemId))
             {
                 session.SendAsyncJsonWithTimeStamp(new JObject
                 {
@@ -1450,7 +1456,7 @@ namespace OpenGSServer
                     ["ItemId"] = itemId,
                     ["Category"] = category,
                     ["Slot"] = slot,
-                    ["ErrorMessage"] = "Item has not been purchased"
+                    ["ErrorMessage"] = "Item, category, slot, or purchase state is invalid"
                 });
                 return;
             }
@@ -1479,7 +1485,7 @@ namespace OpenGSServer
             }
 
             var accountId = ResolveGuildPlayerId(session, data, "PlayerID", "PlayerId", "AccountID", "AccountId");
-            var category = data?["Category"]?.ToString() ?? "Weapon";
+            var category = (data?["Category"]?.ToString() ?? "Weapon").Trim();
             var slot = ReadInt(data?["Slot"]);
             var db = AccountDatabaseManager.GetInstance();
 
@@ -1492,6 +1498,20 @@ namespace OpenGSServer
                     ["Category"] = category,
                     ["Slot"] = slot,
                     ["ErrorMessage"] = "AccountID is required"
+                });
+                return;
+            }
+
+            if (!IsValidShopCategory(category) ||
+                (category.Equals("InstantItem", StringComparison.OrdinalIgnoreCase) && !IsValidInstantItemSlot(slot)))
+            {
+                session.SendAsyncJsonWithTimeStamp(new JObject
+                {
+                    ["MessageType"] = MessageType.ShopEquipResponse,
+                    ["Success"] = false,
+                    ["Category"] = category,
+                    ["Slot"] = slot,
+                    ["ErrorMessage"] = "Category or slot is invalid"
                 });
                 return;
             }
@@ -2058,6 +2078,41 @@ namespace OpenGSServer
 
             return string.Empty;
         }
+
+        private static readonly HashSet<string> ShopCharacterItems = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "Ami", "Yumi", "Misty", "Jack", "Jackle", "LittleJ", "Liu", "Mary", "Seoul",
+            "Wolf", "Wyvern", "Shue", "Swaltz"
+        };
+
+        private static readonly HashSet<string> ShopBoosterItems = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "BoostRed", "BoostBlue", "BoostGreen"
+        };
+
+        private static readonly HashSet<string> ShopInstantItems = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "HealthKit", "FireBullet", "PoisonBullet", "PowerGrenadePack", "ClusterGrenadePack",
+            "MagnetGrenadePack", "MineGrenadePack"
+        };
+
+        private static string ResolveShopCategory(string itemId)
+        {
+            if (ShopCharacterItems.Contains(itemId)) return "Character";
+            if (ShopBoosterItems.Contains(itemId)) return "Booster";
+            if (ShopInstantItems.Contains(itemId)) return "InstantItem";
+            return "Weapon";
+        }
+
+        private static bool IsValidShopCategory(string category)
+        {
+            return category.Equals("Weapon", StringComparison.OrdinalIgnoreCase) ||
+                category.Equals("Character", StringComparison.OrdinalIgnoreCase) ||
+                category.Equals("Booster", StringComparison.OrdinalIgnoreCase) ||
+                category.Equals("InstantItem", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsValidInstantItemSlot(int slot) => slot >= 0 && slot < 3;
 
         private static readonly Dictionary<string, long> ShopPurchasePrices = new(StringComparer.OrdinalIgnoreCase)
         {
