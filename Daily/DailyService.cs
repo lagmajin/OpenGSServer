@@ -56,6 +56,7 @@ namespace OpenGSServer
         public JArray GetPlayerDailies(string playerId)
         {
             if (string.IsNullOrWhiteSpace(playerId)) return new JArray();
+            playerId = ResolveCanonicalPlayerId(playerId);
             lock (_sync)
             {
                 var now = DateTime.UtcNow;
@@ -73,6 +74,7 @@ namespace OpenGSServer
         public bool AddProgress(string playerId, string dailyId, int amount)
         {
             if (string.IsNullOrWhiteSpace(playerId) || amount <= 0 || Definitions.All(x => x.Id != dailyId)) return false;
+            playerId = ResolveCanonicalPlayerId(playerId);
             lock (_sync)
             {
                 var record = GetOrCreate(playerId, dailyId, DateTime.UtcNow.ToString("yyyy-MM-dd"));
@@ -87,6 +89,7 @@ namespace OpenGSServer
         public (bool Success, string Error, long Reward) Claim(string playerId, string dailyId)
         {
             if (string.IsNullOrWhiteSpace(playerId)) return (false, "Player not found", 0);
+            playerId = ResolveCanonicalPlayerId(playerId);
 
             lock (_sync)
             {
@@ -112,9 +115,45 @@ namespace OpenGSServer
             var id = $"{playerId}:{date}:{dailyId}";
             var existing = _progress.FindById(id);
             if (existing != null) return existing;
+
+            // Older sessions could persist the same account under a different
+            // casing. Merge those records before creating a second daily row.
+            var legacyRecords = _progress.FindAll()
+                .Where(record =>
+                    string.Equals(record.PlayerId, playerId, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(record.ResetDateUtc, date, StringComparison.Ordinal) &&
+                    string.Equals(record.DailyId, dailyId, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            if (legacyRecords.Count > 0)
+            {
+                var definition = Definitions.First(item =>
+                    string.Equals(item.Id, dailyId, StringComparison.OrdinalIgnoreCase));
+                var record = legacyRecords[0];
+                record.Id = id;
+                record.PlayerId = playerId;
+                record.DailyId = dailyId;
+                record.ResetDateUtc = date;
+                record.Progress = (int)Math.Min(
+                    definition.Target,
+                    legacyRecords.Sum(item => (long)Math.Max(0, item.Progress)));
+                record.Claimed = legacyRecords.Any(item => item.Claimed);
+                _progress.Upsert(record);
+                foreach (var legacy in legacyRecords.Where(item => item.Id != id))
+                {
+                    _progress.Delete(legacy.Id);
+                }
+
+                return record;
+            }
+
             var created = new DailyProgressRecord { Id = id, PlayerId = playerId, DailyId = dailyId, ResetDateUtc = date };
             _progress.Insert(created);
             return created;
+        }
+
+        private static string ResolveCanonicalPlayerId(string playerId)
+        {
+            return AccountDatabaseManager.GetInstance().GetAccountSnapshot(playerId)?.AccountId ?? playerId;
         }
 
         private void CleanupExpiredRecords(DateTime cutoff)
