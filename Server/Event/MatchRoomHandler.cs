@@ -3583,6 +3583,16 @@ namespace OpenGSServer
             }
             direction /= directionLength;
 
+            var powerToken = grenadeData.GetValue("Power");
+            var power = powerToken == null ? 1.0f : GetFloat(powerToken, float.NaN);
+            if (!IsFinite(power))
+            {
+                Console.WriteLine($"[Match] Ignored grenade with invalid power from '{playerId}'");
+                SendGrenadeLoadoutSnapshotIfTracked(room.Id.ToString(), playerId);
+                return;
+            }
+            power = Math.Clamp(power, 0.1f, 1.0f);
+
             var hasGrenadeLoadout = ServerGrenadeLoadoutStore.TryRead(
                 room.Id.ToString(), playerId, out _);
             var remainingGrenadeSlots = Array.Empty<string>();
@@ -3616,7 +3626,7 @@ namespace OpenGSServer
             // only as a message and nothing was ever simulated.
             var projectileId = Projectiles.CreateGrenade(
                 room.Id.ToString(), playerId, origin, direction, grenadeType,
-                GetFloat(grenadeData.GetValue("Power"), 1.0f));
+                power);
 
             Console.WriteLine($"Player {playerId} threw {grenadeType} ({projectileId})");
             BroadcastGrenadeEvent(room, playerId, grenadeData, projectileId);
