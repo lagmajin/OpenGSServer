@@ -533,18 +533,21 @@ namespace OpenGSServer.Network
         /// <summary>Drops every enemy, for a match that has ended.</summary>
         public void Clear()
         {
-            List<ServerEnemyState> leaving;
-            lock (_lock)
+            lock (_spawnLock)
             {
-                foreach (var enemy in _enemies.Values)
-                    enemy.Timestamp = NextTimestampLocked();
-                leaving = _enemies.Values.Select(CopyState).ToList();
-                _enemies.Clear();
-            }
+                List<ServerEnemyState> leaving;
+                lock (_lock)
+                {
+                    foreach (var enemy in _enemies.Values)
+                        enemy.Timestamp = NextTimestampLocked();
+                    leaving = _enemies.Values.Select(CopyState).ToList();
+                    _enemies.Clear();
+                }
 
-            foreach (var enemy in leaving)
-            {
-                OnDespawn?.Invoke(CopyState(enemy));
+                foreach (var enemy in leaving)
+                {
+                    OnDespawn?.Invoke(CopyState(enemy));
+                }
             }
         }
 
