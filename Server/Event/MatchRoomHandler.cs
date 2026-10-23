@@ -2352,36 +2352,39 @@ namespace OpenGSServer
             // holding goes back to its stand rather than staying in the air. This
             // used to drop the carrier record, which left the flag itself with no
             // state at all: it was neither home, nor dropped, nor carried.
-            foreach (var entry in FlagRooms)
+            if (!preserveRoomMembership)
             {
-                var room = MatchRoomManager.Instance.GetRoomById(entry.Key);
-                if (room == null)
+                foreach (var entry in FlagRooms)
                 {
-                    continue;
-                }
-
-                var released = entry.Value.WithFlags(flags =>
-                {
-                    foreach (var flag in flags.Values)
+                    var room = MatchRoomManager.Instance.GetRoomById(entry.Key);
+                    if (room == null)
                     {
-                        if (flag.IsCarried &&
-                            string.Equals(flag.CarrierId, playerId, StringComparison.OrdinalIgnoreCase) &&
-                            flag.Return(EFlagReturnReason.AutoReturn))
-                        {
-                            return flag.Team;
-                        }
+                        continue;
                     }
 
-                    return ETeam.NoTeam;
-                });
+                    var released = entry.Value.WithFlags(flags =>
+                    {
+                        foreach (var flag in flags.Values)
+                        {
+                            if (flag.IsCarried &&
+                                string.Equals(flag.CarrierId, playerId, StringComparison.OrdinalIgnoreCase) &&
+                                flag.Return(EFlagReturnReason.AutoReturn))
+                            {
+                                return flag.Team;
+                            }
+                        }
 
-                if (released != ETeam.NoTeam)
-                {
-                    GameMessageDispatcher.SendFlagReturned(
-                        room.Id.ToString(),
-                        released.ToString(),
-                        playerId,
-                        EFlagReturnReason.AutoReturn.ToString());
+                        return ETeam.NoTeam;
+                    });
+
+                    if (released != ETeam.NoTeam)
+                    {
+                        GameMessageDispatcher.SendFlagReturned(
+                            room.Id.ToString(),
+                            released.ToString(),
+                            playerId,
+                            EFlagReturnReason.AutoReturn.ToString());
+                    }
                 }
             }
 
