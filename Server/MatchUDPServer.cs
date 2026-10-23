@@ -791,7 +791,6 @@ namespace OpenGSServer
             _pendingPeers.TryRemove(peer.Id, out _);
             _unauthorizedPacketCounts.TryRemove(peer.Id, out _);
             OnPeerConnected(peer);
-            NotifyPeerJoined(peer, playerId);
         }
 
         /// <summary>
