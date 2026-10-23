@@ -710,6 +710,16 @@ namespace OpenGSServer
                 return;
             }
 
+            // Capture the item before consuming it. Spawn maintenance can retire
+            // a picked-up dropped weapon immediately after PickupItem releases
+            // its lock, so looking the item up only after consumption can turn a
+            // successful pickup into a lost reward with no ruling broadcast.
+            if (!itemManager.TryGetItem(itemId, out var item) || item == null)
+            {
+                RefuseFieldItemPickup(room, playerId, itemId, "ItemUnavailable");
+                return;
+            }
+
             var granted = itemManager.PickupItem(itemId, playerId, state.PositionX, state.PositionY, state.PositionZ);
             if (!granted)
             {
@@ -724,12 +734,7 @@ namespace OpenGSServer
                 return;
             }
 
-            if (!itemManager.TryGetItem(itemId, out var item))
-            {
-                return;
-            }
-
-            var type = item!.ItemType;
+            var type = item.ItemType;
             var specialWeapon = type switch
             {
                 EFieldItemType.GranadeLauncher => "RocketLauncher",
