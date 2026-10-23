@@ -107,6 +107,40 @@ namespace OpenGSServer.Network
 
         public int ActiveCount => _projectiles.Count;
 
+        public IReadOnlyList<ServerProjectileState> SnapshotActiveGrenades(string roomId)
+        {
+            if (string.IsNullOrWhiteSpace(roomId)) return Array.Empty<ServerProjectileState>();
+
+            lock (_lock)
+            {
+                return _projectiles.Values
+                    .Where(projectile => projectile.IsActive &&
+                        projectile.Kind == ServerProjectileKind.Grenade &&
+                        string.Equals(projectile.RoomId, roomId, StringComparison.OrdinalIgnoreCase))
+                    .Select(projectile => new ServerProjectileState
+                    {
+                        ProjectileId = projectile.ProjectileId,
+                        OwnerId = projectile.OwnerId,
+                        RoomId = projectile.RoomId,
+                        Kind = projectile.Kind,
+                        Position = projectile.Position,
+                        Velocity = projectile.Velocity,
+                        Radius = projectile.Radius,
+                        RemainingLifetime = projectile.RemainingLifetime,
+                        IsActive = projectile.IsActive,
+                        WeaponType = projectile.WeaponType,
+                        GrenadeType = projectile.GrenadeType,
+                        Damage = projectile.Damage,
+                        ExplosionDamage = projectile.ExplosionDamage,
+                        ExplosionRadius = projectile.ExplosionRadius,
+                        FuseTime = projectile.FuseTime,
+                        ElapsedFuse = projectile.ElapsedFuse,
+                        Gravity = projectile.Gravity
+                    })
+                    .ToArray();
+            }
+        }
+
         public static int CalculateGrenadeDamage(string? grenadeType)
         {
             return grenadeType?.ToLowerInvariant() switch

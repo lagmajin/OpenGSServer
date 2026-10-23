@@ -2196,6 +2196,34 @@ namespace OpenGSServer
             Projectiles.Update(deltaSeconds);
         }
 
+        public static void SendProjectileSnapshot(string roomId, string playerId)
+        {
+            foreach (var projectile in Projectiles.SnapshotActiveGrenades(roomId))
+            {
+                var speed = projectile.Velocity.Length();
+                if (!float.IsFinite(speed) || speed <= 0.001f) continue;
+                var direction = projectile.Velocity / speed;
+                GameMessageDispatcher.SendToPlayer(playerId, new JObject
+                {
+                    ["MessageType"] = GameMessageTypes.GrenadeThrow,
+                    ["ObjectId"] = projectile.ProjectileId,
+                    ["ProjectileId"] = projectile.ProjectileId,
+                    ["PlayerID"] = projectile.OwnerId,
+                    ["PlayerId"] = projectile.OwnerId,
+                    ["RoomID"] = projectile.RoomId,
+                    ["PosX"] = projectile.Position.X,
+                    ["PosY"] = projectile.Position.Y,
+                    ["DirX"] = direction.X,
+                    ["DirY"] = direction.Y,
+                    ["Power"] = Math.Clamp(speed / OpenGSServer.Network.ServerProjectileSimulator.GrenadeSpeed,
+                        0.1f, 1.0f),
+                    ["GrenadeType"] = projectile.GrenadeType,
+                    ["ObjectType"] = projectile.GrenadeType,
+                    ["Direction"] = new JObject { ["X"] = direction.X, ["Y"] = direction.Y }
+                });
+            }
+        }
+
         /// <summary>
         /// Settles a simulated bullet that reached an enemy.
         /// </summary>
@@ -2305,7 +2333,9 @@ namespace OpenGSServer
             {
                 ["MessageType"] = GameMessageTypes.ObjectDestroyed,
                 ["ObjectId"] = projectile.ProjectileId,
-                ["RoomID"] = room.Id.ToString()
+                ["RoomID"] = room.Id.ToString(),
+                ["PosX"] = projectile.Position.X,
+                ["PosY"] = projectile.Position.Y
             });
         }
 
