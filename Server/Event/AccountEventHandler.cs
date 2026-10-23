@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using Newtonsoft.Json.Linq;
 
@@ -21,6 +22,10 @@ namespace OpenGSServer
         /// </para>
         /// </summary>
         private static readonly LobbyResumeTokens ResumeTokens = new();
+        private static readonly ConcurrentDictionary<string, string> SessionOwners =
+            new(StringComparer.OrdinalIgnoreCase);
+        private static readonly ConcurrentDictionary<string, object> SessionGates =
+            new(StringComparer.OrdinalIgnoreCase);
 
         public static void CreateNewAccount(in IClientSession session, IDictionary<string, JToken> dic)
         {
@@ -101,6 +106,17 @@ namespace OpenGSServer
             string accountId,
             bool replaceStaleSession)
         {
+            lock (SessionGates.GetOrAdd(accountId, static _ => new object()))
+            {
+                return CompleteLoginCore(session, accountId, replaceStaleSession);
+            }
+        }
+
+        private static string? CompleteLoginCore(
+            in IClientSession session,
+            string accountId,
+            bool replaceStaleSession)
+        {
             // The account has to be a known one before a token is minted for it.
             // A resumed token names an account that existed when it was issued, but
             // the account may have been deleted since.
@@ -158,7 +174,34 @@ namespace OpenGSServer
             };
 
             session.SendAsyncJsonWithTimeStamp(keyJson);
+            if (session is ClientSession clientSession)
+            {
+                SessionOwners[accountId] = clientSession.ID();
+            }
             return accountId;
+        }
+
+        internal static bool ReleaseOwnedSession(
+            ClientSession session, string? playerId, bool revokeResumeToken = false)
+        {
+            if (string.IsNullOrWhiteSpace(playerId))
+            {
+                return false;
+            }
+
+            lock (SessionGates.GetOrAdd(playerId, static _ => new object()))
+            {
+                if (!SessionOwners.TryGetValue(playerId, out var ownerId) ||
+                    !string.Equals(ownerId, session.ID(), StringComparison.Ordinal) ||
+                    !((ICollection<KeyValuePair<string, string>>)SessionOwners).Remove(
+                        new KeyValuePair<string, string>(playerId, ownerId)))
+                {
+                    return false;
+                }
+
+                PlayerSessionCleanup.Release(playerId, revokeResumeToken);
+                return true;
+            }
         }
 
         private static string? SendLoginFailure(in IClientSession session, in LoginResult result)

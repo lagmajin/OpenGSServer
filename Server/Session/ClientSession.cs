@@ -252,7 +252,7 @@ namespace OpenGSServer
             ConsoleWrite.WriteMessage($"TCP session with Id {Id} disconnected!", ConsoleColor.Red);
 
 
-            PlayerSessionCleanup.Release(PlayerID);
+            AccountEventHandler.ReleaseOwnedSession(this, PlayerID);
 
             receiveBuffer.Clear();
         }
