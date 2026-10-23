@@ -24,7 +24,7 @@ namespace OpenGSServer
         private static readonly string[] MatchEventTypes =
         {
             "LoadingStarted", "LoadingProgress", "LoadingCompleted", "LoadingFinished",
-            "MatchStatusRequest", "PlayerRespawn", "PlayerPose", "GrenadeThrow", "PlayerShot",
+            "MatchStatusRequest", "PlayerRespawn", "PlayerPose", "GrenadeLoadout", "GrenadeThrow", "PlayerShot",
             "ShootRequest", "PlayerReload", "FlagCaptured", "FlagLost", "FlagPickup", "FlagReturn",
             "FlagScoreUpdate", "PlayerEliminated", "ObjectSpawned", "ObjectDestroyed"
         };
@@ -624,6 +624,7 @@ namespace OpenGSServer
                 MessageType.MissionCompleteNotification;
 
             var isRealtimeEvent = messageType is
+                "GrenadeLoadout" or
                 "GrenadeThrow" or
                 "PlayerShot" or
                 // A reload is a claim about the player's own magazine. It was

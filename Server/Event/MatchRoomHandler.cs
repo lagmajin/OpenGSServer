@@ -396,6 +396,9 @@ namespace OpenGSServer
                 case GameMessageTypes.GrenadeThrow:
                     HandleGrenadeThrow(room, playerId, json);
                     break;
+                case "GrenadeLoadout":
+                    HandleGrenadeLoadout(room, playerId, json);
+                    break;
                 case GameMessageTypes.FieldItemPickup:
                 // The client sends ItemPickup on the realtime channel and
                 // FieldItemPickup on the reliable one. Accept both so either route
@@ -723,6 +726,37 @@ namespace OpenGSServer
                 return;
             }
 
+            if (TryGetGrenadePackType(itemType, out var grenadeType))
+            {
+                if (!ServerGrenadeLoadoutStore.TryAdd(
+                    room.Id.ToString(), playerId, grenadeType, out var grenadeSlots))
+                {
+                    RefuseItemUse(room, playerId, itemType, "GrenadeSlotsFull");
+                    if (ServerGrenadeLoadoutStore.TryRead(
+                        room.Id.ToString(), playerId, out var currentGrenadeSlots))
+                        SendGrenadeLoadoutUpdate(room.Id.ToString(), playerId, currentGrenadeSlots);
+                    return;
+                }
+
+                player.EquipInstantItems.Remove(itemType);
+                GameMessageDispatcher.BroadcastToRoom(room.Id.ToString(), new JObject
+                {
+                    ["MessageType"] = GameMessageTypes.ItemUsed,
+                    ["RoomID"] = room.Id.ToString(),
+                    ["PlayerID"] = playerId,
+                    ["PlayerId"] = playerId,
+                    ["ItemType"] = itemType.ToString(),
+                    ["Effect"] = "GrenadeLoadout",
+                    ["RestoredHealth"] = 0,
+                    ["RoundsAdded"] = 0,
+                    ["Health"] = player.Health,
+                    ["MaxHealth"] = player.MaxHealth,
+                    ["Timestamp"] = DateTime.UtcNow.ToString("o")
+                });
+                BroadcastGrenadeLoadoutUpdate(room.Id.ToString(), playerId, grenadeSlots);
+                return;
+            }
+
             var effect = InstantItemRules.EffectOf(itemType);
             if (effect == null)
             {
@@ -932,6 +966,99 @@ namespace OpenGSServer
             }
 
             return false;
+        }
+
+        private static string? NormalizeGrenadeLoadoutType(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return string.Empty;
+            var normalized = value.Trim().ToLowerInvariant()
+                .Replace("_", string.Empty, StringComparison.Ordinal)
+                .Replace("-", string.Empty, StringComparison.Ordinal)
+                .Replace(" ", string.Empty, StringComparison.Ordinal);
+            if (normalized == "empty") return string.Empty;
+            if (normalized.EndsWith("grenadepack", StringComparison.Ordinal))
+                normalized = normalized[..^"grenadepack".Length];
+            else if (normalized.EndsWith("grenade", StringComparison.Ordinal))
+                normalized = normalized[..^"grenade".Length];
+            return normalized switch
+            {
+                "normal" => "Normal",
+                "power" => "Power",
+                "cluster" => "Cluster",
+                "magnetic" or "magnet" => "Magnet",
+                "mine" or "landmine" => "Mine",
+                "fire" => "Fire",
+                "smoke" => "Smoke",
+                _ => null
+            };
+        }
+
+        private static bool TryGetGrenadePackType(EInstantItemType itemType, out string grenadeType)
+        {
+            grenadeType = itemType switch
+            {
+                EInstantItemType.PowerGrenadePack => "Power",
+                EInstantItemType.ClusterGrenadePack => "Cluster",
+                EInstantItemType.MagnetGrenadePack => "Magnet",
+                EInstantItemType.MineGrenadePack => "Mine",
+                _ => string.Empty
+            };
+            return grenadeType.Length > 0;
+        }
+
+        private static void HandleGrenadeLoadout(MatchRoom room, string playerId, JObject json)
+        {
+            if (json["GrenadeSlots"] is not JArray requested || requested.Count != 3)
+            {
+                Console.WriteLine($"[Match] Ignored invalid grenade loadout from '{playerId}'");
+                return;
+            }
+
+            var slots = new string[3];
+            for (var index = 0; index < slots.Length; index++)
+            {
+                if (requested[index]?.Type != JTokenType.String)
+                    return;
+                var normalized = NormalizeGrenadeLoadoutType(requested[index]!.Value<string>());
+                if (normalized == null)
+                    return;
+                slots[index] = normalized;
+            }
+
+            var authoritative = ServerGrenadeLoadoutStore.InitializeOrRead(
+                room.Id.ToString(), playerId, slots);
+            SendGrenadeLoadoutUpdate(room.Id.ToString(), playerId, authoritative);
+        }
+
+        private static void SendGrenadeLoadoutUpdate(
+            string roomId, string playerId, IReadOnlyList<string> slots)
+        {
+            var message = new JObject
+            {
+                ["MessageType"] = "GrenadeLoadoutUpdate",
+                ["RoomID"] = roomId,
+                ["PlayerID"] = playerId,
+                ["GrenadeSlots"] = new JArray(slots.Select(slot =>
+                    string.IsNullOrEmpty(slot) ? "Empty" : slot)),
+                ["Timestamp"] = DateTime.UtcNow.ToString("o")
+            };
+            GameMessageDispatcher.SendToPlayer(playerId, message);
+        }
+
+        private static void BroadcastGrenadeLoadoutUpdate(
+            string roomId, string playerId, IReadOnlyList<string> slots)
+        {
+            var message = new JObject
+            {
+                ["MessageType"] = "GrenadeLoadoutUpdate",
+                ["RoomID"] = roomId,
+                ["PlayerID"] = playerId,
+                ["GrenadeSlots"] = new JArray(slots.Select(slot =>
+                    string.IsNullOrEmpty(slot) ? "Empty" : slot)),
+                ["Timestamp"] = DateTime.UtcNow.ToString("o")
+            };
+            GameMessageDispatcher.BroadcastToRoom(roomId, message);
         }
 
         /// <summary>
@@ -1805,6 +1932,7 @@ namespace OpenGSServer
             if (!preserveMagazines)
             {
                 ServerWeaponMagazineStore.ResetPlayer(playerId);
+                ServerGrenadeLoadoutStore.ClearPlayer(playerId);
                 var playerSuffix = "\n" + playerId;
                 foreach (var key in EquippedSpecialWeapons.Keys
                     .Where(key => key.EndsWith(playerSuffix, StringComparison.OrdinalIgnoreCase))
@@ -1921,6 +2049,9 @@ namespace OpenGSServer
                 pistolMagazine.Capacity,
                 pistolMagazine.ReadReserve());
             SendAmmoStateToPlayer(room.Id.ToString(), requestingPlayerId);
+            if (ServerGrenadeLoadoutStore.TryRead(
+                room.Id.ToString(), requestingPlayerId, out var grenadeSlots))
+                SendGrenadeLoadoutUpdate(room.Id.ToString(), requestingPlayerId, grenadeSlots);
 
             var fieldItemManager = MatchRoomManager.Instance.GetFieldItemManager(room.Id);
             if (fieldItemManager != null)
@@ -2449,6 +2580,7 @@ namespace OpenGSServer
         public static void ClearRoomProjectiles(string roomId)
         {
             Projectiles.ClearRoom(roomId);
+            ServerGrenadeLoadoutStore.ClearRoom(roomId);
         }
 
         private static void HandleBulletHitEnemy(string ownerId, Vector2 hit, int damage)
@@ -2762,6 +2894,26 @@ namespace OpenGSServer
                 return;
             }
 
+            var hasGrenadeLoadout = ServerGrenadeLoadoutStore.TryRead(
+                room.Id.ToString(), playerId, out _);
+            var remainingGrenadeSlots = Array.Empty<string>();
+            if (hasGrenadeLoadout)
+            {
+                var loadoutType = NormalizeGrenadeLoadoutType(grenadeType);
+                if (string.IsNullOrEmpty(loadoutType) ||
+                    !ServerGrenadeLoadoutStore.TryConsume(
+                        room.Id.ToString(), playerId, loadoutType,
+                        out var tracked, out remainingGrenadeSlots) || !tracked)
+                {
+                    Console.WriteLine($"[Match] Refused grenade throw without a matching server slot from '{playerId}'");
+                    if (ServerGrenadeLoadoutStore.TryRead(
+                        room.Id.ToString(), playerId, out var currentGrenadeSlots))
+                        SendGrenadeLoadoutUpdate(room.Id.ToString(), playerId, currentGrenadeSlots);
+                    return;
+                }
+                grenadeType = loadoutType;
+            }
+
             // The server now owns the flight, the fuse, and the blast. The throw
             // used to be logged and echoed to the room, so the grenade existed
             // only as a message and nothing was ever simulated.
@@ -2770,6 +2922,8 @@ namespace OpenGSServer
 
             Console.WriteLine($"Player {playerId} threw {grenadeType} ({projectileId})");
             BroadcastGrenadeEvent(room, playerId, grenadeData, projectileId);
+            if (hasGrenadeLoadout)
+                BroadcastGrenadeLoadoutUpdate(room.Id.ToString(), playerId, remainingGrenadeSlots);
         }
         private static void HandleObjectSpawned(MatchRoom room, string playerId, JObject objectData)
         {
