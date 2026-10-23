@@ -2093,6 +2093,7 @@ namespace OpenGSServer
                 {
                     ["MessageType"] = MessageType.FieldItemStateSync,
                     ["RoomID"] = room.Id.ToString(),
+                    ["Timestamp"] = DateTime.UtcNow.ToString("o"),
                     ["Items"] = fieldItemManager.ToJson()
                 });
             }
