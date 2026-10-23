@@ -99,6 +99,7 @@ namespace OpenGSServer
     public class GameMessageDispatcher
     {
         private static IGameMessageSender? messageSender;
+        private static long lastPlayerPoseTimestampTicks;
 
         public static void Initialize(IGameMessageSender sender)
         {
@@ -397,10 +398,24 @@ namespace OpenGSServer
                 ["PlayerID"] = playerId,
                 ["PlayerId"] = playerId,
                 ["PoseState"] = poseState,
-                ["Timestamp"] = DateTime.UtcNow.ToString("o")
+                ["Timestamp"] = NextPlayerPoseTimestamp()
             };
 
             BroadcastToRoom(roomId, message);
+        }
+
+        private static string NextPlayerPoseTimestamp()
+        {
+            var ticks = DateTime.UtcNow.Ticks;
+            while (true)
+            {
+                var previous = System.Threading.Interlocked.Read(
+                    ref lastPlayerPoseTimestampTicks);
+                var next = Math.Max(ticks, previous + 1);
+                if (System.Threading.Interlocked.CompareExchange(
+                    ref lastPlayerPoseTimestampTicks, next, previous) == previous)
+                    return new DateTime(next, DateTimeKind.Utc).ToString("o");
+            }
         }
 
         public static void SendPlayerReloaded(
