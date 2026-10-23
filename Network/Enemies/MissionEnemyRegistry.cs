@@ -520,6 +520,11 @@ namespace OpenGSServer
 
         private static void BroadcastEnemyState(ServerEnemyState enemy)
         {
+            var simulator = TryGet(enemy.RoomId);
+            if (simulator == null || !simulator.TryPeek(enemy.EnemyId, out var latest) ||
+                !latest.IsAlive || latest.Timestamp.CompareTo(enemy.Timestamp) > 0)
+                return;
+
             var key = enemy.RoomId + "\n" + enemy.EnemyId;
             PendingEnemyStates.AddOrUpdate(key, enemy,
                 (_, current) => current.Timestamp.CompareTo(enemy.Timestamp) >= 0
@@ -529,18 +534,21 @@ namespace OpenGSServer
 
         private static void BroadcastEnemySpawn(ServerEnemyState enemy)
         {
+            RemovePendingEnemyStateAtOrBefore(enemy);
             GameMessageDispatcher.BroadcastToRoom(enemy.RoomId, BuildEnemyMessage(
                 "EnemySpawn", enemy));
         }
 
         private static void BroadcastEnemyDespawn(ServerEnemyState enemy)
         {
+            RemovePendingEnemyStateAtOrBefore(enemy);
             GameMessageDispatcher.BroadcastToRoom(enemy.RoomId, BuildEnemyMessage(
                 "EnemyDespawn", enemy));
         }
 
         private static void BroadcastEnemyDamaged(ServerEnemyState enemy, string attackerId, int damage)
         {
+            RemovePendingEnemyStateAtOrBefore(enemy);
             GameMessageDispatcher.BroadcastToRoom(enemy.RoomId, new JObject
             {
                 ["MessageType"] = "EnemyDamaged",
@@ -560,6 +568,18 @@ namespace OpenGSServer
                     ? DateTime.UtcNow.ToString("o")
                     : enemy.Timestamp
             });
+        }
+
+        private static void RemovePendingEnemyStateAtOrBefore(ServerEnemyState state)
+        {
+            var key = state.RoomId + "\n" + state.EnemyId;
+            if (!PendingEnemyStates.TryGetValue(key, out var pending) ||
+                pending.Timestamp.CompareTo(state.Timestamp) > 0)
+                return;
+
+            var pendingEntry = new KeyValuePair<string, ServerEnemyState>(key, pending);
+            _ = ((ICollection<KeyValuePair<string, ServerEnemyState>>)PendingEnemyStates)
+                .Remove(pendingEntry);
         }
 
         private static JObject BuildEnemyMessage(string messageType, ServerEnemyState enemy)
