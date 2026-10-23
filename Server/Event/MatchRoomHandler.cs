@@ -2560,9 +2560,6 @@ namespace OpenGSServer
         {
             foreach (var roomPlayer in room.Players)
             {
-                if (string.Equals(roomPlayer.Id, requestingPlayerId, StringComparison.OrdinalIgnoreCase))
-                    continue;
-
                 foreach (var magazine in ServerWeaponMagazineStore.ForPlayer(roomPlayer.Id))
                 {
                     if (!ServerWeaponMagazineStore.TryReadReloadSnapshot(roomPlayer.Id,
