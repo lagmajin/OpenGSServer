@@ -2253,6 +2253,17 @@ namespace OpenGSServer
                 return;
             }
 
+            var shooterState = MatchServerV2.Instance.ServerLagCompensationManager.GetPlayerState(playerId);
+            var direction = ReadVector2(shotData, "Dir", "Direction", "AimDirection");
+            var directionLength = direction.Length();
+            if (!string.Equals(shooterState.PlayerId, playerId, StringComparison.OrdinalIgnoreCase) ||
+                !shooterState.HasAuthoritativePosition || !IsFinite(directionLength) || directionLength < 0.001f)
+            {
+                Console.WriteLine($"[Match] Ignored {weaponType} shot with invalid origin or direction from '{playerId}'");
+                return;
+            }
+            direction /= directionLength;
+
             if (!AcceptShot(room, playerId, weaponType, out var remainingAmmo))
             {
                 return;
@@ -2269,17 +2280,6 @@ namespace OpenGSServer
             Console.WriteLine($"Player {playerId} shot with {weaponType}");
             if (weaponType is "RocketLauncher" or "GrenadeLauncher")
             {
-                var shooterState = MatchServerV2.Instance.ServerLagCompensationManager.GetPlayerState(playerId);
-                var direction = ReadVector2(shotData, "Dir", "Direction", "AimDirection");
-                var directionLength = direction.Length();
-                if (!string.Equals(shooterState.PlayerId, playerId, StringComparison.OrdinalIgnoreCase) ||
-                    !shooterState.HasAuthoritativePosition || !IsFinite(directionLength) || directionLength < 0.001f)
-                {
-                    Console.WriteLine($"[Match] Ignored {weaponType} shot with invalid origin or direction from '{playerId}'");
-                    return;
-                }
-
-                direction /= directionLength;
                 var origin = new Vector2(shooterState.PositionX, shooterState.PositionY);
                 var grenadeData = new JObject
                 {
