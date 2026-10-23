@@ -362,22 +362,23 @@ namespace OpenGSServer
             {
                 if (room.TryGetPlayer(attackerId, out var killer) && killer != null)
                 {
-                    room.RecordKill(killer.Id);
-                    killer.Score += 100;
-
-                    GameMessageDispatcher.BroadcastToRoom(enemy.RoomId, new JObject
+                    var killCount = room.RecordKill(killer.Id, 100);
+                    if (killCount > 0)
                     {
-                        ["MessageType"] = "PlayerScoreState",
-                        ["RoomID"] = enemy.RoomId,
-                        ["PlayerID"] = killer.Id,
-                        ["PlayerId"] = killer.Id,
-                        ["PlayerKills"] = killer.Kills,
-                        ["IsTeamMode"] = room.Setting.Mode is EGameMode.TeamDeathMatch or
-                            EGameMode.CaptureTheFlag or EGameMode.TeamSurvival,
-                        ["RedTeamKills"] = room.TeamKillCount(ETeam.Red),
-                        ["BlueTeamKills"] = room.TeamKillCount(ETeam.Blue),
-                        ["Timestamp"] = DateTime.UtcNow.ToString("o")
-                    });
+                        GameMessageDispatcher.BroadcastToRoom(enemy.RoomId, new JObject
+                        {
+                            ["MessageType"] = "PlayerScoreState",
+                            ["RoomID"] = enemy.RoomId,
+                            ["PlayerID"] = killer.Id,
+                            ["PlayerId"] = killer.Id,
+                            ["PlayerKills"] = killCount,
+                            ["IsTeamMode"] = room.Setting.Mode is EGameMode.TeamDeathMatch or
+                                EGameMode.CaptureTheFlag or EGameMode.TeamSurvival,
+                            ["RedTeamKills"] = room.TeamKillCount(ETeam.Red),
+                            ["BlueTeamKills"] = room.TeamKillCount(ETeam.Blue),
+                            ["Timestamp"] = DateTime.UtcNow.ToString("o")
+                        });
+                    }
                 }
             }
 

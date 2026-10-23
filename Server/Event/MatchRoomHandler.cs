@@ -3328,21 +3328,12 @@ namespace OpenGSServer
             // the best kill count in the match, which is the number the death
             // match and survival rules end a match on: it was never written, so
             // those rules could only ever end on the clock.
-            ClearPlayerCombatEffects(room.Id.ToString(), targetId);
-            room.RecordDeath(targetId);
             var isSelfInflicted = string.Equals(attackerId, targetId, StringComparison.OrdinalIgnoreCase);
-            if (!isSelfInflicted)
-            {
-                room.RecordKill(attackerId);
-
-                // The shot path awards score on a kill and this one did not, so a
-                // grenade kill was worth nothing in the standings while a bullet
-                // was worth a hundred. One kill is one kill.
-                if (room.TryGetPlayer(attackerId, out var attacker) && attacker != null)
-                {
-                    attacker.Score += KillScore;
-                }
-            }
+            // Settle the death and killer award together so a match-ending
+            // update cannot capture only half of the elimination.
+            room.RecordPlayerElimination(
+                targetId, isSelfInflicted ? null : attackerId, KillScore);
+            ClearPlayerCombatEffects(room.Id.ToString(), targetId);
 
             // A player who goes down leaves whatever they were carrying on the
             // ground. The server has to do this itself: a client used to report
@@ -3618,10 +3609,8 @@ namespace OpenGSServer
             {
                 // Same reason as the projectile path: the room is where the best
                 // kill count lives, and the rules end a match on it.
+                room.RecordPlayerElimination(targetId, shooterId, KillScore);
                 ClearPlayerCombatEffects(room.Id.ToString(), targetId);
-                room.RecordDeath(targetId);
-                room.RecordKill(shooterId);
-                shooter.Score += KillScore;
 
                 // The same reason as the projectile path: a carrier who goes down
                 // leaves the flag on the ground, and the server is the one that
