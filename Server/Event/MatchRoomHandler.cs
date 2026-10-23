@@ -2485,8 +2485,29 @@ namespace OpenGSServer
                       $"{missionSituation.ObjectiveProgress}/{missionSituation.ObjectiveCount} (was {before})");
         }
 
+        private static bool TryGetActiveCombatant(
+            MatchRoom? room, string playerId, out PlayerInfo? player)
+        {
+            player = null;
+            if (room == null || !room.Playing || room.Finished ||
+                !room.TryGetPlayer(playerId, out var found) || found == null ||
+                ServerDamageResolver.IsDown(found))
+            {
+                return false;
+            }
+
+            player = found;
+            return true;
+        }
+
         private static void HandlePlayerShot(MatchRoom room, string playerId, JObject shotData)
         {
+            if (!TryGetActiveCombatant(room, playerId, out _))
+            {
+                Console.WriteLine($"[Match] Ignored shot from inactive or downed player '{playerId}'");
+                return;
+            }
+
             // 射撃処理 - ヒット判定、ダメージ計算など
             var targetId = shotData.GetStringOrNull("TargetID");
             var weaponType = ResolveWeaponType(
@@ -3235,6 +3256,12 @@ namespace OpenGSServer
         }
         private static void HandleGrenadeThrow(MatchRoom room, string playerId, JObject grenadeData)
         {
+            if (!TryGetActiveCombatant(room, playerId, out _))
+            {
+                Console.WriteLine($"[Match] Ignored grenade throw from inactive or downed player '{playerId}'");
+                return;
+            }
+
             var grenadeType = grenadeData.GetStringOrNull("GrenadeType")
                 ?? grenadeData.GetStringOrNull("WeaponType")
                 ?? "Normal";
@@ -3613,24 +3640,18 @@ namespace OpenGSServer
         /// </summary>
         private static void HandlePlayerReload(MatchRoom room, string playerId, JObject json)
         {
+            if (!TryGetActiveCombatant(room, playerId, out _))
+            {
+                Console.WriteLine($"[Match] Ignored reload from inactive or downed player '{playerId}'");
+                return;
+            }
+
             var weaponType = ResolveWeaponType(
                 ReadString(json, "WeaponType", "WeaponId", "Weapon"),
                 ReadString(json, "WeaponVariant"));
             if (weaponType == null || !ServerWeaponMagazineStore.IsKnownWeapon(weaponType))
             {
                 Console.WriteLine($"[Match] Ignored reload with unknown weapon from '{playerId}'");
-                return;
-            }
-
-            if (!room.TryGetPlayer(playerId, out var player) || player == null)
-            {
-                Console.WriteLine($"[Match] Ignored reload from unknown player '{playerId}'");
-                return;
-            }
-
-            if (player.Health <= 0)
-            {
-                Console.WriteLine($"[Match] Ignored reload from a player that is down: '{playerId}'");
                 return;
             }
 
