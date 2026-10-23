@@ -316,6 +316,20 @@ namespace OpenGSServer
                 {
                     killer.Kills++;
                     killer.Score += 100;
+
+                    GameMessageDispatcher.BroadcastToRoom(enemy.RoomId, new JObject
+                    {
+                        ["MessageType"] = "PlayerScoreState",
+                        ["RoomID"] = enemy.RoomId,
+                        ["PlayerID"] = killer.Id,
+                        ["PlayerId"] = killer.Id,
+                        ["PlayerKills"] = killer.Kills,
+                        ["IsTeamMode"] = room.Setting.Mode is EGameMode.TeamDeathMatch or
+                            EGameMode.CaptureTheFlag or EGameMode.TeamSurvival,
+                        ["RedTeamKills"] = room.TeamKillCount(ETeam.Red),
+                        ["BlueTeamKills"] = room.TeamKillCount(ETeam.Blue),
+                        ["Timestamp"] = DateTime.UtcNow.ToString("o")
+                    });
                 }
             }
 
