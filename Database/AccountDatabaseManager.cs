@@ -49,6 +49,15 @@ namespace OpenGSServer
                     string.Equals(account.Id, accountId, StringComparison.OrdinalIgnoreCase));
         }
 
+        private static List<DBFriend> FindFriendRecords(
+            ILiteCollection<DBFriend> collection, string playerId)
+        {
+            return collection.FindAll()
+                .Where(friend => string.Equals(
+                    friend.PlayerID, playerId, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
+
         public void Connect()
         {
             if (db != null)
@@ -208,23 +217,26 @@ namespace OpenGSServer
                 return;
             }
 
-            var database = EnsureDatabase();
-            var col = database.GetCollection<DBFriend>(friendTableName);
-
-            foreach (var existing in col.Find(Query.EQ(nameof(DBFriend.PlayerID), account)))
+            lock (_accountMutationLock)
             {
-                if (string.Equals(existing.FriendAccountId, friendid, StringComparison.OrdinalIgnoreCase))
+                var database = EnsureDatabase();
+                var accounts = database.GetCollection<DBAccount>(accountTableName);
+                var ownerId = FindAccountRecord(accounts, account)?.AccountId ?? account;
+                var targetId = FindAccountRecord(accounts, friendid)?.AccountId ?? friendid;
+                var col = database.GetCollection<DBFriend>(friendTableName);
+                if (FindFriendRecords(col, ownerId).Any(existing => string.Equals(
+                    existing.FriendAccountId, targetId, StringComparison.OrdinalIgnoreCase)))
                 {
                     return;
                 }
-            }
 
-            col.Insert(new DBFriend
-            {
-                PlayerID = account,
-                FriendAccountId = friendid,
-                CreatedTimeUtc = DateTime.UtcNow.ToString("O")
-            });
+                col.Insert(new DBFriend
+                {
+                    PlayerID = ownerId,
+                    FriendAccountId = targetId,
+                    CreatedTimeUtc = DateTime.UtcNow.ToString("O")
+                });
+            }
         }
 
         public void UpdateAccountData(in DBAccount player)
@@ -287,10 +299,14 @@ namespace OpenGSServer
             }
 
             var database = EnsureDatabase();
+            var accounts = database.GetCollection<DBAccount>(accountTableName);
+            var canonicalId = FindAccountRecord(accounts, accountID)?.AccountId ?? accountID;
             var scoreCol = database.GetCollection<DBAccountScore>(accountScoreTableName);
 
-            var record = scoreCol.FindOne(Query.EQ(nameof(DBAccountScore.accountID), accountID));
-            score.accountID = accountID;
+            var record = scoreCol.FindOne(Query.EQ(nameof(DBAccountScore.accountID), canonicalId))
+                ?? scoreCol.FindAll().FirstOrDefault(existing => string.Equals(
+                    existing.accountID, canonicalId, StringComparison.OrdinalIgnoreCase));
+            score.accountID = canonicalId;
 
             if (record == null)
             {
@@ -541,12 +557,26 @@ namespace OpenGSServer
                 return false;
             }
 
-            var database = EnsureDatabase();
-            var col = database.GetCollection<DBFriend>(friendTableName);
-            var removed = false;
-            removed |= col.DeleteMany(Query.And(Query.EQ(nameof(DBFriend.PlayerID), accountId), Query.EQ(nameof(DBFriend.FriendAccountId), friendId))) > 0;
-            removed |= col.DeleteMany(Query.And(Query.EQ(nameof(DBFriend.PlayerID), friendId), Query.EQ(nameof(DBFriend.FriendAccountId), accountId))) > 0;
-            return removed;
+            lock (_accountMutationLock)
+            {
+                var col = EnsureDatabase().GetCollection<DBFriend>(friendTableName);
+                var removed = false;
+                foreach (var friendship in FindFriendRecords(col, accountId)
+                    .Where(friend => string.Equals(
+                        friend.FriendAccountId, friendId, StringComparison.OrdinalIgnoreCase)))
+                {
+                    removed |= col.Delete(friendship.Id);
+                }
+
+                foreach (var friendship in FindFriendRecords(col, friendId)
+                    .Where(friend => string.Equals(
+                        friend.FriendAccountId, accountId, StringComparison.OrdinalIgnoreCase)))
+                {
+                    removed |= col.Delete(friendship.Id);
+                }
+
+                return removed;
+            }
         }
 
         public bool AddFriend(string accountId, string friendId)
@@ -556,34 +586,46 @@ namespace OpenGSServer
                 return false;
             }
 
-            var database = EnsureDatabase();
-            var col = database.GetCollection<DBFriend>(friendTableName);
-
-            var existing = col.Find(Query.EQ(nameof(DBFriend.PlayerID), accountId))
-                .Any(friend => string.Equals(friend.FriendAccountId, friendId, StringComparison.OrdinalIgnoreCase));
-            if (!existing)
+            lock (_accountMutationLock)
             {
-                col.Insert(new DBFriend
-                {
-                    PlayerID = accountId,
-                    FriendAccountId = friendId,
-                    CreatedTimeUtc = DateTime.UtcNow.ToString("O")
-                });
-            }
+                var database = EnsureDatabase();
+                var accounts = database.GetCollection<DBAccount>(accountTableName);
+                var owner = FindAccountRecord(accounts, accountId);
+                var friend = FindAccountRecord(accounts, friendId);
+                if (owner == null || friend == null) return false;
 
-            var reverseExisting = col.Find(Query.EQ(nameof(DBFriend.PlayerID), friendId))
-                .Any(friend => string.Equals(friend.FriendAccountId, accountId, StringComparison.OrdinalIgnoreCase));
-            if (!reverseExisting)
-            {
-                col.Insert(new DBFriend
-                {
-                    PlayerID = friendId,
-                    FriendAccountId = accountId,
-                    CreatedTimeUtc = DateTime.UtcNow.ToString("O")
-                });
-            }
+                accountId = owner.AccountId;
+                friendId = friend.AccountId;
+                var col = database.GetCollection<DBFriend>(friendTableName);
 
-            return true;
+                var existing = FindFriendRecords(col, accountId)
+                    .Any(record => string.Equals(
+                        record.FriendAccountId, friendId, StringComparison.OrdinalIgnoreCase));
+                if (!existing)
+                {
+                    col.Insert(new DBFriend
+                    {
+                        PlayerID = accountId,
+                        FriendAccountId = friendId,
+                        CreatedTimeUtc = DateTime.UtcNow.ToString("O")
+                    });
+                }
+
+                var reverseExisting = FindFriendRecords(col, friendId)
+                    .Any(record => string.Equals(
+                        record.FriendAccountId, accountId, StringComparison.OrdinalIgnoreCase));
+                if (!reverseExisting)
+                {
+                    col.Insert(new DBFriend
+                    {
+                        PlayerID = friendId,
+                        FriendAccountId = accountId,
+                        CreatedTimeUtc = DateTime.UtcNow.ToString("O")
+                    });
+                }
+
+                return true;
+            }
         }
 
         public List<string> GetFriendIds(string accountId)
@@ -594,9 +636,12 @@ namespace OpenGSServer
             }
 
             var database = EnsureDatabase();
+            var accounts = database.GetCollection<DBAccount>(accountTableName);
+            var ownerId = FindAccountRecord(accounts, accountId)?.AccountId ?? accountId;
             var col = database.GetCollection<DBFriend>(friendTableName);
-            return col.Find(Query.EQ(nameof(DBFriend.PlayerID), accountId))
-                .Select(friend => friend.FriendAccountId)
+            return FindFriendRecords(col, ownerId)
+                .Select(friendship => FindAccountRecord(accounts, friendship.FriendAccountId)?.AccountId
+                    ?? friendship.FriendAccountId)
                 .Where(friendId => !string.IsNullOrWhiteSpace(friendId))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
@@ -640,8 +685,13 @@ namespace OpenGSServer
             }
 
             var database = EnsureDatabase();
+            var accounts = database.GetCollection<DBAccount>(accountTableName);
+            var ownerId = FindAccountRecord(accounts, id)?.AccountId ?? id;
             var col = database.GetCollection<DBFriend>(friendTableName);
-            col.DeleteMany(Query.EQ(nameof(DBFriend.PlayerID), id));
+            foreach (var friendship in FindFriendRecords(col, ownerId))
+            {
+                col.Delete(friendship.Id);
+            }
         }
 
         public void ChangePassword(in string id, in string currentPass, in string newPass)
@@ -711,8 +761,12 @@ namespace OpenGSServer
 
             col.Delete(rec.Id);
             scoreCol.DeleteMany(Query.EQ(nameof(DBAccountScore.accountID), rec.AccountId));
-            friendCol.DeleteMany(Query.EQ(nameof(DBFriend.PlayerID), rec.AccountId));
-            friendCol.DeleteMany(Query.EQ(nameof(DBFriend.FriendAccountId), rec.AccountId));
+            foreach (var friendship in friendCol.FindAll().Where(friend =>
+                string.Equals(friend.PlayerID, rec.AccountId, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(friend.FriendAccountId, rec.AccountId, StringComparison.OrdinalIgnoreCase)).ToList())
+            {
+                friendCol.Delete(friendship.Id);
+            }
         }
 
         public void RemoveAll()
