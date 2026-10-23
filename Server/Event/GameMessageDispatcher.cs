@@ -321,7 +321,9 @@ namespace OpenGSServer
             int currentAmmo,
             int maxAmmo,
             int reserveAmmo,
-            JObject? ctfState = null)
+            JObject? ctfState = null,
+            float currentArmor = -1f,
+            float maxArmor = -1f)
         {
             var message = new JObject
             {
@@ -350,6 +352,12 @@ namespace OpenGSServer
                 message["ReserveAmmo"] = reserveAmmo;
             }
 
+            if (currentArmor >= 0f && maxArmor > 0f && currentArmor <= maxArmor)
+            {
+                message["CurrentArmor"] = currentArmor;
+                message["MaxArmor"] = maxArmor;
+            }
+
             var room = MatchRoomManager.Instance.GetRoomById(roomId);
             if (room != null)
                 message["RemainingSeconds"] = Math.Max(0f, room.RemainingTimeSeconds);
@@ -369,7 +377,8 @@ namespace OpenGSServer
         }
 
         public static void SendPlayerRespawn(
-            string roomId, string playerId, JObject spawnPosition, int currentHealth, int maxHealth)
+            string roomId, string playerId, JObject spawnPosition, int currentHealth, int maxHealth,
+            float currentArmor = -1f, float maxArmor = -1f)
         {
             var message = new JObject
             {
@@ -384,6 +393,12 @@ namespace OpenGSServer
                 ["MaxHealth"] = maxHealth,
                 ["Timestamp"] = DateTime.UtcNow.ToString("o")
             };
+
+            if (currentArmor >= 0f && maxArmor > 0f && currentArmor <= maxArmor)
+            {
+                message["CurrentArmor"] = currentArmor;
+                message["MaxArmor"] = maxArmor;
+            }
 
             BroadcastToRoom(roomId, message);
         }

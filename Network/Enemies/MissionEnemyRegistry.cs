@@ -453,7 +453,7 @@ namespace OpenGSServer
             var pose = room.GetPlayerPoseState(playerId);
             var outcome = ServerDamageResolver.Apply(player, damage, pose,
                 InGameMatchEventHandler.HasDefenseBuff(enemy.RoomId, playerId));
-            if (outcome.Applied <= 0)
+            if (!outcome.HasEffect)
             {
                 return;
             }
@@ -470,6 +470,8 @@ namespace OpenGSServer
                 ["Damage"] = outcome.Applied,
                 ["RemainingHealth"] = outcome.RemainingHealth,
                 ["MaxHealth"] = player.MaxHealth,
+                ["CurrentArmor"] = outcome.RemainingArmor,
+                ["MaxArmor"] = outcome.MaxArmor,
                 ["IsDown"] = outcome.IsNowDown,
                 ["HitPosition"] = new JObject
                 {

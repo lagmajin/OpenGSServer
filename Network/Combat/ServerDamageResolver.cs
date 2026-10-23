@@ -12,13 +12,17 @@ namespace OpenGSServer.Network
     /// </summary>
     public readonly struct DamageOutcome
     {
-        public DamageOutcome(int requested, int applied, int remainingHealth, bool wasAlreadyDown, bool isNowDown)
+        public DamageOutcome(int requested, int applied, int remainingHealth, bool wasAlreadyDown,
+            bool isNowDown, float armorAbsorbed = 0f, float remainingArmor = 100f, float maxArmor = 100f)
         {
             Requested = requested;
             Applied = applied;
             RemainingHealth = remainingHealth;
             WasAlreadyDown = wasAlreadyDown;
             IsNowDown = isNowDown;
+            ArmorAbsorbed = armorAbsorbed;
+            RemainingArmor = remainingArmor;
+            MaxArmor = maxArmor;
         }
 
         /// <summary>Damage the attacker asked for, after the caller's scaling.</summary>
@@ -34,6 +38,11 @@ namespace OpenGSServer.Network
 
         /// <summary>True when this hit is the one that took the player out.</summary>
         public bool IsNowDown { get; }
+
+        public float ArmorAbsorbed { get; }
+        public float RemainingArmor { get; }
+        public float MaxArmor { get; }
+        public bool HasEffect => Applied > 0 || ArmorAbsorbed > 0f;
     }
 
     /// <summary>
@@ -49,9 +58,33 @@ namespace OpenGSServer.Network
     public static class ServerDamageResolver
     {
         private static readonly ConditionalWeakTable<PlayerInfo, object> PlayerHealthLocks = new();
+        private sealed class PlayerArmorState
+        {
+            public float Current = 100f;
+            public const float Maximum = 100f;
+        }
+        private static readonly ConditionalWeakTable<PlayerInfo, PlayerArmorState> PlayerArmor = new();
 
         private static object HealthLock(PlayerInfo player) =>
             PlayerHealthLocks.GetValue(player, static _ => new object());
+
+        private static PlayerArmorState ArmorState(PlayerInfo player) =>
+            PlayerArmor.GetValue(player, static _ => new PlayerArmorState());
+
+        public static (float Current, float Maximum) GetArmor(PlayerInfo? player)
+        {
+            if (player == null) return (0f, PlayerArmorState.Maximum);
+            lock (HealthLock(player))
+            {
+                var armor = ArmorState(player);
+                return (armor.Current, PlayerArmorState.Maximum);
+            }
+        }
+
+        private static void RefillArmor(PlayerInfo player)
+        {
+            ArmorState(player).Current = PlayerArmorState.Maximum;
+        }
 
         /// <summary>
         /// Poses that reduce incoming damage, mirroring what the client shows.
@@ -84,24 +117,31 @@ namespace OpenGSServer.Network
 
             lock (HealthLock(player))
             {
+                var armor = ArmorState(player);
                 if (requested <= 0)
                 {
-                    return new DamageOutcome(0, 0, player.Health, player.Health <= 0, false);
+                    return new DamageOutcome(0, 0, player.Health, player.Health <= 0, false,
+                        remainingArmor: armor.Current);
                 }
 
                 var wasDown = player.Health <= 0;
                 if (wasDown)
                 {
-                    return new DamageOutcome(requested, 0, 0, true, false);
+                    return new DamageOutcome(requested, 0, 0, true, false,
+                        remainingArmor: armor.Current);
                 }
 
                 if (ignoreDamage)
                 {
-                    return new DamageOutcome(requested, 0, player.Health, false, false);
+                    return new DamageOutcome(requested, 0, player.Health, false, false,
+                        remainingArmor: armor.Current);
                 }
 
                 var scaled = (int)MathF.Round(requested * PoseMultiplier(pose));
-                var applied = Math.Max(1, scaled);
+                var absorbed = Math.Min(armor.Current, scaled * 0.1f);
+                armor.Current = Math.Max(0f, armor.Current - absorbed);
+                var healthDamage = scaled - absorbed;
+                var applied = healthDamage <= 0f ? 0 : Math.Max(1, (int)MathF.Round(healthDamage));
                 if (applied > player.Health)
                 {
                     applied = player.Health;
@@ -113,7 +153,8 @@ namespace OpenGSServer.Network
                     player.Health = 0;
                 }
 
-                return new DamageOutcome(requested, applied, player.Health, false, player.Health <= 0);
+                return new DamageOutcome(requested, applied, player.Health, false,
+                    player.Health <= 0, absorbed, armor.Current);
             }
         }
 
@@ -130,6 +171,7 @@ namespace OpenGSServer.Network
             lock (HealthLock(player))
             {
                 player.Health = player.MaxHealth > 0 ? player.MaxHealth : 100;
+                RefillArmor(player);
             }
         }
 
@@ -149,6 +191,7 @@ namespace OpenGSServer.Network
                 }
 
                 player.Health = player.MaxHealth > 0 ? player.MaxHealth : 100;
+                RefillArmor(player);
                 return true;
             }
         }

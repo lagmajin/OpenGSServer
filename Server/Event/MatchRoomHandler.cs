@@ -1720,7 +1720,9 @@ namespace OpenGSServer
             int damage,
             string attackerId = "",
             JObject? hitPosition = null,
-            int? remainingHealth = null)
+            int? remainingHealth = null,
+            float? remainingArmor = null,
+            float? maxArmor = null)
         {
             Console.WriteLine($"Player {damagedPlayerId} took {damage} damage");
 
@@ -1740,6 +1742,8 @@ namespace OpenGSServer
                 // The client adopts this instead of its own prediction, so it
                 // needs the ceiling as well as the current value.
                 ["MaxHealth"] = room.TryGetPlayer(damagedPlayerId, out var damaged) ? damaged!.MaxHealth : 0,
+                ["CurrentArmor"] = remainingArmor,
+                ["MaxArmor"] = maxArmor,
                 ["IsDown"] = remainingHealth.HasValue && remainingHealth.Value <= 0,
                 ["HitPosition"] = hitPosition,
                 ["Timestamp"] = DateTime.UtcNow.ToString("o")
@@ -2472,6 +2476,7 @@ namespace OpenGSServer
             var status = $"Match Active - Players: {room.Players.Count}";
             Console.WriteLine($"Sending status to {requestingPlayerId}: {status}");
             JObject? ctfState = null;
+            var armorSnapshot = ServerDamageResolver.GetArmor(player);
             if (room.Setting.Mode == EGameMode.CaptureTheFlag)
             {
                 var flagSnapshot = FlagStateFor(room).WithFlags(flags => new
@@ -2518,7 +2523,9 @@ namespace OpenGSServer
                 pistolMagazine?.ReadRemaining() ?? -1,
                 pistolMagazine?.Capacity ?? -1,
                 pistolMagazine?.ReadReserve() ?? -1,
-                ctfState);
+                ctfState,
+                armorSnapshot.Current,
+                armorSnapshot.Maximum);
             SendTimedBuffSnapshot(room.Id.ToString(), requestingPlayerId);
 
             var isTeamMode = room.Setting.Mode is EGameMode.TeamDeathMatch or
@@ -2583,6 +2590,7 @@ namespace OpenGSServer
             {
                 if (string.Equals(roomPlayer.Id, requestingPlayerId, StringComparison.OrdinalIgnoreCase))
                     continue;
+                var roomPlayerArmor = ServerDamageResolver.GetArmor(roomPlayer);
 
                 GameMessageDispatcher.SendToPlayer(requestingPlayerId, new JObject
                 {
@@ -2592,6 +2600,8 @@ namespace OpenGSServer
                     ["PlayerId"] = roomPlayer.Id,
                     ["CurrentHealth"] = roomPlayer.Health,
                     ["MaxHealth"] = roomPlayer.MaxHealth,
+                    ["CurrentArmor"] = roomPlayerArmor.Current,
+                    ["MaxArmor"] = roomPlayerArmor.Maximum,
                     ["Timestamp"] = healthSnapshotTimestamp
                 });
             }
@@ -2709,9 +2719,12 @@ namespace OpenGSServer
             // player is holding.
             ServerWeaponMagazineStore.RefillAllMagazines(playerId);
 
+            var armorSnapshot = ServerDamageResolver.GetArmor(respawnedPlayer);
             GameMessageDispatcher.SendPlayerRespawn(
                 room.Id.ToString(), playerId, spawnPosition,
-                respawnedPlayer.Health, Math.Max(1, respawnedPlayer.MaxHealth));
+                respawnedPlayer.Health, Math.Max(1, respawnedPlayer.MaxHealth),
+                armorSnapshot.Current,
+                armorSnapshot.Maximum);
         }
 
         private static void HandlePlayerPose(MatchRoom room, string playerId, JObject json)
@@ -3432,6 +3445,8 @@ namespace OpenGSServer
                 ["RequestedDamage"] = outcome.Requested,
                 ["RemainingHealth"] = outcome.RemainingHealth,
                 ["MaxHealth"] = target.MaxHealth,
+                ["CurrentArmor"] = outcome.RemainingArmor,
+                ["MaxArmor"] = outcome.MaxArmor,
                 ["IsDown"] = outcome.IsNowDown,
                 ["PoseMultiplier"] = ServerDamageResolver.PoseMultiplier(pose),
                 ["HitPosition"] = new JObject { ["X"] = hitPosition.X, ["Y"] = hitPosition.Y },
@@ -3734,7 +3749,7 @@ namespace OpenGSServer
             var outcome = ServerDamageResolver.Apply(
                 target, requestedDamage, pose, HasDefenseBuff(room.Id.ToString(), targetId));
             LobbyServerManager.Instance.RecordDamageDailyProgress(shooterId, outcome.Applied);
-            if (outcome.Applied <= 0)
+            if (!outcome.HasEffect)
             {
                 Console.WriteLine(
                     $"[Match] Ignored hit on an already downed player {targetId} from '{shooterId}'");
@@ -3749,7 +3764,8 @@ namespace OpenGSServer
                 ["Y"] = targetState.PositionY,
                 ["Z"] = targetState.PositionZ
             };
-            HandlePlayerDamaged(room, targetId, damage, shooterId, authoritativeHitPosition, target.Health);
+            HandlePlayerDamaged(room, targetId, damage, shooterId, authoritativeHitPosition,
+                target.Health, outcome.RemainingArmor, outcome.MaxArmor);
 
             if (outcome.IsNowDown)
             {
