@@ -2135,6 +2135,8 @@ namespace OpenGSServer
                 "Shotgun" => 25f,
                 "Rifle" => 90f,
                 "Sniper" => 180f,
+                "RocketLauncher" or "GrenadeLauncher" => 60f,
+                "FlameThrower" => 18f,
                 _ => 60f
             };
         }
@@ -3123,6 +3125,9 @@ namespace OpenGSServer
 
             return normalized switch
             {
+                "rocketlauncher" or "rocketlauncheritem" or "granadelauncher" => "RocketLauncher",
+                "flamethrower" or "flamethroweritem" => "FlameThrower",
+                "grenadelauncher" or "grenadelauncheritem" or "grenadelauncherfielditem" => "GrenadeLauncher",
                 "pistol" or "handgun" or "glock" or "deserteagle" => "Pistol",
                 "smg" or "submachinegun" or "scorpion" or "fnp90" or "uzi" or "mp5" => "SMG",
                 "shotgun" => "Shotgun",
