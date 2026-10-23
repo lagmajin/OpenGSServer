@@ -242,6 +242,10 @@ namespace OpenGSServer
             int damage,
             Vector2 hitPosition)
         {
+            var room = MatchRoomManager.Instance.GetRoomById(roomId);
+            if (room == null || !room.Playing || room.Finished)
+                return 0;
+
             var simulator = TryGet(roomId);
             if (simulator == null)
             {
@@ -346,7 +350,7 @@ namespace OpenGSServer
         private static void OnEnemyKilled(ServerEnemyState enemy, string attackerId)
         {
             var room = MatchRoomManager.Instance.GetRoomById(enemy.RoomId);
-            if (room == null)
+            if (room == null || !room.Playing || room.Finished)
             {
                 return;
             }
