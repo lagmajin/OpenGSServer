@@ -485,6 +485,8 @@ namespace OpenGSServer
             }
 
             InGameMatchEventHandler.ClearPlayerCombatEffects(enemy.RoomId, playerId);
+            if (room is MatchRoom matchRoom)
+                InGameMatchEventHandler.ReleaseWeaponReservations(matchRoom, playerId);
             room.RecordDeath(playerId);
             var deathTimestamp = DateTime.UtcNow;
             if (deathTimestamp <= damageTimestamp)

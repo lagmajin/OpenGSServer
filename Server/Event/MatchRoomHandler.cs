@@ -341,6 +341,45 @@ namespace OpenGSServer
             });
         }
 
+        public static void ReleaseWeaponReservations(MatchRoom room, string playerId)
+        {
+            if (room == null || string.IsNullOrWhiteSpace(playerId))
+                return;
+
+            var itemManager = MatchRoomManager.Instance.GetFieldItemManager(room.Id);
+            if (itemManager == null)
+                return;
+
+            foreach (var token in itemManager.ToJson())
+            {
+                if (token is not JObject item ||
+                    !string.Equals(ReadString(item, "ReservedByPlayerId"), playerId,
+                        StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                var itemId = ReadString(item, "ItemId", "ItemID");
+                var weaponType = ReadString(item, "WeaponType", "WeaponID");
+                if (itemId == null || weaponType == null ||
+                    !itemManager.TrySetReservation(itemId, playerId, reserved: false))
+                    continue;
+
+                GameMessageDispatcher.BroadcastToRoom(room.Id.ToString(), new JObject
+                {
+                    ["MessageType"] = GameMessageTypes.WeaponReleased,
+                    ["RoomID"] = room.Id.ToString(),
+                    ["ItemId"] = itemId,
+                    ["WeaponId"] = itemId,
+                    ["PlayerID"] = playerId,
+                    ["PlayerId"] = playerId,
+                    ["ReservedByPlayerId"] = playerId,
+                    ["WeaponType"] = weaponType,
+                    ["PosX"] = GetFloat(item.GetValue("PositionX"), 0f),
+                    ["PosY"] = GetFloat(item.GetValue("PositionY"), 0f),
+                    ["Timestamp"] = DateTime.UtcNow.ToString("o")
+                });
+            }
+        }
+
         public static void ClearPlayerShotCooldowns(string playerId)
         {
             if (!string.IsNullOrWhiteSpace(playerId))
@@ -1663,6 +1702,7 @@ namespace OpenGSServer
         private static void HandlePlayerKilled(MatchRoom room, string killerId, string killedPlayerId)
         {
             ClearCombatBuffs(room.Id.ToString(), killedPlayerId);
+            ReleaseWeaponReservations(room, killedPlayerId);
             Console.WriteLine($"Player {killedPlayerId} was killed by {killerId}");
             var killerKills = room.TryGetPlayer(killerId, out var killer) && killer != null
                 ? killer.Kills
@@ -2407,38 +2447,8 @@ namespace OpenGSServer
             {
                 ClearCombatBuffs(matchRoom.Id.ToString(), playerId);
             }
-            if (matchRoom != null &&
-                MatchRoomManager.Instance.GetFieldItemManager(matchRoom.Id.ToString()) is { } itemManager)
-            {
-                foreach (var token in itemManager.ToJson())
-                {
-                    if (token is not JObject item ||
-                        !string.Equals(ReadString(item, "ReservedByPlayerId"), playerId,
-                            StringComparison.OrdinalIgnoreCase))
-                        continue;
-
-                    var itemId = ReadString(item, "ItemId", "ItemID");
-                    var weaponType = ReadString(item, "WeaponType", "WeaponID");
-                    if (itemId == null || weaponType == null ||
-                        !itemManager.TrySetReservation(itemId, playerId, reserved: false))
-                        continue;
-
-                    GameMessageDispatcher.BroadcastToRoom(matchRoom.Id.ToString(), new JObject
-                    {
-                        ["MessageType"] = GameMessageTypes.WeaponReleased,
-                        ["RoomID"] = matchRoom.Id.ToString(),
-                        ["ItemId"] = itemId,
-                        ["WeaponId"] = itemId,
-                        ["PlayerID"] = playerId,
-                        ["PlayerId"] = playerId,
-                        ["ReservedByPlayerId"] = playerId,
-                        ["WeaponType"] = weaponType,
-                        ["PosX"] = GetFloat(item.GetValue("PositionX"), 0f),
-                        ["PosY"] = GetFloat(item.GetValue("PositionY"), 0f),
-                        ["Timestamp"] = DateTime.UtcNow.ToString("o")
-                    });
-                }
-            }
+            if (matchRoom != null)
+                ReleaseWeaponReservations(matchRoom, playerId);
 
             if (!preserveRoomMembership)
             {
@@ -2472,6 +2482,7 @@ namespace OpenGSServer
 
         private static void HandlePlayerEliminated(MatchRoom room, string playerId)
         {
+            ReleaseWeaponReservations(room, playerId);
             Console.WriteLine($"Player {playerId} was eliminated");
         }
 
