@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using OpenGSCore;
 
 #nullable enable
@@ -47,6 +48,11 @@ namespace OpenGSServer.Network
     /// </summary>
     public static class ServerDamageResolver
     {
+        private static readonly ConditionalWeakTable<PlayerInfo, object> PlayerHealthLocks = new();
+
+        private static object HealthLock(PlayerInfo player) =>
+            PlayerHealthLocks.GetValue(player, static _ => new object());
+
         /// <summary>
         /// Poses that reduce incoming damage, mirroring what the client shows.
         /// </summary>
@@ -76,36 +82,39 @@ namespace OpenGSServer.Network
                 return new DamageOutcome(requested, 0, 0, true, false);
             }
 
-            if (requested <= 0)
+            lock (HealthLock(player))
             {
-                return new DamageOutcome(0, 0, player.Health, player.Health <= 0, false);
-            }
+                if (requested <= 0)
+                {
+                    return new DamageOutcome(0, 0, player.Health, player.Health <= 0, false);
+                }
 
-            var wasDown = player.Health <= 0;
-            if (wasDown)
-            {
-                return new DamageOutcome(requested, 0, 0, true, false);
-            }
+                var wasDown = player.Health <= 0;
+                if (wasDown)
+                {
+                    return new DamageOutcome(requested, 0, 0, true, false);
+                }
 
-            if (ignoreDamage)
-            {
-                return new DamageOutcome(requested, 0, player.Health, false, false);
-            }
+                if (ignoreDamage)
+                {
+                    return new DamageOutcome(requested, 0, player.Health, false, false);
+                }
 
-            var scaled = (int)MathF.Round(requested * PoseMultiplier(pose));
-            var applied = Math.Max(1, scaled);
-            if (applied > player.Health)
-            {
-                applied = player.Health;
-            }
+                var scaled = (int)MathF.Round(requested * PoseMultiplier(pose));
+                var applied = Math.Max(1, scaled);
+                if (applied > player.Health)
+                {
+                    applied = player.Health;
+                }
 
-            player.Health -= applied;
-            if (player.Health < 0)
-            {
-                player.Health = 0;
-            }
+                player.Health -= applied;
+                if (player.Health < 0)
+                {
+                    player.Health = 0;
+                }
 
-            return new DamageOutcome(requested, applied, player.Health, false, player.Health <= 0);
+                return new DamageOutcome(requested, applied, player.Health, false, player.Health <= 0);
+            }
         }
 
         /// <summary>
@@ -118,7 +127,27 @@ namespace OpenGSServer.Network
                 return;
             }
 
-            player.Health = player.MaxHealth > 0 ? player.MaxHealth : 100;
+            lock (HealthLock(player))
+            {
+                player.Health = player.MaxHealth > 0 ? player.MaxHealth : 100;
+            }
+        }
+
+        /// <summary>Restores health without racing a simultaneous hit or revive.</summary>
+        public static int Heal(PlayerInfo? player, int amount)
+        {
+            if (player == null || amount <= 0)
+            {
+                return 0;
+            }
+
+            lock (HealthLock(player))
+            {
+                var maximum = Math.Max(0, player.MaxHealth);
+                var restored = Math.Min(Math.Max(0, maximum - player.Health), amount);
+                player.Health += restored;
+                return restored;
+            }
         }
 
         /// <summary>
@@ -126,7 +155,11 @@ namespace OpenGSServer.Network
         /// </summary>
         public static bool IsDown(PlayerInfo? player)
         {
-            return player == null || player.Health <= 0;
+            if (player == null) return true;
+            lock (HealthLock(player))
+            {
+                return player.Health <= 0;
+            }
         }
 
         /// <summary>

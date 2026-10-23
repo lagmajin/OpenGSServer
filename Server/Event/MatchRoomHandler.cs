@@ -1013,17 +1013,14 @@ namespace OpenGSServer
         /// </summary>
         private static int HealPlayer(PlayerInfo player, int amount = InstantItemRules.HealAmount)
         {
-            if (player.Health >= player.MaxHealth)
+            var restored = ServerDamageResolver.Heal(player, amount);
+            if (restored <= 0)
             {
                 // Already full. The item is still spent by the caller; there is
                 // simply nothing to restore, and saying so is what stops a client
                 // topping off early and banking the difference.
                 return 0;
             }
-
-            var missing = player.MaxHealth - player.Health;
-            var restored = Math.Min(missing, Math.Max(0, amount));
-            player.Health += restored;
             return restored;
         }
 
@@ -2394,7 +2391,7 @@ namespace OpenGSServer
             MatchServerV2.Instance?.ServerLagCompensationManager.SetPlayerPosition(
                 playerId, spawnX, spawnY, spawnZ);
 
-            respawnedPlayer.Health = Math.Max(1, respawnedPlayer.MaxHealth);
+            ServerDamageResolver.Revive(respawnedPlayer);
             ClearCombatBuffs(room.Id.ToString(), playerId);
 
             // Coming back with the gun that was on its last round would make a
