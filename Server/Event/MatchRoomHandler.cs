@@ -280,6 +280,14 @@ namespace OpenGSServer
             ElementalBulletEffects.TryRemove(key, out _);
         }
 
+        public static void ClearPlayerCombatEffects(string roomId, string playerId)
+        {
+            if (string.IsNullOrWhiteSpace(roomId) || string.IsNullOrWhiteSpace(playerId))
+                return;
+
+            ClearCombatBuffs(roomId, playerId);
+        }
+
         public static void ClearRoomCombatEffects(string roomId)
         {
             if (string.IsNullOrWhiteSpace(roomId)) return;
@@ -3236,6 +3244,8 @@ namespace OpenGSServer
             {
                 return;
             }
+
+            ClearCombatBuffs(room.Id.ToString(), targetId);
 
             // The health change is the authority for a kill now, not a client
             // claiming one. A self hit counts as a death without crediting an

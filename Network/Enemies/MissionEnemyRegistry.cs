@@ -398,6 +398,7 @@ namespace OpenGSServer
                 return;
             }
 
+            InGameMatchEventHandler.ClearPlayerCombatEffects(enemy.RoomId, playerId);
             room.RecordDeath(playerId);
 
             GameMessageDispatcher.BroadcastToRoom(enemy.RoomId, new JObject
