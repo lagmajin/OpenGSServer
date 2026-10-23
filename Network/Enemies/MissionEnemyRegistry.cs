@@ -88,6 +88,7 @@ namespace OpenGSServer
                 var simulator = ForRoom(roomId);
                 simulator.PlayerIds = () => room.Players
                     .Where(player => player != null && room.Playing && !room.Finished && player.Health > 0 &&
+                        !InGameMatchEventHandler.HasStealthBuff(roomId, player.Id) &&
                         MatchServerV2.Instance.IsPlayerConnected(player.Id) &&
                         HasAuthoritativePosition(player.Id))
                     .Select(player => player.Id)

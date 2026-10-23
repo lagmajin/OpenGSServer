@@ -250,6 +250,9 @@ namespace OpenGSServer
         internal static bool HasDefenseBuff(string roomId, string playerId) =>
             IsBuffActive(DefenseBuffExpires, roomId, playerId);
 
+        internal static bool HasStealthBuff(string roomId, string playerId) =>
+            IsBuffActive(StealthBuffExpires, roomId, playerId);
+
         private static void SendTimedBuffSnapshot(string roomId, string playerId)
         {
             var buffs = new JArray();
