@@ -1068,6 +1068,7 @@ namespace OpenGSServer
             };
 
             BroadcastJsonToRoom(room, message);
+            MissionEnemyRegistry.PublishSnapshot(room.Id.ToString());
         }
 
         /// <summary>
