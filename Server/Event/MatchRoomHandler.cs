@@ -683,8 +683,7 @@ namespace OpenGSServer
             if (specialWeapon != null)
             {
                 SetSpecialWeapon(room.Id.ToString(), playerId, specialWeapon);
-                var magazine = ServerWeaponMagazineStore.GetOrCreate(playerId, specialWeapon);
-                magazine.ResetToFull();
+                var magazine = ServerWeaponMagazineStore.GetOrCreateFull(playerId, specialWeapon);
                 GameMessageDispatcher.SendAmmoUpdate(
                     room.Id.ToString(), playerId, specialWeapon,
                     magazine.ReadRemaining(), magazine.Capacity, magazine.ReadReserve());
@@ -789,21 +788,21 @@ namespace OpenGSServer
                 return;
             }
 
-            var magazine = ReadInt(json, -1, "MagazineAmmo", "Ammo", "CurrentAmmo");
             var slot = ReadInt(json, -1, "SlotIndex", "WeaponSlot");
+            if (slot < -1 || slot >= 3)
+            {
+                Console.WriteLine($"[Match] Refused weapon drop with invalid slot '{slot}' from '{playerId}'");
+                return;
+            }
+
             var canonicalDropWeapon = ResolveWeaponType(
                 NormalizeWeaponType(weaponType), weaponType);
-            if (canonicalDropWeapon == null ||
-                !ServerWeaponMagazineStore.TryPeek(playerId, canonicalDropWeapon, out var heldMagazine))
+            if (canonicalDropWeapon == null)
             {
                 Console.WriteLine($"[Match] Refused drop of unowned weapon '{weaponType}' from '{playerId}'");
                 return;
             }
 
-            // The client may request a drop, but its reported ammo is not the
-            // server's magazine state.
-            magazine = heldMagazine.ReadRemaining();
-            var reserveAmmo = heldMagazine.ReadReserve();
             if (IsSpecialWeapon(canonicalDropWeapon) &&
                 !HasSpecialWeapon(room.Id.ToString(), playerId, canonicalDropWeapon!))
             {
@@ -812,22 +811,34 @@ namespace OpenGSServer
                 return;
             }
 
-            var itemId = itemManager.DropWeapon(
-                weaponType,
-                state.PositionX,
-                state.PositionY,
-                state.PositionZ,
-                magazine,
-                slot,
-                reserveAmmo);
+            // The reported ammo is ignored. Weapon creation and ownership removal
+            // happen as one store transaction so simultaneous drop requests
+            // cannot create duplicate world items from the same magazine.
+            var magazine = -1;
+            var reserveAmmo = 0;
+            var itemId = string.Empty;
+            var dropped = ServerWeaponMagazineStore.TryDropWeapon(
+                playerId, canonicalDropWeapon, heldMagazine =>
+                {
+                    magazine = heldMagazine.ReadRemaining();
+                    reserveAmmo = heldMagazine.ReadReserve();
+                    itemId = itemManager.DropWeapon(
+                        weaponType,
+                        state.PositionX,
+                        state.PositionY,
+                        state.PositionZ,
+                        magazine,
+                        slot,
+                        reserveAmmo);
+                    return !string.IsNullOrEmpty(itemId);
+                });
 
-            if (string.IsNullOrEmpty(itemId))
+            if (!dropped)
             {
                 Console.WriteLine($"[Match] Refused weapon drop of '{weaponType}' by '{playerId}'");
                 return;
             }
 
-            ServerWeaponMagazineStore.RemoveWeapon(playerId, canonicalDropWeapon);
             if (IsSpecialWeapon(canonicalDropWeapon))
                 ClearSpecialWeapon(room.Id.ToString(), playerId, canonicalDropWeapon);
 
@@ -1346,11 +1357,8 @@ namespace OpenGSServer
                 {
                     if (IsSpecialWeapon(pickedWeaponType))
                         SetSpecialWeapon(room.Id.ToString(), playerId, pickedWeaponType);
-                    var pickedMagazine = ServerWeaponMagazineStore.GetOrCreate(playerId, pickedWeaponType);
-                    if (item.MagazineAmmo >= 0)
-                        pickedMagazine.SetRemaining(item.MagazineAmmo);
-                    if (item.ReserveAmmo >= 0)
-                        pickedMagazine.SetReserve(item.ReserveAmmo);
+                    var pickedMagazine = ServerWeaponMagazineStore.InitializePickedUpWeapon(
+                        playerId, pickedWeaponType, item.MagazineAmmo, item.ReserveAmmo);
                     GameMessageDispatcher.SendAmmoUpdate(
                         room.Id.ToString(), playerId, pickedWeaponType,
                         pickedMagazine.ReadRemaining(), pickedMagazine.Capacity,
