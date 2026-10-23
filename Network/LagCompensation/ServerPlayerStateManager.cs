@@ -57,7 +57,8 @@ namespace OpenGSServer.Network
             }
         }
 
-        private readonly ConcurrentDictionary<string, PlayerServerState> m_PlayerStates = new();
+        private readonly ConcurrentDictionary<string, PlayerServerState> m_PlayerStates =
+            new(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>最大入力キューサイズ</summary>
         private const int MaxInputQueueSize = 128;

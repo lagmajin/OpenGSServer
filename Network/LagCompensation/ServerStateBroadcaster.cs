@@ -19,7 +19,8 @@ namespace OpenGSServer.Network
         private readonly ServerPlayerStateManager m_PlayerStateManager;
 
         /// <summary>アクティブなクライアントセッション</summary>
-        private readonly ConcurrentDictionary<string, Action<ServerTransformState>> m_ClientCallbacks = new();
+        private readonly ConcurrentDictionary<string, Action<ServerTransformState>> m_ClientCallbacks =
+            new(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>ブロードキャスト回数</summary>
         private int m_BroadcastCount = 0;
