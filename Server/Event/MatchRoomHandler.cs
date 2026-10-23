@@ -2067,6 +2067,20 @@ namespace OpenGSServer
                 });
             }
 
+            foreach (var roomPlayer in room.Players)
+            {
+                GameMessageDispatcher.SendToPlayer(requestingPlayerId, new JObject
+                {
+                    ["MessageType"] = GameMessageTypes.PlayerPose,
+                    ["RoomID"] = room.Id.ToString(),
+                    ["RoomId"] = room.Id.ToString(),
+                    ["PlayerID"] = roomPlayer.Id,
+                    ["PlayerId"] = roomPlayer.Id,
+                    ["PoseState"] = room.GetPlayerPoseState(roomPlayer.Id).ToString(),
+                    ["Timestamp"] = DateTime.UtcNow.ToString("o")
+                });
+            }
+
             SendAmmoStateToPlayer(room.Id.ToString(), requestingPlayerId);
             if (ServerGrenadeLoadoutStore.TryRead(
                 room.Id.ToString(), requestingPlayerId, out var grenadeSlots))
