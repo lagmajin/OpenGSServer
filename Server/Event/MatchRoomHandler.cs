@@ -1715,6 +1715,15 @@ namespace OpenGSServer
             GameMessageDispatcher.SendPlayerKilled(
                 room.Id.ToString(), killerId, killedPlayerId, killerKills, isTeamMode,
                 room.TeamKillCount(ETeam.Red), room.TeamKillCount(ETeam.Blue));
+            var redTeamKills = room.TeamKillCount(ETeam.Red);
+            var blueTeamKills = room.TeamKillCount(ETeam.Blue);
+            if (room.TryGetPlayer(killedPlayerId, out var victim) && victim != null)
+                GameMessageDispatcher.BroadcastPlayerScoreState(
+                    room.Id.ToString(), victim, isTeamMode, redTeamKills, blueTeamKills);
+            if (!string.Equals(killerId, killedPlayerId, StringComparison.OrdinalIgnoreCase) &&
+                room.TryGetPlayer(killerId, out var scoringPlayer) && scoringPlayer != null)
+                GameMessageDispatcher.BroadcastPlayerScoreState(
+                    room.Id.ToString(), scoringPlayer, isTeamMode, redTeamKills, blueTeamKills);
         }
 
         private static void HandlePlayerDamaged(

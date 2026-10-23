@@ -142,6 +142,27 @@ namespace OpenGSServer
             BroadcastToRoom(roomId, message);
         }
 
+        public static void BroadcastPlayerScoreState(
+            string roomId, PlayerInfo player, bool isTeamMode, int redTeamKills, int blueTeamKills)
+        {
+            if (player == null || string.IsNullOrWhiteSpace(roomId))
+                return;
+
+            BroadcastToRoom(roomId, new JObject
+            {
+                ["MessageType"] = "PlayerScoreState",
+                ["RoomID"] = roomId,
+                ["PlayerID"] = player.Id,
+                ["PlayerId"] = player.Id,
+                ["PlayerKills"] = player.Kills,
+                ["Deaths"] = player.Deaths,
+                ["IsTeamMode"] = isTeamMode,
+                ["RedTeamKills"] = redTeamKills,
+                ["BlueTeamKills"] = blueTeamKills,
+                ["Timestamp"] = DateTime.UtcNow.ToString("o")
+            });
+        }
+
         public static void SendFlagCaptured(string roomId, string capturingTeam)
         {
             var message = new JObject

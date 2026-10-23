@@ -377,19 +377,11 @@ namespace OpenGSServer
                     var killCount = room.RecordKill(killer.Id, 100);
                     if (killCount > 0)
                     {
-                        GameMessageDispatcher.BroadcastToRoom(enemy.RoomId, new JObject
-                        {
-                            ["MessageType"] = "PlayerScoreState",
-                            ["RoomID"] = enemy.RoomId,
-                            ["PlayerID"] = killer.Id,
-                            ["PlayerId"] = killer.Id,
-                            ["PlayerKills"] = killCount,
-                            ["IsTeamMode"] = room.Setting.Mode is EGameMode.TeamDeathMatch or
+                        GameMessageDispatcher.BroadcastPlayerScoreState(
+                            enemy.RoomId, killer,
+                            room.Setting.Mode is EGameMode.TeamDeathMatch or
                                 EGameMode.CaptureTheFlag or EGameMode.TeamSurvival,
-                            ["RedTeamKills"] = room.TeamKillCount(ETeam.Red),
-                            ["BlueTeamKills"] = room.TeamKillCount(ETeam.Blue),
-                            ["Timestamp"] = DateTime.UtcNow.ToString("o")
-                        });
+                            room.TeamKillCount(ETeam.Red), room.TeamKillCount(ETeam.Blue));
                     }
                 }
             }
@@ -493,6 +485,11 @@ namespace OpenGSServer
                 InGameMatchEventHandler.ReleaseWeaponReservations(matchRoom, playerId);
             }
             room.RecordDeath(playerId);
+            var teamMode = room.Setting.Mode is EGameMode.TeamDeathMatch or
+                EGameMode.CaptureTheFlag or EGameMode.TeamSurvival;
+            GameMessageDispatcher.BroadcastPlayerScoreState(
+                enemy.RoomId, player, teamMode,
+                room.TeamKillCount(ETeam.Red), room.TeamKillCount(ETeam.Blue));
             var deathTimestamp = DateTime.UtcNow;
             if (deathTimestamp <= damageTimestamp)
                 deathTimestamp = damageTimestamp.AddTicks(1);
