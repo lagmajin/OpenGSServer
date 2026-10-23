@@ -42,6 +42,17 @@ namespace OpenGSServer
             // player half registered somewhere else.
             try
             {
+                // Resolve and broadcast the match-room departure while the
+                // player is still a member; ClearPlayerState removes them.
+                MatchServerV2.Instance.NotifyPlayerLeft(playerId);
+            }
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage($"[Cleanup] Match departure notification failed for {playerId}: {ex.Message}", ConsoleColor.Red);
+            }
+
+            try
+            {
                 InGameMatchEventHandler.ClearPlayerState(playerId);
             }
             catch (Exception ex)

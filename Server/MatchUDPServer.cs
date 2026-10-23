@@ -1095,7 +1095,7 @@ namespace OpenGSServer
         /// <summary>
         /// プレイヤー退出通知
         /// </summary>
-        private void NotifyPlayerLeft(string playerId)
+        public void NotifyPlayerLeft(string playerId)
         {
             var room = GetMatchRoomForPlayer(playerId);
             if (room == null) return;
