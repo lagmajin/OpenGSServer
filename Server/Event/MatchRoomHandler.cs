@@ -2188,7 +2188,8 @@ namespace OpenGSServer
         {
             if (!room.TryGetPlayer(requestingPlayerId, out var player) || player == null)
                 return;
-            var pistolMagazine = ServerWeaponMagazineStore.GetOrCreate(requestingPlayerId, "Pistol");
+            var pistolMagazine = ServerWeaponMagazineStore.GetOrCreateStartingWeapon(
+                requestingPlayerId, "Pistol");
             var status = $"Match Active - Players: {room.Players.Count}";
             Console.WriteLine($"Sending status to {requestingPlayerId}: {status}");
             JObject? ctfState = null;
@@ -2234,10 +2235,10 @@ namespace OpenGSServer
                 room.TeamKillCount(ETeam.Red),
                 room.TeamKillCount(ETeam.Blue),
                 player.EquipInstantItems.Select(item => item.ToString()).ToArray(),
-                pistolMagazine.WeaponType,
-                pistolMagazine.ReadRemaining(),
-                pistolMagazine.Capacity,
-                pistolMagazine.ReadReserve(),
+                pistolMagazine?.WeaponType ?? string.Empty,
+                pistolMagazine?.ReadRemaining() ?? -1,
+                pistolMagazine?.Capacity ?? -1,
+                pistolMagazine?.ReadReserve() ?? -1,
                 ctfState);
             SendTimedBuffSnapshot(room.Id.ToString(), requestingPlayerId);
 
@@ -3506,7 +3507,7 @@ namespace OpenGSServer
                 return false;
             }
 
-            if (!ServerWeaponMagazineStore.TryFire(playerId, weaponType, now, out remainingAmmo))
+            if (!ServerWeaponMagazineStore.TryFireHeld(playerId, weaponType, now, out remainingAmmo))
             {
                 Console.WriteLine(
                     $"[Match] Ignored {weaponType} shot from '{playerId}': " +
@@ -3596,7 +3597,7 @@ namespace OpenGSServer
                 requestedWindow = TimeSpan.FromSeconds(requestedSeconds.Value);
             }
 
-            var result = ServerWeaponMagazineStore.TryReload(
+            var result = ServerWeaponMagazineStore.TryReloadHeld(
                 playerId, weaponType, DateTime.UtcNow, requestedWindow);
 
             Console.WriteLine(

@@ -281,7 +281,9 @@ namespace OpenGSServer.Network
     /// </summary>
     public static class ServerWeaponMagazineStore
     {
+        private static readonly object OwnershipLock = new();
         private static readonly ConcurrentDictionary<string, ConcurrentDictionary<string, ServerMagazine>> Magazines = new();
+        private static readonly ConcurrentDictionary<string, ConcurrentDictionary<string, byte>> RemovedWeapons = new();
 
         /// <summary>
         /// The weapon table, in the same normalized names the shot handler uses.
@@ -383,10 +385,31 @@ namespace OpenGSServer.Network
 
         public static ServerMagazine GetOrCreate(string playerId, string weaponType)
         {
-            var byWeapon = Magazines.GetOrAdd(
-                playerId,
-                _ => new ConcurrentDictionary<string, ServerMagazine>(StringComparer.OrdinalIgnoreCase));
-            return byWeapon.GetOrAdd(weaponType, type => new ServerMagazine(type, Spec(type)));
+            lock (OwnershipLock)
+            {
+                if (RemovedWeapons.TryGetValue(playerId, out var removed))
+                {
+                    removed.TryRemove(weaponType, out _);
+                }
+
+                var byWeapon = Magazines.GetOrAdd(
+                    playerId,
+                    _ => new ConcurrentDictionary<string, ServerMagazine>(StringComparer.OrdinalIgnoreCase));
+                return byWeapon.GetOrAdd(weaponType, type => new ServerMagazine(type, Spec(type)));
+            }
+        }
+
+        public static ServerMagazine? GetOrCreateStartingWeapon(string playerId, string weaponType)
+        {
+            lock (OwnershipLock)
+            {
+                if (TryPeek(playerId, weaponType, out var existing))
+                    return existing;
+                if (RemovedWeapons.TryGetValue(playerId, out var removed) &&
+                    removed.ContainsKey(weaponType))
+                    return null;
+                return GetOrCreate(playerId, weaponType);
+            }
         }
 
         public static bool TryPeek(string playerId, string weaponType, out ServerMagazine magazine)
@@ -398,13 +421,21 @@ namespace OpenGSServer.Network
 
         public static bool RemoveWeapon(string playerId, string weaponType)
         {
-            if (string.IsNullOrWhiteSpace(playerId) || string.IsNullOrWhiteSpace(weaponType) ||
-                !Magazines.TryGetValue(playerId, out var byWeapon))
+            if (string.IsNullOrWhiteSpace(playerId) || string.IsNullOrWhiteSpace(weaponType))
             {
                 return false;
             }
 
-            return byWeapon.TryRemove(weaponType, out _);
+            lock (OwnershipLock)
+            {
+                if (!Magazines.TryGetValue(playerId, out var byWeapon) ||
+                    !byWeapon.TryRemove(weaponType, out _))
+                    return false;
+                var removed = RemovedWeapons.GetOrAdd(
+                    playerId, _ => new ConcurrentDictionary<string, byte>(StringComparer.OrdinalIgnoreCase));
+                removed[weaponType] = 0;
+                return true;
+            }
         }
 
         public static IReadOnlyList<ServerMagazine> ForPlayer(string playerId)
@@ -444,6 +475,18 @@ namespace OpenGSServer.Network
             return GetOrCreate(playerId, weaponType).TryConsume(nowUtc, out remainingAfter);
         }
 
+        public static bool TryFireHeld(
+            string playerId, string weaponType, DateTime nowUtc, out int remainingAfter)
+        {
+            if (!TryPeek(playerId, weaponType, out var magazine))
+            {
+                remainingAfter = 0;
+                return false;
+            }
+
+            return magazine.TryConsume(nowUtc, out remainingAfter);
+        }
+
         /// <summary>
         /// Begins a reload. The window the client asked for is honoured only up to
         /// the weapon's own reload time, so a client cannot shorten the reload into
@@ -457,6 +500,14 @@ namespace OpenGSServer.Network
             }
 
             return GetOrCreate(playerId, weaponType).TryBeginReload(nowUtc, requestWindow);
+        }
+
+        public static ReloadResult TryReloadHeld(
+            string playerId, string weaponType, DateTime nowUtc, TimeSpan requestWindow)
+        {
+            return TryPeek(playerId, weaponType, out var magazine)
+                ? magazine.TryBeginReload(nowUtc, requestWindow)
+                : new ReloadResult(ReloadResultKind.NoReserve, 0, 0, 0f);
         }
 
         /// <summary>Refills reserve ammo across every weapon a player holds.</summary>
@@ -478,6 +529,7 @@ namespace OpenGSServer.Network
 
         public static void ResetPlayer(string playerId)
         {
+            RemovedWeapons.TryRemove(playerId, out _);
             if (Magazines.TryRemove(playerId, out var byWeapon))
             {
                 foreach (var magazine in byWeapon.Values)
@@ -510,6 +562,7 @@ namespace OpenGSServer.Network
             foreach (var playerId in playerIds)
             {
                 Magazines.TryRemove(playerId, out _);
+                RemovedWeapons.TryRemove(playerId, out _);
             }
         }
     }

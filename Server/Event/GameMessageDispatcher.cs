@@ -338,12 +338,16 @@ namespace OpenGSServer
                 ["RedTeamKills"] = redTeamKills,
                 ["BlueTeamKills"] = blueTeamKills,
                 ["CarriedItems"] = new JArray(carriedItems),
-                ["WeaponType"] = weaponType,
-                ["CurrentAmmo"] = currentAmmo,
-                ["MaxAmmo"] = maxAmmo,
-                ["ReserveAmmo"] = reserveAmmo,
                 ["Timestamp"] = DateTime.UtcNow.ToString("o")
             };
+
+            if (!string.IsNullOrWhiteSpace(weaponType) && maxAmmo > 0)
+            {
+                message["WeaponType"] = weaponType;
+                message["CurrentAmmo"] = currentAmmo;
+                message["MaxAmmo"] = maxAmmo;
+                message["ReserveAmmo"] = reserveAmmo;
+            }
 
             var room = MatchRoomManager.Instance.GetRoomById(roomId);
             if (room?.CurrentSituation is MissionMatchSituation mission)
