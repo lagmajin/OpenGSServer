@@ -94,7 +94,9 @@ namespace OpenGSServer
                 return SendLoginFailure(session, result);
             }
 
-            return CompleteLogin(session, id, replaceStaleSession: false);
+            TryReadFirstString(dic, out var playerName, "PlayerName", "DisplayName");
+            return CompleteLogin(session, id, replaceStaleSession: false,
+                string.IsNullOrWhiteSpace(playerName) ? null : playerName);
         }
 
         /// <summary>
@@ -104,18 +106,20 @@ namespace OpenGSServer
         private static string? CompleteLogin(
             in IClientSession session,
             string accountId,
-            bool replaceStaleSession)
+            bool replaceStaleSession,
+            string? playerName = null)
         {
             lock (SessionGates.GetOrAdd(accountId, static _ => new object()))
             {
-                return CompleteLoginCore(session, accountId, replaceStaleSession);
+                return CompleteLoginCore(session, accountId, replaceStaleSession, playerName);
             }
         }
 
         private static string? CompleteLoginCore(
             in IClientSession session,
             string accountId,
-            bool replaceStaleSession)
+            bool replaceStaleSession,
+            string? playerName)
         {
             // The account has to be a known one before a token is minted for it.
             // A resumed token names an account that existed when it was issued, but
@@ -165,6 +169,31 @@ namespace OpenGSServer
                 }
             }
 
+            if (session is ClientSession clientSession)
+            {
+                if (clientSession.IsDisconnected)
+                {
+                    manager.Logout(accountId, false);
+                    return SendLoginFailure(
+                        session,
+                        new LoginResult(accountId, eLoginResultType.Unknown));
+                }
+
+                clientSession.SetPlayerID(accountId);
+                SessionOwners[accountId] = clientSession.ID();
+                var lobbyJoin = LobbyServerManager.Instance.PlayerJoinLobby(
+                    accountId, string.IsNullOrWhiteSpace(playerName) ? account.DisplayName : playerName);
+                if (!lobbyJoin.IsSuccess)
+                {
+                    SessionOwners.TryRemove(accountId, out _);
+                    clientSession.ClearPlayerID();
+                    PlayerSessionCleanup.Release(accountId);
+                    return SendLoginFailure(
+                        session,
+                        new LoginResult(accountId, eLoginResultType.Unknown));
+                }
+            }
+
             var json = new JObject
             {
                 [ServerMessageTypes.MessageType] = OpenGSCore.MessageType.LoginResponse,
@@ -190,10 +219,6 @@ namespace OpenGSServer
             };
 
             session.SendAsyncJsonWithTimeStamp(keyJson);
-            if (session is ClientSession clientSession)
-            {
-                SessionOwners[accountId] = clientSession.ID();
-            }
             return accountId;
         }
 
