@@ -99,7 +99,7 @@ namespace OpenGSServer
         /// A clock the client cannot set, for how long a flag has been lying
         /// about.
         /// </summary>
-        private static double ServerNowSeconds() => (double)DateTime.UtcNow.TimeOfDay.TotalSeconds;
+        private static double ServerNowSeconds() => ServerFieldItemManager.NowSeconds;
 
         /// <summary>
         /// Puts back any flag that has been on the ground long enough.
