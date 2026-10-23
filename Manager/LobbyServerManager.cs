@@ -2121,6 +2121,7 @@ namespace OpenGSServer
             ["DesertEagle"] = 350,
             ["Scorpion"] = 350,
             ["Uzi"] = 350,
+            ["FnP90"] = 300,
             ["AK47"] = 500,
             ["M16"] = 500,
             ["FAMAS"] = 500,
