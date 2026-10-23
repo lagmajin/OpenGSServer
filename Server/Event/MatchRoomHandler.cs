@@ -1875,7 +1875,7 @@ namespace OpenGSServer
         /// two.
         /// </para>
         /// </summary>
-        private static void DropFlagCarriedBy(MatchRoom room, string playerId)
+        public static void DropFlagCarriedBy(MatchRoom room, string playerId)
         {
             var now = ServerNowSeconds();
             var dropped = FlagStateFor(room).WithFlags(flags =>
