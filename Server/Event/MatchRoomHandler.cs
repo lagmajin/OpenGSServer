@@ -299,6 +299,14 @@ namespace OpenGSServer
                 return;
 
             ClearCombatBuffs(roomId, playerId);
+            GameMessageDispatcher.SendToPlayer(playerId, new JObject
+            {
+                ["MessageType"] = "TimedBuffSnapshot",
+                ["RoomID"] = roomId,
+                ["PlayerID"] = playerId,
+                ["Buffs"] = new JArray(),
+                ["Timestamp"] = DateTime.UtcNow.ToString("o")
+            });
         }
 
         public static void ClearPlayerShotCooldowns(string playerId)
