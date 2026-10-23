@@ -1167,6 +1167,12 @@ namespace OpenGSServer
 
         private static void HandleGrenadeLoadout(MatchRoom room, string playerId, JObject json)
         {
+            if (!TryGetActiveCombatant(room, playerId, out _))
+            {
+                Console.WriteLine($"[Match] Ignored grenade loadout from inactive or downed player '{playerId}'");
+                return;
+            }
+
             if (json["GrenadeSlots"] is not JArray requested || requested.Count != 3)
             {
                 Console.WriteLine($"[Match] Ignored invalid grenade loadout from '{playerId}'");
@@ -2490,14 +2496,9 @@ namespace OpenGSServer
         /// </summary>
         private static void HandleMissionComplete(MatchRoom room, string playerId, JObject json)
         {
-            if (room == null)
+            if (!TryGetActiveCombatant(room, playerId, out _))
             {
-                return;
-            }
-
-            if (!room.Playing)
-            {
-                Console.WriteLine($"[Match] Ignored a mission clear from '{playerId}' outside a running match");
+                Console.WriteLine($"[Match] Ignored a mission clear from inactive or downed player '{playerId}'");
                 return;
             }
 
