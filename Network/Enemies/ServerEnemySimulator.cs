@@ -92,6 +92,7 @@ namespace OpenGSServer.Network
         private readonly ConcurrentDictionary<string, ServerEnemyState> _enemies =
             new(StringComparer.OrdinalIgnoreCase);
         private readonly object _lock = new();
+        private readonly object _spawnLock = new();
         private readonly Random _random = new();
 
         /// <summary>Where a player is right now, keyed by player id.</summary>
@@ -153,33 +154,42 @@ namespace OpenGSServer.Network
             int attackDamage = 15,
             float attackIntervalSeconds = 1.0f)
         {
-            var enemy = new ServerEnemyState
+            lock (_spawnLock)
             {
-                EnemyId = $"enemy_{Guid.NewGuid():N}",
-                RoomId = roomId,
-                Kind = kind,
-                Position = position,
-                Health = Math.Max(1, health),
-                MaxHealth = Math.Max(1, health),
-                MoveSpeed = Math.Max(0f, moveSpeed),
-                AttackRange = Math.Max(0f, attackRange),
-                AttackDamage = Math.Max(0, attackDamage),
-                AttackIntervalSeconds = Math.Max(0f, attackIntervalSeconds)
-            };
+                var enemy = new ServerEnemyState
+                {
+                    EnemyId = $"enemy_{Guid.NewGuid():N}",
+                    RoomId = roomId,
+                    Kind = kind,
+                    Position = position,
+                    Health = Math.Max(1, health),
+                    MaxHealth = Math.Max(1, health),
+                    MoveSpeed = Math.Max(0f, moveSpeed),
+                    AttackRange = Math.Max(0f, attackRange),
+                    AttackDamage = Math.Max(0, attackDamage),
+                    AttackIntervalSeconds = Math.Max(0f, attackIntervalSeconds)
+                };
 
-            if (kind == ServerEnemyKind.Turret)
-            {
-                // A turret is a thing to shoot, not a thing that walks.
-                enemy.MoveSpeed = 0f;
+                if (kind == ServerEnemyKind.Turret)
+                {
+                    // A turret is a thing to shoot, not a thing that walks.
+                    enemy.MoveSpeed = 0f;
+                }
+
+                lock (_lock)
+                {
+                    if (_enemies.Count >= MaxEnemiesPerRoom)
+                    {
+                        throw new InvalidOperationException(
+                            $"A room cannot contain more than {MaxEnemiesPerRoom} enemies.");
+                    }
+
+                    _enemies[enemy.EnemyId] = enemy;
+                }
+
+                OnSpawn?.Invoke(CopyState(enemy));
+                return CopyState(enemy);
             }
-
-            lock (_lock)
-            {
-                _enemies[enemy.EnemyId] = enemy;
-            }
-
-            OnSpawn?.Invoke(CopyState(enemy));
-            return CopyState(enemy);
         }
 
         /// <summary>
@@ -194,30 +204,33 @@ namespace OpenGSServer.Network
             int health = 60,
             int attackDamage = 15)
         {
-            int availableSlots;
-            lock (_lock)
+            lock (_spawnLock)
             {
-                availableSlots = Math.Max(0, MaxEnemiesPerRoom - _enemies.Count);
+                int availableSlots;
+                lock (_lock)
+                {
+                    availableSlots = Math.Max(0, MaxEnemiesPerRoom - _enemies.Count);
+                }
+
+                var total = Math.Clamp(count, 0, availableSlots);
+                var spawned = new List<ServerEnemyState>(total);
+
+                for (var i = 0; i < total; i++)
+                {
+                    // A ring, so a wave is not a line and does not arrive as one
+                    // column that can be met with one shot.
+                    var angle = (MathF.Tau * i) / MathF.Max(1, total);
+                    var offset = new Vector2(MathF.Cos(angle), MathF.Sin(angle)) * spacing * (1f + i * 0.1f);
+                    spawned.Add(Spawn(
+                        roomId,
+                        kind,
+                        centre + offset,
+                        health: health,
+                        attackDamage: attackDamage));
+                }
+
+                return spawned;
             }
-
-            var total = Math.Clamp(count, 0, availableSlots);
-            var spawned = new List<ServerEnemyState>(total);
-
-            for (var i = 0; i < total; i++)
-            {
-                // A ring, so a wave is not a line and does not arrive as one
-                // column that can be met with one shot.
-                var angle = (MathF.Tau * i) / MathF.Max(1, total);
-                var offset = new Vector2(MathF.Cos(angle), MathF.Sin(angle)) * spacing * (1f + i * 0.1f);
-                spawned.Add(Spawn(
-                    roomId,
-                    kind,
-                    centre + offset,
-                    health: health,
-                    attackDamage: attackDamage));
-            }
-
-            return spawned;
         }
 
         public bool TryPeek(string enemyId, out ServerEnemyState enemy)
