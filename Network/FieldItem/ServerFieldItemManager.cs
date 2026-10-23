@@ -406,10 +406,13 @@ namespace OpenGSServer.Network
         /// </summary>
         public int GetActiveItemCountForType(EFieldItemType itemType)
         {
-            return _items.Values.Count(item =>
-                item.IsActive &&
-                item.State == "Spawned" &&
-                item.ItemType == itemType);
+            lock (_itemStateLock)
+            {
+                return _items.Values.Count(item =>
+                    item.IsActive &&
+                    item.State == "Spawned" &&
+                    item.ItemType == itemType);
+            }
         }
 
         /// <summary>
@@ -417,8 +420,38 @@ namespace OpenGSServer.Network
         /// </summary>
         public bool TryGetItem(string itemId, [NotNullWhen(true)] out FieldItem? item)
         {
-            return _items.TryGetValue(itemId, out item);
+            lock (_itemStateLock)
+            {
+                if (_items.TryGetValue(itemId, out var found))
+                {
+                    item = CopyFieldItem(found);
+                    return true;
+                }
+            }
+
+            item = null;
+            return false;
         }
+
+        private static FieldItem CopyFieldItem(FieldItem item) => new()
+        {
+            ItemId = item.ItemId,
+            ItemType = item.ItemType,
+            PosX = item.PosX,
+            PosY = item.PosY,
+            PosZ = item.PosZ,
+            SpawnPointId = item.SpawnPointId,
+            SpawnPointName = item.SpawnPointName,
+            State = item.State,
+            PickedUpByPlayerId = item.PickedUpByPlayerId,
+            IsActive = item.IsActive,
+            SpawnTime = item.SpawnTime,
+            WeaponType = item.WeaponType,
+            WeaponSlot = item.WeaponSlot,
+            MagazineAmmo = item.MagazineAmmo,
+            ConsumedAtSeconds = item.ConsumedAtSeconds,
+            ReservedByPlayerId = item.ReservedByPlayerId
+        };
 
         /// <summary>
         /// アイテムを拾う
