@@ -229,6 +229,7 @@ namespace OpenGSServer
             rec.PurchasedItems = ClonePurchasedItems(player.PurchasedItems);
             rec.EquippedItems = CloneEquippedItems(player.EquippedItems);
             rec.EquippedInstantItems = CloneEquippedInstantItems(player.EquippedInstantItems);
+            rec.LifeTimeScore = player.LifeTimeScore ?? new PlayerLifeTimeScore();
             rec.Status = player.Status;
             rec.LastUpdatedUtc = DateTime.UtcNow.ToString("O");
 
