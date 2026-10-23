@@ -1026,11 +1026,14 @@ namespace OpenGSServer
                     var playerId = AccountEventHandler.Login(clientSession, data);
                     if (playerId != null)
                     {
-                        clientSession.SetPlayerID(playerId);
                         var playerName = data["PlayerName"]?.ToString() ??
                                          data["DisplayName"]?.ToString() ??
                                          playerId;
-                        PlayerJoinLobby(playerId, playerName);
+                        AccountEventHandler.RunIfOwnedSession(clientSession, playerId, () =>
+                        {
+                            clientSession.SetPlayerID(playerId);
+                            PlayerJoinLobby(playerId, playerName);
+                        });
                     }
                     break;
                 case MessageType.CreateAccountRequest:

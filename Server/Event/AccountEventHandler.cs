@@ -273,6 +273,31 @@ namespace OpenGSServer
             value = string.Empty;
             return false;
         }
+
+        internal static bool RunIfOwnedSession(ClientSession session, string playerId, Action action)
+        {
+            lock (SessionGates.GetOrAdd(playerId, static _ => new object()))
+            {
+                if (!SessionOwners.TryGetValue(playerId, out var ownerId) ||
+                    !string.Equals(ownerId, session.ID(), StringComparison.Ordinal))
+                {
+                    return false;
+                }
+
+                if (session.IsDisconnected)
+                {
+                    if (((ICollection<KeyValuePair<string, string>>)SessionOwners).Remove(
+                            new KeyValuePair<string, string>(playerId, ownerId)))
+                    {
+                        PlayerSessionCleanup.Release(playerId);
+                    }
+                    return false;
+                }
+
+                action();
+                return true;
+            }
+        }
     }
 
     [Obsolete("Use AccountEventHandler static methods.")]

@@ -7,6 +7,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 //using Microsoft.VisualBasic;
 
@@ -46,8 +47,10 @@ namespace OpenGSServer
         private char separator = '\u001F';
 
         private Stopwatch forPing=new();
+        private int _disconnected;
 
         public string? PlayerID { get; private set; }
+        public bool IsDisconnected => Volatile.Read(ref _disconnected) != 0;
 
         public void SetPlayerID(string id)
         {
@@ -252,6 +255,7 @@ namespace OpenGSServer
             ConsoleWrite.WriteMessage($"TCP session with Id {Id} disconnected!", ConsoleColor.Red);
 
 
+            Interlocked.Exchange(ref _disconnected, 1);
             AccountEventHandler.ReleaseOwnedSession(this, PlayerID);
 
             receiveBuffer.Clear();
