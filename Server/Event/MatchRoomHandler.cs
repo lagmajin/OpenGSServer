@@ -3549,11 +3549,14 @@ namespace OpenGSServer
             // would buy.
             origin = new Vector2(throwerState.PositionX, throwerState.PositionY);
 
-            if (direction == Vector2.Zero)
+            var directionLength = direction.Length();
+            if (!IsFinite(direction.X) || !IsFinite(direction.Y) ||
+                !IsFinite(directionLength) || directionLength < 0.001f)
             {
                 Console.WriteLine($"[Match] Ignored grenade throw with no direction from '{playerId}'");
                 return;
             }
+            direction /= directionLength;
 
             var hasGrenadeLoadout = ServerGrenadeLoadoutStore.TryRead(
                 room.Id.ToString(), playerId, out _);
