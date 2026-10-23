@@ -313,7 +313,7 @@ namespace OpenGSServer.Network
                         projectile.Position += projectile.Velocity * simulationStep;
                         projectile.ElapsedFuse += simulationStep;
                         if (previousFuse < GrenadeArmingSeconds &&
-                            projectile.ElapsedFuse > GrenadeArmingSeconds && simulationStep > 0f)
+                            projectile.ElapsedFuse >= GrenadeArmingSeconds && simulationStep > 0f)
                         {
                             var armedFraction = (GrenadeArmingSeconds - previousFuse) / simulationStep;
                             collisionSegmentStart = Vector2.Lerp(
