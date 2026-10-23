@@ -69,6 +69,16 @@ namespace OpenGSServer.Network
         }
 
         /// <summary>
+        /// Detaches a temporarily disconnected client while retaining its last
+        /// authoritative state for a reconnect within the same match.
+        /// </summary>
+        public void SuspendPlayer(string playerId)
+        {
+            m_StateBroadcaster.UnregisterClient(playerId);
+            Log.Info($"[ServerLagCompensation] Player {playerId} suspended from match {m_MatchId}");
+        }
+
+        /// <summary>
         /// クライアントからの入力を処理する
         /// </summary>
         /// <param name="input">クライアント入力データ</param>

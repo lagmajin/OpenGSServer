@@ -212,12 +212,12 @@ namespace OpenGSServer
             _unauthorizedPacketCounts.TryRemove(peer.Id, out _);
             InGameMatchEventHandler.ClearPlayerState(
                 playerId, preserveMagazines: true, preserveRoomMembership: true);
+            MatchServerV2.Instance.ServerLagCompensationManager.SuspendPlayer(playerId);
 
             ConsoleWrite.WriteMessage(
                 $"[UDP] Player disconnected: {playerId} ({peer.Id}) (Reason: {info.Reason})", 
                 ConsoleColor.Yellow);
             ConsoleWrite.WriteMessage($"[UDP] Total players: {_connectedPlayers.Count}", ConsoleColor.Cyan);
-
 
             NotifyPlayerLeft(playerId);
         }
