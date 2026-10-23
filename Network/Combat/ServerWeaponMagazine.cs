@@ -275,9 +275,9 @@ namespace OpenGSServer.Network
             ["Shotgun"] = new MagazineSpec("Shotgun", 6, 36, 2.6f, 0.80f),
             ["Rifle"] = new MagazineSpec("Rifle", 30, 180, 2.2f, 0.15f),
             ["Sniper"] = new MagazineSpec("Sniper", 5, 35, 2.8f, 1.00f),
-            ["RocketLauncher"] = new MagazineSpec("RocketLauncher", 10, 0, 0f, 0.5f),
-            ["FlameThrower"] = new MagazineSpec("FlameThrower", 100, 0, 0f, 0.05f),
-            ["GrenadeLauncher"] = new MagazineSpec("GrenadeLauncher", 10, 0, 0f, 0.5f)
+            ["RocketLauncher"] = new MagazineSpec("RocketLauncher", 10, 0, 0f, 0.1f),
+            ["FlameThrower"] = new MagazineSpec("FlameThrower", 100, 0, 0f, 0.1f),
+            ["GrenadeLauncher"] = new MagazineSpec("GrenadeLauncher", 10, 0, 0f, 0.1f)
         };
 
         public static bool IsKnownWeapon(string? weaponType)
