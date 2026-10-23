@@ -644,6 +644,21 @@ namespace OpenGSServer
         /// </summary>
         private static readonly FieldItemPickupRateLimiter ItemPickupBudget = new();
 
+        private static void RefuseFieldItemPickup(
+            MatchRoom room, string playerId, string itemId, string reason)
+        {
+            UdpBroadcastToRoom(room.Id.ToString(), new JObject
+            {
+                ["MessageType"] = GameMessageTypes.FieldItemPickup,
+                ["RoomID"] = room.Id.ToString(),
+                ["ItemId"] = itemId,
+                ["PlayerID"] = playerId,
+                ["Success"] = false,
+                ["Reason"] = reason,
+                ["Timestamp"] = DateTime.UtcNow.ToString("o")
+            });
+        }
+
 
         private static void HandleFieldItemPickup(MatchRoom room, string playerId, JObject json)
         {
@@ -672,16 +687,7 @@ namespace OpenGSServer
 
             if (!TryGetActiveCombatant(room, playerId, out _))
             {
-                UdpBroadcastToRoom(room.Id.ToString(), new JObject
-                {
-                    ["MessageType"] = GameMessageTypes.FieldItemPickup,
-                    ["RoomID"] = room.Id.ToString(),
-                    ["ItemId"] = itemId,
-                    ["PlayerID"] = playerId,
-                    ["Success"] = false,
-                    ["Reason"] = "PlayerInactive",
-                    ["Timestamp"] = DateTime.UtcNow.ToString("o")
-                });
+                RefuseFieldItemPickup(room, playerId, itemId, "PlayerInactive");
                 return;
             }
 
@@ -689,6 +695,7 @@ namespace OpenGSServer
             if (itemManager == null)
             {
                 Console.WriteLine($"[Match] Field item pickup for '{playerId}' with no item manager in room '{room.Id}'");
+                RefuseFieldItemPickup(room, playerId, itemId, "ItemManagerUnavailable");
                 return;
             }
 
@@ -699,6 +706,7 @@ namespace OpenGSServer
                 // the origin, so checking the id alone would treat "position unknown"
                 // as "standing at 0,0,0" and hand out an item that is spawning there.
                 Console.WriteLine($"[Match] Refused field item pickup for '{playerId}': no authoritative position");
+                RefuseFieldItemPickup(room, playerId, itemId, "PositionUnavailable");
                 return;
             }
 
@@ -712,16 +720,7 @@ namespace OpenGSServer
                 // by silence leaves the effect in place until the client's own
                 // timeout takes it back. The player should not have to wait out a
                 // timer to find out the server said no.
-                UdpBroadcastToRoom(room.Id.ToString(), new JObject
-                {
-                    ["MessageType"] = GameMessageTypes.FieldItemPickup,
-                    ["RoomID"] = room.Id.ToString(),
-                    ["ItemId"] = itemId,
-                    ["PlayerID"] = playerId,
-                    ["Success"] = false,
-                    ["Reason"] = "OutOfReachOrTaken",
-                    ["Timestamp"] = DateTime.UtcNow.ToString("o")
-                });
+                RefuseFieldItemPickup(room, playerId, itemId, "OutOfReachOrTaken");
                 return;
             }
 
