@@ -57,6 +57,12 @@ namespace OpenGSServer.Network
             Log.Info($"[ServerLagCompensation] Player {playerId} added to match {m_MatchId}");
         }
 
+        public void ResumePlayer(string playerId)
+        {
+            m_PlayerStateManager.ResumePlayer(playerId);
+            Log.Info($"[ServerLagCompensation] Player {playerId} resumed in match {m_MatchId}");
+        }
+
         /// <summary>
         /// プレイヤーをマッチから退出させる
         /// </summary>

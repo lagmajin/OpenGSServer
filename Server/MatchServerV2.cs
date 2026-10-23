@@ -262,8 +262,9 @@ namespace OpenGSServer
                 // ゲームシーン更新（OpenGSCore.MatchRoom使用）
                 room.GameUpdate();
 
-                // ラグ補償システムにルーム内のプレイヤーを登録（一時的な場所、本来はプレイヤー参加時に行う）
-                foreach(var player in room.Players)
+                // Ensure room members have state, without resuming peers whose
+                // UDP session is suspended.
+                foreach (var player in room.Players)
                 {
                     _serverLagCompensationManager.AddPlayer(player.Id);
                 }

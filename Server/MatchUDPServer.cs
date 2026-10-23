@@ -171,7 +171,7 @@ namespace OpenGSServer
             var previousState = lagCompensation.GetPlayerState(playerId);
             var preservePosition = string.Equals(previousState.PlayerId, playerId,
                     StringComparison.OrdinalIgnoreCase) && previousState.HasAuthoritativePosition;
-            lagCompensation.AddPlayer(playerId);
+            lagCompensation.ResumePlayer(playerId);
             var matchRoom = MatchRoomManager.Instance.SearchRoomByMemberID(playerId);
             var roomPlayer = matchRoom?.Players.FirstOrDefault(player =>
                 string.Equals(player.Id, playerId, StringComparison.OrdinalIgnoreCase));

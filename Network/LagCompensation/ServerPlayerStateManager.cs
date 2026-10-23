@@ -94,9 +94,17 @@ namespace OpenGSServer.Network
                 HasAuthoritativePosition = false
             });
 
-            lock (state.SyncRoot)
+        }
+
+        public void ResumePlayer(string playerId)
+        {
+            RegisterPlayer(playerId);
+            if (!string.IsNullOrWhiteSpace(playerId) && m_PlayerStates.TryGetValue(playerId, out var state))
             {
-                state.IsSuspended = false;
+                lock (state.SyncRoot)
+                {
+                    state.IsSuspended = false;
+                }
             }
         }
 
