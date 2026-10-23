@@ -72,18 +72,21 @@ namespace OpenGSServer
 
         public void ConnectRankingDB()
         {
-            if (rankingDB != null)
+            lock (syncRoot)
             {
-                return;
-            }
+                if (rankingDB != null)
+                {
+                    return;
+                }
 
-            var directory = Path.GetDirectoryName(Path.GetFullPath(rankingDBfileName));
-            if (!string.IsNullOrEmpty(directory))
-            {
-                Directory.CreateDirectory(directory);
-            }
+                var directory = Path.GetDirectoryName(Path.GetFullPath(rankingDBfileName));
+                if (!string.IsNullOrEmpty(directory))
+                {
+                    Directory.CreateDirectory(directory);
+                }
 
-            rankingDB = new LiteDatabase(rankingDBfileName);
+                rankingDB = new LiteDatabase(rankingDBfileName);
+            }
         }
 
         private ILiteCollection<RankingEntry> Entries()
@@ -191,31 +194,34 @@ namespace OpenGSServer
                 return Array.Empty<RankingEntry>();
             }
 
-            return Entries()
-                .Find(Query.EQ("Mode", mode.ToString()))
-                .GroupBy(entry => entry.AccountId, StringComparer.OrdinalIgnoreCase)
-                .Select(group =>
-                {
-                    var bestEntry = group.OrderByDescending(entry => entry.BestScore)
-                        .ThenByDescending(entry => entry.Matches)
-                        .First();
-                    return new RankingEntry
+            lock (syncRoot)
+            {
+                return Entries()
+                    .Find(Query.EQ(nameof(RankingEntry.Mode), mode.ToString()))
+                    .GroupBy(entry => entry.AccountId, StringComparer.OrdinalIgnoreCase)
+                    .Select(group =>
                     {
-                        Id = BuildKey(bestEntry.AccountId, mode),
-                        AccountId = bestEntry.AccountId,
-                        DisplayName = bestEntry.DisplayName,
-                        Mode = mode.ToString(),
-                        BestScore = group.Max(entry => entry.BestScore),
-                        TotalScore = group.Sum(entry => Math.Max(0, entry.TotalScore)),
-                        Matches = group.Sum(entry => Math.Max(0, entry.Matches)),
-                        LastPlayedUtc = group.Max(entry => entry.LastPlayedUtc)
-                    };
-                })
-                .OrderByDescending(entry => entry.BestScore)
-                .ThenByDescending(entry => entry.Matches)
-                .ThenBy(entry => entry.DisplayName, StringComparer.Ordinal)
-                .Take(limit)
-                .ToList();
+                        var bestEntry = group.OrderByDescending(entry => entry.BestScore)
+                            .ThenByDescending(entry => entry.Matches)
+                            .First();
+                        return new RankingEntry
+                        {
+                            Id = BuildKey(bestEntry.AccountId, mode),
+                            AccountId = bestEntry.AccountId,
+                            DisplayName = bestEntry.DisplayName,
+                            Mode = mode.ToString(),
+                            BestScore = group.Max(entry => entry.BestScore),
+                            TotalScore = group.Sum(entry => Math.Max(0, entry.TotalScore)),
+                            Matches = group.Sum(entry => Math.Max(0, entry.Matches)),
+                            LastPlayedUtc = group.Max(entry => entry.LastPlayedUtc)
+                        };
+                    })
+                    .OrderByDescending(entry => entry.BestScore)
+                    .ThenByDescending(entry => entry.Matches)
+                    .ThenBy(entry => entry.DisplayName, StringComparer.Ordinal)
+                    .Take(limit)
+                    .ToList();
+            }
         }
 
         public RankingEntry? Find(string accountId, EGameMode mode)
@@ -225,11 +231,14 @@ namespace OpenGSServer
                 return null;
             }
 
-            var entries = Entries();
-            return entries.FindById(BuildKey(accountId, mode)) ??
-                entries.Find(Query.EQ(nameof(RankingEntry.Mode), mode.ToString()))
-                    .FirstOrDefault(entry => string.Equals(
-                        entry.AccountId, accountId, StringComparison.OrdinalIgnoreCase));
+            lock (syncRoot)
+            {
+                var entries = Entries();
+                return entries.FindById(BuildKey(accountId, mode)) ??
+                    entries.Find(Query.EQ(nameof(RankingEntry.Mode), mode.ToString()))
+                        .FirstOrDefault(entry => string.Equals(
+                            entry.AccountId, accountId, StringComparison.OrdinalIgnoreCase));
+            }
         }
 
         private static string BuildKey(string accountId, EGameMode mode)
@@ -240,8 +249,11 @@ namespace OpenGSServer
 
         public void Dispose()
         {
-            rankingDB?.Dispose();
-            rankingDB = null;
+            lock (syncRoot)
+            {
+                rankingDB?.Dispose();
+                rankingDB = null;
+            }
         }
     }
 }
