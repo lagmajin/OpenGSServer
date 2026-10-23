@@ -251,6 +251,12 @@ namespace OpenGSServer
                         ConsoleWrite.WriteMessage($"[Match] Broadcasted {MessageType.MatchEndNotification} via UDP to Room: {matchRoom.RoomName}", ConsoleColor.Cyan);
                     }
 
+                    // Finished rooms stay available while players collect their
+                    // results or reconnect. Their mission simulation does not:
+                    // remove it now so the global tick does not retain and scan
+                    // a finished wave for the lifetime of that room.
+                    MissionEnemyRegistry.ClearRoom(matchRoom.Id);
+
                     // 待機室の状態を更新して全プレイヤーに通知
                     if (waitRoom != null)
                     {
