@@ -499,6 +499,7 @@ namespace OpenGSServer
                 ["MessageType"] = "EnemyDamaged",
                 ["RoomID"] = enemy.RoomId,
                 ["EnemyId"] = enemy.EnemyId,
+                ["EnemyKind"] = enemy.Kind.ToString(),
                 ["AttackerId"] = attackerId ?? string.Empty,
                 ["Damage"] = damage,
                 ["Health"] = enemy.Health,
@@ -506,6 +507,8 @@ namespace OpenGSServer
                 ["IsDown"] = !enemy.IsAlive,
                 ["PosX"] = enemy.Position.X,
                 ["PosY"] = enemy.Position.Y,
+                ["FacingX"] = enemy.Facing.X,
+                ["FacingY"] = enemy.Facing.Y,
                 ["Timestamp"] = string.IsNullOrEmpty(enemy.Timestamp)
                     ? DateTime.UtcNow.ToString("o")
                     : enemy.Timestamp
