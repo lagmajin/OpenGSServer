@@ -200,43 +200,7 @@ namespace OpenGSServer
                     }
                 }
 
-                // UDP入力は受信コールバックで即時適用せず、固定Tickで適用する。
-                var tickSeconds = (_gameLoopTimer?.IntervalMs ?? 40) / 1000.0f;
-                _udpServer?.Tick(tickSeconds);
-
-                // Projectiles are server owned, so they are stepped here rather
-                // than left to the client, which previously simulated nothing
-                // on the server at all.
-                InGameMatchEventHandler.UpdateProjectiles(tickSeconds);
-
-                // Enemies are stepped on the same clock as everything else. A room
-                // with a mission has them moving towards the party and landing
-                // hits; without this they stood where they were put until the
-                // match ended.
-                InGameMatchEventHandler.UpdateEnemies(tickSeconds);
-
-                // A reload finishes on a clock rather than on a message, so the
-                // server advances it and tells the owner. Without this the client's
-                // own reload animation was the only thing that ever ended a reload,
-                // and the server's magazine stayed empty.
-                InGameMatchEventHandler.UpdateReloads();
-
-                // Field items are server owned, so the server also decides what
-                // appears on the map and when. The configured spawn rules existed
-                // and nothing called them, so a live match had an empty item map.
-                InGameMatchEventHandler.UpdateFieldItemSpawns(tickSeconds);
-
-                // A flag lying on the ground becomes due back on a timer, and the
-                // server is the side that holds it. The client had the only timer,
-                // so a dropped flag came back only if some client lived long
-                // enough to say so, and one that did not stayed on the ground for
-                // the rest of the match with its team unable to score.
-                foreach (var matchRoom in matchRoomManager.AllRooms().OfType<MatchRoom>())
-                {
-                    InGameMatchEventHandler.ReturnTimedOutFlags(matchRoom);
-                }
-
-                _serverLagCompensationManager.Update((_gameLoopTimer?.IntervalMs ?? 40) / 1000.0f);
+                UpdateServerOwnedSystems(matchRoomManager);
 
                 // TCPフレームカウント更新
                 _tcpServer?.IncrementFrame();
@@ -400,6 +364,8 @@ namespace OpenGSServer
 
             try
             {
+                // Preserve the single-threaded loop's receive/update ordering.
+                _udpServer?.PollingEvent();
                 var matchRoomManager = MatchRoomManager.Instance;
                 var allRooms = matchRoomManager.AllRooms();
 
@@ -417,9 +383,7 @@ namespace OpenGSServer
                     }
                 });
 
-                _serverLagCompensationManager.Update((_gameLoopTimer?.IntervalMs ?? 40) / 1000.0f);
-
-                _udpServer?.PollingEvent();
+                UpdateServerOwnedSystems(matchRoomManager);
                 _tcpServer?.IncrementFrame();
                 _totalFrames++;
             }
@@ -430,6 +394,28 @@ namespace OpenGSServer
 
             _performanceTimer.Stop();
             UpdatePerformanceStats(_gameLoopTimer?.IntervalMs ?? 40);
+        }
+
+        /// <summary>
+        /// Advances systems that are authoritative for all match rooms. Both
+        /// loop modes use this sequence so parallel room updates cannot disable
+        /// combat, reloads, items, or timed flags.
+        /// </summary>
+        private void UpdateServerOwnedSystems(MatchRoomManager roomManager)
+        {
+            var tickSeconds = (_gameLoopTimer?.IntervalMs ?? 40) / 1000.0f;
+            _udpServer?.Tick(tickSeconds);
+            InGameMatchEventHandler.UpdateProjectiles(tickSeconds);
+            InGameMatchEventHandler.UpdateEnemies(tickSeconds);
+            InGameMatchEventHandler.UpdateReloads();
+            InGameMatchEventHandler.UpdateFieldItemSpawns(tickSeconds);
+
+            foreach (var matchRoom in roomManager.AllRooms().OfType<MatchRoom>())
+            {
+                InGameMatchEventHandler.ReturnTimedOutFlags(matchRoom);
+            }
+
+            _serverLagCompensationManager.Update(tickSeconds);
         }
 
         /// <summary>
