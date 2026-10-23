@@ -609,30 +609,22 @@ namespace OpenGSServer
     {
         lock (matchRoomsLock)
         {
-            foreach (var room in matchRooms.Values)
+            var room = matchRooms.Values.FirstOrDefault(candidate =>
+                candidate.Players.Exists(player =>
+                    string.Equals(player.Id, userid, StringComparison.OrdinalIgnoreCase)));
+            if (room == null)
             {
-                if (room.Players.Exists(p => string.Equals(p.Id, userid, StringComparison.OrdinalIgnoreCase)))
-                {
-                    room.RemovePlayer(userid);
-                    // ルームが空になったら削除
-                    if (room.Players.Count == 0)
-                    {
-                        matchRooms.Remove(room.Id);
-                        roomEventBuses.Remove(room.Id);
-                        if (roomFieldItemManagers.TryGetValue(room.Id, out var itemManager))
-                        {
-                            itemManager.EndMatch();
-                        }
-                        roomFieldItemManagers.Remove(room.Id);
+                return;
+            }
 
-                        // The remembered result goes with the room. It is only
-                        // here to be repeated on the end notification, and a room
-                        // id is never reused, so keeping it would be a result per
-                        // room that has ever existed, for the life of the process.
-                        ClearMatchResults(room.Id.ToString());
-                    }
-                    break;
-                }
+            room.RemovePlayer(userid);
+            // ルームが空になったら削除
+            if (room.Players.Count == 0)
+            {
+                // Use the full teardown so projectiles, flags, mission
+                // enemies, field items, and remembered results all leave
+                // with the empty room.
+                RemoveRoom(room.Id.ToString(), forceShutdownNowPlayingRooms: true);
             }
         }
     }

@@ -2152,7 +2152,10 @@ namespace OpenGSServer
 
             if (!preserveRoomMembership)
             {
-                matchRoom?.RemovePlayer(playerId);
+                if (matchRoom != null)
+                {
+                    MatchRoomManager.Instance.ExitRoom(playerId);
+                }
                 MatchServerV2.Instance.ServerLagCompensationManager.RemovePlayer(playerId);
                 MatchServerV2.Instance.ForgetPlayerLeft(playerId);
             }
