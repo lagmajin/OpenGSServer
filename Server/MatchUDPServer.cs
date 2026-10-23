@@ -2,6 +2,7 @@
 using LiteNetLib;
 using LiteNetLib.Utils;
 using System;
+using System.Collections.Generic;
 using System.Collections.Concurrent;
 using System.Text;
 using Newtonsoft.Json.Linq;
@@ -1212,7 +1213,7 @@ namespace OpenGSServer
             {
                 if (!entry.Value.IsExpired) continue;
 
-                _connectionTokenInfo.TryRemove(entry.Key, out _);
+                ((ICollection<KeyValuePair<string, ConnectionTokenInfo>>)_connectionTokenInfo).Remove(entry);
             }
         }
 
