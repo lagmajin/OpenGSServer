@@ -291,6 +291,106 @@ namespace OpenGSServer
             }
         }
 
+        public MatchResultResponse? SettleMatchProgress(
+            string matchId, string accountId, Func<DBAccount, MatchResultResponse> updateProgress)
+        {
+            if (string.IsNullOrWhiteSpace(matchId) || string.IsNullOrWhiteSpace(accountId) || updateProgress == null)
+                return null;
+
+            lock (_accountMutationLock)
+            {
+                var database = EnsureDatabase();
+                var accounts = database.GetCollection<DBAccount>(accountTableName);
+                var account = FindAccountRecord(accounts, accountId);
+                if (account == null) return null;
+
+                var receipts = database.GetCollection<DBMatchSettlementReceipt>("MatchSettlementReceipt");
+                var receiptId = $"{account.AccountId}:{matchId}";
+                var existingReceipt = receipts.FindById(receiptId);
+                if (existingReceipt != null) return existingReceipt.ToResponse();
+
+                if (!database.BeginTrans())
+                    throw new InvalidOperationException("Could not begin match settlement transaction.");
+
+                try
+                {
+                    account = FindAccountRecord(accounts, account.AccountId);
+                    if (account == null)
+                    {
+                        database.Rollback();
+                        return null;
+                    }
+
+                    existingReceipt = receipts.FindById(receiptId);
+                    if (existingReceipt != null)
+                    {
+                        database.Commit();
+                        return existingReceipt.ToResponse();
+                    }
+
+                    var response = updateProgress(account);
+                    if (response == null)
+                    {
+                        database.Rollback();
+                        return null;
+                    }
+
+                    account.LastUpdatedUtc = DateTime.UtcNow.ToString("O");
+                    if (!accounts.Update(account))
+                    {
+                        database.Rollback();
+                        return null;
+                    }
+                    receipts.Insert(new DBMatchSettlementReceipt
+                    {
+                        Id = receiptId,
+                        AccountId = account.AccountId,
+                        MatchId = matchId,
+                        PlayerId = response.PlayerId,
+                        XpGained = response.XpGained,
+                        NewTotalXp = response.NewTotalXp,
+                        NewLevel = response.NewLevel,
+                        LevelXp = response.LevelXp,
+                        IsLevelUp = response.IsLevelUp,
+                        CreatedUtc = DateTime.UtcNow.ToString("O")
+                    });
+
+                    if (!database.Commit())
+                        throw new InvalidOperationException("Could not commit match settlement transaction.");
+                    return response;
+                }
+                catch
+                {
+                    database.Rollback();
+                    throw;
+                }
+            }
+        }
+
+        private sealed class DBMatchSettlementReceipt
+        {
+            [BsonId] public string Id { get; set; } = string.Empty;
+            public string AccountId { get; set; } = string.Empty;
+            public string MatchId { get; set; } = string.Empty;
+            public string PlayerId { get; set; } = string.Empty;
+            public int XpGained { get; set; }
+            public int NewTotalXp { get; set; }
+            public int NewLevel { get; set; }
+            public int LevelXp { get; set; }
+            public bool IsLevelUp { get; set; }
+            public string CreatedUtc { get; set; } = string.Empty;
+
+            public MatchResultResponse ToResponse() => new()
+            {
+                PlayerId = PlayerId,
+                XpGained = XpGained,
+                NewTotalXp = NewTotalXp,
+                NewLevel = NewLevel,
+                LevelXp = LevelXp,
+                IsLevelUp = IsLevelUp
+            };
+        }
+
         public void UpdateAccountScore(in string accountID, in DBAccountScore score)
         {
             if (string.IsNullOrWhiteSpace(accountID))

@@ -911,6 +911,7 @@ namespace OpenGSServer
                 // whole settlement without risking duplicate progression.
                 var perPlayerResult = BuildMatchResultEnvelope(room, result, player);
                 var persisted = LobbyServerManager.Instance.RecordMatchResult(
+                    roomId,
                     player.Id,
                     player.Score,
                     player.Kills,

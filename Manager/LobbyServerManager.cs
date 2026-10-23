@@ -51,12 +51,12 @@ namespace OpenGSServer
         }
 
         public OpenGSServer.Network.MatchResultResponse? RecordMatchResult(
-            string playerId, int matchScore, int kills, int deaths, bool won, EGameMode mode)
+            string matchId, string playerId, int matchScore, int kills, int deaths, bool won, EGameMode mode)
         {
-            if (string.IsNullOrWhiteSpace(playerId)) return null;
+            if (string.IsNullOrWhiteSpace(matchId) || string.IsNullOrWhiteSpace(playerId)) return null;
 
             var database = AccountDatabaseManager.GetInstance();
-            return database.UpdateMatchProgress(playerId, account =>
+            return database.SettleMatchProgress(matchId, playerId, account =>
             {
                 var calculated = OpenGSServer.Network.MatchLevelCalculator.CreateMatchResultResponse(
                     playerId,
