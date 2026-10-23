@@ -123,6 +123,10 @@ namespace OpenGSServer
             var account = AccountDatabaseManager.GetInstance().GetAccount(accountId);
             if (account == null)
             {
+                if (!replaceStaleSession)
+                {
+                    AccountManager.GetInstance().Logout(accountId, false);
+                }
                 return SendLoginFailure(
                     session,
                     new LoginResult(accountId, eLoginResultType.AccountNotFound));
@@ -137,17 +141,21 @@ namespace OpenGSServer
             if (replaceStaleSession)
             {
                 manager.RemoveAccount(accountId);
+                // The resumed session replaces stale server-side state. Do not
+                // acknowledge the resume unless both account records were added.
+                if (!manager.AddNewLogonUser(new DBAccount
+                {
+                    AccountId = accountId,
+                    DisplayName = account.DisplayName,
+                    HashedPassword = account.HashedPassword,
+                    Salt = account.Salt
+                }))
+                {
+                    return SendLoginFailure(
+                        session,
+                        new LoginResult(accountId, eLoginResultType.Unknown));
+                }
             }
-
-            // The resumed session is logged on the same way a password login is,
-            // so a client that reconnects is not a second session for one account.
-            manager.AddNewLogonUser(new DBAccount
-            {
-                AccountId = accountId,
-                DisplayName = account.DisplayName,
-                HashedPassword = account.HashedPassword,
-                Salt = account.Salt
-            });
 
             var json = new JObject
             {
