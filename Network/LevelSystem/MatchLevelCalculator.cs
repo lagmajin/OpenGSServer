@@ -31,20 +31,19 @@ namespace OpenGSServer.Network
         public static int CalculateMatchXp(int matchScore, int kills, int deaths, bool isVictory)
         {
             // 基础XP = スコア + キル * 10
-            int baseXp = matchScore + (kills * 10);
+            long baseXp = Math.Max(0L, matchScore) + (Math.Max(0L, kills) * 10L);
 
             // 死亡ペナルティ
-            int deathPenalty = deaths * 2;
+            long deathPenalty = Math.Max(0L, deaths) * 2L;
 
             // 勝利ボーナス
             int victoryBonus = isVictory ? 50 : 0;
 
             // アシスト報酬
-            int assistBonus = Math.Max(0, kills - deaths) * 5;
+            long assistBonus = Math.Max(0L, (long)kills - deaths) * 5L;
 
-            int totalXp = Math.Max(0, baseXp - deathPenalty + victoryBonus + assistBonus);
-
-            return totalXp;
+            long totalXp = Math.Max(0L, baseXp - deathPenalty + victoryBonus + assistBonus);
+            return (int)Math.Min(totalXp, int.MaxValue);
         }
 
         /// <summary>
@@ -53,7 +52,7 @@ namespace OpenGSServer.Network
         public static int CalculateLevel(int totalXp)
         {
             int level = 1;
-            int xpRemaining = totalXp;
+            int xpRemaining = Math.Max(0, totalXp);
 
             for (int i = 0; i < LevelUpXpTable.Length; i++)
             {
@@ -76,7 +75,7 @@ namespace OpenGSServer.Network
         /// </summary>
         public static int CalculateLevelXp(int totalXp)
         {
-            int xpRemaining = totalXp;
+            int xpRemaining = Math.Max(0, totalXp);
 
             for (int i = 0; i < LevelUpXpTable.Length; i++)
             {
@@ -127,8 +126,11 @@ namespace OpenGSServer.Network
             bool isVictory,
             int currentTotalXp)
         {
-            int xpGained = CalculateMatchXp(matchScore, kills, deaths, isVictory);
-            int newTotalXp = currentTotalXp + xpGained;
+            int normalizedCurrentXp = Math.Max(0, currentTotalXp);
+            int xpGained = Math.Min(
+                CalculateMatchXp(matchScore, kills, deaths, isVictory),
+                int.MaxValue - normalizedCurrentXp);
+            int newTotalXp = normalizedCurrentXp + xpGained;
 
             int newLevel = CalculateLevel(newTotalXp);
             int levelXp = CalculateLevelXp(newTotalXp);
@@ -140,7 +142,7 @@ namespace OpenGSServer.Network
                 NewTotalXp = newTotalXp,
                 NewLevel = newLevel,
                 LevelXp = levelXp,
-                IsLevelUp = newLevel > CalculateLevel(currentTotalXp)
+                IsLevelUp = newLevel > CalculateLevel(normalizedCurrentXp)
             };
         }
     }
