@@ -772,15 +772,35 @@ namespace OpenGSServer
         /// to put it.
         /// </para>
         /// </summary>
+        private static void SendWeaponDropRefused(
+            string roomId, string playerId, string weaponType, string reason)
+        {
+            if (string.IsNullOrWhiteSpace(roomId) || string.IsNullOrWhiteSpace(playerId) ||
+                string.IsNullOrWhiteSpace(weaponType) || weaponType.Length > 64 ||
+                string.IsNullOrWhiteSpace(reason) || reason.Length > 128)
+                return;
+
+            GameMessageDispatcher.SendToPlayer(playerId, new JObject
+            {
+                ["MessageType"] = "WeaponDropRefused",
+                ["RoomID"] = roomId,
+                ["PlayerID"] = playerId,
+                ["WeaponType"] = weaponType,
+                ["Reason"] = reason,
+                ["Timestamp"] = DateTime.UtcNow.ToString("o")
+            });
+        }
+
         private static void HandleWeaponDrop(MatchRoom room, string playerId, JObject json)
         {
+            var weaponType = ReadString(json, "WeaponType", "WeaponID", "WeaponId");
             if (!TryGetActiveCombatant(room, playerId, out _))
             {
                 Console.WriteLine($"[Match] Ignored weapon drop from inactive or downed player '{playerId}'");
+                SendWeaponDropRefused(room.Id.ToString(), playerId, weaponType, "PlayerInactive");
                 return;
             }
 
-            var weaponType = ReadString(json, "WeaponType", "WeaponID", "WeaponId");
             if (string.IsNullOrWhiteSpace(weaponType))
             {
                 Console.WriteLine($"[Match] Ignored weapon drop with no weapon type from '{playerId}'");
@@ -791,6 +811,7 @@ namespace OpenGSServer
             if (string.IsNullOrEmpty(state.PlayerId) || !state.HasAuthoritativePosition)
             {
                 Console.WriteLine($"[Match] Refused weapon drop for '{playerId}': no authoritative position");
+                SendWeaponDropRefused(room.Id.ToString(), playerId, weaponType, "PositionUnavailable");
                 return;
             }
 
@@ -798,6 +819,7 @@ namespace OpenGSServer
             if (itemManager == null)
             {
                 Console.WriteLine($"[Match] Weapon drop for '{playerId}' with no item manager in room '{room.Id}'");
+                SendWeaponDropRefused(room.Id.ToString(), playerId, weaponType, "ItemManagerUnavailable");
                 return;
             }
 
@@ -805,6 +827,7 @@ namespace OpenGSServer
             if (slot < -1 || slot >= 3)
             {
                 Console.WriteLine($"[Match] Refused weapon drop with invalid slot '{slot}' from '{playerId}'");
+                SendWeaponDropRefused(room.Id.ToString(), playerId, weaponType, "InvalidSlot");
                 return;
             }
 
@@ -813,6 +836,7 @@ namespace OpenGSServer
             if (canonicalDropWeapon == null)
             {
                 Console.WriteLine($"[Match] Refused drop of unowned weapon '{weaponType}' from '{playerId}'");
+                SendWeaponDropRefused(room.Id.ToString(), playerId, weaponType, "WeaponNotOwned");
                 return;
             }
 
@@ -821,6 +845,7 @@ namespace OpenGSServer
             {
                 Console.WriteLine(
                     $"[Match] Refused {canonicalDropWeapon} drop from '{playerId}' without an equipped pickup");
+                SendWeaponDropRefused(room.Id.ToString(), playerId, weaponType, "WeaponNotOwned");
                 return;
             }
 
@@ -849,6 +874,7 @@ namespace OpenGSServer
             if (!dropped)
             {
                 Console.WriteLine($"[Match] Refused weapon drop of '{weaponType}' by '{playerId}'");
+                SendWeaponDropRefused(room.Id.ToString(), playerId, weaponType, "DropUnavailable");
                 return;
             }
 
