@@ -328,6 +328,15 @@ namespace OpenGSServer
                 {
                     simulator.Clear();
                 }
+
+                var pendingPrefix = roomId + "\n";
+                foreach (var key in PendingEnemyStates.Keys)
+                {
+                    if (key.StartsWith(pendingPrefix, StringComparison.OrdinalIgnoreCase))
+                        PendingEnemyStates.TryRemove(key, out _);
+                }
+                if (Simulators.IsEmpty)
+                    NextEnemyStateBroadcastAtSeconds = 0.0;
             }
         }
 
