@@ -167,6 +167,7 @@ namespace OpenGSServer
         }
         private static readonly ConcurrentDictionary<string, DateTime> LastShots = new();
         private static readonly ConcurrentDictionary<string, long> LastGrenadeThrows = new();
+        private static readonly ConcurrentDictionary<string, long> LastMatchStatusRequests = new();
         private static readonly ConcurrentDictionary<string, string> EquippedSpecialWeapons =
             new(StringComparer.OrdinalIgnoreCase);
 
@@ -464,7 +465,10 @@ namespace OpenGSServer
                     break;
 
                 case GameMessageTypes.MatchStatusRequest:
-                    SendMatchStatus(room, playerId);
+                    if (TryAcceptMatchStatusRequest(playerId))
+                        SendMatchStatus(room, playerId);
+                    else
+                        Console.WriteLine($"[Match] Ignored rapid status request from '{playerId}'");
                     break;
 
                 case GameMessageTypes.PlayerRespawn:
@@ -3920,6 +3924,26 @@ namespace OpenGSServer
             }
         }
 
+        private static bool TryAcceptMatchStatusRequest(string playerId)
+        {
+            var key = playerId.ToLowerInvariant();
+            var now = Environment.TickCount64;
+            while (true)
+            {
+                if (LastMatchStatusRequests.TryGetValue(key, out var previous))
+                {
+                    if (now - previous < 1000)
+                        return false;
+                    if (LastMatchStatusRequests.TryUpdate(key, now, previous))
+                        return true;
+                }
+                else if (LastMatchStatusRequests.TryAdd(key, now))
+                {
+                    return true;
+                }
+            }
+        }
+
         private static void ClearShotCooldowns(string playerId)
         {
             var prefix = $"{playerId.ToLowerInvariant()}:";
@@ -3929,6 +3953,7 @@ namespace OpenGSServer
                 LastShots.TryRemove(key, out _);
             }
             LastGrenadeThrows.TryRemove(playerId.ToLowerInvariant(), out _);
+            LastMatchStatusRequests.TryRemove(playerId.ToLowerInvariant(), out _);
         }
 
         /// <summary>
