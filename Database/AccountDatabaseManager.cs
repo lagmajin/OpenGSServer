@@ -1,5 +1,6 @@
 using LiteDB;
 using OpenGSCore;
+using OpenGSServer.Network;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -236,21 +237,21 @@ namespace OpenGSServer
             col.Update(rec);
         }
 
-        public bool UpdateMatchProgress(in DBAccount player)
+        public MatchResultResponse? UpdateMatchProgress(
+            string accountId, Func<DBAccount, MatchResultResponse> updateProgress)
         {
-            if (string.IsNullOrWhiteSpace(player.AccountId))
-                return false;
+            if (string.IsNullOrWhiteSpace(accountId) || updateProgress == null)
+                return null;
 
             lock (_accountMutationLock)
             {
                 var col = EnsureDatabase().GetCollection<DBAccount>(accountTableName);
-                var rec = col.FindOne(Query.EQ(nameof(DBAccount.AccountId), player.AccountId));
-                if (rec == null) return false;
-                rec.Level = player.Level;
-                rec.Exp = player.Exp;
-                rec.LifeTimeScore = player.LifeTimeScore ?? new PlayerLifeTimeScore();
+                var rec = col.FindOne(Query.EQ(nameof(DBAccount.AccountId), accountId));
+                if (rec == null) return null;
+                var result = updateProgress(rec);
+                if (result == null) return null;
                 rec.LastUpdatedUtc = DateTime.UtcNow.ToString("O");
-                return col.Update(rec);
+                return col.Update(rec) ? result : null;
             }
         }
 

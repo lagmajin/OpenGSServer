@@ -58,48 +58,43 @@ namespace OpenGSServer
             if (string.IsNullOrWhiteSpace(playerId)) return result;
 
             var database = AccountDatabaseManager.GetInstance();
-            var account = database.GetAccount(playerId);
-            if (account == null) return result;
-
-            var calculated = OpenGSServer.Network.MatchLevelCalculator.CreateMatchResultResponse(
-                playerId,
-                Math.Max(0, matchScore),
-                Math.Max(0, kills),
-                Math.Max(0, deaths),
-                won,
-                (int)Math.Clamp(account.Exp, 0, int.MaxValue));
-
-            account.Exp = calculated.NewTotalXp;
-            account.Level = calculated.NewLevel;
-            account.LifeTimeScore ??= new PlayerLifeTimeScore();
-            switch (mode)
+            return database.UpdateMatchProgress(playerId, account =>
             {
-                case EGameMode.TeamDeathMatch:
-                    account.LifeTimeScore.RecordTeamDeathMatchResult(won);
-                    break;
-                case EGameMode.Survival:
-                    account.LifeTimeScore.RecordSurvivalResult(won, false);
-                    break;
-                case EGameMode.TeamSurvival:
-                    account.LifeTimeScore.RecordSurvivalResult(won, true);
-                    break;
-                case EGameMode.CaptureTheFlag:
-                    // A capture the flag result used to land in the death match
-                    // branch below, because there was no case for it. A player's
-                    // lifetime record then counted their capture the flag wins as
-                    // death match wins: a number they can see, and simply wrong.
-                    account.LifeTimeScore.RecordCaptureTheFlagResult(won);
-                    break;
-                case EGameMode.Mission:
-                    account.LifeTimeScore.RecordMissionResult(won);
-                    break;
-                default:
-                    account.LifeTimeScore.RecordDeathMatchResult(won);
-                    break;
-            }
+                var calculated = OpenGSServer.Network.MatchLevelCalculator.CreateMatchResultResponse(
+                    playerId,
+                    Math.Max(0, matchScore),
+                    Math.Max(0, kills),
+                    Math.Max(0, deaths),
+                    won,
+                    (int)Math.Clamp(account.Exp, 0, int.MaxValue));
 
-            database.UpdateMatchProgress(account);
-            return calculated;
+                account.Exp = calculated.NewTotalXp;
+                account.Level = calculated.NewLevel;
+                account.LifeTimeScore ??= new PlayerLifeTimeScore();
+                switch (mode)
+                {
+                    case EGameMode.TeamDeathMatch:
+                        account.LifeTimeScore.RecordTeamDeathMatchResult(won);
+                        break;
+                    case EGameMode.Survival:
+                        account.LifeTimeScore.RecordSurvivalResult(won, false);
+                        break;
+                    case EGameMode.TeamSurvival:
+                        account.LifeTimeScore.RecordSurvivalResult(won, true);
+                        break;
+                    case EGameMode.CaptureTheFlag:
+                        // Keep capture-the-flag records out of the death-match counters.
+                        account.LifeTimeScore.RecordCaptureTheFlagResult(won);
+                        break;
+                    case EGameMode.Mission:
+                        account.LifeTimeScore.RecordMissionResult(won);
+                        break;
+                    default:
+                        account.LifeTimeScore.RecordDeathMatchResult(won);
+                        break;
+                }
+                return calculated;
+            }) ?? result;
         }
 
         public void RecordDamageDailyProgress(string playerId, int amount)
