@@ -258,6 +258,13 @@ namespace OpenGSServer
         /// </summary>
         private void SendTransformStateToClient(NetPeer peer, ServerTransformState state)
         {
+            if (string.IsNullOrWhiteSpace(state.PlayerId) ||
+                !_connectedPlayers.TryGetValue(state.PlayerId, out var activeConnection) ||
+                activeConnection.PeerId != peer.Id)
+            {
+                return;
+            }
+
             var message = CreateTransformStateMessage(state);
             var room = GetMatchRoomForPlayer(state.PlayerId);
             if (room == null)
