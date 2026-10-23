@@ -1384,9 +1384,9 @@ namespace OpenGSServer
 
             var accountId = ResolveGuildPlayerId(session, data, "PlayerID", "PlayerId", "AccountID", "AccountId");
             var itemId = data?["ItemId"]?.ToString() ?? string.Empty;
-            var price = GetShopPurchasePrice(itemId);
             var db = AccountDatabaseManager.GetInstance();
-            if (string.IsNullOrWhiteSpace(itemId) || price < 0)
+            var shopItem = ResolveShopItem(itemId);
+            if (shopItem == null)
             {
                 session.SendAsyncJsonWithTimeStamp(new JObject
                 {
@@ -1399,13 +1399,14 @@ namespace OpenGSServer
                 return;
             }
 
-            var purchase = db.TryPurchaseItem(accountId, itemId, price);
+            var purchase = db.TryPurchaseItem(
+                accountId, shopItem.Value.ItemId, shopItem.Value.Price);
 
             session.SendAsyncJsonWithTimeStamp(new JObject
             {
                 ["MessageType"] = MessageType.ShopPurchaseResponse,
                 ["Success"] = purchase.Success,
-                ["ItemId"] = itemId,
+                ["ItemId"] = shopItem.Value.ItemId,
                 ["Credits"] = purchase.Credits,
                 ["AlreadyOwned"] = purchase.AlreadyOwned,
                 ["ErrorMessage"] = purchase.Error
@@ -2056,31 +2057,63 @@ namespace OpenGSServer
             return string.Empty;
         }
 
-        private static long GetShopPurchasePrice(string itemId)
+        private static readonly Dictionary<string, long> ShopPurchasePrices = new(StringComparer.OrdinalIgnoreCase)
         {
-            if (string.IsNullOrWhiteSpace(itemId))
-            {
-                return 0;
-            }
+            ["Glock"] = 250,
+            ["MP5"] = 250,
+            ["DesertEagle"] = 350,
+            ["Scorpion"] = 350,
+            ["Uzi"] = 350,
+            ["AK47"] = 500,
+            ["M16"] = 500,
+            ["FAMAS"] = 500,
+            ["F2000"] = 500,
+            ["SteyrAug"] = 500,
+            ["Scout"] = 650,
+            ["Dragunov"] = 650,
+            ["PSG1"] = 650,
+            ["AWP"] = 650,
+            ["MG42"] = 800,
+            ["M60"] = 800,
+            ["FNMinimiSaw"] = 800,
+            ["LaserGun"] = 900,
+            ["BubbleGun"] = 900,
+            ["ChristmasGun"] = 900,
+            ["Ami"] = 0,
+            ["Yumi"] = 0,
+            ["Misty"] = 0,
+            ["Jack"] = 250,
+            ["Jackle"] = 250,
+            ["LittleJ"] = 250,
+            ["Liu"] = 350,
+            ["Mary"] = 350,
+            ["Seoul"] = 350,
+            ["Wolf"] = 500,
+            ["Wyvern"] = 500,
+            ["Shue"] = 500,
+            ["Swaltz"] = 500,
+            ["BoostRed"] = 400,
+            ["BoostBlue"] = 400,
+            ["BoostGreen"] = 400,
+            ["HealthKit"] = 120,
+            ["FireBullet"] = 180,
+            ["PoisonBullet"] = 180,
+            ["PowerGrenadePack"] = 220,
+            ["ClusterGrenadePack"] = 220,
+            ["MagnetGrenadePack"] = 220,
+            ["MineGrenadePack"] = 220
+        };
 
-            return itemId switch
-            {
-                "Glock" or "MP5" => 250,
-                "DesertEagle" or "Scorpion" or "Uzi" => 350,
-                "AK47" or "M16" or "FAMAS" or "F2000" or "SteyrAug" => 500,
-                "Scout" or "Dragunov" or "PSG1" or "AWP" => 650,
-                "MG42" or "M60" or "FNMinimiSaw" => 800,
-                "LaserGun" or "BubbleGun" or "ChristmasGun" => 900,
-                "Ami" or "Yumi" or "Misty" => 0,
-                "Jack" or "Jackle" or "LittleJ" => 250,
-                "Liu" or "Mary" or "Seoul" => 350,
-                "Wolf" or "Wyvern" or "Shue" or "Swaltz" => 500,
-                "BoostRed" or "BoostBlue" or "BoostGreen" => 400,
-                "HealthKit" => 120,
-                "FireBullet" or "PoisonBullet" => 180,
-                "PowerGrenadePack" or "ClusterGrenadePack" or "MagnetGrenadePack" or "MineGrenadePack" => 220,
-                _ => -1
-            };
+        private static (string ItemId, long Price)? ResolveShopItem(string itemId)
+        {
+            var requestedId = itemId?.Trim();
+            if (string.IsNullOrEmpty(requestedId) ||
+                !ShopPurchasePrices.TryGetValue(requestedId, out var price))
+                return null;
+
+            var canonicalId = ShopPurchasePrices.Keys.First(key =>
+                string.Equals(key, requestedId, StringComparison.OrdinalIgnoreCase));
+            return (canonicalId, price);
         }
 
         private static JObject BuildGuildSummaryJson(DBGuild guild, IEnumerable<DBGuildMember> members)
