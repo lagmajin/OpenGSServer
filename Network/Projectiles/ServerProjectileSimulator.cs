@@ -60,6 +60,8 @@ namespace OpenGSServer.Network
         public const float PlayerHitRadius = 0.6f;
         public const float GrenadeGravity = 18.0f;
         public const float GrenadeArmingSeconds = 0.15f;
+        public const float RocketProjectileSpeed = 30.0f;
+        public const float LaunchedGrenadeSpeed = 18.0f;
 
         private readonly ConcurrentDictionary<string, ServerProjectileState> _projectiles =
             new(StringComparer.OrdinalIgnoreCase);
@@ -154,6 +156,8 @@ namespace OpenGSServer.Network
         {
             return grenadeType?.ToLowerInvariant() switch
             {
+                "rocketprojectile" => 180,
+                "launchedgrenade" => 120,
                 "smoke" or "smokegrenade" => 0,
                 "fire" or "firegrenade" => 150,
                 "clusterchild" or "childclustergrenade" => 30,
@@ -166,13 +170,19 @@ namespace OpenGSServer.Network
 
         public static float CalculateGrenadeRadius(string? grenadeType)
         {
-            return 2.5f;
+            return grenadeType?.ToLowerInvariant() switch
+            {
+                "rocketprojectile" => 3.5f,
+                _ => 2.5f
+            };
         }
 
         public static float CalculateGrenadeFuse(string? grenadeType)
         {
             return grenadeType?.ToLowerInvariant() switch
             {
+                "rocketprojectile" => 1.5f,
+                "launchedgrenade" => 2.5f,
                 "power" or "powergrenade" => 2.0f,
                 "cluster" or "clustergrenade" => 2.0f,
                 "fire" or "firegrenade" => 1.125f,
@@ -184,6 +194,10 @@ namespace OpenGSServer.Network
 
         public static float CalculateGrenadeGravity(string? grenadeType)
         {
+            if (string.Equals(grenadeType, "RocketProjectile", StringComparison.OrdinalIgnoreCase))
+                return 0.0f;
+            if (string.Equals(grenadeType, "LaunchedGrenade", StringComparison.OrdinalIgnoreCase))
+                return 10.0f;
             return string.Equals(grenadeType, "Smoke", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(grenadeType, "SmokeGrenade", StringComparison.OrdinalIgnoreCase)
                 ? 14.0f
@@ -226,7 +240,14 @@ namespace OpenGSServer.Network
             float power = 1f)
         {
             power = float.IsFinite(power) ? Math.Clamp(power, 0.1f, 1.0f) : 1.0f;
-            var id = NewProjectileId("grenade");
+            var normalizedType = grenadeType.ToLowerInvariant();
+            var speed = normalizedType switch
+            {
+                "rocketprojectile" => RocketProjectileSpeed,
+                "launchedgrenade" => LaunchedGrenadeSpeed,
+                _ => GrenadeSpeed
+            };
+            var id = NewProjectileId(normalizedType == "rocketprojectile" ? "rocket" : "grenade");
             var projectile = new ServerProjectileState
             {
                 ProjectileId = id,
@@ -234,7 +255,7 @@ namespace OpenGSServer.Network
                 RoomId = roomId,
                 Kind = ServerProjectileKind.Grenade,
                 Position = origin,
-                Velocity = Normalize(direction) * (GrenadeSpeed * power),
+                Velocity = Normalize(direction) * (speed * power),
                 Radius = GrenadeRadius,
                 RemainingLifetime = GrenadeLifetimeSeconds,
                 GrenadeType = grenadeType,

@@ -2528,16 +2528,18 @@ namespace OpenGSServer
             Console.WriteLine($"Player {playerId} shot with {weaponType}");
             if (weaponType is "RocketLauncher" or "GrenadeLauncher")
             {
+                var projectileType = weaponType == "RocketLauncher"
+                    ? "RocketProjectile" : "LaunchedGrenade";
                 var origin = new Vector2(shooterState.PositionX, shooterState.PositionY);
                 var grenadeData = new JObject
                 {
                     ["DirX"] = direction.X,
                     ["DirY"] = direction.Y,
                     ["Power"] = 1.0f,
-                    ["GrenadeType"] = "Normal"
+                    ["GrenadeType"] = projectileType
                 };
                 var projectileId = Projectiles.CreateGrenade(
-                    room.Id.ToString(), playerId, origin, direction, "Normal");
+                    room.Id.ToString(), playerId, origin, direction, projectileType);
                 BroadcastGrenadeEvent(room, playerId, grenadeData, projectileId);
                 return;
             }
@@ -3224,6 +3226,12 @@ namespace OpenGSServer
             var grenadeType = grenadeData.GetStringOrNull("GrenadeType")
                 ?? grenadeData.GetStringOrNull("WeaponType")
                 ?? "Normal";
+            if (grenadeType.Equals("RocketProjectile", StringComparison.OrdinalIgnoreCase) ||
+                grenadeType.Equals("LaunchedGrenade", StringComparison.OrdinalIgnoreCase))
+            {
+                Console.WriteLine($"[Match] Refused client-supplied launcher projectile from '{playerId}'");
+                return;
+            }
             var origin = ReadVector2(grenadeData, "Position", "Origin");
             // The client spells the direction DirX and DirY, as
             // RUDPMessageTypes.CreateGrenadeThrow and ClientNetworkManager both
@@ -3886,6 +3894,8 @@ namespace OpenGSServer
                 "clusterchild" => "ChildClusterGrenade",
                 "fire" => "FireGrenade",
                 "smoke" => "SmokeGrenade",
+                "rocketprojectile" => "RocketProjectile",
+                "launchedgrenade" => "LaunchedGrenade",
                 _ => "NormalGrenade"
             };
         }
