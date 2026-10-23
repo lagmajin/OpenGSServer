@@ -676,6 +676,7 @@ namespace OpenGSServer
                 // behind would keep two flags alive for every room that has ever
                 // existed, for the lifetime of the process.
                 InGameMatchEventHandler.ClearRoomFlagState(room.Id);
+                MissionEnemyRegistry.ClearRoom(room.Id);
                 lastMatchResults.TryRemove(roomId, out _);
                 foreach (var key in persistedMatchPlayers.Keys)
                 {
@@ -699,6 +700,11 @@ namespace OpenGSServer
         {
             if (forceShutdownNowPlayingRooms)
             {
+                foreach (var roomId in matchRooms.Keys.ToList())
+                {
+                    InGameMatchEventHandler.ClearRoomFlagState(roomId);
+                    MissionEnemyRegistry.ClearRoom(roomId);
+                }
                 foreach (var itemManager in roomFieldItemManagers.Values)
                 {
                     itemManager.EndMatch();
@@ -724,6 +730,7 @@ namespace OpenGSServer
                     matchRooms.Remove(roomId);
                     roomEventBuses.Remove(roomId);
                     InGameMatchEventHandler.ClearRoomFlagState(roomId);
+                    MissionEnemyRegistry.ClearRoom(roomId);
                     lastMatchResults.TryRemove(roomId, out _);
                     if (roomFieldItemManagers.TryGetValue(roomId, out var itemManager))
                     {
