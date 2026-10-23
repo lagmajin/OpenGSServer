@@ -3481,7 +3481,14 @@ namespace OpenGSServer
 
         private static void UdpBroadcastToRoom(string roomId, JObject message)
         {
-            GameMessageDispatcher.BroadcastToRoom(roomId, message);
+            var senderPlayerId = message.GetStringOrNull("PlayerID")
+                ?? message.GetStringOrNull("PlayerId")
+                ?? message.GetStringOrNull("DestroyedBy");
+            var messageType = message.GetStringOrNull("MessageType");
+            if (string.IsNullOrWhiteSpace(senderPlayerId) || string.IsNullOrWhiteSpace(messageType))
+                return;
+
+            MatchServerV2.Instance?.BroadcastToRoom(senderPlayerId, messageType, message);
         }
 
         /// <summary>
