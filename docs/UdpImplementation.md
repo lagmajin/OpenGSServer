@@ -37,11 +37,15 @@ dotnet test Tests/OpenGSServer.Tests.csproj
 
 ## Respawn points
 
-The server settings file can provide team-owned spawn points. Coordinates from
-the client are ignored. Example:
+The server settings file can provide team-owned spawn points and an authoritative
+respawn delay (default 5 seconds, configurable from 0 to 60). The server records
+the down time and refuses early requests; the delay is included in `MatchStatus`
+so clients can show the same countdown. Coordinates from the client are ignored.
+Example:
 
 ```json
 {
+  "RespawnDelaySeconds": 5,
   "RespawnPoints": [
     { "Team": "Red", "X": -8, "Y": 0, "Z": 0 },
     { "Team": "Blue", "X": 8, "Y": 0, "Z": 0 }

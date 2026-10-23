@@ -14,6 +14,7 @@ namespace OpenGSServer
         public int MaxRoom { get; private set; } = 32;
         public int MaxUser { get; private set; } = 200;
         public int TickRate { get; private set; } = 60;
+        public float RespawnDelaySeconds { get; private set; } = 5f;
         public bool CanRegisterAccounts { get; private set; } = true;
 
         public IReadOnlyList<EGameMode> AllowGameModes => _allowGameModes;
@@ -58,6 +59,8 @@ namespace OpenGSServer
         public void SetMaxUser(int value) => MaxUser = Math.Max(1, value);
 
         public void SetTickRate(int value) => TickRate = Math.Max(1, value);
+        public void SetRespawnDelaySeconds(float value) =>
+            RespawnDelaySeconds = float.IsFinite(value) ? Math.Clamp(value, 0f, 60f) : 5f;
 
         public void SetCanRegisterAccounts(bool value) => CanRegisterAccounts = value;
 
@@ -86,6 +89,7 @@ namespace OpenGSServer
                 ["MaxRoom"] = MaxRoom,
                 ["MaxUser"] = MaxUser,
                 ["TickRate"] = TickRate,
+                ["RespawnDelaySeconds"] = RespawnDelaySeconds,
                 ["AllowRegisterAccount"] = CanRegisterAccounts,
                 ["AllowGameModes"] = new JArray(_allowGameModes.Select(m => m.ToString()))
             };
@@ -105,6 +109,9 @@ namespace OpenGSServer
             MaxRoom = ReadInt(json, "MaxRoom", MaxRoom, 1);
             MaxUser = ReadInt(json, "MaxUser", MaxUser, 1);
             TickRate = ReadInt(json, "TickRate", TickRate, 1);
+            if (json["RespawnDelaySeconds"]?.Type == JTokenType.Float ||
+                json["RespawnDelaySeconds"]?.Type == JTokenType.Integer)
+                SetRespawnDelaySeconds(json["RespawnDelaySeconds"]!.Value<float>());
             CanRegisterAccounts = ReadBool(json, "AllowRegisterAccount", CanRegisterAccounts);
 
             if (json.TryGetValue("AllowGameModes", out var modesToken))
@@ -246,6 +253,7 @@ public bool TryGetRespawnPoint(ETeam team, int slot, out ServerRespawnPoint poin
             return MaxRoom == other.MaxRoom &&
                    MaxUser == other.MaxUser &&
                    TickRate == other.TickRate &&
+                   RespawnDelaySeconds.Equals(other.RespawnDelaySeconds) &&
                    CanRegisterAccounts == other.CanRegisterAccounts &&
                    _allowGameModes.SequenceEqual(other._allowGameModes);
         }
@@ -256,6 +264,7 @@ public bool TryGetRespawnPoint(ETeam team, int slot, out ServerRespawnPoint poin
             hash.Add(MaxRoom);
             hash.Add(MaxUser);
             hash.Add(TickRate);
+            hash.Add(RespawnDelaySeconds);
             hash.Add(CanRegisterAccounts);
             foreach (var mode in _allowGameModes)
             {

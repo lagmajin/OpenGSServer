@@ -323,7 +323,9 @@ namespace OpenGSServer
             int reserveAmmo,
             JObject? ctfState = null,
             float currentArmor = -1f,
-            float maxArmor = -1f)
+            float maxArmor = -1f,
+            float respawnDelaySeconds = 5f,
+            bool allowRespawn = false)
         {
             var message = new JObject
             {
@@ -343,6 +345,9 @@ namespace OpenGSServer
                 ["CarriedItems"] = new JArray(carriedItems),
                 ["Timestamp"] = DateTime.UtcNow.ToString("o")
             };
+            message["RespawnDelaySeconds"] =
+                float.IsFinite(respawnDelaySeconds) ? Math.Clamp(respawnDelaySeconds, 0f, 60f) : 5f;
+            message["AllowRespawn"] = allowRespawn;
 
             if (!string.IsNullOrWhiteSpace(weaponType) && maxAmmo > 0)
             {

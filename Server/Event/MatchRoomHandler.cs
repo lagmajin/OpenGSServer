@@ -2528,7 +2528,9 @@ namespace OpenGSServer
                 pistolMagazine?.ReadReserve() ?? -1,
                 ctfState,
                 armorSnapshot.Current,
-                armorSnapshot.Maximum);
+                armorSnapshot.Maximum,
+                ServerManager.Instance.Settings.RespawnDelaySeconds,
+                room.Rule?.CanReSpawn() ?? false);
             SendTimedBuffSnapshot(room.Id.ToString(), requestingPlayerId);
 
             var isTeamMode = room.Setting.Mode is EGameMode.TeamDeathMatch or
@@ -2688,6 +2690,15 @@ namespace OpenGSServer
             {
                 Console.WriteLine(
                     $"[Match] Refused a respawn for '{playerId}': {room.Setting?.Mode} does not respawn");
+                return;
+            }
+
+            var respawnDelaySeconds = ServerManager.Instance.Settings.RespawnDelaySeconds;
+            if (!ServerDamageResolver.IsRespawnDelayElapsed(respawnedPlayer, respawnDelaySeconds))
+            {
+                Console.WriteLine(
+                    $"[Match] Refused an early respawn request from '{playerId}' " +
+                    $"(requires {respawnDelaySeconds:0.##} seconds after death)");
                 return;
             }
 

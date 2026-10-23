@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using System.Diagnostics;
 using OpenGSCore;
 
 #nullable enable
@@ -61,6 +62,7 @@ namespace OpenGSServer.Network
         private sealed class PlayerArmorState
         {
             public float Current = 100f;
+            public long DownedAtTimestamp;
             public const float Maximum = 100f;
         }
         private static readonly ConditionalWeakTable<PlayerInfo, PlayerArmorState> PlayerArmor = new();
@@ -79,11 +81,6 @@ namespace OpenGSServer.Network
                 var armor = ArmorState(player);
                 return (armor.Current, PlayerArmorState.Maximum);
             }
-        }
-
-        private static void RefillArmor(PlayerInfo player)
-        {
-            ArmorState(player).Current = PlayerArmorState.Maximum;
         }
 
         /// <summary>
@@ -150,6 +147,9 @@ namespace OpenGSServer.Network
                     player.Health = 0;
                 }
 
+                if (player.Health <= 0)
+                    armor.DownedAtTimestamp = Stopwatch.GetTimestamp();
+
                 return new DamageOutcome(requested, applied, player.Health, false,
                     player.Health <= 0, absorbed, armor.Current);
             }
@@ -168,7 +168,9 @@ namespace OpenGSServer.Network
             lock (HealthLock(player))
             {
                 player.Health = player.MaxHealth > 0 ? player.MaxHealth : 100;
-                RefillArmor(player);
+                var armor = ArmorState(player);
+                armor.DownedAtTimestamp = 0;
+                armor.Current = PlayerArmorState.Maximum;
             }
         }
 
@@ -188,8 +190,22 @@ namespace OpenGSServer.Network
                 }
 
                 player.Health = player.MaxHealth > 0 ? player.MaxHealth : 100;
-                RefillArmor(player);
+                var armor = ArmorState(player);
+                armor.DownedAtTimestamp = 0;
+                armor.Current = PlayerArmorState.Maximum;
                 return true;
+            }
+        }
+
+        public static bool IsRespawnDelayElapsed(PlayerInfo? player, float delaySeconds)
+        {
+            if (player == null || !float.IsFinite(delaySeconds) || delaySeconds < 0f)
+                return false;
+            lock (HealthLock(player))
+            {
+                var downedAt = ArmorState(player).DownedAtTimestamp;
+                return player.Health <= 0 && downedAt != 0 &&
+                    Stopwatch.GetElapsedTime(downedAt).TotalSeconds >= delaySeconds;
             }
         }
 
