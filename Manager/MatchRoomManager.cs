@@ -321,19 +321,22 @@ namespace OpenGSServer
             BeginMatch(matchRoom);
         }
 
-        public void BeginMatch(OpenGSCore.MatchRoom matchRoom)
+        public bool BeginMatch(OpenGSCore.MatchRoom matchRoom)
         {
             if (matchRoom == null)
             {
-                return;
+                return false;
             }
 
             if (matchRoom.Playing)
             {
-                return;
+                return false;
             }
 
-            matchRoom.GameStart();
+            if (!matchRoom.GameStart())
+            {
+                return false;
+            }
 
             // A mission needs something to fight. Its objective count is how many
             // things, so the wave is the number the rule will judge the mission
@@ -350,6 +353,7 @@ namespace OpenGSServer
             ConsoleWrite.WriteMessage(
                 $"[Match] Room {matchRoom.Id} ({matchRoom.RoomName}) is now playing",
                 ConsoleColor.Green);
+            return true;
         }
 
         public List<AbstractGameRoom> AllRooms()

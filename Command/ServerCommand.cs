@@ -873,7 +873,12 @@ namespace OpenGSServer
                     return;
                 }
 
-                room.GameStart();
+                if (!matchRoomManager.BeginMatch(room))
+                {
+                    ConsoleWrite.WriteMessage($"[ERR] Match '{room.RoomName}' is already starting or finished.", ConsoleColor.Yellow);
+                    return;
+                }
+
                 ConsoleWrite.WriteMessage($"[OK] Match '{room.RoomName}' (ID: {room.Id}) started!", ConsoleColor.Green);
             }
             catch (Exception ex)
