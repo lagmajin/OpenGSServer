@@ -1002,6 +1002,19 @@ namespace OpenGSServer
         /// </summary>
         public void HandleMessage(string messageType, JObject data, ClientSession? session = null)
         {
+            if (session != null && !string.IsNullOrWhiteSpace(session.PlayerID))
+            {
+                var playerId = session.PlayerID!;
+                AccountEventHandler.RunIfOwnedSession(
+                    session, playerId, () => HandleMessageCore(messageType, data, session));
+                return;
+            }
+
+            HandleMessageCore(messageType, data, session);
+        }
+
+        private void HandleMessageCore(string messageType, JObject data, ClientSession? session)
+        {
             var clientSession = session as ClientSession; // キャスト
             switch (messageType)
             {
