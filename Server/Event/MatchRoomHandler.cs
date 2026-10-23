@@ -1986,6 +1986,39 @@ namespace OpenGSServer
             // could never arrive while a ghost was holding a team up. It also let
             // the result name somebody who had left as the winner.
             var matchRoom = MatchRoomManager.Instance.SearchRoomByMemberID(playerId);
+            if (matchRoom != null &&
+                MatchRoomManager.Instance.GetFieldItemManager(matchRoom.Id.ToString()) is { } itemManager)
+            {
+                foreach (var token in itemManager.ToJson())
+                {
+                    if (token is not JObject item ||
+                        !string.Equals(ReadString(item, "ReservedByPlayerId"), playerId,
+                            StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    var itemId = ReadString(item, "ItemId", "ItemID");
+                    var weaponType = ReadString(item, "WeaponType", "WeaponID");
+                    if (itemId == null || weaponType == null ||
+                        !itemManager.TrySetReservation(itemId, playerId, reserved: false))
+                        continue;
+
+                    GameMessageDispatcher.BroadcastToRoom(matchRoom.Id.ToString(), new JObject
+                    {
+                        ["MessageType"] = GameMessageTypes.WeaponReleased,
+                        ["RoomID"] = matchRoom.Id.ToString(),
+                        ["ItemId"] = itemId,
+                        ["WeaponId"] = itemId,
+                        ["PlayerID"] = playerId,
+                        ["PlayerId"] = playerId,
+                        ["ReservedByPlayerId"] = playerId,
+                        ["WeaponType"] = weaponType,
+                        ["PosX"] = GetFloat(item.GetValue("PositionX"), 0f),
+                        ["PosY"] = GetFloat(item.GetValue("PositionY"), 0f),
+                        ["Timestamp"] = DateTime.UtcNow.ToString("o")
+                    });
+                }
+            }
+
             if (!preserveRoomMembership)
             {
                 matchRoom?.RemovePlayer(playerId);
