@@ -758,7 +758,8 @@ namespace OpenGSServer.Network
             int magazineAmmo = -1,
             int slot = -1)
         {
-            if (string.IsNullOrWhiteSpace(weaponType) ||
+            if (string.IsNullOrWhiteSpace(weaponType) || weaponType.Length > 64 ||
+                magazineAmmo < -1 || magazineAmmo > 10000 || slot < -1 || slot > 2 ||
                 !IsFinite(x) || !IsFinite(y) || !IsFinite(z))
             {
                 return string.Empty;
