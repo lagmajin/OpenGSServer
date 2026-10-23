@@ -44,7 +44,7 @@ namespace OpenGSServer
             {
                 // Resolve and broadcast the match-room departure while the
                 // player is still a member; ClearPlayerState removes them.
-                MatchServerV2.Instance.NotifyPlayerLeft(playerId);
+                MatchServerV2.Instance.DisconnectPlayerSession(playerId);
             }
             catch (Exception ex)
             {

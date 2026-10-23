@@ -211,7 +211,11 @@ namespace OpenGSServer
                 return;
             }
 
-            _connectedPlayers.TryRemove(playerId, out _); // Dictionaryのキーをstringに
+            if (!((ICollection<KeyValuePair<string, PlayerConnectionInfo>>)_connectedPlayers)
+                .Remove(new KeyValuePair<string, PlayerConnectionInfo>(playerId, currentConnection)))
+            {
+                return;
+            }
             _matchEventRateLimiters.TryRemove(playerId, out _);
             _pendingInputs.TryRemove(playerId, out _);
             _pendingPeers.TryRemove(peer.Id, out _);
@@ -1152,6 +1156,56 @@ namespace OpenGSServer
             if (!string.IsNullOrWhiteSpace(playerId))
             {
                 _playersNotifiedLeft.TryRemove(playerId, out _);
+            }
+        }
+
+        public void DisconnectPlayerSession(string playerId)
+        {
+            if (string.IsNullOrWhiteSpace(playerId))
+            {
+                return;
+            }
+
+            _connectedPlayers.TryRemove(playerId, out var connection);
+            _pendingInputs.TryRemove(playerId, out _);
+            _matchEventRateLimiters.TryRemove(playerId, out _);
+            _connectionTokenInfo.TryRemove(playerId, out _);
+
+            if (connection != null)
+            {
+                _pendingPeers.TryRemove(connection.PeerId, out _);
+                _unauthorizedPacketCounts.TryRemove(connection.PeerId, out _);
+            }
+
+            try
+            {
+                // Resolve the room after detaching the peer so this notification
+                // reaches the remaining players and cannot echo to the leaver.
+                NotifyPlayerLeft(playerId);
+            }
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage(
+                    $"[UDP] Match departure notification failed for {playerId}: {ex.Message}", ConsoleColor.Red);
+            }
+
+            if (connection == null)
+            {
+                return;
+            }
+
+            try
+            {
+                var peer = _server?.GetPeerById(connection.PeerId);
+                if (peer?.ConnectionState == ConnectionState.Connected)
+                {
+                    peer.Disconnect();
+                }
+            }
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage(
+                    $"[UDP] Peer disconnect failed for {playerId}: {ex.Message}", ConsoleColor.Red);
             }
         }
 

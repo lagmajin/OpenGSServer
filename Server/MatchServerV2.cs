@@ -317,6 +317,14 @@ namespace OpenGSServer
             }
         }
 
+        public void DisconnectPlayerSession(string playerId)
+        {
+            if (!string.IsNullOrWhiteSpace(playerId))
+            {
+                _udpServer?.DisconnectPlayerSession(playerId);
+            }
+        }
+
         public void ForgetPlayerLeft(string playerId)
         {
             if (!string.IsNullOrWhiteSpace(playerId))
