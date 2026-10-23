@@ -559,25 +559,18 @@ namespace OpenGSServer
         private static List<EInstantItemType> ResolveEquippedInstantItems(string accountId)
         {
             var equipped = new EInstantItemType[3];
-            var account = AccountDatabaseManager.GetInstance().GetAccountSnapshot(accountId);
-            if (account != null)
+            var storedItems = AccountDatabaseManager.GetInstance().GetEquippedInstantItems(accountId);
+            foreach (var entry in storedItems)
             {
-                var purchasedItems = new HashSet<string>(
-                    account.PurchasedItems ?? new List<string>(),
-                    StringComparer.OrdinalIgnoreCase);
-                foreach (var entry in account.EquippedInstantItems ?? new List<DBInstantEquippedItem>())
+                if (entry.Slot < 0 || entry.Slot >= equipped.Length ||
+                    string.IsNullOrWhiteSpace(entry.ItemId) ||
+                    !Enum.TryParse(entry.ItemId, true, out EInstantItemType itemType) ||
+                    !InstantItemRules.IsUsable(itemType))
                 {
-                    if (entry.Slot < 0 || entry.Slot >= equipped.Length ||
-                        string.IsNullOrWhiteSpace(entry.ItemId) ||
-                        !purchasedItems.Contains(entry.ItemId) ||
-                        !Enum.TryParse(entry.ItemId, true, out EInstantItemType itemType) ||
-                        !InstantItemRules.IsUsable(itemType))
-                    {
-                        continue;
-                    }
-
-                    equipped[entry.Slot] = itemType;
+                    continue;
                 }
+
+                equipped[entry.Slot] = itemType;
             }
 
             if (equipped.All(item => item == EInstantItemType.None))

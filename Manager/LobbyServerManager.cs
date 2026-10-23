@@ -1342,18 +1342,21 @@ namespace OpenGSServer
                 return;
             }
 
+            var equippedItems = db.GetEquippedItems(accountId);
+            var equippedInstantItems = db.GetEquippedInstantItems(accountId);
+
             session.SendAsyncJsonWithTimeStamp(new JObject
             {
                 ["MessageType"] = MessageType.ShopStateResponse,
                 ["Success"] = true,
                 ["Credits"] = account.Credits,
                 ["PurchasedItems"] = new JArray(account.PurchasedItems ?? new List<string>()),
-                ["EquippedItems"] = new JArray((account.EquippedItems ?? new List<DBEquippedItem>()).Select(item => new JObject
+                ["EquippedItems"] = new JArray(equippedItems.Select(item => new JObject
                 {
                     ["Category"] = item.Category,
                     ["ItemId"] = item.ItemId
                 })),
-                ["EquippedInstantItems"] = new JArray((account.EquippedInstantItems ?? new List<DBInstantEquippedItem>()).Select(item => new JObject
+                ["EquippedInstantItems"] = new JArray(equippedInstantItems.Select(item => new JObject
                 {
                     ["Slot"] = item.Slot,
                     ["ItemId"] = item.ItemId

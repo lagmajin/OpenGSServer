@@ -550,6 +550,45 @@ namespace OpenGSServer
                 ?.ItemId ?? string.Empty;
         }
 
+        public IReadOnlyList<DBEquippedItem> GetEquippedItems(string accountId)
+        {
+            var account = GetAccountSnapshot(accountId);
+            if (account == null)
+            {
+                return Array.Empty<DBEquippedItem>();
+            }
+
+            var purchasedItems = new HashSet<string>(
+                account.PurchasedItems ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
+            return (account.EquippedItems ?? new List<DBEquippedItem>())
+                .Where(item => item != null &&
+                    !string.IsNullOrWhiteSpace(item.Category) &&
+                    !string.IsNullOrWhiteSpace(item.ItemId) &&
+                    purchasedItems.Contains(item.ItemId))
+                .GroupBy(item => item.Category, StringComparer.OrdinalIgnoreCase)
+                .Select(group => new DBEquippedItem(group.First()))
+                .ToList();
+        }
+
+        public IReadOnlyList<DBInstantEquippedItem> GetEquippedInstantItems(string accountId)
+        {
+            var account = GetAccountSnapshot(accountId);
+            if (account == null)
+            {
+                return Array.Empty<DBInstantEquippedItem>();
+            }
+
+            var purchasedItems = new HashSet<string>(
+                account.PurchasedItems ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
+            return (account.EquippedInstantItems ?? new List<DBInstantEquippedItem>())
+                .Where(item => item != null && item.Slot >= 0 && item.Slot < 3 &&
+                    !string.IsNullOrWhiteSpace(item.ItemId) && purchasedItems.Contains(item.ItemId))
+                .GroupBy(item => item.Slot)
+                .Select(group => new DBInstantEquippedItem(group.First()))
+                .OrderBy(item => item.Slot)
+                .ToList();
+        }
+
         public string GetEquippedInstantItem(string accountId, int slot)
         {
             var account = GetAccount(accountId);
