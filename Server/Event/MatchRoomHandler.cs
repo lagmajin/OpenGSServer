@@ -860,6 +860,12 @@ namespace OpenGSServer
                 return;
             }
 
+            if (!TryGetActiveCombatant(room, playerId, out _))
+            {
+                RefuseItemUse(room, playerId, itemType, "PlayerInactive");
+                return;
+            }
+
             if (!room.TryGetPlayer(playerId, out var player) || player == null)
             {
                 return;
