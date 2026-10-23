@@ -1701,7 +1701,7 @@ namespace OpenGSServer
 
         private static void HandlePlayerKilled(MatchRoom room, string killerId, string killedPlayerId)
         {
-            ClearCombatBuffs(room.Id.ToString(), killedPlayerId);
+            ClearPlayerCombatEffects(room.Id.ToString(), killedPlayerId);
             ReleaseWeaponReservations(room, killedPlayerId);
             Console.WriteLine($"Player {killedPlayerId} was killed by {killerId}");
             var killerKills = room.TryGetPlayer(killerId, out var killer) && killer != null
@@ -2702,7 +2702,7 @@ namespace OpenGSServer
 
             MatchServerV2.Instance?.ServerLagCompensationManager.SetPlayerPosition(
                 playerId, spawnX, spawnY, spawnZ);
-            ClearCombatBuffs(room.Id.ToString(), playerId);
+            ClearPlayerCombatEffects(room.Id.ToString(), playerId);
 
             // Coming back with the gun that was on its last round would make a
             // respawn a way to dodge a reload, so a respawn refills what the
