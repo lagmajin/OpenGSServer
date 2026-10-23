@@ -2665,7 +2665,7 @@ namespace OpenGSServer
                 return;
             }
 
-            GameMessageDispatcher.BroadcastToRoom(room.Id.ToString(), new JObject
+            UdpBroadcastToRoom(room.Id.ToString(), new JObject
             {
                 ["MessageType"] = GameMessageTypes.ObjectSpawned,
                 ["ObjectId"] = projectile.ProjectileId,
@@ -2685,10 +2685,13 @@ namespace OpenGSServer
                 return;
             }
 
-            GameMessageDispatcher.BroadcastToRoom(room.Id.ToString(), new JObject
+            UdpBroadcastToRoom(room.Id.ToString(), new JObject
             {
                 ["MessageType"] = GameMessageTypes.ObjectDestroyed,
                 ["ObjectId"] = projectile.ProjectileId,
+                ["ProjectileId"] = projectile.ProjectileId,
+                ["PlayerID"] = projectile.OwnerId,
+                ["PlayerId"] = projectile.OwnerId,
                 ["RoomID"] = room.Id.ToString(),
                 ["PosX"] = projectile.Position.X,
                 ["PosY"] = projectile.Position.Y
@@ -3481,14 +3484,7 @@ namespace OpenGSServer
 
         private static void UdpBroadcastToRoom(string roomId, JObject message)
         {
-            var senderPlayerId = message.GetStringOrNull("PlayerID")
-                ?? message.GetStringOrNull("PlayerId")
-                ?? message.GetStringOrNull("DestroyedBy");
-            var messageType = message.GetStringOrNull("MessageType");
-            if (string.IsNullOrWhiteSpace(senderPlayerId) || string.IsNullOrWhiteSpace(messageType))
-                return;
-
-            MatchServerV2.Instance?.BroadcastToRoom(senderPlayerId, messageType, message);
+            MatchServerV2.Instance?.BroadcastMatchMessage(roomId, message);
         }
 
         /// <summary>

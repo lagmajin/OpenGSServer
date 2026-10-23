@@ -302,6 +302,11 @@ namespace OpenGSServer
             _udpServer?.BroadcastToRoom(senderPlayerId, messageType, extras);
         }
 
+        public void BroadcastMatchMessage(string roomId, JObject message)
+        {
+            _udpServer?.BroadcastMatchMessage(roomId, message);
+        }
+
         public void SendToPlayer(string playerId, JObject message)
         {
             if (!string.IsNullOrWhiteSpace(playerId) && message != null)

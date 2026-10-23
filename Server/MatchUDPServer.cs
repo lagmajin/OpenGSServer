@@ -1006,6 +1006,19 @@ namespace OpenGSServer
             BroadcastJsonToRoom(matchRoom, message);
         }
 
+        public void BroadcastMatchMessage(string roomId, JObject message)
+        {
+            if (string.IsNullOrWhiteSpace(roomId) || message == null) return;
+
+            var matchRoom = MatchRoomManager.Instance.AllRooms()
+                .OfType<MatchRoom>()
+                .FirstOrDefault(candidate =>
+                    string.Equals(candidate.Id, roomId, StringComparison.OrdinalIgnoreCase));
+            if (matchRoom == null) return;
+
+            BroadcastJsonToRoom(matchRoom, message);
+        }
+
         private void BroadcastJsonToRoom(MatchRoom matchRoom, JObject message)
         {
             if (matchRoom == null || message == null) return;
