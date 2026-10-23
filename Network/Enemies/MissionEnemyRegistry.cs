@@ -314,7 +314,7 @@ namespace OpenGSServer
             {
                 if (room.TryGetPlayer(attackerId, out var killer) && killer != null)
                 {
-                    killer.Kills++;
+                    room.RecordKill(killer.Id);
                     killer.Score += 100;
 
                     GameMessageDispatcher.BroadcastToRoom(enemy.RoomId, new JObject
@@ -398,7 +398,7 @@ namespace OpenGSServer
                 return;
             }
 
-                        room.RecordDeath(playerId);
+            room.RecordDeath(playerId);
 
             GameMessageDispatcher.BroadcastToRoom(enemy.RoomId, new JObject
             {
