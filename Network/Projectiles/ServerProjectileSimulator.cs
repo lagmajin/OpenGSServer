@@ -97,21 +97,21 @@ namespace OpenGSServer.Network
         public Action<string, string, int, Vector2>? OnDamage { get; set; }
 
         /// <summary>
-        /// Asked, for each bullet, whether the point it has reached is inside an
-        /// enemy. It is a question rather than a hit report because the simulator
-        /// owns the flight and the caller owns what an enemy is.
+        /// Asked whether a point on a bullet's flight is inside an enemy in the
+        /// projectile's room. It is a question rather than a hit report because
+        /// the simulator owns the flight and the caller owns enemy state.
         /// <para>
         /// A bullet used to be resolved against players only, so in a mission it
         /// went through every enemy on its line and hit whatever was behind.
         /// </para>
         /// </summary>
-        public Func<Vector2, bool>? IsPointInsideEnemy { get; set; }
+        public Func<string, Vector2, bool>? IsPointInsideEnemy { get; set; }
 
         /// <summary>
         /// Called when a bullet reaches an enemy, so the caller can settle the
         /// damage against it. The owner, the hit point and the damage.
         /// </summary>
-        public Action<string, Vector2, int>? OnBulletHitEnemy { get; set; }
+        public Action<string, string, Vector2, int>? OnBulletHitEnemy { get; set; }
 
         /// <summary>Called when a grenade blast can damage mission enemies.</summary>
         public Action<ServerProjectileState>? OnGrenadeExplode { get; set; }
@@ -283,7 +283,7 @@ namespace OpenGSServer.Network
             List<ServerProjectileState> expired = new();
             List<ServerProjectileState> detonated = new();
             List<(ServerProjectileState Grenade, string TargetId, int Damage, Vector2 Hit)> hits = new();
-            List<(string OwnerId, Vector2 Hit, int Damage)> enemyHits = new();
+            List<(string RoomId, string OwnerId, Vector2 Hit, int Damage)> enemyHits = new();
 
             lock (_lock)
             {
@@ -322,25 +322,33 @@ namespace OpenGSServer.Network
                     }
                     else
                     {
-                        projectile.RemainingLifetime -= deltaSeconds;
-                        projectile.Position += projectile.Velocity * deltaSeconds;
+                        var simulationStep = Math.Min(deltaSeconds, projectile.RemainingLifetime);
+                        projectile.RemainingLifetime -= simulationStep;
+                        projectile.Position += projectile.Velocity * simulationStep;
                     }
 
                     if (projectile.Kind == ServerProjectileKind.Bullet)
                     {
-                        // An enemy before a player, because a mission is a fight
-                        // with the enemies and a shot that reached an enemy should
-                        // stop there rather than carry on to somebody behind it.
-                        if (IsPointInsideEnemy?.Invoke(projectile.Position) == true)
+                        var hitEnemy = TryResolveBulletEnemyHit(
+                            projectile, previousPosition, out var enemyHitPosition);
+                        var hitPlayer = TryResolveBulletHit(
+                            projectile, previousPosition, out var playerId, out var playerHitPosition);
+
+                        // Players and mission enemies share one flight path. The
+                        // nearest server-owned target absorbs the bullet.
+                        if (hitEnemy && (!hitPlayer ||
+                                Vector2.DistanceSquared(previousPosition, enemyHitPosition) <=
+                                Vector2.DistanceSquared(previousPosition, playerHitPosition)))
                         {
-                            enemyHits.Add((projectile.OwnerId, projectile.Position, projectile.Damage));
+                            enemyHits.Add((projectile.RoomId, projectile.OwnerId,
+                                enemyHitPosition, projectile.Damage));
                             Retire(projectile, expired);
                             continue;
                         }
 
-                        if (TryResolveBulletHit(projectile, out var bulletHit))
+                        if (hitPlayer)
                         {
-                            hits.Add((projectile, bulletHit, projectile.Damage, projectile.Position));
+                            hits.Add((projectile, playerId, projectile.Damage, playerHitPosition));
                             Retire(projectile, expired);
                             continue;
                         }
@@ -400,7 +408,8 @@ namespace OpenGSServer.Network
 
             foreach (var enemyHit in enemyHits)
             {
-                OnBulletHitEnemy?.Invoke(enemyHit.OwnerId, enemyHit.Hit, enemyHit.Damage);
+                OnBulletHitEnemy?.Invoke(
+                    enemyHit.RoomId, enemyHit.OwnerId, enemyHit.Hit, enemyHit.Damage);
             }
         }
 
@@ -452,9 +461,37 @@ namespace OpenGSServer.Network
             expired.Add(projectile);
         }
 
-        private bool TryResolveBulletHit(ServerProjectileState projectile, out string targetId)
+        private bool TryResolveBulletEnemyHit(
+            ServerProjectileState projectile, Vector2 segmentStart, out Vector2 hitPosition)
+        {
+            hitPosition = projectile.Position;
+            if (IsPointInsideEnemy == null) return false;
+
+            var segment = projectile.Position - segmentStart;
+            var distance = segment.Length();
+            if (!float.IsFinite(distance)) return false;
+            const float maximum_sample_spacing = 0.25f;
+            var sample_count = Math.Max(1, (int)MathF.Ceiling(distance / maximum_sample_spacing));
+            for (var sample = 0; sample <= sample_count; ++sample)
+            {
+                var fraction = (float)sample / sample_count;
+                var point = segmentStart + segment * fraction;
+                if (!IsPointInsideEnemy(projectile.RoomId, point)) continue;
+                hitPosition = point;
+                return true;
+            }
+
+            return false;
+        }
+
+        private bool TryResolveBulletHit(
+            ServerProjectileState projectile,
+            Vector2 segmentStart,
+            out string targetId,
+            out Vector2 hitPosition)
         {
             targetId = string.Empty;
+            hitPosition = projectile.Position;
             var players = PlayerIds?.Invoke();
             var lookup = PlayerPositionLookup;
             if (players == null || lookup == null)
@@ -462,6 +499,11 @@ namespace OpenGSServer.Network
                 return false;
             }
 
+            var segment = projectile.Position - segmentStart;
+            var segmentLengthSquared = segment.LengthSquared();
+            var hitRadius = projectile.Radius + PlayerHitRadius;
+            var hitRadiusSquared = hitRadius * hitRadius;
+            var firstImpactAlong = float.PositiveInfinity;
             foreach (var candidate in players)
             {
                 if (string.Equals(candidate, projectile.OwnerId, StringComparison.OrdinalIgnoreCase))
@@ -470,14 +512,26 @@ namespace OpenGSServer.Network
                 }
 
                 var position = lookup(candidate);
-                if (Vector2.Distance(projectile.Position, position) <= projectile.Radius + PlayerHitRadius)
-                {
-                    targetId = candidate;
-                    return true;
-                }
+                var closestAlong = segmentLengthSquared > 0.000001f
+                    ? Math.Clamp(Vector2.Dot(position - segmentStart, segment) / segmentLengthSquared,
+                        0f, 1f)
+                    : 0f;
+                var closestPoint = segmentStart + segment * closestAlong;
+                var distanceSquared = Vector2.DistanceSquared(closestPoint, position);
+                if (distanceSquared > hitRadiusSquared) continue;
+
+                var entryOffset = segmentLengthSquared > 0.000001f
+                    ? MathF.Sqrt(Math.Max(0f, hitRadiusSquared - distanceSquared) /
+                        segmentLengthSquared)
+                    : 0f;
+                var impactAlong = Math.Max(0f, closestAlong - entryOffset);
+                if (impactAlong >= firstImpactAlong) continue;
+                firstImpactAlong = impactAlong;
+                targetId = candidate;
+                hitPosition = segmentStart + segment * impactAlong;
             }
 
-            return false;
+            return !float.IsPositiveInfinity(firstImpactAlong);
         }
 
         private void CollectGrenadeHits(

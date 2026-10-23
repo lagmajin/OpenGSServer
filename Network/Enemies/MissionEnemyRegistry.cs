@@ -169,6 +169,20 @@ namespace OpenGSServer
             return false;
         }
 
+        public static bool TryResolveEnemyAt(
+            string roomId, Vector2 point, float radius, out string enemyId)
+        {
+            var simulator = TryGet(roomId);
+            if (simulator != null && simulator.TryResolveEnemyAt(point, radius, out var enemy))
+            {
+                enemyId = enemy.EnemyId;
+                return true;
+            }
+
+            enemyId = string.Empty;
+            return false;
+        }
+
         /// <summary>
         /// Applies a player's shot to an enemy, and moves the mission's objective
         /// when it kills one.

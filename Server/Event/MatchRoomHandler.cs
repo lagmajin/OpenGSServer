@@ -2849,10 +2849,10 @@ namespace OpenGSServer
 
             // A bullet in a mission stops at an enemy. It used to be resolved
             // against players only, so it went through every enemy on its line.
-            Projectiles.IsPointInsideEnemy = point =>
-                MissionEnemyRegistry.TryResolveAnyEnemyAt(point, 0.35f, out _);
-            Projectiles.OnBulletHitEnemy = (ownerId, hit, damage) =>
-                HandleBulletHitEnemy(ownerId, hit, damage);
+            Projectiles.IsPointInsideEnemy = (roomId, point) =>
+                MissionEnemyRegistry.TryResolveEnemyAt(roomId, point, 0.35f, out _);
+            Projectiles.OnBulletHitEnemy = (roomId, ownerId, hit, damage) =>
+                HandleBulletHitEnemy(roomId, ownerId, hit, damage);
             Projectiles.OnGrenadeExplode = grenade =>
                 MissionEnemyRegistry.ApplyGrenadeDamageToEnemies(
                     grenade.RoomId, grenade.OwnerId, grenade.Position,
@@ -2916,15 +2916,17 @@ namespace OpenGSServer
         /// <summary>
         /// Settles a simulated bullet that reached an enemy.
         /// </summary>
-        private static void HandleBulletHitEnemy(string ownerId, Vector2 hit, int damage)
+        private static void HandleBulletHitEnemy(
+            string roomId, string ownerId, Vector2 hit, int damage)
         {
-            var room = MatchRoomManager.Instance.SearchRoomByMemberID(ownerId);
-            if (room == null || !room.Playing)
+            var room = MatchRoomManager.Instance.GetRoomById(roomId);
+            if (room == null || !room.Playing || !room.Players.Any(player =>
+                    string.Equals(player.Id, ownerId, StringComparison.OrdinalIgnoreCase)))
             {
                 return;
             }
 
-            if (!MissionEnemyRegistry.TryResolveAnyEnemyAt(hit, 0.35f, out var enemyId))
+            if (!MissionEnemyRegistry.TryResolveEnemyAt(roomId, hit, 0.35f, out var enemyId))
             {
                 return;
             }
