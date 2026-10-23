@@ -763,6 +763,7 @@ namespace OpenGSServer
         OpenGSCore.MatchRoom room,
         OpenGSServer.Network.ServerFieldItemManager? itemManager)
     {
+        ClearDetachedRoomWeaponState(room);
         InGameMatchEventHandler.ClearRoomProjectiles(roomId);
         InGameMatchEventHandler.ClearRoomCombatEffects(roomId);
         InGameMatchEventHandler.ClearRoomFlagState(room.Id);
@@ -776,6 +777,18 @@ namespace OpenGSServer
             }
         }
         itemManager?.EndMatch();
+    }
+
+    private static void ClearDetachedRoomWeaponState(OpenGSCore.MatchRoom room)
+    {
+        // The magazine store is keyed by player, while a player may already have
+        // entered a different room by the time an old completed room is removed.
+        var playerIds = room.Players
+            .Select(player => player.Id)
+            .Where(playerId => !string.IsNullOrWhiteSpace(playerId) &&
+                MatchRoomManager.Instance.SearchRoomByMemberID(playerId) == null)
+            .ToList();
+        OpenGSServer.Network.ServerWeaponMagazineStore.ClearRoomPlayers(playerIds);
     }
 
     public void RemoveAllRooms(bool forceShutdownNowPlayingRooms = false)
@@ -799,6 +812,7 @@ namespace OpenGSServer
 
         foreach (var (roomId, room, itemManager) in removed)
         {
+            ClearDetachedRoomWeaponState(room);
             InGameMatchEventHandler.ClearRoomProjectiles(roomId);
             InGameMatchEventHandler.ClearRoomCombatEffects(roomId);
             InGameMatchEventHandler.ClearRoomFlagState(room.Id);
