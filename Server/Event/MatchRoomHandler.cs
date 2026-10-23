@@ -2738,7 +2738,7 @@ namespace OpenGSServer
             }
 
             MatchServerV2.Instance?.ServerLagCompensationManager.SetPlayerPosition(
-                playerId, spawnX, spawnY, spawnZ);
+                playerId, spawnX, spawnY, spawnZ, clearPendingInputs: true);
             ClearPlayerCombatEffects(room.Id.ToString(), playerId);
 
             // Coming back with the gun that was on its last round would make a

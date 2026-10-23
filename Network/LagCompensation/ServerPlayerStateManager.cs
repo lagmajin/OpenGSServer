@@ -517,7 +517,7 @@ namespace OpenGSServer.Network
         /// <summary>
         /// プレイヤーの位置を直接設定する（リスポーン時など）
         /// </summary>
-        public void SetPlayerPosition(string playerId, float x, float y, float z)
+        public void SetPlayerPosition(string playerId, float x, float y, float z, bool clearPendingInputs = false)
         {
             if (m_PlayerStates.TryGetValue(playerId, out var state))
             {
@@ -530,6 +530,8 @@ namespace OpenGSServer.Network
                     state.VelY = 0f;
                     state.VelZ = 0f;
                     state.IsGrounded = MathF.Abs(z - GroundHeight) < 0.01f;
+                    if (clearPendingInputs)
+                        state.InputQueue.Clear();
                     state.LastUpdateTime = DateTime.UtcNow;
                     // The server has been told where this player is, so the state can now
                     // be treated as a position to measure a pickup against.

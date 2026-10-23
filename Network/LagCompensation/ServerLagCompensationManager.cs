@@ -181,9 +181,9 @@ namespace OpenGSServer.Network
         /// <summary>
         /// プレイヤーの位置を直接設定する（リスポーン時など）
         /// </summary>
-        public void SetPlayerPosition(string playerId, float x, float y, float z)
+        public void SetPlayerPosition(string playerId, float x, float y, float z, bool clearPendingInputs = false)
         {
-            m_PlayerStateManager.SetPlayerPosition(playerId, x, y, z);
+            m_PlayerStateManager.SetPlayerPosition(playerId, x, y, z, clearPendingInputs);
         }
 
         /// <summary>
