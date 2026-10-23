@@ -481,12 +481,9 @@ namespace OpenGSServer
             }
 
             string playerId = json["PlayerID"]?.ToString() ?? "";
-            var accountManager = AccountManager.GetInstance();
 
-            if (accountManager.ExistID(playerId))
+            if (AccountEventHandler.KickPlayerSession(playerId))
             {
-                accountManager.Logout(playerId, true);
-                
                 var response = new JObject
                 {
                     ["MessageType"] = NetworkingConstants.MessageType.KickPlayerResponse,

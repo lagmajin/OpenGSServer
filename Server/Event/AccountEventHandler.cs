@@ -272,6 +272,22 @@ namespace OpenGSServer
 
         internal static void RevokeResumeToken(string accountId) => ResumeTokens.Revoke(accountId);
 
+        internal static bool KickPlayerSession(string playerId)
+        {
+            if (string.IsNullOrWhiteSpace(playerId)) return false;
+
+            lock (SessionGates.GetOrAdd(playerId, static _ => new object()))
+            {
+                var accountManager = AccountManager.GetInstance();
+                if (!accountManager.ExistID(playerId)) return false;
+
+                SessionOwners.TryRemove(playerId, out _);
+                PlayerSessionCleanup.Release(playerId, revokeResumeToken: true);
+                LobbyServerManager.Instance.FindSessionByPlayerId(playerId)?.Disconnect();
+                return true;
+            }
+        }
+
         public static void Logout(ClientSession session, in IDictionary<string, JToken> dic)
         {
             var id = dic.TryGetValue("id", out var idToken) ? idToken.ToString() : string.Empty;
