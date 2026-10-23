@@ -127,7 +127,11 @@ namespace OpenGSServer.Network
         {
             lock (_lock)
             {
-                return _enemies.Values.Where(enemy => enemy.IsAlive).ToList().AsReadOnly();
+                return _enemies.Values
+                    .Where(enemy => enemy.IsAlive)
+                    .Select(CopyState)
+                    .ToList()
+                    .AsReadOnly();
             }
         }
 
@@ -169,8 +173,8 @@ namespace OpenGSServer.Network
                 _enemies[enemy.EnemyId] = enemy;
             }
 
-            OnSpawn?.Invoke(enemy);
-            return enemy;
+            OnSpawn?.Invoke(CopyState(enemy));
+            return CopyState(enemy);
         }
 
         /// <summary>
@@ -211,7 +215,7 @@ namespace OpenGSServer.Network
             {
                 if (_enemies.TryGetValue(enemyId, out var found))
                 {
-                    enemy = found;
+                    enemy = CopyState(found);
                     return true;
                 }
             }
@@ -257,7 +261,7 @@ namespace OpenGSServer.Network
                 applied = Math.Min(damage, found.Health);
                 found.Health -= applied;
                 killed = found.Health <= 0;
-                enemy = found;
+                enemy = CopyState(found);
             }
 
             if (enemy == null)
@@ -291,7 +295,10 @@ namespace OpenGSServer.Network
             List<ServerEnemyState> dead = new();
             lock (_lock)
             {
-                dead = _enemies.Values.Where(enemy => !enemy.IsAlive).ToList();
+                dead = _enemies.Values
+                    .Where(enemy => !enemy.IsAlive)
+                    .Select(CopyState)
+                    .ToList();
             }
 
             // The dead are taken off the map whatever else is happening. This ran
@@ -319,7 +326,7 @@ namespace OpenGSServer.Network
                 {
                     if (!enemy.IsAlive)
                     {
-                        despawned.Add(enemy);
+                        despawned.Add(CopyState(enemy));
                         continue;
                     }
 
@@ -366,14 +373,14 @@ namespace OpenGSServer.Network
                         enemy.NextAttackAtSeconds = nowSeconds + enemy.AttackIntervalSeconds;
                         if (enemy.AttackDamage > 0)
                         {
-                            hits.Add((targetId, enemy, (int)enemy.AttackDamage, enemy.Position));
+                            hits.Add((targetId, CopyState(enemy), (int)enemy.AttackDamage, enemy.Position));
                         }
                     }
 
                     if (Vector2.DistanceSquared(previousPosition, enemy.Position) > 0.0001f ||
                         Vector2.DistanceSquared(previousFacing, enemy.Facing) > 0.0025f)
                     {
-                        changed.Add(enemy);
+                        changed.Add(CopyState(enemy));
                     }
                 }
             }
@@ -434,7 +441,7 @@ namespace OpenGSServer.Network
                 _enemies.TryRemove(enemy.EnemyId, out _);
             }
 
-            OnDespawn?.Invoke(enemy);
+            OnDespawn?.Invoke(CopyState(enemy));
         }
 
         /// <summary>Drops every enemy, for a match that has ended.</summary>
@@ -443,14 +450,34 @@ namespace OpenGSServer.Network
             List<ServerEnemyState> leaving;
             lock (_lock)
             {
-                leaving = _enemies.Values.ToList();
+                leaving = _enemies.Values.Select(CopyState).ToList();
                 _enemies.Clear();
             }
 
             foreach (var enemy in leaving)
             {
-                OnDespawn?.Invoke(enemy);
+                OnDespawn?.Invoke(CopyState(enemy));
             }
+        }
+
+        private static ServerEnemyState CopyState(ServerEnemyState enemy)
+        {
+            return new ServerEnemyState
+            {
+                EnemyId = enemy.EnemyId,
+                RoomId = enemy.RoomId,
+                Kind = enemy.Kind,
+                Position = enemy.Position,
+                Facing = enemy.Facing,
+                Health = enemy.Health,
+                MaxHealth = enemy.MaxHealth,
+                MoveSpeed = enemy.MoveSpeed,
+                AttackRange = enemy.AttackRange,
+                AttackDamage = enemy.AttackDamage,
+                AttackIntervalSeconds = enemy.AttackIntervalSeconds,
+                NextAttackAtSeconds = enemy.NextAttackAtSeconds,
+                CurrentTargetId = enemy.CurrentTargetId
+            };
         }
 
         private static (string PlayerId, Vector2 Position)? NearestPlayer(
