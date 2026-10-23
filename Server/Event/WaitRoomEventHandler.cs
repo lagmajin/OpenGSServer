@@ -919,8 +919,7 @@ namespace OpenGSServer
             // MatchRoom. Wait-room membership alone is not enough: otherwise
             // the old UDP peer and server-owned combat state survive into the
             // player's next match.
-            MatchServerV2.Instance.DisconnectPlayerSession(playerId);
-            InGameMatchEventHandler.ClearPlayerState(playerId);
+            PlayerSessionCleanup.ReleaseMatchState(playerId);
 
             session.SendAsyncJsonWithTimeStamp(new JObject
             {

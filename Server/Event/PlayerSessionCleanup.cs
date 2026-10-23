@@ -50,27 +50,7 @@ namespace OpenGSServer
                 }
             }
 
-            // Each step is isolated so one failing subsystem cannot leave the
-            // player half registered somewhere else.
-            try
-            {
-                // Resolve and broadcast the match-room departure while the
-                // player is still a member; ClearPlayerState removes them.
-                MatchServerV2.Instance.DisconnectPlayerSession(playerId);
-            }
-            catch (Exception ex)
-            {
-                ConsoleWrite.WriteMessage($"[Cleanup] Match departure notification failed for {playerId}: {ex.Message}", ConsoleColor.Red);
-            }
-
-            try
-            {
-                InGameMatchEventHandler.ClearPlayerState(playerId);
-            }
-            catch (Exception ex)
-            {
-                ConsoleWrite.WriteMessage($"[Cleanup] Match state clear failed for {playerId}: {ex.Message}", ConsoleColor.Red);
-            }
+            ReleaseMatchState(playerId);
 
             try
             {
@@ -100,6 +80,38 @@ namespace OpenGSServer
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// Removes the player's active match transport and server-owned match
+        /// state without changing lobby membership or account authentication.
+        /// </summary>
+        public static void ReleaseMatchState(string playerId)
+        {
+            if (string.IsNullOrWhiteSpace(playerId))
+            {
+                return;
+            }
+
+            // Each step is isolated so one failing subsystem cannot leave the
+            // player half registered somewhere else.
+            try
+            {
+                MatchServerV2.Instance.DisconnectPlayerSession(playerId);
+            }
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage($"[Cleanup] Match departure notification failed for {playerId}: {ex.Message}", ConsoleColor.Red);
+            }
+
+            try
+            {
+                InGameMatchEventHandler.ClearPlayerState(playerId);
+            }
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage($"[Cleanup] Match state clear failed for {playerId}: {ex.Message}", ConsoleColor.Red);
+            }
         }
     }
 }
