@@ -87,6 +87,16 @@ namespace OpenGSServer.Network
             }
         }
 
+        public void SetRemaining(int remaining)
+        {
+            lock (Sync)
+            {
+                Remaining = Math.Clamp(remaining, 0, Capacity);
+                ReloadCompletesUtc = DateTime.MinValue;
+                NextAllowedShotUtc = DateTime.MinValue;
+            }
+        }
+
         public bool ReadIsReloading()
         {
             lock (Sync)

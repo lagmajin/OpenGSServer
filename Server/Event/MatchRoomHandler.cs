@@ -166,6 +166,35 @@ namespace OpenGSServer
                 .Snapshot();
         }
         private static readonly ConcurrentDictionary<string, DateTime> LastShots = new();
+        private static readonly ConcurrentDictionary<string, string> EquippedSpecialWeapons =
+            new(StringComparer.OrdinalIgnoreCase);
+
+        private static bool IsSpecialWeapon(string? weaponType) =>
+            weaponType is "RocketLauncher" or "FlameThrower" or "GrenadeLauncher";
+
+        private static string SpecialWeaponKey(string roomId, string playerId) =>
+            roomId + "\n" + playerId;
+
+        private static void SetSpecialWeapon(string roomId, string playerId, string weaponType)
+        {
+            if (IsSpecialWeapon(weaponType))
+                EquippedSpecialWeapons[SpecialWeaponKey(roomId, playerId)] = weaponType;
+        }
+
+        private static bool HasSpecialWeapon(string roomId, string playerId, string weaponType) =>
+            EquippedSpecialWeapons.TryGetValue(SpecialWeaponKey(roomId, playerId), out var equipped) &&
+            string.Equals(equipped, weaponType, StringComparison.OrdinalIgnoreCase);
+
+        private static void ClearSpecialWeapon(string roomId, string playerId, string? weaponType = null)
+        {
+            var key = SpecialWeaponKey(roomId, playerId);
+            if (weaponType == null ||
+                (EquippedSpecialWeapons.TryGetValue(key, out var equipped) &&
+                 string.Equals(equipped, weaponType, StringComparison.OrdinalIgnoreCase)))
+            {
+                EquippedSpecialWeapons.TryRemove(key, out _);
+            }
+        }
 
         /// <summary>What one kill is worth in the standings, on either damage path.</summary>
         private const int KillScore = 100;
@@ -497,6 +526,21 @@ namespace OpenGSServer
             }
 
             var type = item!.ItemType;
+            var specialWeapon = type switch
+            {
+                EFieldItemType.GranadeLauncher => "RocketLauncher",
+                EFieldItemType.FlameThrower => "FlameThrower",
+                _ => null
+            };
+            if (specialWeapon != null)
+            {
+                SetSpecialWeapon(room.Id.ToString(), playerId, specialWeapon);
+                var magazine = ServerWeaponMagazineStore.GetOrCreate(playerId, specialWeapon);
+                magazine.ResetToFull();
+                GameMessageDispatcher.SendAmmoUpdate(
+                    room.Id.ToString(), playerId, specialWeapon,
+                    magazine.ReadRemaining(), magazine.Capacity, magazine.ReadReserve());
+            }
             var duration = FieldItemTypeNames.IsTimedBuff(type)
                 ? FieldItemDefaults.DurationSeconds
                 : 0f;
@@ -579,6 +623,12 @@ namespace OpenGSServer
 
             var magazine = ReadInt(json, -1, "MagazineAmmo", "Ammo", "CurrentAmmo");
             var slot = ReadInt(json, -1, "SlotIndex", "WeaponSlot");
+            var canonicalDropWeapon = NormalizeWeaponType(weaponType);
+            if (IsSpecialWeapon(canonicalDropWeapon) &&
+                ServerWeaponMagazineStore.TryPeek(playerId, canonicalDropWeapon!, out var heldSpecialMagazine))
+            {
+                magazine = heldSpecialMagazine.ReadRemaining();
+            }
             var itemId = itemManager.DropWeapon(
                 weaponType,
                 state.PositionX,
@@ -592,6 +642,9 @@ namespace OpenGSServer
                 Console.WriteLine($"[Match] Refused weapon drop of '{weaponType}' by '{playerId}'");
                 return;
             }
+
+            if (IsSpecialWeapon(canonicalDropWeapon))
+                ClearSpecialWeapon(room.Id.ToString(), playerId, canonicalDropWeapon);
 
             Console.WriteLine($"[Match] {playerId} dropped {weaponType} as '{itemId}' in room {room.Id}");
 
@@ -929,6 +982,22 @@ namespace OpenGSServer
             if (!itemManager.TryGetItem(itemId, out var item) || item == null)
             {
                 return;
+            }
+
+            if (string.Equals(messageType, "WeaponPickup", StringComparison.OrdinalIgnoreCase))
+            {
+                var pickedWeaponType = NormalizeWeaponType(item.WeaponType);
+                if (IsSpecialWeapon(pickedWeaponType))
+                {
+                    SetSpecialWeapon(room.Id.ToString(), playerId, pickedWeaponType!);
+                    var pickedMagazine = ServerWeaponMagazineStore.GetOrCreate(playerId, pickedWeaponType!);
+                    if (item.MagazineAmmo >= 0)
+                        pickedMagazine.SetRemaining(item.MagazineAmmo);
+                    GameMessageDispatcher.SendAmmoUpdate(
+                        room.Id.ToString(), playerId, pickedWeaponType!,
+                        pickedMagazine.ReadRemaining(), pickedMagazine.Capacity,
+                        pickedMagazine.ReadReserve());
+                }
             }
 
             // Everyone is told, because a claim only works if the other players
@@ -1665,6 +1734,13 @@ namespace OpenGSServer
             {
                 LastFlagEvents.TryRemove(key, out _);
             }
+
+            foreach (var key in EquippedSpecialWeapons.Keys
+                .Where(key => key.StartsWith(roomId + "\n", StringComparison.OrdinalIgnoreCase))
+                .ToList())
+            {
+                EquippedSpecialWeapons.TryRemove(key, out _);
+            }
         }
 
         public static void ClearPlayerState(
@@ -1680,7 +1756,16 @@ namespace OpenGSServer
             // A full player-session cleanup resets magazines. A transient UDP peer
             // disconnect preserves them so MatchStatus can restore the same ammo.
             if (!preserveMagazines)
+            {
                 ServerWeaponMagazineStore.ResetPlayer(playerId);
+                var playerSuffix = "\n" + playerId;
+                foreach (var key in EquippedSpecialWeapons.Keys
+                    .Where(key => key.EndsWith(playerSuffix, StringComparison.OrdinalIgnoreCase))
+                    .ToList())
+                {
+                    EquippedSpecialWeapons.TryRemove(key, out _);
+                }
+            }
             LastShots.TryRemove(playerId, out _);
 
             // A player who left cannot be holding a flag, so the flag they were
@@ -1953,6 +2038,13 @@ namespace OpenGSServer
             if (weaponType == null)
             {
                 Console.WriteLine($"[Match] Ignored shot with unknown weapon from '{playerId}'");
+                return;
+            }
+
+            if (IsSpecialWeapon(weaponType) &&
+                !HasSpecialWeapon(room.Id.ToString(), playerId, weaponType))
+            {
+                Console.WriteLine($"[Match] Ignored {weaponType} shot from '{playerId}' without an equipped pickup");
                 return;
             }
 
