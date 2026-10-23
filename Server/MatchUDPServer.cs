@@ -548,6 +548,7 @@ namespace OpenGSServer
                 MoveX = ReadJsonFloat(message, "VelX", "MoveX"),
                 MoveY = ReadJsonFloat(message, "VelY", "MoveY"),
                 MoveZ = ReadJsonFloat(message, "VelZ", "MoveZ"),
+                IndependentVerticalInput = ReadJsonBool(message, "IndependentVerticalInput"),
                 LookX = ReadJsonFloat(direction, "X", "DirX"),
                 LookY = ReadJsonFloat(direction, "Y", "DirY"),
                 Jump = ReadJsonBool(message, "Jump"),

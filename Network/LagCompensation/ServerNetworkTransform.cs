@@ -76,6 +76,9 @@ namespace OpenGSServer.Network
         public float MoveX;
         public float MoveY;
         public float MoveZ;
+        // Opts into independent horizontal and vertical movement axes.
+        // Older clients keep the legacy normalized 3D movement vector.
+        public bool IndependentVerticalInput;
         public float LookX;
         public float LookY;
         public bool Jump;

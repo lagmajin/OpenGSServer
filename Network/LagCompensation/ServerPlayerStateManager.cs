@@ -335,18 +335,24 @@ namespace OpenGSServer.Network
             var startY = state.PosY;
             var startZ = state.PosZ;
 
-            var moveMagnitude = MathF.Sqrt(input.MoveX * input.MoveX + input.MoveY * input.MoveY + input.MoveZ * input.MoveZ);
             var normalizedMoveX = input.MoveX;
             var normalizedMoveY = input.MoveY;
             var normalizedMoveZ = input.MoveZ;
+            var horizontalMagnitude = MathF.Sqrt(input.MoveX * input.MoveX + input.MoveY * input.MoveY);
+            var moveMagnitude = input.IndependentVerticalInput
+                ? horizontalMagnitude
+                : MathF.Sqrt(horizontalMagnitude * horizontalMagnitude + input.MoveZ * input.MoveZ);
             if (moveMagnitude > 1f)
             {
                 var inv = 1f / moveMagnitude;
                 normalizedMoveX *= inv;
                 normalizedMoveY *= inv;
-                normalizedMoveZ *= inv;
+                if (!input.IndependentVerticalInput)
+                    normalizedMoveZ *= inv;
                 RecordViolation(state, "Movement vector was clamped");
             }
+            if (input.IndependentVerticalInput)
+                normalizedMoveZ = Clamp(normalizedMoveZ, -1f, 1f);
 
             var targetVelX = normalizedMoveX * MaxHorizontalSpeed;
             var targetVelY = normalizedMoveY * MaxHorizontalSpeed;
@@ -360,18 +366,26 @@ namespace OpenGSServer.Network
                 state.VelZ = MathF.Max(state.VelZ, JumpImpulse);
                 state.IsGrounded = false;
             }
+            else if (input.IndependentVerticalInput && normalizedMoveZ > 0.01f)
+            {
+                // Vertical input is the native booster control. Leaving the
+                // grounded flag set while it raises PosZ made gravity stop
+                // applying forever after the booster was released.
+                state.IsGrounded = false;
+            }
 
-            if (!state.IsGrounded)
+            var hasIndependentVerticalInput = input.IndependentVerticalInput && normalizedMoveZ > 0.01f;
+            if (!state.IsGrounded && !hasIndependentVerticalInput)
             {
                 state.VelZ -= Gravity * dt;
             }
 
-            state.VelZ = MoveTowards(state.VelZ, targetVelZ, MoveAcceleration * dt);
-
-            if (!input.Jump && state.IsGrounded && MathF.Abs(normalizedMoveZ) < 0.01f)
-            {
+            if (hasIndependentVerticalInput)
+                state.VelZ = MoveTowards(state.VelZ, targetVelZ, MoveAcceleration * dt);
+            else if (state.IsGrounded)
                 state.VelZ = MoveTowards(state.VelZ, 0f, MoveDrag * dt);
-            }
+            if (input.IndependentVerticalInput)
+                state.VelZ = Clamp(state.VelZ, -MaxVerticalSpeed, MaxVerticalSpeed);
 
             state.PosX += state.VelX * dt;
             state.PosY += state.VelY * dt;
@@ -590,15 +604,21 @@ namespace OpenGSServer.Network
         {
             reason = string.Empty;
 
-            var magnitude = MathF.Sqrt(input.MoveX * input.MoveX + input.MoveY * input.MoveY + input.MoveZ * input.MoveZ);
+            var horizontalMagnitude = MathF.Sqrt(input.MoveX * input.MoveX + input.MoveY * input.MoveY);
+            var magnitude = input.IndependentVerticalInput
+                ? horizontalMagnitude
+                : MathF.Sqrt(horizontalMagnitude * horizontalMagnitude + input.MoveZ * input.MoveZ);
             if (magnitude > MaxMovementMagnitude)
             {
                 var inv = MaxMovementMagnitude / magnitude;
                 input.MoveX *= inv;
                 input.MoveY *= inv;
-                input.MoveZ *= inv;
+                if (!input.IndependentVerticalInput)
+                    input.MoveZ *= inv;
                 reason = "Movement vector clamped";
             }
+            if (input.IndependentVerticalInput)
+                input.MoveZ = Clamp(input.MoveZ, -MaxMovementMagnitude, MaxMovementMagnitude);
 
             if (input.DeltaTime < 0f)
             {
