@@ -25,6 +25,7 @@ namespace OpenGSServer
     {
         private static readonly ConcurrentDictionary<string, ServerEnemySimulator> Simulators =
             new(StringComparer.OrdinalIgnoreCase);
+        private static readonly object SimulatorLifecycleLock = new();
 
         /// <summary>
         /// Where a room's players are, read from the same lag compensation state
@@ -75,21 +76,27 @@ namespace OpenGSServer
         /// </summary>
         public static void Attach(string roomId, MatchRoom room)
         {
-            var simulator = ForRoom(roomId);
-            simulator.PlayerIds = () => room.Players
-                .Where(player => player != null && room.Playing && player.Health > 0 &&
-                    MatchServerV2.Instance.IsPlayerConnected(player.Id) &&
-                    HasAuthoritativePosition(player.Id))
-                .Select(player => player.Id)
-                .ToList();
+            if (room == null || !room.Playing || room.Finished || string.IsNullOrWhiteSpace(roomId))
+                return;
 
-            simulator.OnSpawn = enemy => BroadcastEnemySpawn(enemy);
-            simulator.OnDespawn = enemy => BroadcastEnemyDespawn(enemy);
-            simulator.OnStateChanged = enemy => BroadcastEnemyState(enemy);
-            simulator.OnDamaged = (enemy, attackerId, damage, hit) => BroadcastEnemyDamaged(enemy, attackerId, damage);
-            simulator.OnKilled = (enemy, attackerId) => OnEnemyKilled(enemy, attackerId);
-            simulator.OnPlayerDamaged = (playerId, enemy, damage, hit) =>
-                ApplyEnemyDamageOnPlayer(playerId, enemy, damage, hit);
+            lock (SimulatorLifecycleLock)
+            {
+                var simulator = ForRoom(roomId);
+                simulator.PlayerIds = () => room.Players
+                    .Where(player => player != null && room.Playing && !room.Finished && player.Health > 0 &&
+                        MatchServerV2.Instance.IsPlayerConnected(player.Id) &&
+                        HasAuthoritativePosition(player.Id))
+                    .Select(player => player.Id)
+                    .ToList();
+
+                simulator.OnSpawn = enemy => BroadcastEnemySpawn(enemy);
+                simulator.OnDespawn = enemy => BroadcastEnemyDespawn(enemy);
+                simulator.OnStateChanged = enemy => BroadcastEnemyState(enemy);
+                simulator.OnDamaged = (enemy, attackerId, damage, hit) => BroadcastEnemyDamaged(enemy, attackerId, damage);
+                simulator.OnKilled = (enemy, attackerId) => OnEnemyKilled(enemy, attackerId);
+                simulator.OnPlayerDamaged = (playerId, enemy, damage, hit) =>
+                    ApplyEnemyDamageOnPlayer(playerId, enemy, damage, hit);
+            }
         }
 
         private static bool HasAuthoritativePosition(string playerId)
@@ -273,26 +280,38 @@ namespace OpenGSServer
             int count,
             ServerEnemyKind kind = ServerEnemyKind.Chaser)
         {
-            var simulator = ForRoom(roomId);
-            var spawnPoint = simulator.PickSpawnPoint(centre, minimumDistanceFromPlayers: 8f, spread: 4f);
-            var wave = simulator.SpawnWave(roomId, spawnPoint, count, spacing: 2f, kind: kind);
-            return wave.Count;
+            lock (SimulatorLifecycleLock)
+            {
+                if (MatchRoomManager.Instance.GetRoomById(roomId) is not MatchRoom room ||
+                    !room.Playing || room.Finished || !Simulators.TryGetValue(roomId, out var simulator))
+                    return 0;
+
+                var spawnPoint = simulator.PickSpawnPoint(centre, minimumDistanceFromPlayers: 8f, spread: 4f);
+                var wave = simulator.SpawnWave(roomId, spawnPoint, count, spacing: 2f, kind: kind);
+                return wave.Count;
+            }
         }
 
         /// <summary>Advances every room's enemies and announces what moved.</summary>
         public static void Update(float deltaSeconds, double nowSeconds, Action<string, ServerEnemyState, string>? onKilled = null)
         {
-            foreach (var entry in Simulators)
+            lock (SimulatorLifecycleLock)
             {
-                entry.Value.Update(deltaSeconds, nowSeconds);
+                foreach (var entry in Simulators)
+                {
+                    entry.Value.Update(deltaSeconds, nowSeconds);
+                }
             }
         }
 
         public static void ClearRoom(string roomId)
         {
-            if (Simulators.TryRemove(roomId, out var simulator))
+            lock (SimulatorLifecycleLock)
             {
-                simulator.Clear();
+                if (Simulators.TryRemove(roomId, out var simulator))
+                {
+                    simulator.Clear();
+                }
             }
         }
 
@@ -419,24 +438,27 @@ namespace OpenGSServer
         /// </summary>
         public static void PublishSnapshot(string roomId, string? playerId = null)
         {
-            var simulator = TryGet(roomId);
-            var enemies = new JArray();
-            foreach (var enemy in simulator?.Snapshot() ?? Array.Empty<ServerEnemyState>())
+            lock (SimulatorLifecycleLock)
             {
-                enemies.Add(BuildEnemyMessage("EnemySnapshot", enemy));
-            }
+                var simulator = TryGet(roomId);
+                var enemies = new JArray();
+                foreach (var enemy in simulator?.Snapshot() ?? Array.Empty<ServerEnemyState>())
+                {
+                    enemies.Add(BuildEnemyMessage("EnemySnapshot", enemy));
+                }
 
-            var message = new JObject
-            {
-                ["MessageType"] = "EnemySnapshot",
-                ["RoomID"] = roomId,
-                ["Enemies"] = enemies,
-                ["Timestamp"] = DateTime.UtcNow.ToString("o")
-            };
-            if (string.IsNullOrWhiteSpace(playerId))
-                GameMessageDispatcher.BroadcastToRoom(roomId, message);
-            else
-                GameMessageDispatcher.SendToPlayer(playerId, message);
+                var message = new JObject
+                {
+                    ["MessageType"] = "EnemySnapshot",
+                    ["RoomID"] = roomId,
+                    ["Enemies"] = enemies,
+                    ["Timestamp"] = DateTime.UtcNow.ToString("o")
+                };
+                if (string.IsNullOrWhiteSpace(playerId))
+                    GameMessageDispatcher.BroadcastToRoom(roomId, message);
+                else
+                    GameMessageDispatcher.SendToPlayer(playerId, message);
+            }
         }
 
         private static void BroadcastEnemyState(ServerEnemyState enemy)
