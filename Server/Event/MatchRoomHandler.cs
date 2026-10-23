@@ -4196,14 +4196,13 @@ namespace OpenGSServer
         {
             return grenadeType?.ToLowerInvariant() switch
             {
-                "power" => "PowerGrenade",
-                "magnetic" => "MagneticGrenade",
-                "magnet" => "MagneticGrenade",
-                "mine" => "MineGrenade",
-                "cluster" => "ClusterGrenade",
-                "clusterchild" => "ChildClusterGrenade",
-                "fire" => "FireGrenade",
-                "smoke" => "SmokeGrenade",
+                "power" or "powergrenade" => "PowerGrenade",
+                "magnetic" or "magnet" or "magneticgrenade" or "magnetgrenade" => "MagneticGrenade",
+                "mine" or "minegrenade" => "MineGrenade",
+                "cluster" or "clustergrenade" => "ClusterGrenade",
+                "clusterchild" or "childclustergrenade" => "ChildClusterGrenade",
+                "fire" or "firegrenade" => "FireGrenade",
+                "smoke" or "smokegrenade" => "SmokeGrenade",
                 "rocketprojectile" => "RocketProjectile",
                 "launchedgrenade" => "LaunchedGrenade",
                 _ => "NormalGrenade"
