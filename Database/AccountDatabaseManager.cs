@@ -11,6 +11,7 @@ namespace OpenGSServer
     public class AccountDatabaseManager : IDisposable
     {
         private LiteDatabase? db;
+        private readonly object _accountMutationLock = new();
 
         public static AccountDatabaseManager Instance { get; set; } = new();
 
@@ -225,7 +226,6 @@ namespace OpenGSServer
             rec.Salt = player.Salt;
             rec.Level = player.Level;
             rec.Exp = player.Exp;
-            rec.Credits = Math.Max(0, player.Credits);
             rec.PurchasedItems = ClonePurchasedItems(player.PurchasedItems);
             rec.EquippedItems = CloneEquippedItems(player.EquippedItems);
             rec.EquippedInstantItems = CloneEquippedInstantItems(player.EquippedInstantItems);
@@ -234,6 +234,24 @@ namespace OpenGSServer
             rec.LastUpdatedUtc = DateTime.UtcNow.ToString("O");
 
             col.Update(rec);
+        }
+
+        public bool UpdateMatchProgress(in DBAccount player)
+        {
+            if (string.IsNullOrWhiteSpace(player.AccountId))
+                return false;
+
+            lock (_accountMutationLock)
+            {
+                var col = EnsureDatabase().GetCollection<DBAccount>(accountTableName);
+                var rec = col.FindOne(Query.EQ(nameof(DBAccount.AccountId), player.AccountId));
+                if (rec == null) return false;
+                rec.Level = player.Level;
+                rec.Exp = player.Exp;
+                rec.LifeTimeScore = player.LifeTimeScore ?? new PlayerLifeTimeScore();
+                rec.LastUpdatedUtc = DateTime.UtcNow.ToString("O");
+                return col.Update(rec);
+            }
         }
 
         public void UpdateAccountScore(in string accountID, in DBAccountScore score)
@@ -288,22 +306,51 @@ namespace OpenGSServer
             return account?.Credits ?? 0;
         }
 
-        public bool UpdateCredits(string accountId, long credits)
+        public (bool Success, long Granted, long Credits) TryAddCredits(string accountId, long amount)
         {
-            if (string.IsNullOrWhiteSpace(accountId))
-            {
-                return false;
-            }
+            if (string.IsNullOrWhiteSpace(accountId) || amount < 0)
+                return (false, 0, 0);
 
-            var account = GetAccount(accountId);
-            if (account == null)
+            lock (_accountMutationLock)
             {
-                return false;
+                var account = GetAccount(accountId);
+                if (account == null) return (false, 0, 0);
+                var current = Math.Max(0L, account.Credits);
+                var next = (long)Math.Min(
+                    (decimal)long.MaxValue, (decimal)current + amount);
+                account.Credits = next;
+                account.LastUpdatedUtc = DateTime.UtcNow.ToString("O");
+                var updated = EnsureDatabase().GetCollection<DBAccount>(accountTableName).Update(account);
+                return updated ? (true, next - current, next) : (false, 0, current);
             }
+        }
 
-            account.Credits = Math.Max(0, credits);
-            account.LastUpdatedUtc = DateTime.UtcNow.ToString("O");
-            return EnsureDatabase().GetCollection<DBAccount>(accountTableName).Update(account);
+        public (bool Success, string Error, long Credits, bool AlreadyOwned) TryPurchaseItem(
+            string accountId, string itemId, long price)
+        {
+            if (string.IsNullOrWhiteSpace(accountId) || string.IsNullOrWhiteSpace(itemId) || price < 0)
+                return (false, "Account or item is invalid", 0, false);
+
+            lock (_accountMutationLock)
+            {
+                var account = GetAccount(accountId);
+                if (account == null) return (false, "Account not found", 0, false);
+                account.PurchasedItems ??= new List<string>();
+                var current = Math.Max(0L, account.Credits);
+                if (account.PurchasedItems.Any(existing =>
+                    string.Equals(existing, itemId, StringComparison.OrdinalIgnoreCase)))
+                    return (true, string.Empty, current, true);
+                if (current < price)
+                    return (false, "Insufficient credits", current, false);
+
+                account.Credits = current - price;
+                account.PurchasedItems.Add(itemId);
+                account.LastUpdatedUtc = DateTime.UtcNow.ToString("O");
+                var updated = EnsureDatabase().GetCollection<DBAccount>(accountTableName).Update(account);
+                return updated
+                    ? (true, string.Empty, account.Credits, false)
+                    : (false, "Failed to complete purchase", current, false);
+            }
         }
 
         public IReadOnlyList<string> GetPurchasedItems(string accountId)
@@ -319,27 +366,30 @@ namespace OpenGSServer
                 return false;
             }
 
-            var account = GetAccount(accountId);
-            if (account == null)
+            lock (_accountMutationLock)
             {
-                return false;
-            }
-
-            account.PurchasedItems ??= new List<string>();
-            if (purchased)
-            {
-                if (!account.PurchasedItems.Any(existing => string.Equals(existing, itemId, StringComparison.OrdinalIgnoreCase)))
+                var account = GetAccount(accountId);
+                if (account == null)
                 {
-                    account.PurchasedItems.Add(itemId);
+                    return false;
                 }
-            }
-            else
-            {
-                account.PurchasedItems.RemoveAll(existing => string.Equals(existing, itemId, StringComparison.OrdinalIgnoreCase));
-            }
 
-            account.LastUpdatedUtc = DateTime.UtcNow.ToString("O");
-            return EnsureDatabase().GetCollection<DBAccount>(accountTableName).Update(account);
+                account.PurchasedItems ??= new List<string>();
+                if (purchased)
+                {
+                    if (!account.PurchasedItems.Any(existing => string.Equals(existing, itemId, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        account.PurchasedItems.Add(itemId);
+                    }
+                }
+                else
+                {
+                    account.PurchasedItems.RemoveAll(existing => string.Equals(existing, itemId, StringComparison.OrdinalIgnoreCase));
+                }
+
+                account.LastUpdatedUtc = DateTime.UtcNow.ToString("O");
+                return EnsureDatabase().GetCollection<DBAccount>(accountTableName).Update(account);
+            }
         }
 
         public bool IsPurchased(string accountId, string itemId)
@@ -385,29 +435,32 @@ namespace OpenGSServer
                 return false;
             }
 
-            var account = GetAccount(accountId);
-            if (account == null)
+            lock (_accountMutationLock)
             {
-                return false;
-            }
-
-            account.EquippedItems ??= new List<DBEquippedItem>();
-            var existing = account.EquippedItems.FirstOrDefault(item => string.Equals(item.Category, category, StringComparison.OrdinalIgnoreCase));
-            if (existing == null)
-            {
-                account.EquippedItems.Add(new DBEquippedItem
+                var account = GetAccount(accountId);
+                if (account == null)
                 {
-                    Category = category,
-                    ItemId = itemId ?? string.Empty
-                });
-            }
-            else
-            {
-                existing.ItemId = itemId ?? string.Empty;
-            }
+                    return false;
+                }
 
-            account.LastUpdatedUtc = DateTime.UtcNow.ToString("O");
-            return EnsureDatabase().GetCollection<DBAccount>(accountTableName).Update(account);
+                account.EquippedItems ??= new List<DBEquippedItem>();
+                var existing = account.EquippedItems.FirstOrDefault(item => string.Equals(item.Category, category, StringComparison.OrdinalIgnoreCase));
+                if (existing == null)
+                {
+                    account.EquippedItems.Add(new DBEquippedItem
+                    {
+                        Category = category,
+                        ItemId = itemId ?? string.Empty
+                    });
+                }
+                else
+                {
+                    existing.ItemId = itemId ?? string.Empty;
+                }
+
+                account.LastUpdatedUtc = DateTime.UtcNow.ToString("O");
+                return EnsureDatabase().GetCollection<DBAccount>(accountTableName).Update(account);
+            }
         }
 
         public bool SetEquippedInstantItem(string accountId, int slot, string itemId)
@@ -417,29 +470,32 @@ namespace OpenGSServer
                 return false;
             }
 
-            var account = GetAccount(accountId);
-            if (account == null)
+            lock (_accountMutationLock)
             {
-                return false;
-            }
-
-            account.EquippedInstantItems ??= new List<DBInstantEquippedItem>();
-            var existing = account.EquippedInstantItems.FirstOrDefault(item => item.Slot == slot);
-            if (existing == null)
-            {
-                account.EquippedInstantItems.Add(new DBInstantEquippedItem
+                var account = GetAccount(accountId);
+                if (account == null)
                 {
-                    Slot = slot,
-                    ItemId = itemId ?? string.Empty
-                });
-            }
-            else
-            {
-                existing.ItemId = itemId ?? string.Empty;
-            }
+                    return false;
+                }
 
-            account.LastUpdatedUtc = DateTime.UtcNow.ToString("O");
-            return EnsureDatabase().GetCollection<DBAccount>(accountTableName).Update(account);
+                account.EquippedInstantItems ??= new List<DBInstantEquippedItem>();
+                var existing = account.EquippedInstantItems.FirstOrDefault(item => item.Slot == slot);
+                if (existing == null)
+                {
+                    account.EquippedInstantItems.Add(new DBInstantEquippedItem
+                    {
+                        Slot = slot,
+                        ItemId = itemId ?? string.Empty
+                    });
+                }
+                else
+                {
+                    existing.ItemId = itemId ?? string.Empty;
+                }
+
+                account.LastUpdatedUtc = DateTime.UtcNow.ToString("O");
+                return EnsureDatabase().GetCollection<DBAccount>(accountTableName).Update(account);
+            }
         }
 
         public bool RemoveFriend(string accountId, string friendId)

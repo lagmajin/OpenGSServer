@@ -96,18 +96,13 @@ namespace OpenGSServer
                 if (record.Claimed) return (false, "Daily reward already claimed", 0);
                 if (record.Progress < definition.Target) return (false, "Daily is not complete", 0);
 
-                var database = AccountDatabaseManager.GetInstance();
-                var account = database.GetAccount(playerId);
-                if (account == null) return (false, "Account not found", 0);
-                var currentCredits = Math.Max(0, account.Credits);
-                var newCredits = (long)Math.Min(
-                    (decimal)long.MaxValue,
-                    (decimal)currentCredits + definition.RewardCredits);
-                var grantedCredits = newCredits - currentCredits;
-                if (!database.UpdateCredits(playerId, newCredits)) return (false, "Failed to grant reward", 0);
+                var creditResult = AccountDatabaseManager.GetInstance()
+                    .TryAddCredits(playerId, definition.RewardCredits);
+                if (!creditResult.Success)
+                    return (false, "Failed to grant reward", 0);
                 record.Claimed = true;
                 _progress.Upsert(record);
-                return (true, string.Empty, grantedCredits);
+                return (true, string.Empty, creditResult.Granted);
             }
         }
 

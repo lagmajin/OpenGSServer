@@ -98,7 +98,7 @@ namespace OpenGSServer
                     break;
             }
 
-            database.UpdateAccountData(account);
+            database.UpdateMatchProgress(account);
             return calculated;
         }
 
@@ -1391,44 +1391,29 @@ namespace OpenGSServer
             var itemId = data?["ItemId"]?.ToString() ?? string.Empty;
             var price = GetShopPurchasePrice(itemId);
             var db = AccountDatabaseManager.GetInstance();
-            var account = db.GetAccount(accountId);
-
-            if (account == null || string.IsNullOrWhiteSpace(itemId) || price < 0)
+            if (string.IsNullOrWhiteSpace(itemId) || price < 0)
             {
                 session.SendAsyncJsonWithTimeStamp(new JObject
                 {
                     ["MessageType"] = MessageType.ShopPurchaseResponse,
                     ["Success"] = false,
                     ["ItemId"] = itemId,
-                    ["Credits"] = account?.Credits ?? 0,
-                    ["ErrorMessage"] = price < 0 ? "Item is invalid" : "Account or item is invalid"
+                    ["Credits"] = db.GetCredits(accountId),
+                    ["ErrorMessage"] = "Item is invalid"
                 });
                 return;
             }
 
-            if (account.Credits < price)
-            {
-                session.SendAsyncJsonWithTimeStamp(new JObject
-                {
-                    ["MessageType"] = MessageType.ShopPurchaseResponse,
-                    ["Success"] = false,
-                    ["ItemId"] = itemId,
-                    ["Credits"] = account.Credits,
-                    ["ErrorMessage"] = "Insufficient credits"
-                });
-                return;
-            }
-
-            account.Credits -= price;
-            db.SetPurchasedItem(accountId, itemId, true);
-            db.UpdateAccountData(account);
+            var purchase = db.TryPurchaseItem(accountId, itemId, price);
 
             session.SendAsyncJsonWithTimeStamp(new JObject
             {
                 ["MessageType"] = MessageType.ShopPurchaseResponse,
-                ["Success"] = true,
+                ["Success"] = purchase.Success,
                 ["ItemId"] = itemId,
-                ["Credits"] = account.Credits
+                ["Credits"] = purchase.Credits,
+                ["AlreadyOwned"] = purchase.AlreadyOwned,
+                ["ErrorMessage"] = purchase.Error
             });
         }
 
