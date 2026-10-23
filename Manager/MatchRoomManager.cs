@@ -310,6 +310,8 @@ namespace OpenGSServer
                 return true;
             }
 
+            OpenGSCore.MatchRoom? detachedRoom;
+            OpenGSServer.Network.ServerFieldItemManager? itemManager;
             string? matchRoomId;
             lock (matchRoomsLock)
             {
@@ -327,10 +329,15 @@ namespace OpenGSServer
                 }
 
                 matchRoomId = pendingRoom.Id.ToString();
+                if (!TryDetachRoomLocked(matchRoomId, forceShutdownNowPlayingRooms: false,
+                        out detachedRoom, out itemManager))
+                {
+                    return false;
+                }
             }
 
-            RemoveRoom(matchRoomId);
-            return GetRoomById(matchRoomId) == null;
+            CleanupDetachedRoom(matchRoomId, detachedRoom!, itemManager);
+            return true;
         }
 
         public bool BeginMatch(OpenGSCore.MatchRoom matchRoom)
@@ -604,6 +611,8 @@ namespace OpenGSServer
     public void ExitRoom(string userid)
     {
         string? emptyRoomId = null;
+        OpenGSCore.MatchRoom? detachedRoom = null;
+        OpenGSServer.Network.ServerFieldItemManager? itemManager = null;
         lock (matchRoomsLock)
         {
             var room = matchRooms.Values.FirstOrDefault(candidate =>
@@ -619,6 +628,8 @@ namespace OpenGSServer
             if (room.Players.Count == 0)
             {
                 emptyRoomId = room.Id.ToString();
+                TryDetachRoomLocked(emptyRoomId, forceShutdownNowPlayingRooms: true,
+                    out detachedRoom, out itemManager);
             }
         }
 
@@ -626,7 +637,10 @@ namespace OpenGSServer
         // takes the simulator lock, whose update path can query this manager.
         if (emptyRoomId != null)
         {
-            RemoveRoom(emptyRoomId, forceShutdownNowPlayingRooms: true);
+            if (detachedRoom != null)
+            {
+                CleanupDetachedRoom(emptyRoomId, detachedRoom, itemManager);
+            }
         }
     }
 
@@ -696,23 +710,40 @@ namespace OpenGSServer
         OpenGSServer.Network.ServerFieldItemManager? itemManager;
         lock (matchRoomsLock)
         {
-            if (!matchRooms.TryGetValue(roomId, out room))
-            {
-                return;
-            }
-
-            // プレイ中のルームの強制シャットダウンチェック
-            if (!forceShutdownNowPlayingRooms && room.Playing)
-            {
-                return;
-            }
-
-            // Detach first, then run subsystem callbacks without the manager lock.
-            matchRooms.Remove(roomId);
-            roomEventBuses.Remove(roomId);
-            roomFieldItemManagers.Remove(roomId, out itemManager);
+            if (!TryDetachRoomLocked(roomId, forceShutdownNowPlayingRooms,
+                    out room, out itemManager)) return;
         }
 
+        CleanupDetachedRoom(roomId, room!, itemManager);
+    }
+
+    private bool TryDetachRoomLocked(
+        string roomId,
+        bool forceShutdownNowPlayingRooms,
+        out OpenGSCore.MatchRoom? room,
+        out OpenGSServer.Network.ServerFieldItemManager? itemManager)
+    {
+        itemManager = null;
+        if (!matchRooms.TryGetValue(roomId, out room) ||
+            (!forceShutdownNowPlayingRooms && room.Playing))
+        {
+            room = null;
+            return false;
+        }
+
+        // The caller holds matchRoomsLock. Detach atomically, then run callbacks
+        // outside the lock to avoid manager/simulator lock inversion.
+        matchRooms.Remove(roomId);
+        roomEventBuses.Remove(roomId);
+        roomFieldItemManagers.Remove(roomId, out itemManager);
+        return true;
+    }
+
+    private static void CleanupDetachedRoom(
+        string roomId,
+        OpenGSCore.MatchRoom room,
+        OpenGSServer.Network.ServerFieldItemManager? itemManager)
+    {
         InGameMatchEventHandler.ClearRoomProjectiles(roomId);
         InGameMatchEventHandler.ClearRoomFlagState(room.Id);
         MissionEnemyRegistry.ClearRoom(room.Id);
