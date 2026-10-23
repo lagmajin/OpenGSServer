@@ -2435,13 +2435,12 @@ namespace OpenGSServer
                 }
             }
 
-            // An enemy on the line is a target like any other. The resolver walked
-            // the player list only, so in a mission every shot went through an
-            // enemy standing in it and hit whatever was behind, and the objective
-            // could only ever be moved by a shot that happened to miss.
-            if (bestId == null &&
-                MissionEnemyRegistry.TryResolveOnShotLine(
-                    room.Id.ToString(), originX, originY, dirX, dirY, range, out var enemyId))
+            // Enemies and players share one line of fire. A target behind an
+            // enemy cannot absorb the shot before the closer target does.
+            if (MissionEnemyRegistry.TryResolveOnShotLine(
+                    room.Id.ToString(), originX, originY, dirX, dirY, range,
+                    out var enemyId, out var enemyDistance) &&
+                (bestId == null || enemyDistance < bestDistanceSquared))
             {
                 bestId = enemyId;
             }

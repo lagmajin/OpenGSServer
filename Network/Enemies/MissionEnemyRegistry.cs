@@ -105,7 +105,22 @@ namespace OpenGSServer
             float range,
             out string enemyId)
         {
+            return TryResolveOnShotLine(
+                roomId, originX, originY, dirX, dirY, range, out enemyId, out _);
+        }
+
+        public static bool TryResolveOnShotLine(
+            string roomId,
+            float originX,
+            float originY,
+            float dirX,
+            float dirY,
+            float range,
+            out string enemyId,
+            out float hitDistance)
+        {
             enemyId = string.Empty;
+            hitDistance = 0f;
             var simulator = TryGet(roomId);
             if (simulator == null)
             {
