@@ -68,6 +68,7 @@ namespace OpenGSServer
         private MatchTcpServer? _tcpServer;
         private MatchUDPServer? _udpServer;
         private TickTimer? _gameLoopTimer;
+        private bool _multiCoreEnabled;
         private readonly Stopwatch _performanceTimer = new();
         private bool _disposed;
 
@@ -99,16 +100,6 @@ namespace OpenGSServer
             ConsoleWrite.WriteMessage("[Match] Server initializing...", ConsoleColor.Cyan);
             _serverLagCompensationManager = new ServerLagCompensationManager(); // ラグ補償マネージャーを初期化
             GameMessageDispatcher.Initialize(this);
-            InitializeGameLoop();
-        }
-
-        /// <summary>
-        /// ゲームループを初期化（40ms = 25Hz）
-        /// </summary>
-        private void InitializeGameLoop()
-        {
-            _gameLoopTimer = new TickTimer(GameLoopCallback, 40);
-            ConsoleWrite.WriteMessage("[Match] Game loop initialized (25Hz)", ConsoleColor.Green);
         }
 
         /// <summary>
@@ -143,7 +134,9 @@ namespace OpenGSServer
                 _udpServer.StartSnapshotBroadcast(MatchUDPServer.SnapshotCheckIntervalMs);
 
                 // ゲームループ開始
-                _gameLoopTimer?.Start();
+                _gameLoopTimer = new TickTimer(
+                    _multiCoreEnabled ? MultiCoreGameLoopCallback : GameLoopCallback, 40);
+                _gameLoopTimer.Start();
                 IsRunning = true;
 
                 ConsoleWrite.WriteMessage("[Match] Server fully operational", ConsoleColor.Cyan);
@@ -153,6 +146,7 @@ namespace OpenGSServer
                 ConsoleWrite.WriteMessage($"[Match] Failed to start server: {ex.Message}", ConsoleColor.Red);
 
                 _gameLoopTimer?.Stop();
+                _gameLoopTimer = null;
                 try
                 {
                     _udpServer?.Dispose();
@@ -470,6 +464,7 @@ namespace OpenGSServer
             }
 
             _gameLoopTimer?.Stop();
+            _multiCoreEnabled = true;
             _gameLoopTimer = new TickTimer(MultiCoreGameLoopCallback, 40);
             _gameLoopTimer.Start();
 
@@ -512,6 +507,7 @@ namespace OpenGSServer
             ConsoleWrite.WriteMessage("[Match] Server shutting down...", ConsoleColor.Yellow);
 
             _gameLoopTimer?.Stop();
+            _gameLoopTimer = null;
             _udpServer?.Shutdown();
             _tcpServer?.Stop();
 
