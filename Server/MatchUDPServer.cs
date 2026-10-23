@@ -262,7 +262,7 @@ namespace OpenGSServer
         /// </summary>
         private void SendTransformStateToClient(NetPeer peer, ServerTransformState state)
         {
-            if (string.IsNullOrWhiteSpace(state.PlayerId) ||
+            if (string.IsNullOrWhiteSpace(state.PlayerId) || !state.HasAuthoritativePosition ||
                 !_connectedPlayers.TryGetValue(state.PlayerId, out var activeConnection) ||
                 activeConnection.PeerId != peer.Id)
             {
@@ -846,7 +846,7 @@ namespace OpenGSServer
             foreach (var roomPlayer in room.Players)
             {
                 var state = lagCompensation.GetPlayerState(roomPlayer.Id);
-                if (!string.IsNullOrWhiteSpace(state.PlayerId))
+                if (!string.IsNullOrWhiteSpace(state.PlayerId) && state.HasAuthoritativePosition)
                     SendJsonToPeer(peer, CreateTransformStateMessage(state),
                         DeliveryMethod.ReliableOrdered);
             }
@@ -1160,7 +1160,8 @@ namespace OpenGSServer
             BroadcastJsonToRoom(room, message);
             var transform = MatchServerV2.Instance.ServerLagCompensationManager
                 .GetPlayerState(playerId);
-            if (!string.IsNullOrWhiteSpace(transform.PlayerId))
+            if (!string.IsNullOrWhiteSpace(transform.PlayerId) &&
+                transform.HasAuthoritativePosition)
             {
                 var transformMessage = CreateTransformStateMessage(transform);
                 foreach (var roomPlayer in room.Players)
@@ -1436,6 +1437,7 @@ namespace OpenGSServer
                     {
                         var playerState = lagCompManager.GetPlayerState(player.Id);
                         if (playerState.PlayerId != null &&
+                            playerState.HasAuthoritativePosition &&
                             _connectedPlayers.TryGetValue(player.Id, out var connectionInfo))
                         {
                             var peerById = _server?.GetPeerById(connectionInfo.PeerId);
