@@ -280,6 +280,22 @@ namespace OpenGSServer
             ElementalBulletEffects.TryRemove(key, out _);
         }
 
+        public static void ClearRoomCombatEffects(string roomId)
+        {
+            if (string.IsNullOrWhiteSpace(roomId)) return;
+
+            var prefix = roomId + "\n";
+            foreach (var key in AttackBuffExpires.Keys.Where(key =>
+                key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
+                AttackBuffExpires.TryRemove(key, out _);
+            foreach (var key in DefenseBuffExpires.Keys.Where(key =>
+                key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
+                DefenseBuffExpires.TryRemove(key, out _);
+            foreach (var key in ElementalBulletEffects.Keys.Where(key =>
+                key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
+                ElementalBulletEffects.TryRemove(key, out _);
+        }
+
         /// <summary>What one kill is worth in the standings, on either damage path.</summary>
         private const int KillScore = 100;
 
@@ -2173,6 +2189,10 @@ namespace OpenGSServer
             // could never arrive while a ghost was holding a team up. It also let
             // the result name somebody who had left as the winner.
             var matchRoom = MatchRoomManager.Instance.SearchRoomByMemberID(playerId);
+            if (matchRoom != null && !preserveRoomMembership)
+            {
+                ClearCombatBuffs(matchRoom.Id.ToString(), playerId);
+            }
             if (matchRoom != null &&
                 MatchRoomManager.Instance.GetFieldItemManager(matchRoom.Id.ToString()) is { } itemManager)
             {

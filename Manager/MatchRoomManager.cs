@@ -745,6 +745,7 @@ namespace OpenGSServer
         OpenGSServer.Network.ServerFieldItemManager? itemManager)
     {
         InGameMatchEventHandler.ClearRoomProjectiles(roomId);
+        InGameMatchEventHandler.ClearRoomCombatEffects(roomId);
         InGameMatchEventHandler.ClearRoomFlagState(room.Id);
         MissionEnemyRegistry.ClearRoom(room.Id);
         ClearMatchResults(roomId);
@@ -780,6 +781,7 @@ namespace OpenGSServer
         foreach (var (roomId, room, itemManager) in removed)
         {
             InGameMatchEventHandler.ClearRoomProjectiles(roomId);
+            InGameMatchEventHandler.ClearRoomCombatEffects(roomId);
             InGameMatchEventHandler.ClearRoomFlagState(room.Id);
             MissionEnemyRegistry.ClearRoom(room.Id);
             ClearMatchResults(roomId);
