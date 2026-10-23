@@ -193,63 +193,18 @@ namespace OpenGSServer
                 bus.OnGameEndedWithResult += (result) =>
                 {
                     RememberMatchResult(matchRoom.Id.ToString(), result);
-
-                    var winners = ExtractWinnerIds(result);
                     foreach (var p in matchRoom.Players)
                     {
-                        var resultKey = $"{matchRoom.Id}:{p.Id}";
-                        if (!persistedMatchPlayers.TryAdd(resultKey, 0))
+                        var perPlayerResult = SettleMatchResultForPlayer(matchRoom, p, result);
+                        if (perPlayerResult == null)
                         {
                             continue;
                         }
 
-                        var matchResultPersisted = false;
-                        try
+                        var session = LobbyServerManager.Instance.GetSession(p.Id);
+                        if (session != null)
                         {
-                            var won = winners.Contains(p.Id);
-                            var persisted = LobbyServerManager.Instance.RecordMatchResult(
-                                p.Id,
-                                p.Score,
-                                p.Kills,
-                                p.Deaths,
-                                won,
-                                matchRoom.Setting.Mode);
-                            if (persisted == null)
-                            {
-                                throw new InvalidOperationException(
-                                    $"No account record was updated for match player '{p.Id}'.");
-                            }
-
-                            // Keep the idempotency marker after the durable XP
-                            // update, so a later notification failure cannot
-                            // award the same match twice on a repeated event.
-                            matchResultPersisted = true;
-                            LobbyServerManager.Instance.RecordMatchDailyProgress(p.Id, won);
-
-                            var perPlayerResult = BuildMatchResultEnvelope(matchRoom, result, p);
-                            perPlayerResult["XpGained"] = persisted.XpGained;
-                            perPlayerResult["TotalExp"] = persisted.NewTotalXp;
-                            perPlayerResult["NewLevel"] = persisted.NewLevel;
-                            perPlayerResult["IsLevelUp"] = persisted.IsLevelUp;
-                            RememberMatchPlayerResult(matchRoom.Id.ToString(), p.Id, perPlayerResult);
-                            var session = LobbyServerManager.Instance.GetSession(p.Id);
-                            if (session != null)
-                            {
-                                session.SendAsyncJsonWithTimeStamp((JObject)perPlayerResult.DeepClone());
-                            }
-
-                            RecordStanding(matchRoom, p);
-                        }
-                        catch (Exception ex)
-                        {
-                            if (!matchResultPersisted)
-                            {
-                                persistedMatchPlayers.TryRemove(resultKey, out _);
-                            }
-
-                            ConsoleWrite.WriteMessage(
-                                $"[Match] Failed to settle results for player '{p.Id}' in room '{matchRoom.Id}': {ex.Message}",
-                                ConsoleColor.Red);
+                            session.SendAsyncJsonWithTimeStamp((JObject)perPlayerResult.DeepClone());
                         }
                     }
                 };
@@ -855,8 +810,10 @@ namespace OpenGSServer
         /// answer, so the first one is remembered instead.
         /// </para>
         /// </summary>
-        private static readonly ConcurrentDictionary<string, JObject> lastMatchResults = new();
-        private static readonly ConcurrentDictionary<string, JObject> lastPlayerMatchResults = new();
+        private static readonly ConcurrentDictionary<string, JObject> lastMatchResults =
+            new(StringComparer.OrdinalIgnoreCase);
+        private static readonly ConcurrentDictionary<string, JObject> lastPlayerMatchResults =
+            new(StringComparer.OrdinalIgnoreCase);
 
         private static string PlayerMatchResultKey(string roomId, string playerId) =>
             $"{roomId}:{playerId}";
@@ -895,6 +852,69 @@ namespace OpenGSServer
             return lastMatchResults.TryGetValue(roomId, out var result) ? result : null;
         }
 
+        private JObject? SettleMatchResultForPlayer(
+            MatchRoom room, PlayerInfo player, JObject result)
+        {
+            var roomId = room.Id.ToString();
+            if (lastPlayerMatchResults.TryGetValue(
+                PlayerMatchResultKey(roomId, player.Id), out var existingResult))
+                return (JObject)existingResult.DeepClone();
+
+            var resultKey = PlayerMatchResultKey(roomId, player.Id);
+            if (!persistedMatchPlayers.TryAdd(resultKey, 0))
+            {
+                return lastPlayerMatchResults.TryGetValue(resultKey, out existingResult)
+                    ? (JObject)existingResult.DeepClone()
+                    : null;
+            }
+
+            var matchResultPersisted = false;
+            try
+            {
+                var won = ExtractWinnerIds(result).Contains(player.Id);
+                var persisted = LobbyServerManager.Instance.RecordMatchResult(
+                    player.Id,
+                    player.Score,
+                    player.Kills,
+                    player.Deaths,
+                    won,
+                    room.Setting.Mode);
+                if (persisted == null)
+                {
+                    throw new InvalidOperationException(
+                        $"No account record was updated for match player '{player.Id}'.");
+                }
+
+                // Keep the idempotency marker after the durable XP update, so
+                // retrying delivery or reconnect recovery cannot award it twice.
+                matchResultPersisted = true;
+                var perPlayerResult = BuildMatchResultEnvelope(room, result, player);
+                perPlayerResult["XpGained"] = persisted.XpGained;
+                perPlayerResult["TotalExp"] = persisted.NewTotalXp;
+                perPlayerResult["NewLevel"] = persisted.NewLevel;
+                perPlayerResult["IsLevelUp"] = persisted.IsLevelUp;
+                RememberMatchPlayerResult(roomId, player.Id, perPlayerResult);
+
+                LobbyServerManager.Instance.RecordMatchDailyProgress(player.Id, won);
+                RecordStanding(room, player);
+                return (JObject)perPlayerResult.DeepClone();
+            }
+            catch (Exception ex)
+            {
+                if (!matchResultPersisted)
+                {
+                    persistedMatchPlayers.TryRemove(resultKey, out _);
+                }
+
+                ConsoleWrite.WriteMessage(
+                    $"[Match] Failed to settle results for player '{player.Id}' in room '{room.Id}': {ex.Message}",
+                    ConsoleColor.Red);
+                return lastPlayerMatchResults.TryGetValue(resultKey, out existingResult)
+                    ? (JObject)existingResult.DeepClone()
+                    : null;
+            }
+        }
+
         public JObject? GetLastMatchResultEnvelope(OpenGSCore.MatchRoom room, PlayerInfo player)
         {
             if (room == null || player == null)
@@ -907,7 +927,10 @@ namespace OpenGSServer
                 return (JObject)playerResult.DeepClone();
 
             var result = LastMatchResult(room.Id.ToString());
-            return result == null ? null : BuildMatchResultEnvelope(room, result, player);
+            if (result == null) return null;
+
+            return SettleMatchResultForPlayer(room, player, result) ??
+                BuildMatchResultEnvelope(room, result, player);
         }
 
         private static JObject BuildMatchResultEnvelope(OpenGSCore.MatchRoom matchRoom, JObject result, PlayerInfo player)
