@@ -310,6 +310,7 @@ namespace OpenGSServer
                 return true;
             }
 
+            string? matchRoomId;
             lock (matchRoomsLock)
             {
                 var pendingRoom = matchRooms.Values.FirstOrDefault(room =>
@@ -325,10 +326,11 @@ namespace OpenGSServer
                     return false;
                 }
 
-                var matchRoomId = pendingRoom.Id.ToString();
-                RemoveRoom(matchRoomId);
-                return !matchRooms.ContainsKey(matchRoomId);
+                matchRoomId = pendingRoom.Id.ToString();
             }
+
+            RemoveRoom(matchRoomId);
+            return GetRoomById(matchRoomId) == null;
         }
 
         public bool BeginMatch(OpenGSCore.MatchRoom matchRoom)
@@ -601,6 +603,7 @@ namespace OpenGSServer
 
     public void ExitRoom(string userid)
     {
+        string? emptyRoomId = null;
         lock (matchRoomsLock)
         {
             var room = matchRooms.Values.FirstOrDefault(candidate =>
@@ -615,11 +618,15 @@ namespace OpenGSServer
             // ルームが空になったら削除
             if (room.Players.Count == 0)
             {
-                // Use the full teardown so projectiles, flags, mission
-                // enemies, field items, and remembered results all leave
-                // with the empty room.
-                RemoveRoom(room.Id.ToString(), forceShutdownNowPlayingRooms: true);
+                emptyRoomId = room.Id.ToString();
             }
+        }
+
+        // Do the teardown after releasing the room lock. Projectile cleanup
+        // takes the simulator lock, whose update path can query this manager.
+        if (emptyRoomId != null)
+        {
+            RemoveRoom(emptyRoomId, forceShutdownNowPlayingRooms: true);
         }
     }
 
@@ -685,90 +692,74 @@ namespace OpenGSServer
 
     public void RemoveRoom(in string roomId, bool forceShutdownNowPlayingRooms = false)
     {
+        OpenGSCore.MatchRoom? room;
+        OpenGSServer.Network.ServerFieldItemManager? itemManager;
         lock (matchRoomsLock)
         {
-            if (matchRooms.TryGetValue(roomId, out var room))
+            if (!matchRooms.TryGetValue(roomId, out room))
             {
-                // プレイ中のルームの強制シャットダウンチェック
-                if (!forceShutdownNowPlayingRooms && room.Playing)
-                {
-                    return;
-                }
+                return;
+            }
 
-                InGameMatchEventHandler.ClearRoomProjectiles(roomId);
-                matchRooms.Remove(roomId);
-                roomEventBuses.Remove(roomId);
+            // プレイ中のルームの強制シャットダウンチェック
+            if (!forceShutdownNowPlayingRooms && room.Playing)
+            {
+                return;
+            }
 
-                // The flag state is held beside the room rather than in it, and
-                // it is keyed by room id. A room id is never reused, so leaving it
-                // behind would keep two flags alive for every room that has ever
-                // existed, for the lifetime of the process.
-                InGameMatchEventHandler.ClearRoomFlagState(room.Id);
-                MissionEnemyRegistry.ClearRoom(room.Id);
-                ClearMatchResults(roomId);
-                foreach (var key in persistedMatchPlayers.Keys)
-                {
-                    if (key.StartsWith($"{roomId}:", StringComparison.OrdinalIgnoreCase))
-                    {
-                        persistedMatchPlayers.TryRemove(key, out _);
-                    }
-                }
-                if (roomFieldItemManagers.TryGetValue(roomId, out var itemManager))
-                {
-                    itemManager.EndMatch();
-                }
-                roomFieldItemManagers.Remove(roomId);
+            // Detach first, then run subsystem callbacks without the manager lock.
+            matchRooms.Remove(roomId);
+            roomEventBuses.Remove(roomId);
+            roomFieldItemManagers.Remove(roomId, out itemManager);
+        }
+
+        InGameMatchEventHandler.ClearRoomProjectiles(roomId);
+        InGameMatchEventHandler.ClearRoomFlagState(room.Id);
+        MissionEnemyRegistry.ClearRoom(room.Id);
+        ClearMatchResults(roomId);
+        foreach (var key in persistedMatchPlayers.Keys)
+        {
+            if (key.StartsWith($"{roomId}:", StringComparison.OrdinalIgnoreCase))
+            {
+                persistedMatchPlayers.TryRemove(key, out _);
             }
         }
+        itemManager?.EndMatch();
     }
 
     public void RemoveAllRooms(bool forceShutdownNowPlayingRooms = false)
     {
+        List<(string RoomId, OpenGSCore.MatchRoom Room, OpenGSServer.Network.ServerFieldItemManager? ItemManager)> removed = new();
         lock (matchRoomsLock)
         {
-            if (forceShutdownNowPlayingRooms)
+            foreach (var (roomId, room) in matchRooms.ToList())
             {
-                foreach (var roomId in matchRooms.Keys.ToList())
+                if (!forceShutdownNowPlayingRooms && room.Playing)
                 {
-                    InGameMatchEventHandler.ClearRoomProjectiles(roomId);
-                    MissionEnemyRegistry.ClearRoom(roomId);
-                    InGameMatchEventHandler.ClearRoomFlagState(roomId);
-                }
-                foreach (var itemManager in roomFieldItemManagers.Values)
-                {
-                    itemManager.EndMatch();
-                }
-                matchRooms.Clear();
-                roomEventBuses.Clear();
-                roomFieldItemManagers.Clear();
-            }
-            else
-            {
-                // プレイ中のルーム以外を削除
-                var roomsToRemove = new List<string>();
-                foreach (var room in matchRooms.Values)
-                {
-                    if (!room.Playing)
-                    {
-                        roomsToRemove.Add(room.Id);
-                    }
+                    continue;
                 }
 
-                foreach (var roomId in roomsToRemove)
+                matchRooms.Remove(roomId);
+                roomEventBuses.Remove(roomId);
+                roomFieldItemManagers.Remove(roomId, out var itemManager);
+                removed.Add((roomId, room, itemManager));
+            }
+        }
+
+        foreach (var (roomId, room, itemManager) in removed)
+        {
+            InGameMatchEventHandler.ClearRoomProjectiles(roomId);
+            InGameMatchEventHandler.ClearRoomFlagState(room.Id);
+            MissionEnemyRegistry.ClearRoom(room.Id);
+            ClearMatchResults(roomId);
+            foreach (var key in persistedMatchPlayers.Keys)
+            {
+                if (key.StartsWith($"{roomId}:", StringComparison.OrdinalIgnoreCase))
                 {
-                    InGameMatchEventHandler.ClearRoomProjectiles(roomId);
-                    matchRooms.Remove(roomId);
-                    roomEventBuses.Remove(roomId);
-                    InGameMatchEventHandler.ClearRoomFlagState(roomId);
-                    MissionEnemyRegistry.ClearRoom(roomId);
-                    ClearMatchResults(roomId);
-                    if (roomFieldItemManagers.TryGetValue(roomId, out var itemManager))
-                    {
-                        itemManager.EndMatch();
-                    }
-                    roomFieldItemManagers.Remove(roomId);
+                    persistedMatchPlayers.TryRemove(key, out _);
                 }
             }
+            itemManager?.EndMatch();
         }
     }
 

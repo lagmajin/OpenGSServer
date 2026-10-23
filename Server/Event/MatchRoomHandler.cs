@@ -2853,12 +2853,14 @@ namespace OpenGSServer
                 return new Vector2(state.PositionX, state.PositionY);
             };
             Projectiles.PlayerIds = () => GetLocatedMatchPlayerIds();
+            Projectiles.PlayerRoomLookup = playerId =>
+                MatchRoomManager.Instance.SearchRoomByMemberID(playerId)?.Id.ToString();
             Projectiles.IsRoomActive = roomId =>
                 MatchRoomManager.Instance.GetRoomById(roomId)?.Playing == true;
             Projectiles.OnSpawn = (projectile, spawnType) => BroadcastProjectileSpawn(projectile, spawnType);
             Projectiles.OnExpire = projectile => BroadcastProjectileExpire(projectile);
-            Projectiles.OnDamage = (targetId, attackerId, damage, hit) =>
-                HandleProjectileDamage(targetId, attackerId, damage, hit);
+            Projectiles.OnRoomDamage = (roomId, targetId, attackerId, damage, hit) =>
+                HandleProjectileDamage(roomId, targetId, attackerId, damage, hit);
 
             Projectiles.ResolveEnemyOnSegment = (roomId, segmentStart, segmentEnd) =>
             {
@@ -3072,12 +3074,13 @@ namespace OpenGSServer
         }
 
         private static void HandleProjectileDamage(
+            string roomId,
             string targetId,
             string attackerId,
             int damage,
             Vector2 hitPosition)
         {
-            var room = MatchRoomManager.Instance.SearchRoomByMemberID(targetId);
+            var room = MatchRoomManager.Instance.GetRoomById(roomId);
             if (room == null || !room.Playing)
             {
                 return;

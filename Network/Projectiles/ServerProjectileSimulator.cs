@@ -72,6 +72,9 @@ namespace OpenGSServer.Network
         /// </summary>
         public Func<string, Vector2>? PlayerPositionLookup { get; set; }
 
+        /// <summary>Finds the room a player belongs to, for room-local collision tests.</summary>
+        public Func<string, string?>? PlayerRoomLookup { get; set; }
+
         /// <summary>
         /// Players currently in play, used to resolve hits.
         /// </summary>
@@ -95,6 +98,12 @@ namespace OpenGSServer.Network
         /// damage, and where the hit landed.
         /// </summary>
         public Action<string, string, int, Vector2>? OnDamage { get; set; }
+
+        /// <summary>
+        /// Room-aware damage callback. The legacy callback remains available for
+        /// simulator consumers that do not need to route damage between rooms.
+        /// </summary>
+        public Action<string, string, string, int, Vector2>? OnRoomDamage { get; set; }
 
         /// <summary>
         /// Resolves the first enemy touched by a bullet segment in its room.
@@ -398,7 +407,15 @@ namespace OpenGSServer.Network
 
             foreach (var hit in hits)
             {
-                OnDamage?.Invoke(hit.TargetId, hit.Grenade.OwnerId, hit.Damage, hit.Hit);
+                if (OnRoomDamage != null)
+                {
+                    OnRoomDamage(hit.Grenade.RoomId, hit.TargetId,
+                        hit.Grenade.OwnerId, hit.Damage, hit.Hit);
+                }
+                else
+                {
+                    OnDamage?.Invoke(hit.TargetId, hit.Grenade.OwnerId, hit.Damage, hit.Hit);
+                }
             }
 
             foreach (var grenade in detonated)
@@ -483,6 +500,11 @@ namespace OpenGSServer.Network
             var firstImpactAlong = float.PositiveInfinity;
             foreach (var candidate in players)
             {
+                if (!IsPlayerInRoom(candidate, projectile.RoomId))
+                {
+                    continue;
+                }
+
                 if (string.Equals(candidate, projectile.OwnerId, StringComparison.OrdinalIgnoreCase))
                 {
                     continue;
@@ -524,6 +546,11 @@ namespace OpenGSServer.Network
 
             foreach (var candidate in players)
             {
+                if (!IsPlayerInRoom(candidate, grenade.RoomId))
+                {
+                    continue;
+                }
+
                 if (string.Equals(candidate, grenade.OwnerId, StringComparison.OrdinalIgnoreCase))
                 {
                     // The thrower is not a victim of their own throw. A grenade
@@ -567,6 +594,11 @@ namespace OpenGSServer.Network
             var firstImpactPosition = grenade.Position;
             foreach (var candidate in players)
             {
+                if (!IsPlayerInRoom(candidate, grenade.RoomId))
+                {
+                    continue;
+                }
+
                 if (string.Equals(candidate, grenade.OwnerId, StringComparison.OrdinalIgnoreCase))
                 {
                     continue;
@@ -594,6 +626,13 @@ namespace OpenGSServer.Network
             if (float.IsPositiveInfinity(firstImpactAlong)) return false;
             impactPosition = firstImpactPosition;
             return true;
+        }
+
+        private bool IsPlayerInRoom(string playerId, string roomId)
+        {
+            var roomLookup = PlayerRoomLookup;
+            return roomLookup == null || string.Equals(
+                roomLookup(playerId), roomId, StringComparison.OrdinalIgnoreCase);
         }
 
         private void CollectClusterChildren(ServerProjectileState grenade, List<ServerProjectileState> spawned)
