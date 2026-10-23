@@ -87,6 +87,27 @@ namespace OpenGSServer.Network
             }
         }
 
+        public bool TryReadReloadSnapshot(
+            DateTime nowUtc, out float seconds, out int remainingAmmo, out int reserveAmmo)
+        {
+            lock (Sync)
+            {
+                var remaining = ReloadCompletesUtc - nowUtc;
+                if (ReloadCompletesUtc <= DateTime.MinValue || remaining <= TimeSpan.Zero)
+                {
+                    seconds = 0f;
+                    remainingAmmo = Remaining;
+                    reserveAmmo = Reserve;
+                    return false;
+                }
+
+                seconds = (float)Math.Clamp(remaining.TotalSeconds, 0.0, 30.0);
+                remainingAmmo = Remaining;
+                reserveAmmo = Reserve;
+                return seconds > 0f;
+            }
+        }
+
         public void SetRemaining(int remaining)
         {
             lock (Sync)

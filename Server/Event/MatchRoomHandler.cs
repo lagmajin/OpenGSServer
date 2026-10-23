@@ -2515,6 +2515,42 @@ namespace OpenGSServer
                     ["Timestamp"] = healthSnapshotTimestamp
                 });
             }
+
+            SendReloadSnapshots(room, requestingPlayerId);
+        }
+
+        private static void SendReloadSnapshots(MatchRoom room, string requestingPlayerId)
+        {
+            foreach (var roomPlayer in room.Players)
+            {
+                if (string.Equals(roomPlayer.Id, requestingPlayerId, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                foreach (var magazine in ServerWeaponMagazineStore.ForPlayer(roomPlayer.Id))
+                {
+                    var timestamp = DateTime.UtcNow;
+                    if (!magazine.TryReadReloadSnapshot(timestamp, out var remainingSeconds,
+                        out var currentAmmo, out var reserveAmmo))
+                        continue;
+
+                    GameMessageDispatcher.SendToPlayer(requestingPlayerId, new JObject
+                    {
+                        ["MessageType"] = GameMessageTypes.PlayerReloaded,
+                        ["RoomID"] = room.Id.ToString(),
+                        ["RoomId"] = room.Id.ToString(),
+                        ["PlayerID"] = roomPlayer.Id,
+                        ["PlayerId"] = roomPlayer.Id,
+                        ["WeaponType"] = magazine.WeaponType,
+                        ["CurrentAmmo"] = currentAmmo,
+                        ["MaxAmmo"] = magazine.Capacity,
+                        ["ReserveAmmo"] = reserveAmmo,
+                        ["Accepted"] = true,
+                        ["Reason"] = "Snapshot",
+                        ["ReloadSeconds"] = remainingSeconds,
+                        ["Timestamp"] = timestamp.ToString("o")
+                    });
+                }
+            }
         }
 
         private static void HandlePositionUpdate(MatchRoom room, string playerId, JObject position)
