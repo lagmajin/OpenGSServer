@@ -207,7 +207,7 @@ namespace OpenGSServer.Network
                 "power" or "powergrenade" => 2.0f,
                 "cluster" or "clustergrenade" => 2.0f,
                 "fire" or "firegrenade" => 1.125f,
-                "magnet" or "magnetic" or "magneticgrenade" => 2.0f,
+                "magnet" or "magnetic" or "magnetgrenade" or "magneticgrenade" => 2.0f,
                 "smoke" or "smokegrenade" => 2.0f,
                 _ => 3.0f
             };
