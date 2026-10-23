@@ -536,6 +536,10 @@ namespace OpenGSServer.Network
                 }
 
                 var position = lookup(playerId);
+                if (!float.IsFinite(position.X) || !float.IsFinite(position.Y))
+                {
+                    continue;
+                }
                 var distance = Vector2.Distance(enemy.Position, position);
                 if (distance >= bestDistance)
                 {

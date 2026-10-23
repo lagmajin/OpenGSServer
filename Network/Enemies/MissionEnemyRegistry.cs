@@ -34,6 +34,9 @@ namespace OpenGSServer
         private static Vector2 PlayerPosition(string playerId)
         {
             var state = MatchServerV2.Instance.ServerLagCompensationManager.GetPlayerState(playerId);
+            if (!state.HasAuthoritativePosition ||
+                !string.Equals(state.PlayerId, playerId, StringComparison.OrdinalIgnoreCase))
+                return new Vector2(float.NaN, float.NaN);
             return new Vector2(state.PositionX, state.PositionY);
         }
 
