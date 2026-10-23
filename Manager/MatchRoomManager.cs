@@ -211,15 +211,16 @@ namespace OpenGSServer
                             p.Deaths,
                             winners.Contains(p.Id),
                             matchRoom.Setting.Mode);
+                        var perPlayerResult = BuildMatchResultEnvelope(matchRoom, result, p);
+                        perPlayerResult["XpGained"] = persisted.XpGained;
+                        perPlayerResult["TotalExp"] = persisted.NewTotalXp;
+                        perPlayerResult["NewLevel"] = persisted.NewLevel;
+                        perPlayerResult["IsLevelUp"] = persisted.IsLevelUp;
+                        RememberMatchPlayerResult(matchRoom.Id.ToString(), p.Id, perPlayerResult);
                         var session = LobbyServerManager.Instance.GetSession(p.Id);
                         if (session != null)
                         {
-                            var perPlayerResult = BuildMatchResultEnvelope(matchRoom, result, p);
-                            perPlayerResult["XpGained"] = persisted.XpGained;
-                            perPlayerResult["TotalExp"] = persisted.NewTotalXp;
-                            perPlayerResult["NewLevel"] = persisted.NewLevel;
-                            perPlayerResult["IsLevelUp"] = persisted.IsLevelUp;
-                            session.SendAsyncJsonWithTimeStamp(perPlayerResult);
+                            session.SendAsyncJsonWithTimeStamp((JObject)perPlayerResult.DeepClone());
                         }
 
                         RecordStanding(matchRoom, p);
@@ -590,7 +591,7 @@ namespace OpenGSServer
                         // here to be repeated on the end notification, and a room
                         // id is never reused, so keeping it would be a result per
                         // room that has ever existed, for the life of the process.
-                        lastMatchResults.TryRemove(room.Id.ToString(), out _);
+                        ClearMatchResults(room.Id.ToString());
                     }
                     break;
                 }
@@ -680,7 +681,7 @@ namespace OpenGSServer
                 // existed, for the lifetime of the process.
                 InGameMatchEventHandler.ClearRoomFlagState(room.Id);
                 MissionEnemyRegistry.ClearRoom(room.Id);
-                lastMatchResults.TryRemove(roomId, out _);
+                ClearMatchResults(roomId);
                 foreach (var key in persistedMatchPlayers.Keys)
                 {
                     if (key.StartsWith($"{roomId}:", StringComparison.OrdinalIgnoreCase))
@@ -736,7 +737,7 @@ namespace OpenGSServer
                     roomEventBuses.Remove(roomId);
                     InGameMatchEventHandler.ClearRoomFlagState(roomId);
                     MissionEnemyRegistry.ClearRoom(roomId);
-                    lastMatchResults.TryRemove(roomId, out _);
+                    ClearMatchResults(roomId);
                     if (roomFieldItemManagers.TryGetValue(roomId, out var itemManager))
                     {
                         itemManager.EndMatch();
@@ -786,6 +787,29 @@ namespace OpenGSServer
         /// </para>
         /// </summary>
         private static readonly ConcurrentDictionary<string, JObject> lastMatchResults = new();
+        private static readonly ConcurrentDictionary<string, JObject> lastPlayerMatchResults = new();
+
+        private static string PlayerMatchResultKey(string roomId, string playerId) =>
+            $"{roomId}:{playerId}";
+
+        private static void RememberMatchPlayerResult(string roomId, string playerId, JObject result)
+        {
+            if (string.IsNullOrWhiteSpace(roomId) || string.IsNullOrWhiteSpace(playerId))
+                return;
+            lastPlayerMatchResults[PlayerMatchResultKey(roomId, playerId)] =
+                (JObject)result.DeepClone();
+        }
+
+        private static void ClearMatchResults(string roomId)
+        {
+            lastMatchResults.TryRemove(roomId, out _);
+            var prefix = $"{roomId}:";
+            foreach (var key in lastPlayerMatchResults.Keys)
+            {
+                if (key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                    lastPlayerMatchResults.TryRemove(key, out _);
+            }
+        }
 
         private static void RememberMatchResult(string roomId, JObject result)
         {
@@ -808,6 +832,10 @@ namespace OpenGSServer
             {
                 return null;
             }
+
+            if (lastPlayerMatchResults.TryGetValue(
+                PlayerMatchResultKey(room.Id.ToString(), player.Id), out var playerResult))
+                return (JObject)playerResult.DeepClone();
 
             var result = LastMatchResult(room.Id.ToString());
             return result == null ? null : BuildMatchResultEnvelope(room, result, player);
