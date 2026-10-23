@@ -74,7 +74,7 @@ namespace OpenGSServer
         {
             var simulator = ForRoom(roomId);
             simulator.PlayerIds = () => room.Players
-                .Where(player => player != null && player.Health > 0 &&
+                .Where(player => player != null && room.Playing && player.Health > 0 &&
                     MatchServerV2.Instance.IsPlayerConnected(player.Id))
                 .Select(player => player.Id)
                 .ToList();
