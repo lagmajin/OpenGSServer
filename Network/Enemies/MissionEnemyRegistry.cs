@@ -56,6 +56,7 @@ namespace OpenGSServer
 
             simulator.OnSpawn = enemy => BroadcastEnemySpawn(enemy);
             simulator.OnDespawn = enemy => BroadcastEnemyDespawn(enemy);
+            simulator.OnStateChanged = enemy => BroadcastEnemyState(enemy);
             simulator.OnDamaged = (enemy, attackerId, damage, hit) => BroadcastEnemyDamaged(enemy, attackerId, damage);
             simulator.OnPlayerDamaged = (playerId, enemy, damage, hit) =>
                 ApplyEnemyDamageOnPlayer(playerId, enemy, damage, hit);
@@ -79,6 +80,7 @@ namespace OpenGSServer
 
             simulator.OnSpawn = enemy => BroadcastEnemySpawn(enemy);
             simulator.OnDespawn = enemy => BroadcastEnemyDespawn(enemy);
+            simulator.OnStateChanged = enemy => BroadcastEnemyState(enemy);
             simulator.OnDamaged = (enemy, attackerId, damage, hit) => BroadcastEnemyDamaged(enemy, attackerId, damage);
             simulator.OnKilled = (enemy, attackerId) => OnEnemyKilled(enemy, attackerId);
             simulator.OnPlayerDamaged = (playerId, enemy, damage, hit) =>
@@ -289,7 +291,8 @@ namespace OpenGSServer
         /// Publishes the whole set of enemies, for a client that has just arrived
         /// and missed every spawn.
         /// </summary>
-        public static void PublishSnapshot(string roomId)        {
+        public static void PublishSnapshot(string roomId, string? playerId = null)
+        {
             var simulator = TryGet(roomId);
             if (simulator == null)
             {
@@ -302,13 +305,23 @@ namespace OpenGSServer
                 enemies.Add(BuildEnemyMessage("EnemySnapshot", enemy));
             }
 
-            GameMessageDispatcher.BroadcastToRoom(roomId, new JObject
+            var message = new JObject
             {
                 ["MessageType"] = "EnemySnapshot",
                 ["RoomID"] = roomId,
                 ["Enemies"] = enemies,
                 ["Timestamp"] = DateTime.UtcNow.ToString("o")
-            });
+            };
+            if (string.IsNullOrWhiteSpace(playerId))
+                GameMessageDispatcher.BroadcastToRoom(roomId, message);
+            else
+                GameMessageDispatcher.SendToPlayer(playerId, message);
+        }
+
+        private static void BroadcastEnemyState(ServerEnemyState enemy)
+        {
+            GameMessageDispatcher.BroadcastToRoom(enemy.RoomId, BuildEnemyMessage(
+                "EnemyState", enemy));
         }
 
         private static void BroadcastEnemySpawn(ServerEnemyState enemy)

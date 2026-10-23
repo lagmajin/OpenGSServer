@@ -1072,7 +1072,7 @@ namespace OpenGSServer
             };
 
             BroadcastJsonToRoom(room, message);
-            MissionEnemyRegistry.PublishSnapshot(room.Id.ToString());
+            MissionEnemyRegistry.PublishSnapshot(room.Id.ToString(), playerId);
             MatchRoomHandler.SendProjectileSnapshot(room.Id.ToString(), playerId);
         }
 

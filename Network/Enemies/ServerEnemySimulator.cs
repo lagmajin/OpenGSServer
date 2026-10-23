@@ -101,6 +101,9 @@ namespace OpenGSServer.Network
         /// <summary>Called when an enemy leaves play for any reason.</summary>
         public Action<ServerEnemyState>? OnDespawn { get; set; }
 
+        /// <summary>Called after an enemy's position or facing changes in a tick.</summary>
+        public Action<ServerEnemyState>? OnStateChanged { get; set; }
+
         /// <summary>
         /// Called when an enemy takes damage. The enemy, the attacker, the damage
         /// that was actually applied, and where it landed.
@@ -308,6 +311,7 @@ namespace OpenGSServer.Network
 
             var hits = new List<(string PlayerId, ServerEnemyState Enemy, int Damage, Vector2 Hit)>();
             var despawned = new List<ServerEnemyState>();
+            var changed = new List<ServerEnemyState>();
 
             lock (_lock)
             {
@@ -319,6 +323,8 @@ namespace OpenGSServer.Network
                         continue;
                     }
 
+                    var previousPosition = enemy.Position;
+                    var previousFacing = enemy.Facing;
                     var target = NearestPlayer(enemy, players, lookup);
                     if (target == null)
                     {
@@ -363,7 +369,18 @@ namespace OpenGSServer.Network
                             hits.Add((targetId, enemy, (int)enemy.AttackDamage, enemy.Position));
                         }
                     }
+
+                    if (Vector2.DistanceSquared(previousPosition, enemy.Position) > 0.0001f ||
+                        Vector2.DistanceSquared(previousFacing, enemy.Facing) > 0.0025f)
+                    {
+                        changed.Add(enemy);
+                    }
                 }
+            }
+
+            foreach (var enemy in changed)
+            {
+                OnStateChanged?.Invoke(enemy);
             }
 
             foreach (var enemy in despawned)
