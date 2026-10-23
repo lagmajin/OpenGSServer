@@ -3847,6 +3847,10 @@ namespace OpenGSServer
             if (LastShots.TryGetValue(cooldownKey, out var lastShot) && now - lastShot < cooldown)
             {
                 Console.WriteLine($"[Match] Ignored rapid {weaponType} shot from '{playerId}'");
+                var remaining = ServerWeaponMagazineStore.TryPeek(playerId, weaponType, out var magazine)
+                    ? magazine.ReadRemaining()
+                    : 0;
+                RefuseShot(room, playerId, weaponType, remaining);
                 return false;
             }
 
