@@ -839,6 +839,12 @@ namespace OpenGSServer
 
             SendJsonToPeer(peer, joined, DeliveryMethod.ReliableOrdered);
             SendJsonToPeer(peer, CreateRoomSnapshotMessage(room), DeliveryMethod.ReliableOrdered);
+            // ClientConnect may be retried on the same peer when the first
+            // admission response was lost. Replay live simulation state as well
+            // as room state so this path has the same recovery guarantees as a
+            // fresh peer admission.
+            MissionEnemyRegistry.PublishSnapshot(room.Id.ToString(), playerId);
+            MatchRoomHandler.SendProjectileSnapshot(room.Id.ToString(), playerId);
         }
 
         private void RegisterUnauthorizedPacket(NetPeer peer)
