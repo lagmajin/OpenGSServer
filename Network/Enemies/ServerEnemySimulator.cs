@@ -162,6 +162,8 @@ namespace OpenGSServer.Network
             int attackDamage = 15,
             float attackIntervalSeconds = 1.0f)
         {
+            ValidateSpawn(roomId, kind, position, health, moveSpeed, attackRange,
+                attackDamage, attackIntervalSeconds);
             lock (_spawnLock)
             {
                 var enemy = new ServerEnemyState
@@ -213,6 +215,19 @@ namespace OpenGSServer.Network
             int health = 60,
             int attackDamage = 15)
         {
+            if (string.IsNullOrWhiteSpace(roomId) || roomId.Length > 128)
+                throw new ArgumentException("A room id is required.", nameof(roomId));
+            if (!Enum.IsDefined(typeof(ServerEnemyKind), kind))
+                throw new ArgumentOutOfRangeException(nameof(kind));
+            if (!IsValidPosition(centre))
+                throw new ArgumentOutOfRangeException(nameof(centre));
+            if (!float.IsFinite(spacing) || spacing < 0f || spacing > 100_000f)
+                throw new ArgumentOutOfRangeException(nameof(spacing));
+            if (health > 1_000_000)
+                throw new ArgumentOutOfRangeException(nameof(health));
+            if (attackDamage < 0 || attackDamage > 1_000_000)
+                throw new ArgumentOutOfRangeException(nameof(attackDamage));
+
             lock (_spawnLock)
             {
                 int availableSlots;
@@ -223,6 +238,7 @@ namespace OpenGSServer.Network
 
                 var total = Math.Clamp(count, 0, availableSlots);
                 var spawned = new List<ServerEnemyState>(total);
+                var positions = new Vector2[total];
 
                 for (var i = 0; i < total; i++)
                 {
@@ -230,10 +246,18 @@ namespace OpenGSServer.Network
                     // column that can be met with one shot.
                     var angle = (MathF.Tau * i) / MathF.Max(1, total);
                     var offset = new Vector2(MathF.Cos(angle), MathF.Sin(angle)) * spacing * (1f + i * 0.1f);
+                    positions[i] = centre + offset;
+                    if (!IsValidPosition(positions[i]))
+                        throw new ArgumentOutOfRangeException(nameof(spacing),
+                            "The requested wave extends beyond the supported world bounds.");
+                }
+
+                foreach (var position in positions)
+                {
                     spawned.Add(Spawn(
                         roomId,
                         kind,
-                        centre + offset,
+                        position,
                         health: health,
                         attackDamage: attackDamage));
                 }
@@ -241,6 +265,37 @@ namespace OpenGSServer.Network
                 return spawned;
             }
         }
+
+        private static void ValidateSpawn(
+            string roomId,
+            ServerEnemyKind kind,
+            Vector2 position,
+            int health,
+            float moveSpeed,
+            float attackRange,
+            int attackDamage,
+            float attackIntervalSeconds)
+        {
+            if (string.IsNullOrWhiteSpace(roomId) || roomId.Length > 128)
+                throw new ArgumentException("A room id is required.", nameof(roomId));
+            if (!Enum.IsDefined(typeof(ServerEnemyKind), kind))
+                throw new ArgumentOutOfRangeException(nameof(kind));
+            if (!IsValidPosition(position))
+                throw new ArgumentOutOfRangeException(nameof(position));
+            if (health > 1_000_000)
+                throw new ArgumentOutOfRangeException(nameof(health));
+            if (!float.IsFinite(moveSpeed) || moveSpeed > 1_000f ||
+                !float.IsFinite(attackRange) || attackRange > 100_000f ||
+                !float.IsFinite(attackIntervalSeconds) || attackIntervalSeconds > 86_400f)
+                throw new ArgumentOutOfRangeException(nameof(moveSpeed),
+                    "Enemy movement and attack values must be finite and within supported limits.");
+            if (attackDamage < 0 || attackDamage > 1_000_000)
+                throw new ArgumentOutOfRangeException(nameof(attackDamage));
+        }
+
+        private static bool IsValidPosition(Vector2 position) =>
+            float.IsFinite(position.X) && float.IsFinite(position.Y) &&
+            MathF.Abs(position.X) <= 100_000f && MathF.Abs(position.Y) <= 100_000f;
 
         public bool TryPeek(string enemyId, out ServerEnemyState enemy)
         {
