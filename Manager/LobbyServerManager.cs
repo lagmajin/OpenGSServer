@@ -2327,12 +2327,10 @@ namespace OpenGSServer
         {
             if (session is ClientSession clientSession)
             {
-                var playerId = clientSession.PlayerID;
-                if (!string.IsNullOrWhiteSpace(playerId))
-                {
-                    _manager.PlayerLeaveLobby(playerId);
-                    WaitRoomEventHandler.RemoveDisconnectedPlayer(playerId);
-                }
+                // ClientSession.OnDisconnected owns the full, ordered teardown
+                // through PlayerSessionCleanup. Keep this server callback for
+                // transport-level logging only; repeating lobby/wait-room
+                // removal here can race the in-game cleanup.
                 ConsoleWrite.WriteMessage($"[LOBBY] Client disconnected", ConsoleColor.Yellow);
             }
         }
