@@ -3857,7 +3857,8 @@ namespace OpenGSServer
 
             ServerWeaponMagazineStore.TickReloads(DateTime.UtcNow, (playerId, magazine) =>
             {
-                if (!roomByPlayer.TryGetValue(playerId, out var room))
+                if (!roomByPlayer.TryGetValue(playerId, out var room) ||
+                    !room.Playing || room.Finished)
                 {
                     return;
                 }

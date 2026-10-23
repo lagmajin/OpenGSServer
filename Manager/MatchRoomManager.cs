@@ -358,6 +358,13 @@ namespace OpenGSServer
                 return false;
             }
 
+            // A new match starts with full magazines even when players stayed
+            // in the lobby after the previous match and retained server ammo.
+            foreach (var player in matchRoom.Players)
+            {
+                ServerWeaponMagazineStore.RefillAllMagazines(player.Id);
+            }
+
             if (!matchRoom.GameStart())
             {
                 return false;
