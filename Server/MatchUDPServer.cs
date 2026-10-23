@@ -450,8 +450,19 @@ namespace OpenGSServer
 
             if (string.Equals(messageType, "ClientConnect", StringComparison.OrdinalIgnoreCase))
             {
-                if (string.IsNullOrWhiteSpace(messagePlayerId))
+                var requestedRoomId = message["RoomID"]?.ToString() ??
+                    message["RoomId"]?.ToString();
+                var matchRoom = string.IsNullOrWhiteSpace(messagePlayerId)
+                    ? null
+                    : MatchRoomManager.Instance.SearchRoomByMemberID(messagePlayerId);
+                if (string.IsNullOrWhiteSpace(messagePlayerId) ||
+                    string.IsNullOrWhiteSpace(requestedRoomId) || matchRoom == null ||
+                    !string.Equals(requestedRoomId, matchRoom.Id.ToString(),
+                        StringComparison.OrdinalIgnoreCase))
                 {
+                    ConsoleWrite.WriteMessage(
+                        $"[UDP] Rejected ClientConnect for player '{messagePlayerId}' with room '{requestedRoomId}'",
+                        ConsoleColor.Yellow);
                     peer.Disconnect();
                     return;
                 }
