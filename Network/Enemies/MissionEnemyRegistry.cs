@@ -392,7 +392,7 @@ namespace OpenGSServer
             PublishObjectiveProgress(enemy.RoomId);
         }
 
-        public static void PublishObjectiveProgress(string roomId)
+        public static void PublishObjectiveProgress(string roomId, string? playerId = null)
         {
             var room = MatchRoomManager.Instance.GetRoomById(roomId);
             if (room?.CurrentSituation is not MissionMatchSituation mission)
@@ -400,14 +400,18 @@ namespace OpenGSServer
                 return;
             }
 
-            GameMessageDispatcher.BroadcastToRoom(roomId, new JObject
+            var message = new JObject
             {
                 ["MessageType"] = GameMessageTypes.MissionObjectiveProgress,
                 ["RoomID"] = roomId,
                 ["ObjectiveCount"] = mission.ObjectiveCount,
                 ["ObjectiveProgress"] = mission.ObjectiveProgress,
                 ["Timestamp"] = DateTime.UtcNow.ToString("o")
-            });
+            };
+            if (string.IsNullOrWhiteSpace(playerId))
+                GameMessageDispatcher.BroadcastToRoom(roomId, message);
+            else
+                GameMessageDispatcher.SendToPlayer(playerId, message);
         }
 
         private static void ApplyEnemyDamageOnPlayer(

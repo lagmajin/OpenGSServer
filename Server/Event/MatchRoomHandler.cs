@@ -2597,6 +2597,10 @@ namespace OpenGSServer
             // ready and discard it. MatchStatusRequest is sent again after the
             // client enters the match, so include a fresh mission snapshot here.
             MissionEnemyRegistry.PublishSnapshot(room.Id.ToString(), requestingPlayerId);
+            // The mission objective is broadcast on match start and whenever an
+            // enemy dies. A reconnect missed those events, so restore its current
+            // authoritative progress alongside the enemy snapshot.
+            MissionEnemyRegistry.PublishObjectiveProgress(room.Id.ToString(), requestingPlayerId);
             SendProjectileSnapshot(room.Id.ToString(), requestingPlayerId);
 
             var healthSnapshotTimestamp = DateTime.UtcNow.ToString("o");
