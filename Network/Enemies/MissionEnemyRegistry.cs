@@ -428,7 +428,11 @@ namespace OpenGSServer
                 ["RemainingHealth"] = outcome.RemainingHealth,
                 ["MaxHealth"] = player.MaxHealth,
                 ["IsDown"] = outcome.IsNowDown,
-                ["HitPosition"] = new JObject { ["X"] = hit.X, ["Y"] = hit.Y },
+                ["HitPosition"] = new JObject
+                {
+                    ["X"] = playerState.PositionX,
+                    ["Y"] = playerState.PositionY
+                },
                 ["Timestamp"] = DateTime.UtcNow.ToString("o")
             });
 
