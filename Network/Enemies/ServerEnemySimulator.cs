@@ -32,6 +32,7 @@ namespace OpenGSServer.Network
 
         public Vector2 Position { get; set; }
         public Vector2 Facing { get; set; } = new(1f, 0f);
+        public string Timestamp { get; set; } = string.Empty;
 
         public int Health { get; set; }
         public int MaxHealth { get; set; }
@@ -94,6 +95,7 @@ namespace OpenGSServer.Network
         private readonly object _lock = new();
         private readonly object _spawnLock = new();
         private readonly Random _random = new();
+        private long _lastTimestampTicks;
 
         /// <summary>Where a player is right now, keyed by player id.</summary>
         public Func<string, Vector2>? PlayerPositionLookup { get; set; }
@@ -131,8 +133,14 @@ namespace OpenGSServer.Network
 
         public IReadOnlyCollection<ServerEnemyState> Snapshot()
         {
+            return Snapshot(out _);
+        }
+
+        public IReadOnlyCollection<ServerEnemyState> Snapshot(out string timestamp)
+        {
             lock (_lock)
             {
+                timestamp = NextTimestampLocked();
                 return _enemies.Values
                     .Where(enemy => enemy.IsAlive)
                     .Select(CopyState)
@@ -185,6 +193,7 @@ namespace OpenGSServer.Network
                     }
 
                     _enemies[enemy.EnemyId] = enemy;
+                    enemy.Timestamp = NextTimestampLocked();
                 }
 
                 OnSpawn?.Invoke(CopyState(enemy));
@@ -284,6 +293,7 @@ namespace OpenGSServer.Network
 
                 applied = Math.Min(damage, found.Health);
                 found.Health -= applied;
+                found.Timestamp = NextTimestampLocked();
                 killed = found.Health <= 0;
                 enemy = CopyState(found);
             }
@@ -404,6 +414,7 @@ namespace OpenGSServer.Network
                     if (Vector2.DistanceSquared(previousPosition, enemy.Position) > 0.0001f ||
                         Vector2.DistanceSquared(previousFacing, enemy.Facing) > 0.0025f)
                     {
+                        enemy.Timestamp = NextTimestampLocked();
                         changed.Add(CopyState(enemy));
                     }
                 }
@@ -505,6 +516,7 @@ namespace OpenGSServer.Network
             {
                 if (_enemies.TryRemove(enemy.EnemyId, out var current))
                 {
+                    current.Timestamp = NextTimestampLocked();
                     removed = CopyState(current);
                 }
             }
@@ -524,6 +536,8 @@ namespace OpenGSServer.Network
             List<ServerEnemyState> leaving;
             lock (_lock)
             {
+                foreach (var enemy in _enemies.Values)
+                    enemy.Timestamp = NextTimestampLocked();
                 leaving = _enemies.Values.Select(CopyState).ToList();
                 _enemies.Clear();
             }
@@ -543,6 +557,7 @@ namespace OpenGSServer.Network
                 Kind = enemy.Kind,
                 Position = enemy.Position,
                 Facing = enemy.Facing,
+                Timestamp = enemy.Timestamp,
                 Health = enemy.Health,
                 MaxHealth = enemy.MaxHealth,
                 MoveSpeed = enemy.MoveSpeed,
@@ -552,6 +567,13 @@ namespace OpenGSServer.Network
                 NextAttackAtSeconds = enemy.NextAttackAtSeconds,
                 CurrentTargetId = enemy.CurrentTargetId
             };
+        }
+
+        private string NextTimestampLocked()
+        {
+            var ticks = Math.Max(DateTime.UtcNow.Ticks, _lastTimestampTicks + 1);
+            _lastTimestampTicks = ticks;
+            return new DateTime(ticks, DateTimeKind.Utc).ToString("o");
         }
 
         private static (string PlayerId, Vector2 Position)? NearestPlayer(

@@ -441,12 +441,21 @@ namespace OpenGSServer
             lock (SimulatorLifecycleLock)
             {
                 var simulator = TryGet(roomId);
-                // Mark the snapshot boundary before enumerating the simulator.
-                // Delta events created during enumeration then carry a newer
-                // timestamp and can safely win if they overtake this snapshot.
-                var snapshotTimestamp = DateTime.UtcNow.ToString("o");
+                string snapshotTimestamp;
+                IReadOnlyCollection<ServerEnemyState> snapshot;
+                if (simulator == null)
+                {
+                    snapshotTimestamp = DateTime.UtcNow.ToString("o");
+                    snapshot = Array.Empty<ServerEnemyState>();
+                }
+                else
+                {
+                    // Capture the boundary and states under the simulator lock
+                    // so they describe one consistent view of the room.
+                    snapshot = simulator.Snapshot(out snapshotTimestamp);
+                }
                 var enemies = new JArray();
-                foreach (var enemy in simulator?.Snapshot() ?? Array.Empty<ServerEnemyState>())
+                foreach (var enemy in snapshot)
                 {
                     enemies.Add(BuildEnemyMessage("EnemySnapshot", enemy));
                 }
@@ -497,7 +506,9 @@ namespace OpenGSServer
                 ["IsDown"] = !enemy.IsAlive,
                 ["PosX"] = enemy.Position.X,
                 ["PosY"] = enemy.Position.Y,
-                ["Timestamp"] = DateTime.UtcNow.ToString("o")
+                ["Timestamp"] = string.IsNullOrEmpty(enemy.Timestamp)
+                    ? DateTime.UtcNow.ToString("o")
+                    : enemy.Timestamp
             });
         }
 
@@ -515,7 +526,9 @@ namespace OpenGSServer
                 ["PosY"] = enemy.Position.Y,
                 ["FacingX"] = enemy.Facing.X,
                 ["FacingY"] = enemy.Facing.Y,
-                ["Timestamp"] = DateTime.UtcNow.ToString("o")
+                ["Timestamp"] = string.IsNullOrEmpty(enemy.Timestamp)
+                    ? DateTime.UtcNow.ToString("o")
+                    : enemy.Timestamp
             };
         }
     }
