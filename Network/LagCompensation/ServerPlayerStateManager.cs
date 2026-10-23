@@ -75,7 +75,7 @@ namespace OpenGSServer.Network
                 return;
             }
 
-            var state = m_PlayerStates.GetOrAdd(playerId, id => new PlayerServerState
+            m_PlayerStates.GetOrAdd(playerId, id => new PlayerServerState
             {
                 PlayerId = id,
                 PosX = 0,
@@ -93,7 +93,6 @@ namespace OpenGSServer.Network
                 // the origin, so this stays false until an update arrives.
                 HasAuthoritativePosition = false
             });
-
         }
 
         public void ResumePlayer(string playerId)
