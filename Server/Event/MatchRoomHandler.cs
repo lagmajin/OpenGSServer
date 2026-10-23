@@ -1390,13 +1390,15 @@ namespace OpenGSServer
 
             var isPickup = string.Equals(messageType, "WeaponPickup", StringComparison.OrdinalIgnoreCase);
             var requestedItemId = isPickup ? ReadString(json, "ItemId", "ItemID") : string.Empty;
+            if (isPickup && (string.IsNullOrWhiteSpace(requestedItemId) || requestedItemId.Length > 128))
+            {
+                Console.WriteLine($"[Match] Ignored weapon pickup without a valid item id from '{playerId}'");
+                return;
+            }
             if (isPickup && !TryGetActiveCombatant(room, playerId, out _))
             {
-                if (!string.IsNullOrWhiteSpace(requestedItemId) && requestedItemId.Length <= 128)
-                {
-                    BroadcastDroppedWeaponPickup(room, playerId,
-                        requestedItemId, weaponType, false);
-                }
+                BroadcastDroppedWeaponPickup(room, playerId,
+                    requestedItemId, weaponType, false);
                 return;
             }
 
@@ -1404,7 +1406,7 @@ namespace OpenGSServer
             if (string.IsNullOrEmpty(itemId))
             {
                 Console.WriteLine($"[Match] No weapon of type '{weaponType}' for '{playerId}' to claim in room {room.Id}");
-                if (isPickup && !string.IsNullOrWhiteSpace(requestedItemId) && requestedItemId.Length <= 128)
+                if (isPickup)
                     BroadcastDroppedWeaponPickup(room, playerId, requestedItemId, weaponType, false);
                 return;
             }
