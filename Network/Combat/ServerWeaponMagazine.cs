@@ -550,6 +550,25 @@ namespace OpenGSServer.Network
             }
         }
 
+        public static bool TryReadReloadSnapshot(
+            string playerId, string weaponType, DateTime nowUtc,
+            out ServerMagazine magazine, out float seconds,
+            out int remainingAmmo, out int reserveAmmo)
+        {
+            lock (OwnershipLock)
+            {
+                if (TryPeek(playerId, weaponType, out magazine))
+                    return magazine.TryReadReloadSnapshot(nowUtc,
+                        out seconds, out remainingAmmo, out reserveAmmo);
+            }
+
+            magazine = null!;
+            seconds = 0f;
+            remainingAmmo = 0;
+            reserveAmmo = 0;
+            return false;
+        }
+
         /// <summary>Whether a player has a magazine for this weapon, and how much is in it.</summary>
         public static bool TryReadRemaining(string playerId, string weaponType, out int remaining, out int capacity)
         {

@@ -2548,8 +2548,9 @@ namespace OpenGSServer
                 foreach (var magazine in ServerWeaponMagazineStore.ForPlayer(roomPlayer.Id))
                 {
                     var timestamp = DateTime.UtcNow;
-                    if (!magazine.TryReadReloadSnapshot(timestamp, out var remainingSeconds,
-                        out var currentAmmo, out var reserveAmmo))
+                    if (!ServerWeaponMagazineStore.TryReadReloadSnapshot(roomPlayer.Id,
+                        magazine.WeaponType, timestamp, out var currentMagazine,
+                        out var remainingSeconds, out var currentAmmo, out var reserveAmmo))
                         continue;
 
                     GameMessageDispatcher.SendToPlayer(requestingPlayerId, new JObject
@@ -2559,9 +2560,9 @@ namespace OpenGSServer
                         ["RoomId"] = room.Id.ToString(),
                         ["PlayerID"] = roomPlayer.Id,
                         ["PlayerId"] = roomPlayer.Id,
-                        ["WeaponType"] = magazine.WeaponType,
+                        ["WeaponType"] = currentMagazine.WeaponType,
                         ["CurrentAmmo"] = currentAmmo,
-                        ["MaxAmmo"] = magazine.Capacity,
+                        ["MaxAmmo"] = currentMagazine.Capacity,
                         ["ReserveAmmo"] = reserveAmmo,
                         ["Accepted"] = true,
                         ["Reason"] = "Snapshot",
