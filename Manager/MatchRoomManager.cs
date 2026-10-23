@@ -321,6 +321,34 @@ namespace OpenGSServer
             BeginMatch(matchRoom);
         }
 
+        public bool DiscardPendingMatchForWaitRoom(string waitRoomId)
+        {
+            if (string.IsNullOrWhiteSpace(waitRoomId))
+            {
+                return true;
+            }
+
+            lock (matchRoomsLock)
+            {
+                var pendingRoom = matchRooms.Values.FirstOrDefault(room =>
+                    room.WaitRoomLink != null &&
+                    string.Equals(room.WaitRoomLink.RoomId, waitRoomId, StringComparison.OrdinalIgnoreCase));
+                if (pendingRoom == null)
+                {
+                    return true;
+                }
+
+                if (pendingRoom.Playing || pendingRoom.IsStarting)
+                {
+                    return false;
+                }
+
+                var matchRoomId = pendingRoom.Id.ToString();
+                RemoveRoom(matchRoomId);
+                return !matchRooms.ContainsKey(matchRoomId);
+            }
+        }
+
         public bool BeginMatch(OpenGSCore.MatchRoom matchRoom)
         {
             if (matchRoom == null)

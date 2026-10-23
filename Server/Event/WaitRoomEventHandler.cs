@@ -1,7 +1,7 @@
 using System;
-using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using Newtonsoft.Json.Linq;
 using OpenGSCore;
 
@@ -18,6 +18,8 @@ namespace OpenGSServer
         private static readonly object LoadingStateLock = new();
         private static readonly Dictionary<string, HashSet<string>> LoadingCompletedPlayers = new(StringComparer.OrdinalIgnoreCase);
         private static readonly HashSet<string> LoadingRooms = new(StringComparer.OrdinalIgnoreCase);
+        private static readonly HashSet<string> LoadingApprovedRooms = new(StringComparer.OrdinalIgnoreCase);
+        private static readonly HashSet<string> LoadingTimedOutRooms = new(StringComparer.OrdinalIgnoreCase);
 
         // S3: loading start, progress, completion, and map entry approval all
         // run through the server, but a client that never reports completion
@@ -44,7 +46,8 @@ namespace OpenGSServer
             LoadingTimeout,
             new Func<IEnumerable<WaitRoom>>[]
             {
-                () => WaitRoomManager.Instance().GetAllRooms()
+                () => WaitRoomManager.Instance().GetAllRooms(),
+                () => MissionWaitRoomManager.Instance.GetAllMissionRooms()
             },
             IsRoomWaitingForLoading,
             HandleLoadingTimeout);
@@ -73,8 +76,26 @@ namespace OpenGSServer
         {
             lock (LoadingStateLock)
             {
-                LoadingRooms.Remove(waitRoom.RoomId);
+                if (!LoadingRooms.Remove(waitRoom.RoomId))
+                {
+                    return;
+                }
+
+                var players = waitRoom.AllPlayers();
+                pendingPlayers = LoadingCompletedPlayers.TryGetValue(waitRoom.RoomId, out var completedPlayers)
+                    ? players.Where(player => !completedPlayers.Contains(player.Id)).Select(player => player.Id).ToList()
+                    : players.Select(player => player.Id).ToList();
+
                 LoadingCompletedPlayers.Remove(waitRoom.RoomId);
+                LoadingApprovedRooms.Remove(waitRoom.RoomId);
+                LoadingTimedOutRooms.Add(waitRoom.RoomId);
+            }
+
+            LoadingTimeouts.Forget(waitRoom.RoomId);
+
+            if (!MatchRoomManager.Instance.DiscardPendingMatchForWaitRoom(waitRoom.RoomId))
+            {
+                return;
             }
 
             // S3: the MatchRoom created for this attempt is discarded, so the
@@ -148,51 +169,97 @@ namespace OpenGSServer
                 return;
             }
 
-            BeginLoading(waitRoom);
+            BeginLoading(waitRoom, forceRestart: true);
         }
 
-        private static void BeginLoading(WaitRoom waitRoom)
+        private static bool BeginLoading(WaitRoom waitRoom, bool forceRestart = false)
         {
-            // S3: start the clock so a client that never reports completion
-            // cannot hold the room locked.
-            LoadingTimeouts.TrackLoadingStarted(waitRoom.RoomId);
-
+            var trackTimeout = false;
             lock (LoadingStateLock)
             {
-                if (LoadingRooms.Add(waitRoom.RoomId))
+                if (forceRestart)
                 {
+                    LoadingApprovedRooms.Remove(waitRoom.RoomId);
+                    LoadingTimedOutRooms.Remove(waitRoom.RoomId);
+                    LoadingRooms.Add(waitRoom.RoomId);
                     LoadingCompletedPlayers[waitRoom.RoomId] = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    trackTimeout = true;
+                }
+                else
+                {
+                    if (LoadingApprovedRooms.Contains(waitRoom.RoomId) || LoadingTimedOutRooms.Contains(waitRoom.RoomId))
+                    {
+                        return false;
+                    }
+
+                    if (LoadingRooms.Add(waitRoom.RoomId))
+                    {
+                        LoadingCompletedPlayers[waitRoom.RoomId] = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                        trackTimeout = true;
+                    }
                 }
             }
+
+            // Repeated LoadingStarted messages must not extend the deadline.
+            if (trackTimeout)
+            {
+                LoadingTimeouts.TrackLoadingStarted(waitRoom.RoomId);
+            }
+
+            return true;
         }
 
-        private static bool MarkLoadingCompleted(WaitRoom waitRoom, string playerId)
+        private static (bool Accepted, bool AllPlayersCompleted) MarkLoadingCompleted(WaitRoom waitRoom, string playerId)
         {
+            var allPlayersCompleted = false;
             lock (LoadingStateLock)
             {
                 if (!LoadingRooms.Contains(waitRoom.RoomId))
                 {
-                    LoadingRooms.Add(waitRoom.RoomId);
-                    LoadingCompletedPlayers[waitRoom.RoomId] = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    return (false, false);
+                }
+
+                var players = waitRoom.AllPlayers();
+                if (!players.Any(player => string.Equals(player.Id, playerId, StringComparison.OrdinalIgnoreCase)))
+                {
+                    return (false, false);
                 }
 
                 var completedPlayers = LoadingCompletedPlayers[waitRoom.RoomId];
                 completedPlayers.Add(playerId);
-                var players = waitRoom.AllPlayers();
                 if (players.Count == 0)
                 {
-                    return false;
+                    return (false, false);
                 }
 
                 foreach (var player in players)
                 {
                     if (!completedPlayers.Contains(player.Id))
                     {
-                        return false;
+                        return (true, false);
                     }
                 }
 
-                return true;
+                LoadingRooms.Remove(waitRoom.RoomId);
+                LoadingCompletedPlayers.Remove(waitRoom.RoomId);
+                LoadingApprovedRooms.Add(waitRoom.RoomId);
+                allPlayersCompleted = true;
+            }
+
+            if (allPlayersCompleted)
+            {
+                LoadingTimeouts.Forget(waitRoom.RoomId);
+            }
+
+            return (true, allPlayersCompleted);
+        }
+
+        private static bool HasLoadingCompleted(string roomId, string playerId)
+        {
+            lock (LoadingStateLock)
+            {
+                return LoadingCompletedPlayers.TryGetValue(roomId, out var completedPlayers) &&
+                    completedPlayers.Contains(playerId);
             }
         }
 
@@ -210,6 +277,8 @@ namespace OpenGSServer
             {
                 LoadingRooms.Remove(roomId);
                 LoadingCompletedPlayers.Remove(roomId);
+                LoadingApprovedRooms.Remove(roomId);
+                LoadingTimedOutRooms.Remove(roomId);
             }
         }
 
@@ -277,7 +346,7 @@ namespace OpenGSServer
                 }
             }
 
-            return null;
+            return FindMissionRoomByPlayerId(playerId);
         }
 
         private static WaitRoom? FindMissionRoomByPlayerId(string playerId)
@@ -379,7 +448,8 @@ namespace OpenGSServer
 
             if (!string.IsNullOrWhiteSpace(roomId))
             {
-                waitRoom = WaitRoomManager.Instance().FindWaitRoom(roomId);
+                waitRoom = WaitRoomManager.Instance().FindWaitRoom(roomId)
+                    ?? MissionWaitRoomManager.Instance.FindMissionRoom(roomId);
             }
 
             if (waitRoom != null && !string.IsNullOrWhiteSpace(playerId) && !waitRoom.Players.ContainsKey(playerId))
@@ -528,6 +598,16 @@ namespace OpenGSServer
                 return;
             }
 
+            if (!BeginLoading(waitRoom))
+            {
+                return;
+            }
+
+            if (HasLoadingCompleted(waitRoom.RoomId, playerId))
+            {
+                return;
+            }
+
             bool changed = false;
             lock (waitRoom)
             {
@@ -542,8 +622,6 @@ namespace OpenGSServer
             {
                 return;
             }
-
-            BeginLoading(waitRoom);
 
             BroadcastLoadingNotification(waitRoom, new JObject
             {
@@ -568,6 +646,12 @@ namespace OpenGSServer
                 return;
             }
 
+            var completion = MarkLoadingCompleted(waitRoom, playerId);
+            if (!completion.Accepted)
+            {
+                return;
+            }
+
             bool changed = false;
             lock (waitRoom)
             {
@@ -583,8 +667,6 @@ namespace OpenGSServer
                 return;
             }
 
-            var allPlayersCompletedLoading = MarkLoadingCompleted(waitRoom, playerId);
-
             BroadcastLoadingNotification(waitRoom, new JObject
             {
                 ["MessageType"] = MessageType.LoadingCompletedNotification,
@@ -592,7 +674,7 @@ namespace OpenGSServer
                 ["RoomInfo"] = BuildRoomInfoJson(waitRoom)
             });
 
-            if (allPlayersCompletedLoading)
+            if (completion.AllPlayersCompleted && waitRoom.AllPlayers().Count > 0)
             {
                 // S2: entry is approved, so the match room can actually start
                 // running. Without this the game loop skipped the room because
