@@ -441,6 +441,10 @@ namespace OpenGSServer
             lock (SimulatorLifecycleLock)
             {
                 var simulator = TryGet(roomId);
+                // Mark the snapshot boundary before enumerating the simulator.
+                // Delta events created during enumeration then carry a newer
+                // timestamp and can safely win if they overtake this snapshot.
+                var snapshotTimestamp = DateTime.UtcNow.ToString("o");
                 var enemies = new JArray();
                 foreach (var enemy in simulator?.Snapshot() ?? Array.Empty<ServerEnemyState>())
                 {
@@ -452,7 +456,7 @@ namespace OpenGSServer
                     ["MessageType"] = "EnemySnapshot",
                     ["RoomID"] = roomId,
                     ["Enemies"] = enemies,
-                    ["Timestamp"] = DateTime.UtcNow.ToString("o")
+                    ["Timestamp"] = snapshotTimestamp
                 };
                 if (string.IsNullOrWhiteSpace(playerId))
                     GameMessageDispatcher.BroadcastToRoom(roomId, message);
