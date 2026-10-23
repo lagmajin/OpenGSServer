@@ -140,6 +140,14 @@ namespace OpenGSServer
             // reconnect would strand the account until it logged out on its own.
             if (replaceStaleSession)
             {
+                // Release every lobby, wait-room, and match registration left
+                // by the previous connection before the new session joins.
+                // The account gate prevents its delayed disconnect from
+                // cleaning up the replacement session afterwards.
+                if (SessionOwners.TryRemove(accountId, out _))
+                {
+                    PlayerSessionCleanup.Release(accountId);
+                }
                 manager.RemoveAccount(accountId);
                 // The resumed session replaces stale server-side state. Do not
                 // acknowledge the resume unless both account records were added.
