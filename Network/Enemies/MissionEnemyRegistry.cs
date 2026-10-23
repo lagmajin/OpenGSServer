@@ -447,7 +447,11 @@ namespace OpenGSServer
                 return;
             }
 
-            var damageTimestamp = DateTime.UtcNow;
+            // Enemy events and snapshots share the simulator's monotonic
+            // timestamp sequence. Using wall-clock time here can place a
+            // player-damage event before a later snapshot boundary even
+            // though the attack was resolved after that snapshot was taken.
+            var damageTimestamp = ParseEnemyTimestamp(enemy.Timestamp);
             GameMessageDispatcher.BroadcastToRoom(enemy.RoomId, new JObject
             {
                 ["MessageType"] = GameMessageTypes.PlayerDamaged,
@@ -615,6 +619,14 @@ namespace OpenGSServer
                     ? DateTime.UtcNow.ToString("o")
                     : enemy.Timestamp
             };
+        }
+
+        private static DateTime ParseEnemyTimestamp(string timestamp)
+        {
+            return DateTime.TryParse(timestamp, null,
+                System.Globalization.DateTimeStyles.RoundtripKind, out var parsed)
+                ? parsed
+                : DateTime.UtcNow;
         }
     }
 }
