@@ -530,6 +530,10 @@ namespace OpenGSServer.Network
 
             var segment = grenade.Position - segmentStart;
             var segmentLengthSquared = segment.LengthSquared();
+            var hitRadius = grenade.Radius + PlayerHitRadius;
+            var hitRadiusSquared = hitRadius * hitRadius;
+            var firstImpactAlong = float.PositiveInfinity;
+            var firstImpactPosition = grenade.Position;
             foreach (var candidate in players)
             {
                 if (string.Equals(candidate, grenade.OwnerId, StringComparison.OrdinalIgnoreCase))
@@ -538,19 +542,27 @@ namespace OpenGSServer.Network
                 }
 
                 var position = lookup(candidate);
-                var closestPoint = segmentLengthSquared > 0.000001f
-                    ? segmentStart + segment * Math.Clamp(
-                        Vector2.Dot(position - segmentStart, segment) / segmentLengthSquared,
+                var closestAlong = segmentLengthSquared > 0.000001f
+                    ? Math.Clamp(Vector2.Dot(position - segmentStart, segment) / segmentLengthSquared,
                         0f, 1f)
-                    : grenade.Position;
-                if (Vector2.Distance(closestPoint, position) <= grenade.Radius + PlayerHitRadius)
-                {
-                    impactPosition = closestPoint;
-                    return true;
-                }
+                    : 0f;
+                var closestPoint = segmentStart + segment * closestAlong;
+                var distanceSquared = Vector2.DistanceSquared(closestPoint, position);
+                if (distanceSquared > hitRadiusSquared) continue;
+
+                var entryOffset = segmentLengthSquared > 0.000001f
+                    ? MathF.Sqrt(Math.Max(0f, hitRadiusSquared - distanceSquared) /
+                        segmentLengthSquared)
+                    : 0f;
+                var impactAlong = Math.Max(0f, closestAlong - entryOffset);
+                if (impactAlong >= firstImpactAlong) continue;
+                firstImpactAlong = impactAlong;
+                firstImpactPosition = segmentStart + segment * impactAlong;
             }
 
-            return false;
+            if (float.IsPositiveInfinity(firstImpactAlong)) return false;
+            impactPosition = firstImpactPosition;
+            return true;
         }
 
         private void CollectClusterChildren(ServerProjectileState grenade, List<ServerProjectileState> spawned)
