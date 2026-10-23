@@ -837,10 +837,72 @@ namespace OpenGSServer
                     return;
                 }
 
-                // ダミーのPlayerInfoを作成
-                var playerInfo = new PlayerInfo(id: playerId, name: $"Player_{playerId}");
+                if (string.IsNullOrWhiteSpace(playerId))
+                {
+                    ConsoleWrite.WriteMessage("[ERR] Player ID is required.", ConsoleColor.Red);
+                    return;
+                }
+
+                var account = AccountDatabaseManager.GetInstance().GetAccountSnapshot(playerId);
+                if (account == null || account.Status != DBAccount.EAccountStatus.Active)
+                {
+                    ConsoleWrite.WriteMessage(
+                        $"[ERR] Active player account '{playerId}' was not found.",
+                        ConsoleColor.Red);
+                    return;
+                }
+
+                if (room.Playing)
+                {
+                    ConsoleWrite.WriteMessage(
+                        $"[ERR] Match '{room.RoomName}' has already started.",
+                        ConsoleColor.Red);
+                    return;
+                }
+
+                var existingRoom = matchRoomManager.SearchRoomByMemberID(account.AccountId);
+                if (existingRoom != null &&
+                    !string.Equals(existingRoom.Id, room.Id, StringComparison.OrdinalIgnoreCase))
+                {
+                    ConsoleWrite.WriteMessage(
+                        $"[ERR] Player '{account.AccountId}' is already in another match.",
+                        ConsoleColor.Red);
+                    return;
+                }
+
+                if (room.ContainsPlayer(account.AccountId))
+                {
+                    ConsoleWrite.WriteMessage(
+                        $"[ERR] Player '{account.AccountId}' is already in match '{room.RoomName}'.",
+                        ConsoleColor.Yellow);
+                    return;
+                }
+
+                if (room.Players.Count >= room.Setting.MaxPlayerCount)
+                {
+                    ConsoleWrite.WriteMessage(
+                        $"[ERR] Match '{room.RoomName}' is full.",
+                        ConsoleColor.Red);
+                    return;
+                }
+
+                var playerInfo = new PlayerInfo(
+                    id: account.AccountId,
+                    name: account.DisplayName,
+                    level: account.Level,
+                    exp: Math.Max(0L, account.Exp));
                 room.AddNewPlayer(playerInfo);
-                ConsoleWrite.WriteMessage($"[OK] Player '{playerId}' added to match '{room.RoomName}' (ID: {room.Id})", ConsoleColor.Green);
+                if (!room.ContainsPlayer(account.AccountId))
+                {
+                    ConsoleWrite.WriteMessage(
+                        $"[ERR] Player '{account.AccountId}' was not added to match '{room.RoomName}'.",
+                        ConsoleColor.Red);
+                    return;
+                }
+
+                ConsoleWrite.WriteMessage(
+                    $"[OK] Player '{account.AccountId}' added to match '{room.RoomName}' (ID: {room.Id})",
+                    ConsoleColor.Green);
             }
             catch (Exception ex)
             {
