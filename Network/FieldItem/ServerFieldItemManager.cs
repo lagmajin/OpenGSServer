@@ -354,30 +354,45 @@ namespace OpenGSServer.Network
         {
             var now = NowSeconds;
 
-            foreach (var item in _items.Values
-                .Where(item => !item.IsActive && item.State == "PickedUp")
-                .ToList())
+            var respawnedItems = new List<FieldItem>();
+            lock (_itemStateLock)
             {
-                if (!_spawnRules.TryGetValue(item.ItemType, out var rule) ||
-                    now - item.ConsumedAtSeconds < rule.RespawnDelaySec)
+                foreach (var item in _items.Values)
                 {
-                    continue;
-                }
+                    if (item.IsActive || item.State != "PickedUp" ||
+                        !_spawnRules.TryGetValue(item.ItemType, out var rule) ||
+                        now - item.ConsumedAtSeconds < rule.RespawnDelaySec)
+                    {
+                        continue;
+                    }
 
-                var point = item.SpawnPointId >= 0
-                    ? item.SpawnPointId
-                    : PickSpawnPointId(item.ItemType);
-                if (!TryResolveSpawnPoint(point, out var spawnPoint))
-                {
-                    continue;
-                }
+                    var pointId = item.SpawnPointId >= 0
+                        ? item.SpawnPointId
+                        : PickSpawnPointId(item.ItemType);
+                    if (!TryResolveSpawnPoint(pointId, out var spawnPoint))
+                    {
+                        continue;
+                    }
 
-                RespawnItem(item.ItemId, spawnPoint.PosX, spawnPoint.PosY, spawnPoint.PosZ);
-                item.SpawnPointId = spawnPoint.SpawnPointId;
-                item.SpawnPointName = spawnPoint.Name;
+                    item.PosX = spawnPoint.PosX;
+                    item.PosY = spawnPoint.PosY;
+                    item.PosZ = spawnPoint.PosZ;
+                    item.SpawnPointId = spawnPoint.SpawnPointId;
+                    item.SpawnPointName = spawnPoint.Name;
+                    item.State = "Spawned";
+                    item.IsActive = true;
+                    item.PickedUpByPlayerId = string.Empty;
+                    item.ReservedByPlayerId = string.Empty;
+                    item.SpawnTime = (float)now;
+                    respawnedItems.Add(CopyFieldItem(item));
+                }
+            }
+
+            foreach (var item in respawnedItems)
+            {
                 Console.WriteLine(
                     $"[FieldItem] Respawned {item.ItemId} ({item.ItemType}) " +
-                    $"at spawn point {spawnPoint.SpawnPointId}");
+                    $"at spawn point {item.SpawnPointId}");
                 onSpawned?.Invoke(item);
             }
 
