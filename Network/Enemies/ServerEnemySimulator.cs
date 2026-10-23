@@ -500,12 +500,22 @@ namespace OpenGSServer.Network
                 return;
             }
 
+            ServerEnemyState? removed = null;
             lock (_lock)
             {
-                _enemies.TryRemove(enemy.EnemyId, out _);
+                if (_enemies.TryRemove(enemy.EnemyId, out var current))
+                {
+                    removed = CopyState(current);
+                }
             }
 
-            OnDespawn?.Invoke(CopyState(enemy));
+            // The periodic dead-enemy sweep, match cleanup, and explicit removal
+            // can race. Only the operation that actually removed the authoritative
+            // entry publishes its despawn, so clients see one terminal transition.
+            if (removed != null)
+            {
+                OnDespawn?.Invoke(removed);
+            }
         }
 
         /// <summary>Drops every enemy, for a match that has ended.</summary>
