@@ -255,33 +255,52 @@ namespace OpenGSServer
 
         private static void SendTimedBuffSnapshot(string roomId, string playerId)
         {
-            var buffs = new JArray();
             var now = DateTime.UtcNow;
-            AddRemaining(AttackBuffExpires, "PowerUpItem");
-            AddRemaining(DefenseBuffExpires, "DefenceUpItem");
-            AddRemaining(SpeedBuffExpires, "SpeedUpItem");
-            AddRemaining(StealthBuffExpires, "StealthItem");
-            GameMessageDispatcher.SendToPlayer(playerId, new JObject
+            SendSnapshot(playerId, includeGameplayBuffs: true);
+            if (MatchRoomManager.Instance.GetRoomById(roomId) is MatchRoom room)
             {
-                ["MessageType"] = "TimedBuffSnapshot",
-                ["RoomID"] = roomId,
-                ["PlayerID"] = playerId,
-                ["Buffs"] = buffs,
-                ["Timestamp"] = now.ToString("o")
-            });
-
-            void AddRemaining(ConcurrentDictionary<string, DateTime> expirations, string itemType)
-            {
-                if (!expirations.TryGetValue(TimedBuffKey(roomId, playerId), out var expiresAt))
-                    return;
-                var remainingSeconds = (expiresAt - now).TotalSeconds;
-                if (remainingSeconds <= 0.0 || remainingSeconds > 86400.0)
-                    return;
-                buffs.Add(new JObject
+                foreach (var roomPlayer in room.Players)
                 {
-                    ["ItemType"] = itemType,
-                    ["Duration"] = remainingSeconds
+                    if (string.Equals(roomPlayer.Id, playerId, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    SendSnapshot(roomPlayer.Id, includeGameplayBuffs: false);
+                }
+            }
+
+            void SendSnapshot(string targetPlayerId, bool includeGameplayBuffs)
+            {
+                var buffs = new JArray();
+                if (includeGameplayBuffs)
+                {
+                    AddRemaining(AttackBuffExpires, "PowerUpItem");
+                    AddRemaining(DefenseBuffExpires, "DefenceUpItem");
+                    AddRemaining(SpeedBuffExpires, "SpeedUpItem");
+                }
+                AddRemaining(StealthBuffExpires, "StealthItem");
+                GameMessageDispatcher.SendToPlayer(targetPlayerId, new JObject
+                {
+                    ["MessageType"] = "TimedBuffSnapshot",
+                    ["RoomID"] = roomId,
+                    ["PlayerID"] = targetPlayerId,
+                    ["Buffs"] = buffs,
+                    ["Timestamp"] = now.ToString("o")
                 });
+
+                void AddRemaining(
+                    ConcurrentDictionary<string, DateTime> expirations, string itemType)
+                {
+                    if (!expirations.TryGetValue(TimedBuffKey(roomId, targetPlayerId),
+                        out var expiresAt))
+                        return;
+                    var remainingSeconds = (expiresAt - now).TotalSeconds;
+                    if (remainingSeconds <= 0.0 || remainingSeconds > 86400.0)
+                        return;
+                    buffs.Add(new JObject
+                    {
+                        ["ItemType"] = itemType,
+                        ["Duration"] = remainingSeconds
+                    });
+                }
             }
         }
 
