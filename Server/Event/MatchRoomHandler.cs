@@ -1439,7 +1439,19 @@ namespace OpenGSServer
                 return;
             }
 
-            var itemId = FindWeaponItem(itemManager, weaponType, playerId, requestedItemId);
+            var itemId = reserved
+                ? FindWeaponItem(itemManager, weaponType, playerId, requestedItemId)
+                : FindReservedWeaponItem(
+                    itemManager, weaponType, playerId,
+                    playerState.HasAuthoritativePosition
+                        ? playerState.PositionX
+                        : null,
+                    playerState.HasAuthoritativePosition
+                        ? playerState.PositionY
+                        : null,
+                    playerState.HasAuthoritativePosition
+                        ? playerState.PositionZ
+                        : null);
             if (string.IsNullOrEmpty(itemId))
             {
                 Console.WriteLine($"[Match] No weapon of type '{weaponType}' for '{playerId}' to claim in room {room.Id}");
@@ -1601,6 +1613,45 @@ namespace OpenGSServer
                 {
                     continue;
                 }
+
+                bestDistance = distance;
+                bestId = item["ItemId"]?.ToString();
+            }
+
+            return bestId ?? string.Empty;
+        }
+
+        private static string FindReservedWeaponItem(
+            OpenGSServer.Network.ServerFieldItemManager itemManager,
+            string weaponType,
+            string playerId,
+            float? playerX,
+            float? playerY,
+            float? playerZ)
+        {
+            string? bestId = null;
+            var bestDistance = float.MaxValue;
+            foreach (var item in itemManager.ToJson())
+            {
+                if (item["ItemType"]?.ToString() != nameof(EFieldItemType.WeaponItem) ||
+                    item["State"]?.ToString() != "Spawned" ||
+                    !string.Equals(item["WeaponType"]?.ToString(), weaponType, StringComparison.OrdinalIgnoreCase) ||
+                    !string.Equals(item["ReservedByPlayerId"]?.ToString(), playerId, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var distance = 0f;
+                if (playerX.HasValue && playerY.HasValue && playerZ.HasValue)
+                {
+                    var dx = (item["PositionX"]?.Value<float>() ?? 0f) - playerX.Value;
+                    var dy = (item["PositionY"]?.Value<float>() ?? 0f) - playerY.Value;
+                    var dz = (item["PositionZ"]?.Value<float>() ?? 0f) - playerZ.Value;
+                    distance = (dx * dx) + (dy * dy) + (dz * dz);
+                }
+
+                if (distance >= bestDistance)
+                    continue;
 
                 bestDistance = distance;
                 bestId = item["ItemId"]?.ToString();
