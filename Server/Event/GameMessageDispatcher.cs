@@ -450,9 +450,9 @@ namespace OpenGSServer
         }
 
         /// <summary>
-        /// Publishes what a magazine now holds. Used for a refusal and for a reload
-        /// that finished on the server's clock, so a client that fired dry is told
-        /// the count the server holds rather than keeping the one it guessed.
+        /// Publishes what a magazine holds after an ordinary shot or refusal.
+        /// Reload completion uses PlayerReloaded so clients can distinguish it from
+        /// an ammo correction and release the matching pending reload request.
         /// </summary>
         public static void SendAmmoUpdate(
             string roomId,

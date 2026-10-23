@@ -4036,13 +4036,16 @@ namespace OpenGSServer
                     return;
                 }
 
-                GameMessageDispatcher.SendAmmoUpdate(
+                GameMessageDispatcher.SendPlayerReloaded(
                     room.Id.ToString(),
                     playerId,
                     magazine.WeaponType,
                     magazine.ReadRemaining(),
                     magazine.Capacity,
-                    magazine.ReadReserve());
+                    magazine.ReadReserve(),
+                    true,
+                    "Completed",
+                    0.0f);
             });
         }
 
