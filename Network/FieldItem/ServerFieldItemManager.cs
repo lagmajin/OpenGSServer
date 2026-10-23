@@ -27,6 +27,8 @@ namespace OpenGSServer.Network
         private static readonly System.Diagnostics.Stopwatch Clock = System.Diagnostics.Stopwatch.StartNew();
 
         public static double NowSeconds => Clock.Elapsed.TotalSeconds;
+        private const double DroppedWeaponPickupDelaySeconds = 1.0d;
+        private const double DroppedWeaponLifetimeSeconds = 30.0d;
         /// <summary>
         /// アイテムデータ
         /// </summary>
@@ -61,6 +63,8 @@ namespace OpenGSServer.Network
             /// and the weapon is taken at its own value.
             /// </summary>
             public int MagazineAmmo { get; set; } = -1;
+            public bool IsPlayerDroppedWeapon { get; set; }
+            public double DroppedAtSeconds { get; set; }
 
             /// <summary>
             /// The player who has laid claim to this item, if any.
@@ -350,49 +354,56 @@ namespace OpenGSServer.Network
         /// </para>
         /// </summary>
         /// <param name="onSpawned">Called for every item that appears or comes back.</param>
-        public void TickSpawns(Action<FieldItem>? onSpawned)
+        public void TickSpawns(Action<FieldItem>? onSpawned, Action<FieldItem>? onDespawned = null)
         {
             var now = NowSeconds;
 
-            var respawnedItems = new List<FieldItem>();
+            var expiredDrops = new List<FieldItem>();
             lock (_itemStateLock)
             {
                 foreach (var item in _items.Values)
                 {
-                    if (item.IsActive || item.State != "PickedUp" ||
-                        !_spawnRules.TryGetValue(item.ItemType, out var rule) ||
-                        now - item.ConsumedAtSeconds < rule.RespawnDelaySec)
-                    {
+                    if (!item.IsPlayerDroppedWeapon || !item.IsActive || item.State != "Spawned" ||
+                        now - item.DroppedAtSeconds < DroppedWeaponLifetimeSeconds)
                         continue;
-                    }
 
-                    var pointId = item.SpawnPointId >= 0
-                        ? item.SpawnPointId
-                        : PickSpawnPointId(item.ItemType);
-                    if (!TryResolveSpawnPoint(pointId, out var spawnPoint))
-                    {
-                        continue;
-                    }
-
-                    item.PosX = spawnPoint.PosX;
-                    item.PosY = spawnPoint.PosY;
-                    item.PosZ = spawnPoint.PosZ;
-                    item.SpawnPointId = spawnPoint.SpawnPointId;
-                    item.SpawnPointName = spawnPoint.Name;
-                    item.State = "Spawned";
-                    item.IsActive = true;
-                    item.PickedUpByPlayerId = string.Empty;
+                    item.State = "Despawned";
+                    item.IsActive = false;
                     item.ReservedByPlayerId = string.Empty;
-                    item.SpawnTime = (float)now;
-                    respawnedItems.Add(CopyFieldItem(item));
+                    expiredDrops.Add(item);
                 }
             }
 
-            foreach (var item in respawnedItems)
+            foreach (var item in expiredDrops)
             {
+                Console.WriteLine($"[FieldItem] Expired dropped weapon {item.ItemId} ({item.WeaponType})");
+                onDespawned?.Invoke(item);
+            }
+
+            foreach (var item in _items.Values
+                .Where(item => !item.IsActive && item.State == "PickedUp")
+                .ToList())
+            {
+                if (!_spawnRules.TryGetValue(item.ItemType, out var rule) ||
+                    now - item.ConsumedAtSeconds < rule.RespawnDelaySec)
+                {
+                    continue;
+                }
+
+                var point = item.SpawnPointId >= 0
+                    ? item.SpawnPointId
+                    : PickSpawnPointId(item.ItemType);
+                if (!TryResolveSpawnPoint(point, out var spawnPoint))
+                {
+                    continue;
+                }
+
+                RespawnItem(item.ItemId, spawnPoint.PosX, spawnPoint.PosY, spawnPoint.PosZ);
+                item.SpawnPointId = spawnPoint.SpawnPointId;
+                item.SpawnPointName = spawnPoint.Name;
                 Console.WriteLine(
                     $"[FieldItem] Respawned {item.ItemId} ({item.ItemType}) " +
-                    $"at spawn point {item.SpawnPointId}");
+                    $"at spawn point {spawnPoint.SpawnPointId}");
                 onSpawned?.Invoke(item);
             }
 
@@ -464,6 +475,8 @@ namespace OpenGSServer.Network
             WeaponType = item.WeaponType,
             WeaponSlot = item.WeaponSlot,
             MagazineAmmo = item.MagazineAmmo,
+            IsPlayerDroppedWeapon = item.IsPlayerDroppedWeapon,
+            DroppedAtSeconds = item.DroppedAtSeconds,
             ConsumedAtSeconds = item.ConsumedAtSeconds,
             ReservedByPlayerId = item.ReservedByPlayerId
         };
@@ -492,7 +505,9 @@ namespace OpenGSServer.Network
         public bool IsWithinPickupRange(string itemId, float x, float y, float z)
         {
             if (!IsFinite(x) || !IsFinite(y) || !IsFinite(z))
+            {
                 return false;
+            }
 
             lock (_itemStateLock)
             {
@@ -528,7 +543,9 @@ namespace OpenGSServer.Network
             string itemId, string playerId, float? playerX, float? playerY, float? playerZ)
         {
             if (string.IsNullOrWhiteSpace(itemId) || string.IsNullOrWhiteSpace(playerId))
+            {
                 return false;
+            }
 
             var hasPosition = playerX.HasValue || playerY.HasValue || playerZ.HasValue;
             if (hasPosition && (!playerX.HasValue || !playerY.HasValue || !playerZ.HasValue ||
@@ -545,7 +562,9 @@ namespace OpenGSServer.Network
                 if (_items.TryGetValue(itemId, out var item) && item.IsActive && item.State == "Spawned" &&
                     (string.IsNullOrEmpty(item.ReservedByPlayerId) ||
                         string.Equals(item.ReservedByPlayerId, playerId, StringComparison.OrdinalIgnoreCase)) &&
-                    (!hasPosition || IsWithinPickupRange(item, playerX!.Value, playerY!.Value, playerZ!.Value)))
+                    (!hasPosition || IsWithinPickupRange(item, playerX!.Value, playerY!.Value, playerZ!.Value)) &&
+                    (!item.IsPlayerDroppedWeapon ||
+                        NowSeconds - item.DroppedAtSeconds >= DroppedWeaponPickupDelaySeconds))
                 {
                     item.State = "PickedUp";
                     item.PickedUpByPlayerId = playerId;
@@ -557,7 +576,9 @@ namespace OpenGSServer.Network
             }
 
             if (!picked)
+            {
                 return false;
+            }
 
             OnItemPickedUp?.Invoke(itemId, playerId, itemType);
             Console.WriteLine($"[FieldItem] Picked up: {itemId} by {playerId}");
@@ -646,6 +667,11 @@ namespace OpenGSServer.Network
                         ["WeaponType"] = kvp.Value.WeaponType,
                         ["WeaponSlot"] = kvp.Value.WeaponSlot,
                         ["MagazineAmmo"] = kvp.Value.MagazineAmmo,
+                        ["IsPlayerDroppedWeapon"] = kvp.Value.IsPlayerDroppedWeapon,
+                        ["DroppedWeaponRemainingSeconds"] = kvp.Value.IsPlayerDroppedWeapon
+                            ? Math.Clamp(DroppedWeaponLifetimeSeconds - (NowSeconds - kvp.Value.DroppedAtSeconds),
+                                0d, DroppedWeaponLifetimeSeconds)
+                            : 0d,
                         ["ReservedByPlayerId"] = kvp.Value.ReservedByPlayerId
                     };
                     array.Add(item);
@@ -687,6 +713,10 @@ namespace OpenGSServer.Network
 
                 if (reserved)
                 {
+                    if (item.IsPlayerDroppedWeapon &&
+                        NowSeconds - item.DroppedAtSeconds < DroppedWeaponPickupDelaySeconds)
+                        return false;
+
                     if (string.IsNullOrEmpty(item.ReservedByPlayerId))
                     {
                         item.ReservedByPlayerId = playerId;
@@ -758,8 +788,7 @@ namespace OpenGSServer.Network
             int magazineAmmo = -1,
             int slot = -1)
         {
-            if (string.IsNullOrWhiteSpace(weaponType) || weaponType.Length > 64 ||
-                magazineAmmo < -1 || magazineAmmo > 10000 || slot < -1 || slot > 2 ||
+            if (string.IsNullOrWhiteSpace(weaponType) ||
                 !IsFinite(x) || !IsFinite(y) || !IsFinite(z))
             {
                 return string.Empty;
@@ -780,6 +809,8 @@ namespace OpenGSServer.Network
                     // keeps whatever it was carrying rather than becoming empty.
                     item.MagazineAmmo = Math.Max(-1, magazineAmmo);
                     item.WeaponSlot = slot;
+                    item.IsPlayerDroppedWeapon = true;
+                    item.DroppedAtSeconds = NowSeconds;
                 }
             }
 
@@ -823,8 +854,17 @@ namespace OpenGSServer.Network
                     WeaponType = itemObj["WeaponType"]?.ToString() ?? "",
                     WeaponSlot = itemObj["WeaponSlot"]?.Value<int>() ?? -1,
                     MagazineAmmo = itemObj["MagazineAmmo"]?.Value<int>() ?? -1,
+                    IsPlayerDroppedWeapon = itemObj["IsPlayerDroppedWeapon"]?.Value<bool>() ?? false,
                     ReservedByPlayerId = itemObj["ReservedByPlayerId"]?.ToString() ?? ""
                 };
+
+                if (item.IsPlayerDroppedWeapon)
+                {
+                    var remaining = itemObj["DroppedWeaponRemainingSeconds"]?.Value<double>() ??
+                        DroppedWeaponLifetimeSeconds;
+                    remaining = Math.Clamp(remaining, 0d, DroppedWeaponLifetimeSeconds);
+                    item.DroppedAtSeconds = NowSeconds - (DroppedWeaponLifetimeSeconds - remaining);
+                }
 
                 if (string.IsNullOrWhiteSpace(item.ItemId) ||
                     !IsFinite(item.PosX) || !IsFinite(item.PosY) || !IsFinite(item.PosZ))

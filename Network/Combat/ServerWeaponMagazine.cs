@@ -280,11 +280,40 @@ namespace OpenGSServer.Network
         /// </summary>
         private static readonly Dictionary<string, MagazineSpec> Specs = new(StringComparer.OrdinalIgnoreCase)
         {
-            ["Pistol"] = new MagazineSpec("Pistol", 12, 60, 1.4f, 0.20f),
-            ["SMG"] = new MagazineSpec("SMG", 30, 180, 2.0f, 0.08f),
-            ["Shotgun"] = new MagazineSpec("Shotgun", 6, 36, 2.6f, 0.80f),
-            ["Rifle"] = new MagazineSpec("Rifle", 30, 180, 2.2f, 0.15f),
-            ["Sniper"] = new MagazineSpec("Sniper", 5, 35, 2.8f, 1.00f),
+            // Family entries remain the fallback for existing clients. Variant
+            // entries use the serialized Unity prefab values where known.
+            ["Pistol"] = new MagazineSpec("Pistol", 12, 60, 1.6f, 0.10f),
+            ["SMG"] = new MagazineSpec("SMG", 30, 180, 2.0f, 0.10f),
+            ["Shotgun"] = new MagazineSpec("Shotgun", 30, 180, 2.0f, 0.10f),
+            ["Rifle"] = new MagazineSpec("Rifle", 30, 180, 2.0f, 0.08f),
+            ["Sniper"] = new MagazineSpec("Sniper", 30, 180, 2.0f, 0.10f),
+            ["Glock"] = new MagazineSpec("Glock", 12, 60, 1.6f, 0.25f),
+            ["DesertEagle"] = new MagazineSpec("DesertEagle", 12, 35, 1.6f, 0.25f),
+            ["FiveSeven"] = new MagazineSpec("FiveSeven", 12, 100, 1.6f, 0.25f),
+            ["HK69A1"] = new MagazineSpec("HK69A1", 3, 18, 1.6f, 3.2f),
+            ["Scorpion"] = new MagazineSpec("Scorpion", 60, 180, 2.0f, 0.10f),
+            ["FNP90"] = new MagazineSpec("FNP90", 60, 180, 2.0f, 0.10f),
+            ["P90"] = new MagazineSpec("P90", 60, 180, 2.0f, 0.10f),
+            ["Uzi"] = new MagazineSpec("Uzi", 60, 180, 2.0f, 0.10f),
+            ["MP5"] = new MagazineSpec("MP5", 60, 180, 2.0f, 0.10f),
+            ["Benelli"] = new MagazineSpec("Benelli", 60, 180, 2.0f, 0.10f),
+            ["MX1014"] = new MagazineSpec("MX1014", 60, 180, 2.0f, 0.10f),
+            ["Spas12"] = new MagazineSpec("Spas12", 60, 180, 2.0f, 0.10f),
+            ["AK47"] = new MagazineSpec("AK47", 60, 180, 2.0f, 0.10f),
+            ["M16"] = new MagazineSpec("M16", 30, 180, 2.0f, 0.10f),
+            ["FAMAS"] = new MagazineSpec("FAMAS", 30, 180, 2.0f, 0.08f),
+            ["F2000"] = new MagazineSpec("F2000", 17, 102, 2.0f, 0.09f),
+            ["SteyrAug"] = new MagazineSpec("SteyrAug", 30, 180, 2.0f, 0.09f),
+            ["MG42"] = new MagazineSpec("MG42", 60, 180, 2.0f, 0.10f),
+            ["M60"] = new MagazineSpec("M60", 60, 180, 2.0f, 0.10f),
+            ["M60E4"] = new MagazineSpec("M60E4", 60, 180, 2.0f, 0.10f),
+            ["FNMinimiSaw"] = new MagazineSpec("FNMinimiSaw", 60, 180, 2.0f, 0.10f),
+            ["Scout"] = new MagazineSpec("Scout", 60, 180, 2.0f, 0.10f),
+            ["Dragunov"] = new MagazineSpec("Dragunov", 60, 180, 2.0f, 0.10f),
+            ["PSG1"] = new MagazineSpec("PSG1", 60, 180, 2.0f, 0.10f),
+            ["AWP"] = new MagazineSpec("AWP", 60, 180, 2.0f, 0.10f),
+            ["GM94"] = new MagazineSpec("GM94", 60, 360, 2.0f, 0.10f),
+            // Field weapons use one finite special-weapon magazine per pickup.
             ["RocketLauncher"] = new MagazineSpec("RocketLauncher", 10, 0, 0f, 0.1f),
             ["FlameThrower"] = new MagazineSpec("FlameThrower", 100, 0, 0f, 0.1f),
             ["GrenadeLauncher"] = new MagazineSpec("GrenadeLauncher", 10, 0, 0f, 0.1f)
@@ -295,6 +324,26 @@ namespace OpenGSServer.Network
             return weaponType != null && Specs.ContainsKey(weaponType);
         }
 
+        public static bool IsKnownVariant(string? weaponType, string family)
+        {
+            if (string.IsNullOrWhiteSpace(weaponType) || !Specs.ContainsKey(weaponType)) return false;
+            return string.Equals(FamilyOf(weaponType), family, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string FamilyOf(string weaponType)
+        {
+            return weaponType.ToLowerInvariant() switch
+            {
+                "pistol" or "glock" or "deserteagle" or "fiveseven" or "hk69a1" or "gm94" => "Pistol",
+                "smg" or "scorpion" or "fnp90" or "p90" or "uzi" or "mp5" => "SMG",
+                "shotgun" or "benelli" or "mx1014" or "spas12" => "Shotgun",
+                "rifle" or "ak47" or "m16" or "famas" or "f2000" or "steyraug" or
+                    "mg42" or "m60" or "m60e4" or "fnminimisaw" => "Rifle",
+                "sniper" or "scout" or "dragunov" or "psg1" or "awp" => "Sniper",
+                _ => string.Empty
+            };
+        }
+
         public static MagazineSpec Spec(string weaponType)
         {
             if (Specs.TryGetValue(weaponType, out var spec))
@@ -302,7 +351,7 @@ namespace OpenGSServer.Network
                 return spec;
             }
 
-            return new MagazineSpec(weaponType, 30, 180, 2.0f, 0.20f);
+            return new MagazineSpec(weaponType, 30, 180, 2.0f, 0.10f);
         }
 
         /// <summary>
@@ -337,6 +386,13 @@ namespace OpenGSServer.Network
             magazine = null!;
             return Magazines.TryGetValue(playerId, out var byWeapon) &&
                    byWeapon.TryGetValue(weaponType, out magazine!);
+        }
+
+        public static IReadOnlyList<ServerMagazine> ForPlayer(string playerId)
+        {
+            return Magazines.TryGetValue(playerId, out var byWeapon)
+                ? new List<ServerMagazine>(byWeapon.Values)
+                : Array.Empty<ServerMagazine>();
         }
 
         /// <summary>Whether a player has a magazine for this weapon, and how much is in it.</summary>

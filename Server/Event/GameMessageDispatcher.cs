@@ -49,6 +49,7 @@ namespace OpenGSServer
         // read it on either side, so reaching a gate online could not finish a
         // mission.
         public const string MissionComplete = MessageType.MissionCompleteNotification;
+        public const string MissionObjectiveProgress = "MissionObjectiveProgress";
         // The pickup ruling, and a field item appearing and disappearing. All
         // three have a name in the shared contract so the server cannot answer
         // under a label the client does not read. Each used to carry its own copy
@@ -318,7 +319,8 @@ namespace OpenGSServer
             string weaponType,
             int currentAmmo,
             int maxAmmo,
-            int reserveAmmo)
+            int reserveAmmo,
+            JObject? ctfState = null)
         {
             var message = new JObject
             {
@@ -342,6 +344,19 @@ namespace OpenGSServer
                 ["ReserveAmmo"] = reserveAmmo,
                 ["Timestamp"] = DateTime.UtcNow.ToString("o")
             };
+
+            var room = MatchRoomManager.Instance.GetRoomById(roomId);
+            if (room?.CurrentSituation is MissionMatchSituation mission)
+            {
+                message["ObjectiveCount"] = mission.ObjectiveCount;
+                message["ObjectiveProgress"] = mission.ObjectiveProgress;
+            }
+
+            if (ctfState != null)
+            {
+                foreach (var property in ctfState.Properties())
+                    message[property.Name] = property.Value.DeepClone();
+            }
 
             SendToPlayer(playerId, message);
         }

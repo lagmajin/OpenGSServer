@@ -196,6 +196,88 @@ namespace OpenGSServer
             }
         }
 
+        // The client already reports successful field-item pickups with a
+        // server-selected duration. Keep combat effects server-authoritative
+        // without adding protocol fields that older clients cannot understand.
+        private static readonly ConcurrentDictionary<string, DateTime> AttackBuffExpires =
+            new(StringComparer.OrdinalIgnoreCase);
+        private static readonly ConcurrentDictionary<string, DateTime> DefenseBuffExpires =
+            new(StringComparer.OrdinalIgnoreCase);
+        private static readonly ConcurrentDictionary<string, (string DamageType, DateTime ExpiresAt)>
+            ElementalBulletEffects = new(StringComparer.OrdinalIgnoreCase);
+
+        private static string TimedBuffKey(string roomId, string playerId) =>
+            roomId + "\n" + playerId;
+
+        private static bool IsBuffActive(
+            ConcurrentDictionary<string, DateTime> expirations, string roomId, string playerId)
+        {
+            var key = TimedBuffKey(roomId, playerId);
+            if (!expirations.TryGetValue(key, out var expiresAt))
+                return false;
+            if (expiresAt > DateTime.UtcNow)
+                return true;
+            expirations.TryRemove(key, out _);
+            return false;
+        }
+
+        private static int ApplyAttackBuff(string roomId, string playerId, int damage)
+        {
+            if (!IsBuffActive(AttackBuffExpires, roomId, playerId) || damage <= 0)
+                return Math.Max(0, damage);
+            return damage >= int.MaxValue / 2 ? int.MaxValue : damage * 2;
+        }
+
+        private static bool HasDefenseBuff(string roomId, string playerId) =>
+            IsBuffActive(DefenseBuffExpires, roomId, playerId);
+
+        private static void SendTimedBuffSnapshot(string roomId, string playerId)
+        {
+            var buffs = new JArray();
+            var now = DateTime.UtcNow;
+            AddRemaining(AttackBuffExpires, "PowerUpItem");
+            AddRemaining(DefenseBuffExpires, "DefenceUpItem");
+            GameMessageDispatcher.SendToPlayer(playerId, new JObject
+            {
+                ["MessageType"] = "TimedBuffSnapshot",
+                ["RoomID"] = roomId,
+                ["PlayerID"] = playerId,
+                ["Buffs"] = buffs,
+                ["Timestamp"] = now.ToString("o")
+            });
+
+            void AddRemaining(ConcurrentDictionary<string, DateTime> expirations, string itemType)
+            {
+                if (!expirations.TryGetValue(TimedBuffKey(roomId, playerId), out var expiresAt))
+                    return;
+                var remainingSeconds = (expiresAt - now).TotalSeconds;
+                if (remainingSeconds <= 0.0 || remainingSeconds > 86400.0)
+                    return;
+                buffs.Add(new JObject
+                {
+                    ["ItemType"] = itemType,
+                    ["Duration"] = remainingSeconds
+                });
+            }
+        }
+
+        private static string ElementalBulletType(string roomId, string playerId)
+        {
+            var key = TimedBuffKey(roomId, playerId);
+            if (!ElementalBulletEffects.TryGetValue(key, out var effect)) return "Bullet";
+            if (effect.ExpiresAt > DateTime.UtcNow) return effect.DamageType;
+            ElementalBulletEffects.TryRemove(key, out _);
+            return "Bullet";
+        }
+
+        private static void ClearCombatBuffs(string roomId, string playerId)
+        {
+            var key = TimedBuffKey(roomId, playerId);
+            AttackBuffExpires.TryRemove(key, out _);
+            DefenseBuffExpires.TryRemove(key, out _);
+            ElementalBulletEffects.TryRemove(key, out _);
+        }
+
         /// <summary>What one kill is worth in the standings, on either damage path.</summary>
         private const int KillScore = 100;
 
@@ -510,7 +592,7 @@ namespace OpenGSServer
                 // by silence leaves the effect in place until the client's own
                 // timeout takes it back. The player should not have to wait out a
                 // timer to find out the server said no.
-                GameMessageDispatcher.BroadcastToRoom(room.Id.ToString(), new JObject
+                UdpBroadcastToRoom(room.Id.ToString(), new JObject
                 {
                     ["MessageType"] = GameMessageTypes.FieldItemPickup,
                     ["RoomID"] = room.Id.ToString(),
@@ -544,19 +626,32 @@ namespace OpenGSServer
                     room.Id.ToString(), playerId, specialWeapon,
                     magazine.ReadRemaining(), magazine.Capacity, magazine.ReadReserve());
             }
+
             var duration = FieldItemTypeNames.IsTimedBuff(type)
                 ? FieldItemDefaults.DurationSeconds
                 : 0f;
 
-            // A pickup has to put something in the player's hands. It used to grant
-            // the pickup and nothing else, so the item left the map and the player
-            // was no closer to being able to spend the one thing a health item is
-            // for: the server checks that a kit is carried before it lets a kit be
-            // spent, and nothing a player walked into ever made it carried.
+            if (duration > 0f)
+            {
+                var expiresAt = DateTime.UtcNow.AddSeconds(duration);
+                var buffKey = TimedBuffKey(room.Id.ToString(), playerId);
+                var itemType = FieldItemTypeNames.ToWireName(type);
+                if (string.Equals(itemType, "PowerUpItem", StringComparison.OrdinalIgnoreCase))
+                    AttackBuffExpires[buffKey] = expiresAt;
+                else if (string.Equals(itemType, "DefenceUpItem", StringComparison.OrdinalIgnoreCase))
+                    DefenseBuffExpires[buffKey] = expiresAt;
+            }
+
+            // Field healing applies on contact in Unity, while grenade packs are
+            // carried for a later throw. Keep those two pickup contracts distinct.
             var grantedItem = EInstantItemType.None;
+            var restoredHealth = 0;
             if (room.TryGetPlayer(playerId, out var carrier) && carrier != null)
             {
-                grantedItem = FieldItemTypeNames.GrantsInstantItem(type);
+                if (type == EFieldItemType.HealItem)
+                    restoredHealth = HealPlayer(carrier, 25);
+                else
+                    grantedItem = FieldItemTypeNames.GrantsInstantItem(type);
                 if (grantedItem != EInstantItemType.None)
                 {
                     carrier.EquipInstantItems.Add(grantedItem);
@@ -567,7 +662,7 @@ namespace OpenGSServer
             // A timed item used to carry its own thirty second lifetime that
             // only the client knew about, so the server could neither shorten
             // it nor answer a question about it.
-            GameMessageDispatcher.BroadcastToRoom(room.Id.ToString(), new JObject
+            UdpBroadcastToRoom(room.Id.ToString(), new JObject
             {
                 ["MessageType"] = GameMessageTypes.FieldItemPickup,
                 ["RoomID"] = room.Id.ToString(),
@@ -575,6 +670,7 @@ namespace OpenGSServer
                 ["PlayerID"] = playerId,
                 ["ItemType"] = FieldItemTypeNames.ToWireName(type),
                 ["GrantedInstantItem"] = grantedItem.ToString(),
+                ["RestoredHealth"] = restoredHealth,
                 ["Duration"] = duration,
                 ["IsTimedBuff"] = FieldItemTypeNames.IsTimedBuff(type),
                 ["ExpiresAtSeconds"] = duration > 0f
@@ -632,6 +728,7 @@ namespace OpenGSServer
             {
                 magazine = heldSpecialMagazine.ReadRemaining();
             }
+
             var itemId = itemManager.DropWeapon(
                 weaponType,
                 state.PositionX,
@@ -663,6 +760,7 @@ namespace OpenGSServer
                 ["PlayerId"] = playerId,
                 ["WeaponType"] = weaponType,
                 ["MagazineAmmo"] = magazine,
+                ["PickupDelaySeconds"] = 1.0f,
                 ["SlotIndex"] = slot,
                 ["PosX"] = state.PositionX,
                 ["PosY"] = state.PositionY,
@@ -768,9 +866,20 @@ namespace OpenGSServer
             var healthBefore = player.Health;
             var restored = 0;
             var roundsAdded = 0;
+            var elementalDamageType = itemType.ToString() switch
+            {
+                "FireBullet" => "Fire",
+                "PoisonBullet" => "Poison",
+                _ => string.Empty
+            };
             if (effect.Value == EInstantItemEffect.Heal)
             {
                 restored = HealPlayer(player);
+            }
+            else if (elementalDamageType.Length > 0)
+            {
+                ElementalBulletEffects[TimedBuffKey(room.Id.ToString(), playerId)] =
+                    (elementalDamageType, DateTime.UtcNow.AddSeconds(30));
             }
             else if (effect.Value == EInstantItemEffect.Ammo)
             {
@@ -783,9 +892,12 @@ namespace OpenGSServer
             }
 
             player.EquipInstantItems.Remove(itemType);
+            var resolvedEffect = elementalDamageType.Length > 0
+                ? elementalDamageType
+                : effect.Value.ToString();
 
             Console.WriteLine(
-                $"[Match] {playerId} used {itemType} ({effect.Value}), " +
+                $"[Match] {playerId} used {itemType} ({resolvedEffect}), " +
                 $"health {healthBefore} -> {player.Health}, rounds added {roundsAdded}");
 
             GameMessageDispatcher.BroadcastToRoom(room.Id.ToString(), new JObject
@@ -795,7 +907,7 @@ namespace OpenGSServer
                 ["PlayerID"] = playerId,
                 ["PlayerId"] = playerId,
                 ["ItemType"] = itemType.ToString(),
-                ["Effect"] = effect.Value.ToString(),
+                ["Effect"] = resolvedEffect,
                 ["RestoredHealth"] = restored,
                 ["RoundsAdded"] = roundsAdded,
                 ["Health"] = player.Health,
@@ -813,24 +925,17 @@ namespace OpenGSServer
         /// </summary>
         private static void BroadcastAmmoForAllWeapons(MatchRoom room, string playerId)
         {
-            foreach (var weaponType in TrackedWeaponTypes)
+            foreach (var magazine in ServerWeaponMagazineStore.ForPlayer(playerId))
             {
-                if (!ServerWeaponMagazineStore.TryPeek(playerId, weaponType, out var magazine))
-                {
-                    continue;
-                }
-
                 GameMessageDispatcher.SendAmmoUpdate(
                     room.Id.ToString(),
                     playerId,
-                    weaponType,
+                    magazine.WeaponType,
                     magazine.ReadRemaining(),
                     magazine.Capacity,
                     magazine.ReadReserve());
             }
         }
-
-        private static readonly string[] TrackedWeaponTypes = { "Pistol", "SMG", "Shotgun", "Rifle", "Sniper" };
 
         private static void SendAmmoStateToPlayer(string roomId, string playerId)
         {
@@ -887,7 +992,7 @@ namespace OpenGSServer
         /// <summary>
         /// Restores health up to the maximum, and reports how much went in.
         /// </summary>
-        private static int HealPlayer(PlayerInfo player)
+        private static int HealPlayer(PlayerInfo player, int amount = InstantItemRules.HealAmount)
         {
             if (player.Health >= player.MaxHealth)
             {
@@ -898,7 +1003,7 @@ namespace OpenGSServer
             }
 
             var missing = player.MaxHealth - player.Health;
-            var restored = Math.Min(missing, InstantItemRules.HealAmount);
+            var restored = Math.Min(missing, Math.Max(0, amount));
             player.Health += restored;
             return restored;
         }
@@ -1257,6 +1362,7 @@ namespace OpenGSServer
 
         private static void HandlePlayerKilled(MatchRoom room, string killerId, string killedPlayerId)
         {
+            ClearCombatBuffs(room.Id.ToString(), killedPlayerId);
             Console.WriteLine($"Player {killedPlayerId} was killed by {killerId}");
             var killerKills = room.TryGetPlayer(killerId, out var killer) && killer != null
                 ? killer.Kills
@@ -1941,7 +2047,7 @@ namespace OpenGSServer
                     EquippedSpecialWeapons.TryRemove(key, out _);
                 }
             }
-            LastShots.TryRemove(playerId, out _);
+            ClearShotCooldowns(playerId);
 
             // A player who left cannot be holding a flag, so the flag they were
             // holding goes back to its stand rather than staying in the air. This
@@ -2030,7 +2136,7 @@ namespace OpenGSServer
                 LastFlagEvents.TryRemove(entry, out _);
             }
 
-            LastShots.TryRemove(playerId, out _);
+            ClearShotCooldowns(playerId);
         }
 
         private static void HandleFlagScoreUpdate(MatchRoom room)
@@ -2064,6 +2170,36 @@ namespace OpenGSServer
             var pistolMagazine = ServerWeaponMagazineStore.GetOrCreate(requestingPlayerId, "Pistol");
             var status = $"Match Active - Players: {room.Players.Count}";
             Console.WriteLine($"Sending status to {requestingPlayerId}: {status}");
+            JObject? ctfState = null;
+            if (room.Setting.Mode == EGameMode.CaptureTheFlag)
+            {
+                var flagSnapshot = FlagStateFor(room).WithFlags(flags => new
+                {
+                    RedState = flags[ETeam.Red].State.ToString(),
+                    BlueState = flags[ETeam.Blue].State.ToString(),
+                    RedCarrierId = flags[ETeam.Red].IsCarried
+                        ? flags[ETeam.Red].CarrierId ?? string.Empty : string.Empty,
+                    BlueCarrierId = flags[ETeam.Blue].IsCarried
+                        ? flags[ETeam.Blue].CarrierId ?? string.Empty : string.Empty
+                });
+                var redCarrierId = flagSnapshot.RedCarrierId;
+                var blueCarrierId = flagSnapshot.BlueCarrierId;
+                ctfState = new JObject
+                {
+                    ["PlayerTeam"] = ResolvePlayerTeam(room, requestingPlayerId).ToString(),
+                    ["RedFlagState"] = flagSnapshot.RedState,
+                    ["BlueFlagState"] = flagSnapshot.BlueState,
+                    ["RedFlagCarrierID"] = redCarrierId,
+                    ["BlueFlagCarrierID"] = blueCarrierId,
+                    ["RedFlagCarrierTeam"] = redCarrierId.Length == 0
+                        ? ETeam.NoTeam.ToString() : ResolvePlayerTeam(room, redCarrierId).ToString(),
+                    ["BlueFlagCarrierTeam"] = blueCarrierId.Length == 0
+                        ? ETeam.NoTeam.ToString() : ResolvePlayerTeam(room, blueCarrierId).ToString(),
+                    ["RedFlagScore"] = room.GetFlagScore(ETeam.Red),
+                    ["BlueFlagScore"] = room.GetFlagScore(ETeam.Blue)
+                };
+            }
+
             GameMessageDispatcher.SendMatchStatus(
                 requestingPlayerId,
                 room.Id.ToString(),
@@ -2080,7 +2216,9 @@ namespace OpenGSServer
                 pistolMagazine.WeaponType,
                 pistolMagazine.ReadRemaining(),
                 pistolMagazine.Capacity,
-                pistolMagazine.ReadReserve());
+                pistolMagazine.ReadReserve(),
+                ctfState);
+            SendTimedBuffSnapshot(room.Id.ToString(), requestingPlayerId);
 
             var isTeamMode = room.Setting.Mode is EGameMode.TeamDeathMatch or
                 EGameMode.CaptureTheFlag or EGameMode.TeamSurvival;
@@ -2115,6 +2253,7 @@ namespace OpenGSServer
             }
 
             SendAmmoStateToPlayer(room.Id.ToString(), requestingPlayerId);
+
             if (ServerGrenadeLoadoutStore.TryRead(
                 room.Id.ToString(), requestingPlayerId, out var grenadeSlots))
                 SendGrenadeLoadoutUpdate(room.Id.ToString(), requestingPlayerId, grenadeSlots);
@@ -2217,6 +2356,7 @@ namespace OpenGSServer
                 playerId, spawnX, spawnY, spawnZ);
 
             respawnedPlayer.Health = Math.Max(1, respawnedPlayer.MaxHealth);
+            ClearCombatBuffs(room.Id.ToString(), playerId);
 
             // Coming back with the gun that was on its last round would make a
             // respawn a way to dodge a reload, so a respawn refills what the
@@ -2301,17 +2441,6 @@ namespace OpenGSServer
 
             var before = missionSituation.ObjectiveProgress;
             var completed = room.RecordObjectiveProgress(steps);
-            if (missionSituation.ObjectiveProgress != before)
-            {
-                GameMessageDispatcher.BroadcastToRoom(room.Id.ToString(), new JObject
-                {
-                    ["MessageType"] = GameMessageTypes.MissionObjectiveProgress,
-                    ["RoomID"] = room.Id.ToString(),
-                    ["ObjectiveCount"] = missionSituation.ObjectiveCount,
-                    ["ObjectiveProgress"] = missionSituation.ObjectiveProgress,
-                    ["Timestamp"] = DateTime.UtcNow.ToString("o")
-                });
-            }
 
             Console.WriteLine(
                 completed
@@ -2324,7 +2453,8 @@ namespace OpenGSServer
         {
             // 射撃処理 - ヒット判定、ダメージ計算など
             var targetId = shotData.GetStringOrNull("TargetID");
-            var weaponType = NormalizeWeaponType(shotData.GetStringOrNull("WeaponType"));
+            var weaponType = ResolveWeaponType(
+                shotData.GetStringOrNull("WeaponType"), shotData.GetStringOrNull("WeaponVariant"));
 
             if (weaponType == null)
             {
@@ -2379,6 +2509,7 @@ namespace OpenGSServer
                 BroadcastGrenadeEvent(room, playerId, grenadeData, projectileId);
                 return;
             }
+            var weaponFamily = NormalizeWeaponType(weaponType) ?? weaponType;
 
             if (!string.IsNullOrWhiteSpace(targetId) &&
                 string.Equals(targetId, playerId, StringComparison.OrdinalIgnoreCase))
@@ -2397,14 +2528,40 @@ namespace OpenGSServer
             // The message a real client builds carries no target, so ignoring this
             // one changes nothing for it. It matters for anyone who sends one,
             // which is exactly the case that has to be server owned.
-            var resolved = ResolveShotTarget(room, playerId, shotData, weaponType);
-            if (resolved != null)
+            var pelletDirections = new List<Vector2>();
+            if (string.Equals(weaponFamily, "Shotgun", StringComparison.OrdinalIgnoreCase))
             {
-                HandleShotHit(room, playerId, resolved, weaponType);
+                // Unity ShotgunController emits eight pellets with independent
+                // directions over a 15-degree half-angle. One accepted request
+                // consumes one shell, then the server resolves every pellet
+                // against its own player/enemy positions.
+                var baseDirection = ReadVector2(shotData, "Dir", "Direction", "AimDirection");
+                const int pelletCount = 8;
+                const float spreadWidthDegrees = 15f;
+                for (var pellet = 0; pellet < pelletCount; ++pellet)
+                {
+                    var angle = (Random.Shared.NextSingle() * 2f - 1f) *
+                        spreadWidthDegrees * (MathF.PI / 180f);
+                    var cosine = MathF.Cos(angle);
+                    var sine = MathF.Sin(angle);
+                    var direction = new Vector2(
+                        baseDirection.X * cosine - baseDirection.Y * sine,
+                        baseDirection.X * sine + baseDirection.Y * cosine);
+                    pelletDirections.Add(direction);
+                    var resolved = ResolveShotTarget(room, playerId, shotData, weaponFamily, direction);
+                    if (resolved != null)
+                        HandleShotHit(room, playerId, resolved, weaponType);
+                }
+            }
+            else
+            {
+                var resolved = ResolveShotTarget(room, playerId, shotData, weaponFamily);
+                if (resolved != null)
+                    HandleShotHit(room, playerId, resolved, weaponType);
             }
 
             // 全プレイヤーに射撃イベントをブロードキャスト（UDP）
-            BroadcastShotEvent(room, playerId, shotData);
+            BroadcastShotEvent(room, playerId, shotData, pelletDirections);
         }
 
         /// <summary>
@@ -2435,7 +2592,8 @@ namespace OpenGSServer
             MatchRoom room,
             string shooterId,
             JObject shotData,
-            string weaponType)
+            string weaponType,
+            Vector2? directionOverride = null)
         {
             var stateManager = MatchServerV2.Instance.ServerLagCompensationManager;
             var shooterState = stateManager.GetPlayerState(shooterId);
@@ -2453,8 +2611,10 @@ namespace OpenGSServer
             // thing a client is the authority on, but a degenerate one is refused
             // rather than normalised: a zero vector is not an aim.
             var direction = shotData.GetValue("Direction") as JObject;
-            var dirX = GetFloat(shotData.GetValue("DirX") ?? direction?.GetValue("X") ?? direction?.GetValue("x"), 0f);
-            var dirY = GetFloat(shotData.GetValue("DirY") ?? direction?.GetValue("Y") ?? direction?.GetValue("y"), 0f);
+            var dirX = directionOverride?.X ?? GetFloat(
+                shotData.GetValue("DirX") ?? direction?.GetValue("X") ?? direction?.GetValue("x"), 0f);
+            var dirY = directionOverride?.Y ?? GetFloat(
+                shotData.GetValue("DirY") ?? direction?.GetValue("Y") ?? direction?.GetValue("y"), 0f);
             if (!IsFinite(dirX) || !IsFinite(dirY))
             {
                 return null;
@@ -2676,15 +2836,15 @@ namespace OpenGSServer
             }
         }
 
-        /// <summary>
-        /// Settles a simulated bullet that reached an enemy.
-        /// </summary>
         public static void ClearRoomProjectiles(string roomId)
         {
             Projectiles.ClearRoom(roomId);
             ServerGrenadeLoadoutStore.ClearRoom(roomId);
         }
 
+        /// <summary>
+        /// Settles a simulated bullet that reached an enemy.
+        /// </summary>
         private static void HandleBulletHitEnemy(string ownerId, Vector2 hit, int damage)
         {
             var room = MatchRoomManager.Instance.SearchRoomByMemberID(ownerId);
@@ -2698,6 +2858,7 @@ namespace OpenGSServer
                 return;
             }
 
+            damage = ApplyAttackBuff(room.Id.ToString(), ownerId, damage);
             var applied = MissionEnemyRegistry.ApplyPlayerDamageToEnemy(
                 room.Id.ToString(), enemyId, ownerId, damage, hit);
             if (applied > 0)
@@ -2767,6 +2928,32 @@ namespace OpenGSServer
                 return;
             }
 
+            if (projectile.Kind == OpenGSServer.Network.ServerProjectileKind.Grenade &&
+                string.Equals(spawnType, "ChildClusterGrenade", StringComparison.OrdinalIgnoreCase))
+            {
+                var length = projectile.Velocity.Length();
+                if (length <= 0.001f || !IsFinite(length)) return;
+                var direction = projectile.Velocity / length;
+                UdpBroadcastToRoom(room.Id.ToString(), new JObject
+                {
+                    ["MessageType"] = GameMessageTypes.GrenadeThrow,
+                    ["ObjectId"] = projectile.ProjectileId,
+                    ["ProjectileId"] = projectile.ProjectileId,
+                    ["PlayerID"] = projectile.OwnerId,
+                    ["PlayerId"] = projectile.OwnerId,
+                    ["RoomID"] = room.Id.ToString(),
+                    ["PosX"] = projectile.Position.X,
+                    ["PosY"] = projectile.Position.Y,
+                    ["DirX"] = direction.X,
+                    ["DirY"] = direction.Y,
+                    ["Power"] = 1.0f,
+                    ["GrenadeType"] = "ChildClusterGrenade",
+                    ["ObjectType"] = "ChildClusterGrenade",
+                    ["Direction"] = new JObject { ["X"] = direction.X, ["Y"] = direction.Y }
+                });
+                return;
+            }
+
             UdpBroadcastToRoom(room.Id.ToString(), new JObject
             {
                 ["MessageType"] = GameMessageTypes.ObjectSpawned,
@@ -2818,7 +3005,8 @@ namespace OpenGSServer
             }
 
             var pose = room.GetPlayerPoseState(targetId);
-            var outcome = ServerDamageResolver.Apply(target, damage, pose);
+            var outcome = ServerDamageResolver.Apply(
+                target, damage, pose, HasDefenseBuff(room.Id.ToString(), targetId));
 
             if (outcome.WasAlreadyDown)
             {
@@ -3023,7 +3211,8 @@ namespace OpenGSServer
             // used to be logged and echoed to the room, so the grenade existed
             // only as a message and nothing was ever simulated.
             var projectileId = Projectiles.CreateGrenade(
-                room.Id.ToString(), playerId, origin, direction, grenadeType);
+                room.Id.ToString(), playerId, origin, direction, grenadeType,
+                GetFloat(grenadeData.GetValue("Power"), 1.0f));
 
             Console.WriteLine($"Player {playerId} threw {grenadeType} ({projectileId})");
             BroadcastGrenadeEvent(room, playerId, grenadeData, projectileId);
@@ -3121,7 +3310,10 @@ namespace OpenGSServer
             // down or sitting took full damage from a shot and reduced damage from
             // the grenade that hit them harder.
             var pose = room.GetPlayerPoseState(targetId);
-            var outcome = ServerDamageResolver.Apply(target, CalculateWeaponDamage(weaponType), pose);
+            var requestedDamage = ApplyAttackBuff(
+                room.Id.ToString(), shooterId, CalculateWeaponDamage(weaponType));
+            var outcome = ServerDamageResolver.Apply(
+                target, requestedDamage, pose, HasDefenseBuff(room.Id.ToString(), targetId));
             LobbyServerManager.Instance.RecordDamageDailyProgress(shooterId, outcome.Applied);
             if (outcome.Applied <= 0)
             {
@@ -3175,7 +3367,8 @@ namespace OpenGSServer
                 return;
             }
 
-            var damage = CalculateWeaponDamage(weaponType);
+            var damage = ApplyAttackBuff(room.Id.ToString(), shooter.Id,
+                CalculateWeaponDamage(weaponType));
             var applied = MissionEnemyRegistry.ApplyPlayerDamageToEnemy(
                 room.Id.ToString(), enemy.EnemyId, shooter.Id, damage, enemy.Position);
 
@@ -3219,14 +3412,34 @@ namespace OpenGSServer
 
         private static int CalculateWeaponDamage(string? weaponType)
         {
-            return weaponType switch
+            var variant = weaponType?.Trim().ToLowerInvariant()
+                .Replace("(clone)", string.Empty, StringComparison.Ordinal)
+                .Replace("_", string.Empty, StringComparison.Ordinal)
+                .Replace("-", string.Empty, StringComparison.Ordinal)
+                .Replace(" ", string.Empty, StringComparison.Ordinal);
+
+            // Native clients send the resolved Unity weapon prefab as the
+            // variant. Match its serialized AbstractGunController.damage value
+            // instead of collapsing every weapon to a family-wide number.
+            // Family names remain as the fallback for older clients.
+            return variant switch
             {
-                "Pistol" => 25,
-                "Rifle" => 35,
-                "Sniper" => 80,
-                "Shotgun" => 20,
-                "SMG" => 15,
-                _ => 30 // デフォルトダメージ
+                "glock" or "deserteagle" or "fiveseven" => 15,
+                "hk69a1" => 25,
+                "gm94" => 30,
+                "scorpion" or "fnp90" or "p90" or "uzi" or "mp5" => 30,
+                "benelli" or "mx1014" or "spas12" => 30,
+                "famas" => 25,
+                "f2000" or "steyraug" => 20,
+                "ak47" or "m16" or "mg42" or "m60" or "m60e4" or "fnminimisaw" => 30,
+                "scout" or "dragunov" or "psg1" or "awp" => 30,
+                "lasergun" or "bubblegun" => 30,
+                "pistol" or "handgun" => 25,
+                "rifle" or "assaultrifle" => 35,
+                "sniper" or "sniperrifle" => 80,
+                "shotgun" => 30,
+                "smg" or "submachinegun" => 15,
+                _ => 30
             };
         }
 
@@ -3248,7 +3461,8 @@ namespace OpenGSServer
             remainingAmmo = 0;
             var now = DateTime.UtcNow;
             var cooldown = TimeSpan.FromSeconds(ServerWeaponMagazineStore.Spec(weaponType).IntervalSeconds);
-            if (LastShots.TryGetValue(playerId, out var lastShot) && now - lastShot < cooldown)
+            var cooldownKey = ShotCooldownKey(playerId, weaponType);
+            if (LastShots.TryGetValue(cooldownKey, out var lastShot) && now - lastShot < cooldown)
             {
                 Console.WriteLine($"[Match] Ignored rapid {weaponType} shot from '{playerId}'");
                 return false;
@@ -3263,8 +3477,21 @@ namespace OpenGSServer
                 return false;
             }
 
-            LastShots[playerId] = now;
+            LastShots[cooldownKey] = now;
             return true;
+        }
+
+        private static string ShotCooldownKey(string playerId, string weaponType) =>
+            $"{playerId.ToLowerInvariant()}:{weaponType.ToLowerInvariant()}";
+
+        private static void ClearShotCooldowns(string playerId)
+        {
+            var prefix = $"{playerId.ToLowerInvariant()}:";
+            foreach (var key in LastShots.Keys.Where(key =>
+                key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
+            {
+                LastShots.TryRemove(key, out _);
+            }
         }
 
         /// <summary>
@@ -3296,8 +3523,9 @@ namespace OpenGSServer
         /// </summary>
         private static void HandlePlayerReload(MatchRoom room, string playerId, JObject json)
         {
-            var weaponType = NormalizeWeaponType(
-                ReadString(json, "WeaponType", "WeaponId", "Weapon"));
+            var weaponType = ResolveWeaponType(
+                ReadString(json, "WeaponType", "WeaponId", "Weapon"),
+                ReadString(json, "WeaponVariant"));
             if (weaponType == null || !ServerWeaponMagazineStore.IsKnownWeapon(weaponType))
             {
                 Console.WriteLine($"[Match] Ignored reload with unknown weapon from '{playerId}'");
@@ -3370,20 +3598,30 @@ namespace OpenGSServer
                 }
 
                 var roomId = room.Id.ToString();
-                itemManager.TickSpawns(item => GameMessageDispatcher.BroadcastToRoom(roomId, new JObject
-                {
-                    ["MessageType"] = GameMessageTypes.FieldItemSpawn,
-                    ["RoomID"] = roomId,
-                    ["RoomId"] = roomId,
-                    ["ItemId"] = item.ItemId,
-                    ["ItemType"] = FieldItemTypeNames.ToWireName(item.ItemType),
-                    ["SpawnPointId"] = item.SpawnPointId,
-                    ["SpawnPointName"] = item.SpawnPointName,
-                    ["PositionX"] = item.PosX,
-                    ["PositionY"] = item.PosY,
-                    ["PositionZ"] = item.PosZ,
-                    ["Timestamp"] = DateTime.UtcNow.ToString("o")
-                }));
+                itemManager.TickSpawns(
+                    item => GameMessageDispatcher.BroadcastToRoom(roomId, new JObject
+                    {
+                        ["MessageType"] = GameMessageTypes.FieldItemSpawn,
+                        ["RoomID"] = roomId,
+                        ["RoomId"] = roomId,
+                        ["ItemId"] = item.ItemId,
+                        ["ItemType"] = FieldItemTypeNames.ToWireName(item.ItemType),
+                        ["SpawnPointId"] = item.SpawnPointId,
+                        ["SpawnPointName"] = item.SpawnPointName,
+                        ["PositionX"] = item.PosX,
+                        ["PositionY"] = item.PosY,
+                        ["PositionZ"] = item.PosZ,
+                        ["Timestamp"] = DateTime.UtcNow.ToString("o")
+                    }),
+                    item => GameMessageDispatcher.BroadcastToRoom(roomId, new JObject
+                    {
+                        ["MessageType"] = GameMessageTypes.FieldItemDespawn,
+                        ["RoomID"] = roomId,
+                        ["RoomId"] = roomId,
+                        ["ItemId"] = item.ItemId,
+                        ["ItemType"] = FieldItemTypeNames.ToWireName(item.ItemType),
+                        ["Timestamp"] = DateTime.UtcNow.ToString("o")
+                    }));
             }
         }
 
@@ -3426,7 +3664,8 @@ namespace OpenGSServer
         }
 
         // UDPブロードキャストメソッド群
-        private static void BroadcastShotEvent(MatchRoom room, string playerId, JObject shotData)
+        private static void BroadcastShotEvent(
+            MatchRoom room, string playerId, JObject shotData, IReadOnlyList<Vector2>? pelletDirections = null)
         {
             var serverState = MatchServerV2.Instance?.ServerLagCompensationManager.GetPlayerState(playerId) ?? default;
             if (!string.Equals(serverState.PlayerId, playerId, StringComparison.OrdinalIgnoreCase) ||
@@ -3437,7 +3676,8 @@ namespace OpenGSServer
             }
 
             var objectId = Guid.NewGuid().ToString("N");
-            var weaponType = NormalizeWeaponType(shotData.GetStringOrNull("WeaponType")) ?? "Unknown";
+            var weaponType = ResolveWeaponType(
+                shotData.GetStringOrNull("WeaponType"), shotData.GetStringOrNull("WeaponVariant")) ?? "Unknown";
             var direction = shotData.GetValue("Direction") as JObject;
             var dirX = GetFloat(shotData.GetValue("DirX") ?? direction?.GetValue("X") ?? direction?.GetValue("x"), 1f);
             var dirY = GetFloat(shotData.GetValue("DirY") ?? direction?.GetValue("Y") ?? direction?.GetValue("y"), 0f);
@@ -3452,6 +3692,26 @@ namespace OpenGSServer
             dirY /= directionLength;
             Console.WriteLine($"[Match] Room {room.Id} player {playerId} fired shot ({objectId})");
 
+            var shotDataEvent = new JObject
+            {
+                ["ObjectId"] = objectId,
+                ["WeaponType"] = weaponType,
+                ["DamageType"] = ElementalBulletType(room.Id.ToString(), playerId),
+                ["PosX"] = serverState.PositionX,
+                ["PosY"] = serverState.PositionY,
+                ["PosZ"] = serverState.PositionZ,
+                ["DirX"] = dirX,
+                ["DirY"] = dirY
+            };
+            if (pelletDirections is { Count: > 0 })
+            {
+                shotDataEvent["PelletDirections"] = new JArray(pelletDirections.Select(direction => new JObject
+                {
+                    ["X"] = direction.X,
+                    ["Y"] = direction.Y
+                }));
+            }
+
             var message = new JObject
             {
                 ["MessageType"] = GameMessageTypes.PlayerShot,
@@ -3465,16 +3725,8 @@ namespace OpenGSServer
                 ["DirX"] = dirX,
                 ["DirY"] = dirY,
                 ["WeaponType"] = weaponType,
-                ["ShotData"] = new JObject
-                {
-                    ["ObjectId"] = objectId,
-                    ["WeaponType"] = weaponType,
-                    ["PosX"] = serverState.PositionX,
-                    ["PosY"] = serverState.PositionY,
-                    ["PosZ"] = serverState.PositionZ,
-                    ["DirX"] = dirX,
-                    ["DirY"] = dirY
-                },
+                ["DamageType"] = ElementalBulletType(room.Id.ToString(), playerId),
+                ["ShotData"] = shotDataEvent,
                 ["Timestamp"] = DateTime.UtcNow.ToString("o")
             };
 
@@ -3520,6 +3772,7 @@ namespace OpenGSServer
                 ["PosZ"] = serverState.PositionZ,
                 ["DirX"] = dirX,
                 ["DirY"] = dirY,
+                ["Power"] = Math.Clamp(GetFloat(grenadeData.GetValue("Power"), 1.0f), 0.1f, 1.0f),
                 ["GrenadeType"] = objectType,
                 ["Direction"] = new JObject
                 {
@@ -3574,14 +3827,34 @@ namespace OpenGSServer
                 "rocketlauncher" or "rocketlauncheritem" or "granadelauncher" => "RocketLauncher",
                 "flamethrower" or "flamethroweritem" => "FlameThrower",
                 "grenadelauncher" or "grenadelauncheritem" or "grenadelauncherfielditem" => "GrenadeLauncher",
-                "pistol" or "handgun" or "glock" or "deserteagle" => "Pistol",
-                "smg" or "submachinegun" or "scorpion" or "fnp90" or "uzi" or "mp5" => "SMG",
-                "shotgun" => "Shotgun",
+                "pistol" or "handgun" or "glock" or "deserteagle" or "fiveseven" or
+                    "hk69a1" or "gm94" => "Pistol",
+                "smg" or "submachinegun" or "scorpion" or "fnp90" or "p90" or "uzi" or "mp5" => "SMG",
+                "shotgun" or "benelli" or "mx1014" or "spas12" => "Shotgun",
                 "rifle" or "assaultrifle" or "ak47" or "m16" or "famas" or "f2000" or
-                    "steyraug" or "mg42" or "m60" or "fnminimisaw" => "Rifle",
+                    "steyraug" or "mg42" or "m60" or "m60e4" or "fnminimisaw" => "Rifle",
                 "sniper" or "sniperrifle" or "scout" or "dragunov" or "psg1" or "awp" => "Sniper",
                 _ => null
             };
+        }
+
+        private static string? ResolveWeaponType(string? familyClaim, string? variantClaim)
+        {
+            var family = NormalizeWeaponType(familyClaim);
+            if (family == null) return null;
+            if (family is "RocketLauncher" or "FlameThrower" or "GrenadeLauncher")
+            {
+                var variant = NormalizeWeaponType(variantClaim);
+                return variant == family ? family : null;
+            }
+            if (string.IsNullOrWhiteSpace(variantClaim)) return family;
+
+            var variant = variantClaim.Trim()
+                .Replace("(Clone)", string.Empty, StringComparison.OrdinalIgnoreCase)
+                .Replace("_", string.Empty, StringComparison.Ordinal)
+                .Replace("-", string.Empty, StringComparison.Ordinal)
+                .Replace(" ", string.Empty, StringComparison.Ordinal);
+            return ServerWeaponMagazineStore.IsKnownVariant(variant, family) ? variant : null;
         }
 
         private static void UdpBroadcastToRoom(string roomId, JObject message)

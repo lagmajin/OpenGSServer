@@ -706,8 +706,8 @@ namespace OpenGSServer
                 foreach (var roomId in matchRooms.Keys.ToList())
                 {
                     InGameMatchEventHandler.ClearRoomProjectiles(roomId);
-                    InGameMatchEventHandler.ClearRoomFlagState(roomId);
                     MissionEnemyRegistry.ClearRoom(roomId);
+                    InGameMatchEventHandler.ClearRoomFlagState(roomId);
                 }
                 foreach (var itemManager in roomFieldItemManagers.Values)
                 {

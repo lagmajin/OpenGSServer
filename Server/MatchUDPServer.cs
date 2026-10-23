@@ -53,6 +53,7 @@ namespace OpenGSServer
 
         public bool IsRunning => _server?.IsRunning ?? false;
         public int ConnectedPlayerCount => _connectedPlayers.Count;
+
         public bool IsPlayerConnected(string playerId) =>
             !string.IsNullOrWhiteSpace(playerId) && _connectedPlayers.ContainsKey(playerId);
         public int? UdpPort { get; private set; }

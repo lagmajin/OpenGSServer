@@ -68,7 +68,8 @@ namespace OpenGSServer.Network
         /// a player cannot be invulnerable by standing still.
         /// </para>
         /// </summary>
-        public static DamageOutcome Apply(PlayerInfo? player, int requested, EPlayerPoseState pose)
+        public static DamageOutcome Apply(
+            PlayerInfo? player, int requested, EPlayerPoseState pose, bool ignoreDamage = false)
         {
             if (player == null)
             {
@@ -84,6 +85,11 @@ namespace OpenGSServer.Network
             if (wasDown)
             {
                 return new DamageOutcome(requested, 0, 0, true, false);
+            }
+
+            if (ignoreDamage)
+            {
+                return new DamageOutcome(requested, 0, player.Health, false, false);
             }
 
             var scaled = (int)MathF.Round(requested * PoseMultiplier(pose));
@@ -140,7 +146,9 @@ namespace OpenGSServer.Network
                 return 0;
             }
 
-            var falloff = 1f - Math.Clamp(distance / radius, 0f, 1f);
+            // Unity GrenadeExplosionDamageUtility uses Lerp(1.0, 0.35, distance/radius).
+            var normalizedDistance = Math.Clamp(distance / radius, 0f, 1f);
+            var falloff = 1f - (0.65f * normalizedDistance);
             return Math.Max(1, (int)MathF.Round(totalDamage * falloff));
         }
     }

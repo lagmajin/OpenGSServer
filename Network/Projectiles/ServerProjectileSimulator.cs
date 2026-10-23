@@ -33,6 +33,7 @@ namespace OpenGSServer.Network
         public float ExplosionRadius { get; set; }
         public float FuseTime { get; set; }
         public float ElapsedFuse { get; set; }
+        public float Gravity { get; set; }
     }
 
     /// <summary>
@@ -57,6 +58,8 @@ namespace OpenGSServer.Network
         public const float GrenadeLifetimeSeconds = 4.0f;
         public const float GrenadeRadius = 0.35f;
         public const float PlayerHitRadius = 0.6f;
+        public const float GrenadeGravity = 18.0f;
+        public const float GrenadeArmingSeconds = 0.15f;
 
         private readonly ConcurrentDictionary<string, ServerProjectileState> _projectiles =
             new(StringComparer.OrdinalIgnoreCase);
@@ -151,36 +154,40 @@ namespace OpenGSServer.Network
         {
             return grenadeType?.ToLowerInvariant() switch
             {
-                "power" => 160,
-                "cluster" => 90,
-                "fire" => 120,
-                "magnet" => 80,
-                _ => 110
+                "smoke" or "smokegrenade" => 0,
+                "fire" or "firegrenade" => 150,
+                "clusterchild" or "childclustergrenade" => 30,
+                "normal" or "normalgrenade" or "power" or "powergrenade" or
+                    "cluster" or "clustergrenade" or "magnet" or "magnetic" or
+                    "magneticgrenade" or "mine" or "minegrenade" => 120,
+                _ => 120
             };
         }
 
         public static float CalculateGrenadeRadius(string? grenadeType)
         {
-            return grenadeType?.ToLowerInvariant() switch
-            {
-                "power" => 4.5f,
-                "cluster" => 3.0f,
-                "fire" => 3.5f,
-                "magnet" => 2.5f,
-                _ => 3.0f
-            };
+            return 2.5f;
         }
 
         public static float CalculateGrenadeFuse(string? grenadeType)
         {
             return grenadeType?.ToLowerInvariant() switch
             {
-                "power" => 2.5f,
-                "cluster" => 2.0f,
-                "fire" => 2.2f,
-                "magnet" => 2.0f,
+                "power" or "powergrenade" => 2.0f,
+                "cluster" or "clustergrenade" => 2.0f,
+                "fire" or "firegrenade" => 1.125f,
+                "magnet" or "magnetic" or "magneticgrenade" => 2.0f,
+                "smoke" or "smokegrenade" => 2.0f,
                 _ => 3.0f
             };
+        }
+
+        public static float CalculateGrenadeGravity(string? grenadeType)
+        {
+            return string.Equals(grenadeType, "Smoke", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(grenadeType, "SmokeGrenade", StringComparison.OrdinalIgnoreCase)
+                ? 14.0f
+                : GrenadeGravity;
         }
 
         public string CreateBullet(
@@ -215,8 +222,10 @@ namespace OpenGSServer.Network
             string ownerId,
             Vector2 origin,
             Vector2 direction,
-            string grenadeType)
+            string grenadeType,
+            float power = 1f)
         {
+            power = float.IsFinite(power) ? Math.Clamp(power, 0.1f, 1.0f) : 1.0f;
             var id = NewProjectileId("grenade");
             var projectile = new ServerProjectileState
             {
@@ -225,13 +234,14 @@ namespace OpenGSServer.Network
                 RoomId = roomId,
                 Kind = ServerProjectileKind.Grenade,
                 Position = origin,
-                Velocity = Normalize(direction) * GrenadeSpeed,
+                Velocity = Normalize(direction) * (GrenadeSpeed * power),
                 Radius = GrenadeRadius,
                 RemainingLifetime = GrenadeLifetimeSeconds,
                 GrenadeType = grenadeType,
                 ExplosionDamage = CalculateGrenadeDamage(grenadeType),
                 ExplosionRadius = CalculateGrenadeRadius(grenadeType),
-                FuseTime = CalculateGrenadeFuse(grenadeType)
+                FuseTime = CalculateGrenadeFuse(grenadeType),
+                Gravity = CalculateGrenadeGravity(grenadeType)
             };
 
             Add(projectile);
@@ -270,6 +280,10 @@ namespace OpenGSServer.Network
                     }
 
                     projectile.RemainingLifetime -= deltaSeconds;
+                    if (projectile.Kind == ServerProjectileKind.Grenade)
+                    {
+                        projectile.Velocity += new Vector2(0f, -projectile.Gravity * deltaSeconds);
+                    }
                     projectile.Position += projectile.Velocity * deltaSeconds;
 
                     if (projectile.Kind == ServerProjectileKind.Bullet)
@@ -295,6 +309,19 @@ namespace OpenGSServer.Network
                     {
                         projectile.ElapsedFuse += deltaSeconds;
                         if (projectile.ElapsedFuse >= projectile.FuseTime)
+                        {
+                            CollectClusterChildren(projectile, spawned);
+                            CollectGrenadeHits(projectile, hits);
+                            detonated.Add(projectile);
+                            Retire(projectile, expired);
+                            continue;
+                        }
+
+                        // Unity's grenade projectile ignores collisions during its
+                        // arming window. Apply the same delay before allowing a
+                        // launcher round to detonate on a nearby player.
+                        if (projectile.ElapsedFuse >= GrenadeArmingSeconds &&
+                            TryResolveGrenadePlayerHit(projectile, out _))
                         {
                             CollectClusterChildren(projectile, spawned);
                             CollectGrenadeHits(projectile, hits);
@@ -450,9 +477,37 @@ namespace OpenGSServer.Network
             }
         }
 
+        private bool TryResolveGrenadePlayerHit(ServerProjectileState grenade, out string targetId)
+        {
+            targetId = string.Empty;
+            var players = PlayerIds?.Invoke();
+            var lookup = PlayerPositionLookup;
+            if (players == null || lookup == null)
+            {
+                return false;
+            }
+
+            foreach (var candidate in players)
+            {
+                if (string.Equals(candidate, grenade.OwnerId, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (Vector2.Distance(grenade.Position, lookup(candidate)) <= grenade.Radius + PlayerHitRadius)
+                {
+                    targetId = candidate;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         private void CollectClusterChildren(ServerProjectileState grenade, List<ServerProjectileState> spawned)
         {
-            if (!string.Equals(grenade.GrenadeType, "Cluster", StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(grenade.GrenadeType, "Cluster", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(grenade.GrenadeType, "ClusterGrenade", StringComparison.OrdinalIgnoreCase))
             {
                 return;
             }
@@ -473,13 +528,14 @@ namespace OpenGSServer.Network
                     RoomId = grenade.RoomId,
                     Kind = ServerProjectileKind.Grenade,
                     Position = grenade.Position,
-                    Velocity = Normalize(direction) * (GrenadeSpeed * 1.15f),
+                    Velocity = Normalize(direction) * 8.0f,
                     Radius = 0.25f,
-                    RemainingLifetime = 1.25f,
+                    RemainingLifetime = 3.0f,
                     GrenadeType = "ClusterChild",
-                    ExplosionDamage = 60,
-                    ExplosionRadius = 2.0f,
-                    FuseTime = 1.0f
+                    ExplosionDamage = 30,
+                    ExplosionRadius = 2.5f,
+                    FuseTime = float.PositiveInfinity,
+                    Gravity = 30.0f
                 };
 
                 lock (_lock)

@@ -137,6 +137,7 @@ namespace OpenGSServer
                 if (simulator.TryResolveEnemyAt(point, 0.35f, out var enemy))
                 {
                     enemyId = enemy.EnemyId;
+                    hitDistance = travelled;
                     return true;
                 }
             }
