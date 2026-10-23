@@ -375,7 +375,6 @@ namespace OpenGSServer.Network
             }
 
             var hasIndependentVerticalInput = input.IndependentVerticalInput && normalizedMoveZ > 0.01f;
-            var hasIndependentVerticalInput = input.IndependentVerticalInput && normalizedMoveZ > 0.01f;
             if (!state.IsGrounded && !hasIndependentVerticalInput)
             {
                 state.VelZ -= Gravity * dt;
