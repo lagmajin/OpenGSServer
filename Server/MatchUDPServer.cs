@@ -360,6 +360,12 @@ namespace OpenGSServer
                     return;
                 }
 
+                if (!IsCurrentPeer(peer, playerId))
+                {
+                    peer.Disconnect();
+                    return;
+                }
+
                 var binaryReader = new NetDataReader(data);
                 // メッセージタイプを読み取り
                 var messageType = binaryReader.GetString();
@@ -466,6 +472,12 @@ namespace OpenGSServer
                 return;
             }
 
+            if (!IsCurrentPeer(peer, playerId))
+            {
+                peer.Disconnect();
+                return;
+            }
+
             if (string.Equals(messageType, MessageType.PingRequest, StringComparison.OrdinalIgnoreCase))
             {
                 HandleJsonPing(peer, playerId, message);
@@ -526,6 +538,10 @@ namespace OpenGSServer
             return string.Equals(messageType, "PlayerMove", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(messageType, "PlayerInput", StringComparison.OrdinalIgnoreCase);
         }
+
+        private bool IsCurrentPeer(NetPeer peer, string playerId) =>
+            _connectedPlayers.TryGetValue(playerId, out var activeConnection) &&
+            activeConnection.PeerId == peer.Id;
 
         private static void HandleJsonPing(NetPeer peer, string playerId, JObject message)
         {
