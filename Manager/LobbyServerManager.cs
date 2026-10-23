@@ -2027,7 +2027,7 @@ namespace OpenGSServer
                 ["RewardCredits"] = result.Reward,
                 ["Credits"] = AccountDatabaseManager.GetInstance().GetCredits(playerId),
                 ["ErrorMessage"] = result.Error,
-                ["Dailies"] = result.Success ? _dailyService.GetPlayerDailies(playerId) : new JArray()
+                ["Dailies"] = _dailyService.GetPlayerDailies(playerId)
             });
         }
 

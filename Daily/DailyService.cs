@@ -93,7 +93,7 @@ namespace OpenGSServer
                 var definition = Definitions.FirstOrDefault(x => x.Id == dailyId);
                 var record = definition == null ? null : GetOrCreate(playerId, dailyId, DateTime.UtcNow.ToString("yyyy-MM-dd"));
                 if (definition == null || record == null) return (false, "Daily not found", 0);
-                if (record.Claimed) return (false, "Daily reward already claimed", 0);
+                if (record.Claimed) return (true, string.Empty, 0);
                 if (record.Progress < definition.Target) return (false, "Daily is not complete", 0);
 
                 var creditResult = AccountDatabaseManager.GetInstance()
