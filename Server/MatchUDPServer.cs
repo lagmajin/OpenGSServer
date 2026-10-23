@@ -819,6 +819,7 @@ namespace OpenGSServer
             };
 
             SendJsonToPeer(peer, joined, DeliveryMethod.ReliableOrdered);
+            SendJsonToPeer(peer, CreateRoomSnapshotMessage(room), DeliveryMethod.ReliableOrdered);
         }
 
         private void RegisterUnauthorizedPacket(NetPeer peer)
