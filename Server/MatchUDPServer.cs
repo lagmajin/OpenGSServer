@@ -4,6 +4,7 @@ using LiteNetLib.Utils;
 using System;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Text;
 using Newtonsoft.Json.Linq;
 using OpenGSCore;
@@ -45,6 +46,8 @@ namespace OpenGSServer
         private readonly ConcurrentDictionary<string, TokenBucket> _matchEventRateLimiters =
             new(StringComparer.OrdinalIgnoreCase);
         private readonly ConcurrentDictionary<string, TokenBucket> _positionRateLimiters =
+            new(StringComparer.OrdinalIgnoreCase);
+        private readonly ConcurrentDictionary<string, long> _lastAcceptedPositionTicks =
             new(StringComparer.OrdinalIgnoreCase);
         private const double MatchEventBurstCapacity = 30;
         private const double MatchEventRatePerSecond = 20;
@@ -588,8 +591,15 @@ namespace OpenGSServer
                 return;
             }
 
+            var nowTicks = Stopwatch.GetTimestamp();
+            var serverDeltaTime = _lastAcceptedPositionTicks.TryGetValue(playerId, out var lastAcceptedTicks)
+                ? (float)Math.Clamp(
+                    (double)(nowTicks - lastAcceptedTicks) / Stopwatch.Frequency,
+                    0.0d,
+                    0.25d)
+                : 0f;
             if (!MatchServerV2.Instance.ServerLagCompensationManager.ValidatePlayerPosition(
-                    playerId, x, y, z, deltaTime, out var rejectionReason))
+                    playerId, x, y, z, serverDeltaTime, out var rejectionReason))
             {
                 ConsoleWrite.WriteMessage($"[UDP] Rejected position update from {playerId}: {rejectionReason}", ConsoleColor.Yellow);
                 return;
@@ -600,6 +610,7 @@ namespace OpenGSServer
             // against an authoritative position, a pickup radius for one, was then
             // reading the spawn point the player had already left.
             MatchServerV2.Instance.ServerLagCompensationManager.SetPlayerPosition(playerId, x, y, z);
+            _lastAcceptedPositionTicks[playerId] = nowTicks;
 
             var room = MatchRoomManager.Instance.SearchRoomByMemberID(playerId);
             if (room == null)
@@ -1229,6 +1240,7 @@ namespace OpenGSServer
             _pendingInputs.TryRemove(playerId, out _);
             _matchEventRateLimiters.TryRemove(playerId, out _);
             _positionRateLimiters.TryRemove(playerId, out _);
+            _lastAcceptedPositionTicks.TryRemove(playerId, out _);
             _connectionTokenInfo.TryRemove(playerId, out _);
 
             if (connection != null)
@@ -1497,6 +1509,7 @@ namespace OpenGSServer
                 _pendingInputs.Clear();
                 _matchEventRateLimiters.Clear();
                 _positionRateLimiters.Clear();
+                _lastAcceptedPositionTicks.Clear();
                 return;
             }
 
@@ -1524,6 +1537,7 @@ namespace OpenGSServer
             _pendingInputs.Clear();
             _matchEventRateLimiters.Clear();
             _positionRateLimiters.Clear();
+            _lastAcceptedPositionTicks.Clear();
 
             ConsoleWrite.WriteMessage("[UDP] Server shutdown complete", ConsoleColor.Green);
         }
