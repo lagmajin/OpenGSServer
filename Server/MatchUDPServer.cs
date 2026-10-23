@@ -1158,6 +1158,23 @@ namespace OpenGSServer
             };
 
             BroadcastJsonToRoom(room, message);
+            var transform = MatchServerV2.Instance.ServerLagCompensationManager
+                .GetPlayerState(playerId);
+            if (!string.IsNullOrWhiteSpace(transform.PlayerId))
+            {
+                var transformMessage = CreateTransformStateMessage(transform);
+                foreach (var roomPlayer in room.Players)
+                {
+                    if (string.Equals(roomPlayer.Id, playerId,
+                        StringComparison.OrdinalIgnoreCase) ||
+                        !_connectedPlayers.TryGetValue(roomPlayer.Id, out var connection))
+                        continue;
+
+                    var peer = _server?.GetPeerById(connection.PeerId);
+                    if (peer != null && peer.ConnectionState == ConnectionState.Connected)
+                        SendJsonToPeer(peer, transformMessage, DeliveryMethod.ReliableOrdered);
+                }
+            }
             MissionEnemyRegistry.PublishSnapshot(room.Id.ToString(), playerId);
             MatchRoomHandler.SendProjectileSnapshot(room.Id.ToString(), playerId);
         }
