@@ -262,6 +262,7 @@ namespace OpenGSServer
         /// </summary>
         private void UpdateMatchRoom(MatchRoom room)
         {
+            InGameMatchEventHandler.UpdateMatchTime(room);
             if (room.Playing && !room.Finished)
             {
                 // ゲームシーン更新（OpenGSCore.MatchRoom使用）

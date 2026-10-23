@@ -350,6 +350,8 @@ namespace OpenGSServer
             }
 
             var room = MatchRoomManager.Instance.GetRoomById(roomId);
+            if (room != null)
+                message["RemainingSeconds"] = Math.Max(0f, room.RemainingTimeSeconds);
             if (room?.CurrentSituation is MissionMatchSituation mission)
             {
                 message["ObjectiveCount"] = mission.ObjectiveCount;

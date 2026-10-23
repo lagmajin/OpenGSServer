@@ -205,6 +205,8 @@ namespace OpenGSServer
             new(StringComparer.OrdinalIgnoreCase);
         private static readonly ConcurrentDictionary<string, (string DamageType, DateTime ExpiresAt)>
             ElementalBulletEffects = new(StringComparer.OrdinalIgnoreCase);
+        private static readonly ConcurrentDictionary<string, DateTime> LastMatchTimeBroadcasts =
+            new(StringComparer.OrdinalIgnoreCase);
 
         private static string TimedBuffKey(string roomId, string playerId) =>
             roomId + "\n" + playerId;
@@ -2757,6 +2759,33 @@ namespace OpenGSServer
 
             var now = ServerFieldItemManager.NowSeconds;
             MissionEnemyRegistry.Update(deltaSeconds, now);
+        }
+
+        public static void UpdateMatchTime(MatchRoom room)
+        {
+            if (room == null)
+                return;
+
+            var roomId = room.Id.ToString();
+            if (!room.Playing || room.Finished)
+            {
+                LastMatchTimeBroadcasts.TryRemove(roomId, out _);
+                return;
+            }
+
+            var now = DateTime.UtcNow;
+            if (LastMatchTimeBroadcasts.TryGetValue(roomId, out var lastSent) &&
+                now - lastSent < TimeSpan.FromSeconds(1))
+                return;
+
+            LastMatchTimeBroadcasts[roomId] = now;
+            UdpBroadcastToRoom(roomId, new JObject
+            {
+                ["MessageType"] = "MatchTimeSync",
+                ["RoomID"] = roomId,
+                ["RemainingSeconds"] = Math.Max(0f, room.RemainingTimeSeconds),
+                ["Timestamp"] = now.ToString("o")
+            });
         }
 
         /// <summary>
