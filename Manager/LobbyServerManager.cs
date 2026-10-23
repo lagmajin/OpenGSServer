@@ -102,7 +102,7 @@ namespace OpenGSServer
             _dailyService.AddProgress(playerId, "deal_damage", amount);
         }
 
-        private bool _disposed;
+        private int _disposeState;
 
         public static LobbyServerManager Instance => _instance.Value;
 
@@ -2213,29 +2213,40 @@ namespace OpenGSServer
 
         public void Dispose()
         {
-            if (_disposed) return;
+            if (Interlocked.Exchange(ref _disposeState, 1) != 0) return;
 
             ConsoleWrite.WriteMessage("[LOBBY] Disposing lobby server manager", ConsoleColor.Yellow);
 
-            // TCPサーバー停止
-            StopTcpServer();
+            using (var idleTimerStopped = new ManualResetEvent(false))
+            {
+                _idleCheckTimer.Dispose(idleTimerStopped);
+                idleTimerStopped.WaitOne();
+            }
+            using (var connectionTimerStopped = new ManualResetEvent(false))
+            {
+                _connectionCheckTimer.Dispose(connectionTimerStopped);
+                connectionTimerStopped.WaitOne();
+            }
 
-            _idleCheckTimer?.Dispose();
-            _connectionCheckTimer?.Dispose();
-            _lobbyLock?.Dispose();
-            _dailyService.Dispose();
-            GuildDatabaseManager.GetInstance().Disconnect();
-            ((IDisposable)AccountDatabaseManager.GetInstance()).Dispose();
+            // Stop accepting requests before tearing down player state.
+            StopTcpServer();
 
             foreach (var playerId in _connectedPlayers.Keys.ToList())
             {
-                PlayerLeaveLobby(playerId);
+                if (!AccountEventHandler.KickPlayerSession(playerId))
+                {
+                    PlayerSessionCleanup.Release(playerId, revokeResumeToken: true);
+                }
             }
 
             _connectedPlayers.Clear();
             _rateLimiters.Clear();
 
-            _disposed = true;
+            _dailyService.Dispose();
+            GuildDatabaseManager.GetInstance().Disconnect();
+            ((IDisposable)AccountDatabaseManager.GetInstance()).Dispose();
+            _lobbyLock?.Dispose();
+
         }
 
         #endregion
