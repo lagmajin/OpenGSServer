@@ -209,8 +209,9 @@ namespace OpenGSServer
 
             try
             {
-                databaseManager.AddNewPlayerData(dbAccount);
-                return new CreateNewAccountResult(eCreateAccountResult.Succeeful);
+                return databaseManager.TryAddNewPlayerData(dbAccount)
+                    ? new CreateNewAccountResult(eCreateAccountResult.Succeeful)
+                    : new CreateNewAccountResult(eCreateAccountResult.ExistAlreadySameAccount);
             }
             catch (Exception ex)
             {

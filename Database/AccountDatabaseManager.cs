@@ -39,6 +39,16 @@ namespace OpenGSServer
             return db!;
         }
 
+        private static DBAccount? FindAccountRecord(
+            ILiteCollection<DBAccount> collection, string accountId)
+        {
+            return collection.FindOne(Query.EQ(nameof(DBAccount.AccountId), accountId))
+                ?? collection.FindOne(Query.EQ(nameof(DBAccount.Id), accountId))
+                ?? collection.FindAll().FirstOrDefault(account =>
+                    string.Equals(account.AccountId, accountId, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(account.Id, accountId, StringComparison.OrdinalIgnoreCase));
+        }
+
         public void Connect()
         {
             if (db != null)
@@ -84,28 +94,22 @@ namespace OpenGSServer
 
             var database = EnsureDatabase();
             var col = database.GetCollection<DBAccount>(accountTableName);
-            return col.FindOne(Query.EQ(nameof(DBAccount.AccountId), accountID)) != null
-                || col.FindOne(Query.EQ(nameof(DBAccount.Id), accountID)) != null;
+            return FindAccountRecord(col, accountID) != null;
         }
 
         public DBAccount? GetDBPlayerInfoOld(in string id)
         {
-            var col = db?.GetCollection<DBAccount>(accountTableName);
-
-            DBAccount? data = null;
-            if (col != null)
+            if (string.IsNullOrWhiteSpace(id)) return null;
+            try
             {
-                try
-                {
-                    data = col.FindOne(Query.EQ(nameof(DBAccount.AccountId), id))
-                        ?? col.FindOne(Query.EQ(nameof(DBAccount.Id), id));
-                }
-                catch (Exception)
-                {
-                }
+                var col = EnsureDatabase().GetCollection<DBAccount>(accountTableName);
+                return FindAccountRecord(col, id);
             }
-
-            return data;
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage($"[AccountDB] Account lookup failed: {ex.Message}", ConsoleColor.Red);
+                return null;
+            }
         }
 
         public DBAccount? GetAccount(string accountId)
@@ -118,8 +122,7 @@ namespace OpenGSServer
             var database = EnsureDatabase();
             var col = database.GetCollection<DBAccount>(accountTableName);
 
-            return col.FindOne(Query.EQ(nameof(DBAccount.AccountId), accountId))
-                ?? col.FindOne(Query.EQ(nameof(DBAccount.Id), accountId));
+            return FindAccountRecord(col, accountId);
         }
 
         public DBAccount? GetAccountSnapshot(string accountId)
@@ -159,35 +162,42 @@ namespace OpenGSServer
 
         public void AddNewPlayerData(in DBAccount player)
         {
+            TryAddNewPlayerData(player);
+        }
+
+        public bool TryAddNewPlayerData(in DBAccount player)
+        {
             if (string.IsNullOrWhiteSpace(player.AccountId))
             {
                 ConsoleWrite.WriteMessage("[AccountDB] Skip insert: account ID is empty", ConsoleColor.Yellow);
-                return;
+                return false;
             }
 
-            var database = EnsureDatabase();
-            var col = database.GetCollection<DBAccount>(accountTableName);
-            var scoreCol = database.GetCollection<DBAccountScore>(accountScoreTableName);
-
-            var existing = col.FindOne(Query.EQ(nameof(DBAccount.AccountId), player.AccountId))
-                ?? col.FindOne(Query.EQ(nameof(DBAccount.Id), player.Id));
-
-            if (existing != null)
+            lock (_accountMutationLock)
             {
-                ConsoleWrite.WriteMessage($"[AccountDB] Already have data in db: {player.AccountId}", ConsoleColor.Yellow);
-                return;
-            }
+                var database = EnsureDatabase();
+                var col = database.GetCollection<DBAccount>(accountTableName);
+                var scoreCol = database.GetCollection<DBAccountScore>(accountScoreTableName);
 
-            player.LastUpdatedUtc = DateTime.UtcNow.ToString("O");
-            player.Credits = Math.Max(0, player.Credits);
-            col.Insert(player);
-
-            if (scoreCol.FindOne(Query.EQ(nameof(DBAccountScore.accountID), player.AccountId)) == null)
-            {
-                scoreCol.Insert(new DBAccountScore
+                if (FindAccountRecord(col, player.AccountId) != null)
                 {
-                    accountID = player.AccountId
-                });
+                    ConsoleWrite.WriteMessage($"[AccountDB] Already have data in db: {player.AccountId}", ConsoleColor.Yellow);
+                    return false;
+                }
+
+                player.LastUpdatedUtc = DateTime.UtcNow.ToString("O");
+                player.Credits = Math.Max(0, player.Credits);
+                col.Insert(player);
+
+                if (scoreCol.FindOne(Query.EQ(nameof(DBAccountScore.accountID), player.AccountId)) == null)
+                {
+                    scoreCol.Insert(new DBAccountScore
+                    {
+                        accountID = player.AccountId
+                    });
+                }
+
+                return true;
             }
         }
 
@@ -230,7 +240,7 @@ namespace OpenGSServer
                 var col = database.GetCollection<DBAccount>(accountTableName);
                 col.EnsureIndex(x => x.AccountId, true);
 
-                var rec = col.FindOne(Query.EQ(nameof(DBAccount.AccountId), player.AccountId));
+                var rec = FindAccountRecord(col, player.AccountId);
                 if (rec == null)
                 {
                     ConsoleWrite.WriteMessage("[AccountDB] Account not found", ConsoleColor.Yellow);
@@ -260,7 +270,7 @@ namespace OpenGSServer
             lock (_accountMutationLock)
             {
                 var col = EnsureDatabase().GetCollection<DBAccount>(accountTableName);
-                var rec = col.FindOne(Query.EQ(nameof(DBAccount.AccountId), accountId));
+                var rec = FindAccountRecord(col, accountId);
                 if (rec == null) return null;
                 var result = updateProgress(rec);
                 if (result == null) return null;
@@ -645,7 +655,7 @@ namespace OpenGSServer
             var col = database.GetCollection<DBAccount>(accountTableName);
             col.EnsureIndex(player => player.Id, true);
 
-            var rec = col.FindOne(Query.EQ(nameof(DBAccount.AccountId), id));
+            var rec = FindAccountRecord(col, id);
             if (rec == null)
             {
                 return;
@@ -683,7 +693,7 @@ namespace OpenGSServer
 
             col.EnsureIndex(player => player.Id, true);
 
-            var rec = col.FindOne(Query.EQ(nameof(DBAccount.AccountId), accountID));
+            var rec = FindAccountRecord(col, accountID);
             if (rec == null)
             {
                 return;
@@ -699,10 +709,10 @@ namespace OpenGSServer
                 }
             }
 
-            col.DeleteMany(Query.EQ(nameof(DBAccount.AccountId), accountID));
-            scoreCol.DeleteMany(Query.EQ(nameof(DBAccountScore.accountID), accountID));
-            friendCol.DeleteMany(Query.EQ(nameof(DBFriend.PlayerID), accountID));
-            friendCol.DeleteMany(Query.EQ(nameof(DBFriend.FriendAccountId), accountID));
+            col.Delete(rec.Id);
+            scoreCol.DeleteMany(Query.EQ(nameof(DBAccountScore.accountID), rec.AccountId));
+            friendCol.DeleteMany(Query.EQ(nameof(DBFriend.PlayerID), rec.AccountId));
+            friendCol.DeleteMany(Query.EQ(nameof(DBFriend.FriendAccountId), rec.AccountId));
         }
 
         public void RemoveAll()

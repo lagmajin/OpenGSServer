@@ -43,7 +43,9 @@ namespace OpenGSServer
 
             var result = AccountManager.GetInstance().CreateNewAccount(accountId, password, displayName);
             var response = result.ToJson();
-            var account = AccountDatabaseManager.GetInstance().GetAccount(accountId);
+            var account = response["Success"]?.Value<bool>() == true
+                ? AccountDatabaseManager.GetInstance().GetAccount(accountId)
+                : null;
             if (account != null)
             {
                 response["DisplayName"] = account.DisplayName;
@@ -146,6 +148,11 @@ namespace OpenGSServer
                     session,
                     new LoginResult(accountId, eLoginResultType.AccountNotFound));
             }
+
+            // Account IDs are case-insensitive throughout session ownership and
+            // room state. Keep the persisted spelling as the canonical ID so
+            // later exact-key records such as friends and scores stay aligned.
+            accountId = account.AccountId;
 
             var manager = AccountManager.GetInstance();
 
