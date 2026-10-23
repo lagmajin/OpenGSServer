@@ -1960,13 +1960,23 @@ namespace OpenGSServer
 
             var flagState = FlagStateFor(room);
 
+            // The message's position is client input and can put the flag
+            // anywhere on the map. Capture the carrier's server-tracked position
+            // before changing state, so an unknown position cannot leave a loose
+            // flag that later pickups have to trust without a range check.
+            if (!TryGetAuthoritativePosition(playerId, out var dropX, out var dropY, out var dropZ))
+            {
+                Console.WriteLine(
+                    $"[Match] Refused a lost {flagTeam} flag claim from '{playerId}': no authoritative position");
+                return;
+            }
+
             // Only the flag this player is actually holding can be dropped. A
             // claim that a flag was lost is a claim about a carrier, so a player
             // holding nothing has nothing to drop. The server drops it itself when
             // it rules the carrier down, so a report that arrives after that is
             // refused here rather than counting the drop twice.
             var now = ServerNowSeconds();
-            var reported = ReadReportedPosition(json);
             var dropped = flagState.WithFlags(flags =>
                 flags.TryGetValue(flagTeam, out var flag) && flag.IsCarried &&
                 string.Equals(flag.CarrierId, playerId, StringComparison.OrdinalIgnoreCase) &&
@@ -1979,20 +1989,7 @@ namespace OpenGSServer
                 return;
             }
 
-            // Where a flag lands is where it lies. A client that says where is
-            // believed, because it is the client whose player dropped it, and one
-            // that does not is answered from the place the server already holds
-            // for the carrier. Without a position the server would know the flag
-            // was loose and not where, so a later pickup has nothing to be
-            // measured against and is taken on trust.
-            if (reported != null)
-            {
-                NoteFlagPosition(room, flagTeam, reported.Value.X, reported.Value.Y, 0f);
-            }
-            else if (TryGetAuthoritativePosition(playerId, out var dx, out var dy, out var dz))
-            {
-                NoteFlagPosition(room, flagTeam, dx, dy, dz);
-            }
+            NoteFlagPosition(room, flagTeam, dropX, dropY, dropZ);
 
             Console.WriteLine($"The {flagTeam} flag was dropped by {playerId}");
             GameMessageDispatcher.SendFlagLost(room.Id.ToString(), flagTeam.ToString(), playerId);
@@ -2066,68 +2063,6 @@ namespace OpenGSServer
         private static string FlagPositionKey(MatchRoom room, ETeam team) => $"{room.Id}:{team}";
 
         /// <summary>
-        /// Where a message says a thing is, or null when it says nothing usable.
-        /// <para>
-        /// A position in a message is a claim about where something is, so both
-        /// coordinates have to be present and finite. A missing one would place a
-        /// flag at the origin, and the origin is where nothing is.
-        /// </para>
-        /// </summary>
-        private static (float X, float Y)? ReadReportedPosition(JObject json)
-        {
-            if (json == null)
-            {
-                return null;
-            }
-
-            if (!TryReadFiniteFloat(json, new[] { "PosX", "PositionX", "X" }, out var x) ||
-                !TryReadFiniteFloat(json, new[] { "PosY", "PositionY", "Y" }, out var y))
-            {
-                return null;
-            }
-
-            return (x, y);
-        }
-
-        private static bool TryReadFiniteFloat(JObject json, string[] keys, out float value)
-        {
-            value = 0f;
-            if (json == null || keys == null)
-            {
-                return false;
-            }
-
-            foreach (var key in keys)
-            {
-                if (string.IsNullOrWhiteSpace(key))
-                {
-                    continue;
-                }
-
-                var token = json.GetValue(key);
-                if (token == null)
-                {
-                    continue;
-                }
-
-                if (!float.TryParse(
-                        token.ToString(),
-                        System.Globalization.NumberStyles.Float,
-                        System.Globalization.CultureInfo.InvariantCulture,
-                        out var parsed) ||
-                    !float.IsFinite(parsed))
-                {
-                    continue;
-                }
-
-                value = parsed;
-                return true;
-            }
-
-            return false;
-        }
-
-        /// <summary>
         /// Records where a team's flag is, from a report that a flag is on the
         /// ground or in somebody's hands.
         /// <para>
@@ -2139,7 +2074,8 @@ namespace OpenGSServer
         /// </summary>
         public static void NoteFlagPosition(MatchRoom room, ETeam team, float x, float y, float z)
         {
-            if (room == null || team == ETeam.NoTeam)
+            if (room == null || team == ETeam.NoTeam ||
+                !float.IsFinite(x) || !float.IsFinite(y) || !float.IsFinite(z))
             {
                 return;
             }
@@ -2181,15 +2117,18 @@ namespace OpenGSServer
 
             if (!FlagPositions.TryGetValue(FlagPositionKey(room, flagTeam), out var position))
             {
-                // A flag whose position nobody has reported cannot be measured
-                // against, so the carrier check stands on its own rather than a
-                // claim being refused for the lack of a number.
-                return true;
+                // Every server-side drop records a position. If that invariant
+                // is ever broken, refuse the pickup rather than treating an
+                // unknown location as permission to take the flag from anywhere.
+                Console.WriteLine(
+                    $"[Match] Refused a {flagTeam} flag pickup by '{playerId}': its position is unavailable");
+                return false;
             }
 
             var dx = position.X - px;
             var dy = position.Y - py;
-            if (MathF.Sqrt((dx * dx) + (dy * dy)) > FlagPickupReach)
+            var dz = position.Z - pz;
+            if ((dx * dx) + (dy * dy) + (dz * dz) > FlagPickupReach * FlagPickupReach)
             {
                 Console.WriteLine(
                     $"[Match] Refused a {flagTeam} flag pickup by '{playerId}': they are not next to it");
@@ -2223,7 +2162,9 @@ namespace OpenGSServer
         private static bool TryGetAuthoritativePosition(string playerId, out float x, out float y, out float z)
         {
             var state = MatchServerV2.Instance.ServerLagCompensationManager.GetPlayerState(playerId);
-            if (string.IsNullOrEmpty(state.PlayerId) || !state.HasAuthoritativePosition)
+            if (string.IsNullOrEmpty(state.PlayerId) || !state.HasAuthoritativePosition ||
+                !float.IsFinite(state.PositionX) || !float.IsFinite(state.PositionY) ||
+                !float.IsFinite(state.PositionZ))
             {
                 x = y = z = 0f;
                 return false;
