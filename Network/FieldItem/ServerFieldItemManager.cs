@@ -902,7 +902,11 @@ namespace OpenGSServer.Network
                         item.DroppedAtSeconds = NowSeconds - (DroppedWeaponLifetimeSeconds - remaining);
                     }
 
-                    if (string.IsNullOrWhiteSpace(item.ItemId) ||
+                    if (string.IsNullOrWhiteSpace(item.ItemId) || item.ItemId.Length > 128 ||
+                        item.State.Length > 32 || item.ReservedByPlayerId.Length > 128 ||
+                        item.WeaponType.Length > 64 || item.WeaponSlot < -1 || item.WeaponSlot > 2 ||
+                        item.MagazineAmmo < -1 || item.MagazineAmmo > 10000 ||
+                        item.ReserveAmmo < -1 || item.ReserveAmmo > 100000 ||
                         !IsFinite(item.PosX) || !IsFinite(item.PosY) || !IsFinite(item.PosZ))
                     {
                         continue;
