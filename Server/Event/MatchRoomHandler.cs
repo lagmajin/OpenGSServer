@@ -3198,6 +3198,8 @@ namespace OpenGSServer
                     ["DirY"] = direction.Y,
                     ["Power"] = Math.Clamp(speed / OpenGSServer.Network.ServerProjectileSimulator.GrenadeSpeed,
                         0.1f, 1.0f),
+                    ["RemainingFuseSeconds"] = Math.Max(0.0f,
+                        projectile.FuseTime - projectile.ElapsedFuse),
                     ["IsSnapshot"] = true,
                     ["GrenadeType"] = projectile.GrenadeType,
                     ["ObjectType"] = projectile.GrenadeType,
@@ -3322,6 +3324,8 @@ namespace OpenGSServer
                     ["DirX"] = direction.X,
                     ["DirY"] = direction.Y,
                     ["Power"] = 1.0f,
+                    ["RemainingFuseSeconds"] = Math.Max(0.0f,
+                        projectile.FuseTime - projectile.ElapsedFuse),
                     ["GrenadeType"] = "ChildClusterGrenade",
                     ["ObjectType"] = "ChildClusterGrenade",
                     ["Direction"] = new JObject { ["X"] = direction.X, ["Y"] = direction.Y }
@@ -4144,6 +4148,8 @@ namespace OpenGSServer
                 ["DirX"] = dirX,
                 ["DirY"] = dirY,
                 ["Power"] = Math.Clamp(GetFloat(grenadeData.GetValue("Power"), 1.0f), 0.1f, 1.0f),
+                ["RemainingFuseSeconds"] = OpenGSServer.Network.ServerProjectileSimulator
+                    .CalculateGrenadeFuse(objectType),
                 ["GrenadeType"] = objectType,
                 ["Direction"] = new JObject
                 {
