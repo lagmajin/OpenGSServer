@@ -3245,8 +3245,6 @@ namespace OpenGSServer
                 return;
             }
 
-            ClearCombatBuffs(room.Id.ToString(), targetId);
-
             // The health change is the authority for a kill now, not a client
             // claiming one. A self hit counts as a death without crediting an
             // attacker. Recording on the room as well as the player is what puts
@@ -3279,20 +3277,7 @@ namespace OpenGSServer
 
             Console.WriteLine(
                 $"[Match] {targetId} is down in room {room.Id} (hit by {attackerId})");
-
-            GameMessageDispatcher.BroadcastToRoom(room.Id.ToString(), new JObject
-            {
-                ["MessageType"] = GameMessageTypes.PlayerKilled,
-                ["RoomID"] = room.Id.ToString(),
-                ["KillerID"] = attackerId,
-                ["KilledPlayerID"] = targetId,
-                // The client reads the dead player from PlayerId on the death
-                // message it was built around, so both spellings travel together.
-                ["DeadPlayerID"] = targetId,
-                ["PlayerId"] = targetId,
-                ["IsSelfInflicted"] = isSelfInflicted,
-                ["Timestamp"] = DateTime.UtcNow.ToString("o")
-            });
+            HandlePlayerKilled(room, attackerId, targetId);
         }
         /// <summary>
         /// Reads a two component position out of a message, accepting both the
