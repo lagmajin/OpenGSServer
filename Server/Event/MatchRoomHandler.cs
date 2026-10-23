@@ -2068,6 +2068,7 @@ namespace OpenGSServer
             // ready and discard it. MatchStatusRequest is sent again after the
             // client enters the match, so include a fresh mission snapshot here.
             MissionEnemyRegistry.PublishSnapshot(room.Id.ToString(), requestingPlayerId);
+            SendProjectileSnapshot(room.Id.ToString(), requestingPlayerId);
         }
 
         private static void HandlePositionUpdate(MatchRoom room, string playerId, JObject position)
@@ -2575,6 +2576,7 @@ namespace OpenGSServer
                     ["DirY"] = direction.Y,
                     ["Power"] = Math.Clamp(speed / OpenGSServer.Network.ServerProjectileSimulator.GrenadeSpeed,
                         0.1f, 1.0f),
+                    ["IsSnapshot"] = true,
                     ["GrenadeType"] = projectile.GrenadeType,
                     ["ObjectType"] = projectile.GrenadeType,
                     ["Direction"] = new JObject { ["X"] = direction.X, ["Y"] = direction.Y }
