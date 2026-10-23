@@ -393,13 +393,8 @@ namespace OpenGSServer
         public static void PublishSnapshot(string roomId, string? playerId = null)
         {
             var simulator = TryGet(roomId);
-            if (simulator == null)
-            {
-                return;
-            }
-
             var enemies = new JArray();
-            foreach (var enemy in simulator.Snapshot())
+            foreach (var enemy in simulator?.Snapshot() ?? Array.Empty<ServerEnemyState>())
             {
                 enemies.Add(BuildEnemyMessage("EnemySnapshot", enemy));
             }
