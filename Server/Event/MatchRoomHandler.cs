@@ -2192,6 +2192,15 @@ namespace OpenGSServer
         {
             if (!room.TryGetPlayer(requestingPlayerId, out var player) || player == null)
                 return;
+            if (!room.Playing || room.Finished)
+            {
+                var finalResult = MatchRoomManager.Instance.GetLastMatchResultEnvelope(room, player);
+                if (finalResult != null)
+                {
+                    GameMessageDispatcher.SendToPlayer(requestingPlayerId, finalResult);
+                    return;
+                }
+            }
             var pistolMagazine = ServerWeaponMagazineStore.GetOrCreateStartingWeapon(
                 requestingPlayerId, "Pistol");
             var status = $"Match Active - Players: {room.Players.Count}";

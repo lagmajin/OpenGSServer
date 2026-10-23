@@ -802,6 +802,17 @@ namespace OpenGSServer
             return lastMatchResults.TryGetValue(roomId, out var result) ? result : null;
         }
 
+        public JObject? GetLastMatchResultEnvelope(OpenGSCore.MatchRoom room, PlayerInfo player)
+        {
+            if (room == null || player == null)
+            {
+                return null;
+            }
+
+            var result = LastMatchResult(room.Id.ToString());
+            return result == null ? null : BuildMatchResultEnvelope(room, result, player);
+        }
+
         private static JObject BuildMatchResultEnvelope(OpenGSCore.MatchRoom matchRoom, JObject result, PlayerInfo player)
         {
             var envelope = result != null ? new JObject(result) : new JObject();
