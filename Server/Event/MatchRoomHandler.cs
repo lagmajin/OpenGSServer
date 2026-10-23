@@ -2069,6 +2069,24 @@ namespace OpenGSServer
             // client enters the match, so include a fresh mission snapshot here.
             MissionEnemyRegistry.PublishSnapshot(room.Id.ToString(), requestingPlayerId);
             SendProjectileSnapshot(room.Id.ToString(), requestingPlayerId);
+
+            var healthSnapshotTimestamp = DateTime.UtcNow.ToString("o");
+            foreach (var roomPlayer in room.Players)
+            {
+                if (string.Equals(roomPlayer.Id, requestingPlayerId, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                GameMessageDispatcher.SendToPlayer(requestingPlayerId, new JObject
+                {
+                    ["MessageType"] = "PlayerHealthSnapshot",
+                    ["RoomID"] = room.Id.ToString(),
+                    ["PlayerID"] = roomPlayer.Id,
+                    ["PlayerId"] = roomPlayer.Id,
+                    ["CurrentHealth"] = roomPlayer.Health,
+                    ["MaxHealth"] = roomPlayer.MaxHealth,
+                    ["Timestamp"] = healthSnapshotTimestamp
+                });
+            }
         }
 
         private static void HandlePositionUpdate(MatchRoom room, string playerId, JObject position)
