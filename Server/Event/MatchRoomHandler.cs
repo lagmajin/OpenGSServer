@@ -3320,6 +3320,7 @@ namespace OpenGSServer
             // the best kill count in the match, which is the number the death
             // match and survival rules end a match on: it was never written, so
             // those rules could only ever end on the clock.
+            ClearPlayerCombatEffects(room.Id.ToString(), targetId);
             room.RecordDeath(targetId);
             var isSelfInflicted = string.Equals(attackerId, targetId, StringComparison.OrdinalIgnoreCase);
             if (!isSelfInflicted)
@@ -3609,6 +3610,7 @@ namespace OpenGSServer
             {
                 // Same reason as the projectile path: the room is where the best
                 // kill count lives, and the rules end a match on it.
+                ClearPlayerCombatEffects(room.Id.ToString(), targetId);
                 room.RecordDeath(targetId);
                 room.RecordKill(shooterId);
                 shooter.Score += KillScore;
