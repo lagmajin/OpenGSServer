@@ -873,7 +873,8 @@ namespace OpenGSServer
             var result = new List<MatchRoom>();
             foreach (var room in matchRooms.Values)
             {
-                if (!room.Playing && room.Players.Count < room.Setting.MaxPlayerCount)
+                if (!room.Playing && !room.Finished &&
+                    room.Players.Count < room.Setting.MaxPlayerCount)
                 {
                     result.Add(room);
                 }
