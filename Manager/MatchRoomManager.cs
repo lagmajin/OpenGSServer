@@ -210,6 +210,10 @@ namespace OpenGSServer
                 };
                 bus.OnGameEnded += () => {
                     itemManager.EndMatch();
+                    // Do not leave live weapons in the reconnect snapshot until
+                    // the next projectile tick notices that the room stopped.
+                    OpenGSServer.Network.InGameMatchEventHandler.ClearRoomProjectiles(
+                        matchRoom.Id.ToString());
                     // UDPで全プレイヤーに正規のマッチ終了通知を送る
                     var firstPlayer = matchRoom.Players.Find(p => !string.IsNullOrEmpty(p.Id));
                     if (firstPlayer != null)
