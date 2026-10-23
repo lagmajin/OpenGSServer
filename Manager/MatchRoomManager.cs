@@ -366,6 +366,26 @@ namespace OpenGSServer
                 return false;
             }
 
+            int? missionEnemyCount = null;
+            if (matchRoom.Setting?.Mode == EGameMode.Mission &&
+                matchRoom.Setting is MissionMatchSetting missionSetting)
+            {
+                var requestedEnemyCount = Math.Max(0, missionSetting.ObjectiveCount);
+                var supportedEnemyCount = Math.Min(
+                    requestedEnemyCount,
+                    OpenGSServer.Network.ServerEnemySimulator.MaxEnemiesPerRoom);
+                if (!matchRoom.SetMissionObjectiveCountBeforeStart(supportedEnemyCount))
+                    return false;
+                missionEnemyCount = supportedEnemyCount;
+
+                if (supportedEnemyCount != requestedEnemyCount)
+                {
+                    ConsoleWrite.WriteMessage(
+                        $"[Mission] Room {matchRoom.Id} objective count was capped at {supportedEnemyCount} enemies to fit the snapshot protocol",
+                        ConsoleColor.Yellow);
+                }
+            }
+
             // A new match starts with full magazines even when players stayed
             // in the lobby after the previous match and retained server ammo.
             foreach (var player in matchRoom.Players)
@@ -378,26 +398,13 @@ namespace OpenGSServer
                 return false;
             }
 
-            // A mission needs something to fight. Its objective count is how many
-            // things, so the wave is the number the rule will judge the mission
-            // on rather than a fixed handful that has nothing to do with it.
-            if (matchRoom.Setting?.Mode == EGameMode.Mission &&
-                matchRoom.Setting is MissionMatchSetting missionSetting)
+            // A mission needs something to fight. Its objective target was
+            // reconciled before GameStart, when the rule and situation were
+            // created from the room settings.
+            if (missionEnemyCount.HasValue)
             {
-                var requestedEnemyCount = Math.Max(0, missionSetting.ObjectiveCount);
-                var supportedEnemyCount = Math.Min(
-                    requestedEnemyCount,
-                    OpenGSServer.Network.ServerEnemySimulator.MaxEnemiesPerRoom);
-                if (supportedEnemyCount != requestedEnemyCount)
-                {
-                    missionSetting.ObjectiveCount = supportedEnemyCount;
-                    ConsoleWrite.WriteMessage(
-                        $"[Mission] Room {matchRoom.Id} objective count was capped at {supportedEnemyCount} enemies to fit the snapshot protocol",
-                        ConsoleColor.Yellow);
-                }
-
                 InGameMatchEventHandler.BeginMissionEnemies(
-                    matchRoom, supportedEnemyCount, new System.Numerics.Vector2(0f, 0f));
+                    matchRoom, missionEnemyCount.Value, new System.Numerics.Vector2(0f, 0f));
                 OpenGSServer.Network.MissionEnemyRegistry.PublishObjectiveProgress(
                     matchRoom.Id.ToString());
             }
