@@ -1994,7 +1994,6 @@ namespace OpenGSServer
                 var projectileId = Projectiles.CreateGrenade(
                     room.Id.ToString(), playerId, origin, direction, "Normal");
                 BroadcastGrenadeEvent(room, playerId, grenadeData, projectileId);
-                BroadcastShotEvent(room, playerId, shotData);
                 return;
             }
 
