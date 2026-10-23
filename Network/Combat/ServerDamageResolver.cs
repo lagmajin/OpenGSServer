@@ -108,7 +108,7 @@ namespace OpenGSServer.Network
         /// </para>
         /// </summary>
         public static DamageOutcome Apply(
-            PlayerInfo? player, int requested, EPlayerPoseState pose, bool ignoreDamage = false)
+            PlayerInfo? player, int requested, EPlayerPoseState pose, float armorAbsorptionMultiplier = 1f)
         {
             if (player == null)
             {
@@ -131,14 +131,11 @@ namespace OpenGSServer.Network
                         remainingArmor: armor.Current);
                 }
 
-                if (ignoreDamage)
-                {
-                    return new DamageOutcome(requested, 0, player.Health, false, false,
-                        remainingArmor: armor.Current);
-                }
-
                 var scaled = (int)MathF.Round(requested * PoseMultiplier(pose));
-                var absorbed = Math.Min(armor.Current, scaled * 0.1f);
+                var safeArmorMultiplier = float.IsFinite(armorAbsorptionMultiplier)
+                    ? Math.Max(0f, armorAbsorptionMultiplier)
+                    : 1f;
+                var absorbed = Math.Min(armor.Current, scaled * 0.1f * safeArmorMultiplier);
                 armor.Current = Math.Max(0f, armor.Current - absorbed);
                 var healthDamage = scaled - absorbed;
                 var applied = healthDamage <= 0f ? 0 : Math.Max(1, (int)MathF.Round(healthDamage));

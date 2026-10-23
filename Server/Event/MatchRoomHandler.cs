@@ -252,6 +252,9 @@ namespace OpenGSServer
         internal static bool HasDefenseBuff(string roomId, string playerId) =>
             IsBuffActive(DefenseBuffExpires, roomId, playerId);
 
+        internal static float GetDefenseArmorAbsorptionMultiplier(string roomId, string playerId) =>
+            HasDefenseBuff(roomId, playerId) ? 2f : 1f;
+
         internal static bool HasStealthBuff(string roomId, string playerId) =>
             IsBuffActive(StealthBuffExpires, roomId, playerId);
 
@@ -3422,7 +3425,7 @@ namespace OpenGSServer
 
             var pose = room.GetPlayerPoseState(targetId);
             var outcome = ServerDamageResolver.Apply(
-                target, damage, pose, HasDefenseBuff(room.Id.ToString(), targetId));
+                target, damage, pose, GetDefenseArmorAbsorptionMultiplier(room.Id.ToString(), targetId));
 
             if (outcome.WasAlreadyDown)
             {
@@ -3747,7 +3750,8 @@ namespace OpenGSServer
             var requestedDamage = ApplyAttackBuff(
                 room.Id.ToString(), shooterId, CalculateWeaponDamage(weaponType));
             var outcome = ServerDamageResolver.Apply(
-                target, requestedDamage, pose, HasDefenseBuff(room.Id.ToString(), targetId));
+                target, requestedDamage, pose,
+                GetDefenseArmorAbsorptionMultiplier(room.Id.ToString(), targetId));
             LobbyServerManager.Instance.RecordDamageDailyProgress(shooterId, outcome.Applied);
             if (!outcome.HasEffect)
             {
