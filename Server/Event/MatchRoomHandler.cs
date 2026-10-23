@@ -3153,8 +3153,8 @@ namespace OpenGSServer
 
         public static void SendProjectileSnapshot(string roomId, string playerId)
         {
-            var snapshot = Projectiles.SnapshotActiveGrenades(roomId);
-            var timestamp = DateTime.UtcNow.ToString("o");
+            var snapshot = Projectiles.SnapshotActiveGrenades(roomId, out var snapshotTime);
+            var timestamp = snapshotTime.ToString("o");
             GameMessageDispatcher.SendToPlayer(playerId, new JObject
             {
                 ["MessageType"] = "GrenadeSnapshotBegin",

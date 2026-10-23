@@ -126,10 +126,25 @@ namespace OpenGSServer.Network
 
         public IReadOnlyList<ServerProjectileState> SnapshotActiveGrenades(string roomId)
         {
-            if (string.IsNullOrWhiteSpace(roomId)) return Array.Empty<ServerProjectileState>();
+            return SnapshotActiveGrenades(roomId, out _);
+        }
+
+        public IReadOnlyList<ServerProjectileState> SnapshotActiveGrenades(
+            string roomId, out DateTime timestamp)
+        {
+            if (string.IsNullOrWhiteSpace(roomId))
+            {
+                timestamp = DateTime.UtcNow;
+                return Array.Empty<ServerProjectileState>();
+            }
 
             lock (_lock)
             {
+                // The boundary and membership must describe the same state.
+                // A projectile retired after this point receives a later event
+                // timestamp, allowing clients to retain that event over this
+                // snapshot instead of reviving the retired projectile.
+                timestamp = DateTime.UtcNow;
                 return _projectiles.Values
                     .Where(projectile => projectile.IsActive &&
                         projectile.Kind == ServerProjectileKind.Grenade &&
