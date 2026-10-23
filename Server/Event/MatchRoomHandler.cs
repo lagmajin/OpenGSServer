@@ -2786,19 +2786,10 @@ namespace OpenGSServer
         }
 
         /// <summary>
-        /// A player reported reaching a mission's clear gate.
-        /// <para>
-        /// The report is recorded on the room, not acted on. A mission ends when its
-        /// own rule says it is over, and that check already runs every tick, so the
-        /// objective reaching its target is all this has to do — the client does not
-        /// get to say the mission is over, only that something in the level was done.
-        /// </para>
-        /// <para>
-        /// Nothing was recording it. The rule, the situation, the result evaluator
-        /// and the finish check were all in place and the progress counter they all
-        /// read stayed at zero, so an online mission could only ever end on the
-        /// clock or on running out of lives.
-        /// </para>
+        /// Handles the legacy client mission-clear notification without trusting
+        /// it to advance objective progress. Mission objectives are advanced by
+        /// authoritative enemy kills; the notification can only request the
+        /// current server state after every enemy has been defeated.
         /// </summary>
         private static void HandleMissionComplete(MatchRoom room, string playerId, JObject json)
         {
@@ -2817,32 +2808,15 @@ namespace OpenGSServer
                 return;
             }
 
-            var steps = ReadInt(json, 1, "Steps", "Step");
-            if (steps <= 0)
+            var simulator = MissionEnemyRegistry.TryGet(room.Id.ToString());
+            if (simulator == null || simulator.AliveCount > 0)
             {
-                Console.WriteLine($"[Match] Ignored a mission clear from '{playerId}' with no progress in it");
+                Console.WriteLine(
+                    $"[Match] Ignored a mission clear from '{playerId}' while server-owned enemies remain");
                 return;
             }
 
-            // A report from somebody who is not in this room is not a claim about
-            // this room. ParseTcpEvent and ParseUdpEvent both resolve the room from
-            // the player, so this only guards a caller that hands one over directly.
-            var isMember = room.Players.Any(player =>
-                string.Equals(player.Id, playerId, StringComparison.OrdinalIgnoreCase));
-            if (!isMember)
-            {
-                Console.WriteLine($"[Match] Ignored a mission clear from '{playerId}', who is not in room {room.Id}");
-                return;
-            }
-
-            var before = missionSituation.ObjectiveProgress;
-            var completed = room.RecordObjectiveProgress(steps);
-
-            Console.WriteLine(
-                completed
-                    ? $"[Match] '{playerId}' completed the mission objective: {missionSituation.ObjectiveProgress}/{missionSituation.ObjectiveCount}"
-                    : $"[Match] '{playerId}' reported mission progress but the objective did not move: " +
-                      $"{missionSituation.ObjectiveProgress}/{missionSituation.ObjectiveCount} (was {before})");
+            MissionEnemyRegistry.PublishObjectiveProgress(room.Id.ToString());
         }
 
         private static bool TryGetActiveCombatant(
