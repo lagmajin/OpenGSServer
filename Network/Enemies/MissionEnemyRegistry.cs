@@ -75,7 +75,8 @@ namespace OpenGSServer
             var simulator = ForRoom(roomId);
             simulator.PlayerIds = () => room.Players
                 .Where(player => player != null && room.Playing && player.Health > 0 &&
-                    MatchServerV2.Instance.IsPlayerConnected(player.Id))
+                    MatchServerV2.Instance.IsPlayerConnected(player.Id) &&
+                    HasAuthoritativePosition(player.Id))
                 .Select(player => player.Id)
                 .ToList();
 
@@ -86,6 +87,13 @@ namespace OpenGSServer
             simulator.OnKilled = (enemy, attackerId) => OnEnemyKilled(enemy, attackerId);
             simulator.OnPlayerDamaged = (playerId, enemy, damage, hit) =>
                 ApplyEnemyDamageOnPlayer(playerId, enemy, damage, hit);
+        }
+
+        private static bool HasAuthoritativePosition(string playerId)
+        {
+            var state = MatchServerV2.Instance.ServerLagCompensationManager.GetPlayerState(playerId);
+            return state.HasAuthoritativePosition &&
+                string.Equals(state.PlayerId, playerId, StringComparison.OrdinalIgnoreCase);
         }
 
         public static int AliveCount(string roomId)
