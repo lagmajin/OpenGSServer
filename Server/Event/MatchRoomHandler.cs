@@ -2417,9 +2417,10 @@ namespace OpenGSServer
 
         private static void HandlePlayerRespawn(MatchRoom room, string playerId, JObject json)
         {
-            if (!room.Playing || room.Finished)
+            if (!room.Playing || room.Finished ||
+                !ReferenceEquals(MatchRoomManager.Instance.GetRoomById(room.Id.ToString()), room))
             {
-                Console.WriteLine($"[Match] Ignored respawn from '{playerId}' outside an active match");
+                Console.WriteLine($"[Match] Ignored respawn from '{playerId}' outside a registered active match");
                 return;
             }
 
@@ -2580,6 +2581,7 @@ namespace OpenGSServer
         {
             player = null;
             if (room == null || !room.Playing || room.Finished ||
+                !ReferenceEquals(MatchRoomManager.Instance.GetRoomById(room.Id.ToString()), room) ||
                 !room.TryGetPlayer(playerId, out var found) || found == null ||
                 ServerDamageResolver.IsDown(found))
             {
