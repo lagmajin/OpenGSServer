@@ -408,6 +408,16 @@ namespace OpenGSServer
                 return;
             }
 
+            if ((eventType == GameMessageTypes.FlagCaptured ||
+                 eventType == GameMessageTypes.FlagLost ||
+                 eventType == GameMessageTypes.FlagPickup ||
+                 eventType == GameMessageTypes.FlagReturn) &&
+                !TryGetActiveCombatant(room, playerId, out _))
+            {
+                Console.WriteLine($"[Match] Ignored flag action from inactive or downed player '{playerId}'");
+                return;
+            }
+
             switch (eventType)
             {
                 case GameMessageTypes.PlayerKilled:
@@ -1955,7 +1965,13 @@ namespace OpenGSServer
             // has to be the player speaking: every client simulates every player,
             // so a claim naming somebody else is one of them reporting for a peer.
             var reason = ParseFlagReturnReason(ReadString(json, "ReturnReason"));
-            if (reason != EFlagReturnReason.AutoReturn && !IsClaimFromTheCarrier(room, playerId, json))
+            if (reason == EFlagReturnReason.AutoReturn)
+            {
+                Console.WriteLine($"[Match] Ignored client-requested automatic flag return from '{playerId}'");
+                return;
+            }
+
+            if (!IsClaimFromTheCarrier(room, playerId, json))
             {
                 return;
             }
