@@ -300,12 +300,31 @@ namespace OpenGSServer.Network
                         continue;
                     }
 
-                    projectile.RemainingLifetime -= deltaSeconds;
+                    var previousPosition = projectile.Position;
+                    var previousFuse = projectile.ElapsedFuse;
+                    var collisionSegmentStart = previousPosition;
                     if (projectile.Kind == ServerProjectileKind.Grenade)
                     {
-                        projectile.Velocity += new Vector2(0f, -projectile.Gravity * deltaSeconds);
+                        var simulationStep = Math.Min(deltaSeconds, projectile.RemainingLifetime);
+                        simulationStep = Math.Min(simulationStep,
+                            Math.Max(0f, projectile.FuseTime - projectile.ElapsedFuse));
+                        projectile.RemainingLifetime -= simulationStep;
+                        projectile.Velocity += new Vector2(0f, -projectile.Gravity * simulationStep);
+                        projectile.Position += projectile.Velocity * simulationStep;
+                        projectile.ElapsedFuse += simulationStep;
+                        if (previousFuse < GrenadeArmingSeconds &&
+                            projectile.ElapsedFuse > GrenadeArmingSeconds && simulationStep > 0f)
+                        {
+                            var armedFraction = (GrenadeArmingSeconds - previousFuse) / simulationStep;
+                            collisionSegmentStart = Vector2.Lerp(
+                                previousPosition, projectile.Position, armedFraction);
+                        }
                     }
-                    projectile.Position += projectile.Velocity * deltaSeconds;
+                    else
+                    {
+                        projectile.RemainingLifetime -= deltaSeconds;
+                        projectile.Position += projectile.Velocity * deltaSeconds;
+                    }
 
                     if (projectile.Kind == ServerProjectileKind.Bullet)
                     {
@@ -328,9 +347,13 @@ namespace OpenGSServer.Network
                     }
                     else
                     {
-                        projectile.ElapsedFuse += deltaSeconds;
-                        if (projectile.ElapsedFuse >= projectile.FuseTime)
+                        // Check the whole traveled segment so a fast launcher
+                        // round cannot cross a player between server ticks.
+                        if (projectile.ElapsedFuse >= GrenadeArmingSeconds &&
+                            TryResolveGrenadePlayerHit(
+                                projectile, collisionSegmentStart, out var impactPosition))
                         {
+                            projectile.Position = impactPosition;
                             CollectClusterChildren(projectile, spawned);
                             CollectGrenadeHits(projectile, hits);
                             detonated.Add(projectile);
@@ -338,11 +361,7 @@ namespace OpenGSServer.Network
                             continue;
                         }
 
-                        // Unity's grenade projectile ignores collisions during its
-                        // arming window. Apply the same delay before allowing a
-                        // launcher round to detonate on a nearby player.
-                        if (projectile.ElapsedFuse >= GrenadeArmingSeconds &&
-                            TryResolveGrenadePlayerHit(projectile, out _))
+                        if (projectile.ElapsedFuse >= projectile.FuseTime)
                         {
                             CollectClusterChildren(projectile, spawned);
                             CollectGrenadeHits(projectile, hits);
@@ -498,9 +517,10 @@ namespace OpenGSServer.Network
             }
         }
 
-        private bool TryResolveGrenadePlayerHit(ServerProjectileState grenade, out string targetId)
+        private bool TryResolveGrenadePlayerHit(
+            ServerProjectileState grenade, Vector2 segmentStart, out Vector2 impactPosition)
         {
-            targetId = string.Empty;
+            impactPosition = grenade.Position;
             var players = PlayerIds?.Invoke();
             var lookup = PlayerPositionLookup;
             if (players == null || lookup == null)
@@ -508,6 +528,8 @@ namespace OpenGSServer.Network
                 return false;
             }
 
+            var segment = grenade.Position - segmentStart;
+            var segmentLengthSquared = segment.LengthSquared();
             foreach (var candidate in players)
             {
                 if (string.Equals(candidate, grenade.OwnerId, StringComparison.OrdinalIgnoreCase))
@@ -515,9 +537,15 @@ namespace OpenGSServer.Network
                     continue;
                 }
 
-                if (Vector2.Distance(grenade.Position, lookup(candidate)) <= grenade.Radius + PlayerHitRadius)
+                var position = lookup(candidate);
+                var closestPoint = segmentLengthSquared > 0.000001f
+                    ? segmentStart + segment * Math.Clamp(
+                        Vector2.Dot(position - segmentStart, segment) / segmentLengthSquared,
+                        0f, 1f)
+                    : grenade.Position;
+                if (Vector2.Distance(closestPoint, position) <= grenade.Radius + PlayerHitRadius)
                 {
-                    targetId = candidate;
+                    impactPosition = closestPoint;
                     return true;
                 }
             }
