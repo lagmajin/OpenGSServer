@@ -143,6 +143,13 @@ namespace OpenGSServer.Network
 
             lock (HealthLock(player))
             {
+                // Healing is not a respawn path. Only the match rule's revive
+                // operation may bring a downed player back into play.
+                if (player.Health <= 0)
+                {
+                    return 0;
+                }
+
                 var maximum = Math.Max(0, player.MaxHealth);
                 var restored = Math.Min(Math.Max(0, maximum - player.Health), amount);
                 player.Health += restored;
