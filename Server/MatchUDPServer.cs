@@ -40,7 +40,7 @@ namespace OpenGSServer
             new(StringComparer.OrdinalIgnoreCase);
         private readonly ConcurrentDictionary<int, DateTime> _pendingPeers = new();
         private readonly ConcurrentDictionary<int, int> _unauthorizedPacketCounts = new();
-        private readonly ConcurrentDictionary<string, ConcurrentQueue<ClientInputData>> _pendingInputs =
+        private readonly ConcurrentDictionary<string, ConcurrentQueue<QueuedClientInput>> _pendingInputs =
             new(StringComparer.OrdinalIgnoreCase);
         private readonly ConcurrentDictionary<string, TokenBucket> _matchEventRateLimiters =
             new(StringComparer.OrdinalIgnoreCase);
@@ -51,6 +51,8 @@ namespace OpenGSServer
         private const int ConnectionTokenLifetimeMinutes = 10;
         private const int MaxInputsPerPlayerPerTick = 8;
         private bool _disposed;
+
+        private readonly record struct QueuedClientInput(int PeerId, ClientInputData Input);
 
         public bool IsRunning => _server?.IsRunning ?? false;
         public int ConnectedPlayerCount => _connectedPlayers.Count;
@@ -503,7 +505,7 @@ namespace OpenGSServer
                 ClientPosZ = ReadJsonFloat(message, "PosZ", "PositionZ")
             };
 
-            QueueInput(input);
+            QueueInput(peer, input);
         }
 
         private static bool IsJsonInputMessage(string messageType)
@@ -881,7 +883,7 @@ namespace OpenGSServer
                 DeltaTime = deltaTime
             };
 
-            QueueInput(inputData);
+            QueueInput(peer, inputData);
         }
 
         /// <summary>
@@ -910,7 +912,7 @@ namespace OpenGSServer
                 Timestamp = timestamp,
                 DeltaTime = deltaTime
             };
-            QueueInput(inputData);
+            QueueInput(peer, inputData);
         }
 
         /// <summary>
@@ -1157,17 +1159,17 @@ namespace OpenGSServer
             ExpireConnectionTokens();
         }
 
-        private void QueueInput(ClientInputData input)
+        private void QueueInput(NetPeer peer, ClientInputData input)
         {
-            if (string.IsNullOrWhiteSpace(input.PlayerId)) return;
+            if (peer == null || string.IsNullOrWhiteSpace(input.PlayerId)) return;
 
             var queue = _pendingInputs.GetOrAdd(
                 input.PlayerId,
-                _ => new ConcurrentQueue<ClientInputData>());
+                _ => new ConcurrentQueue<QueuedClientInput>());
 
             // 古い入力を無限に溜めず、遅延が増えた場合は最新側を優先する。
             while (queue.Count >= MaxInputsPerPlayerPerTick * 4 && queue.TryDequeue(out _)) { }
-            queue.Enqueue(input);
+            queue.Enqueue(new QueuedClientInput(peer.Id, input));
         }
 
         private void ProcessPendingInputs()
@@ -1181,9 +1183,15 @@ namespace OpenGSServer
                 }
 
                 var processed = 0;
-                while (processed++ < MaxInputsPerPlayerPerTick && entry.Value.TryDequeue(out var input))
+                while (processed++ < MaxInputsPerPlayerPerTick && entry.Value.TryDequeue(out var queuedInput))
                 {
-                    if (!MatchServerV2.Instance.ServerLagCompensationManager.ProcessClientInput(input, out var rejectionReason) &&
+                    if (!_connectedPlayers.TryGetValue(entry.Key, out var activeConnection) ||
+                        activeConnection.PeerId != queuedInput.PeerId)
+                    {
+                        continue;
+                    }
+
+                    if (!MatchServerV2.Instance.ServerLagCompensationManager.ProcessClientInput(queuedInput.Input, out var rejectionReason) &&
                         !string.IsNullOrWhiteSpace(rejectionReason))
                     {
                         ConsoleWrite.WriteMessage($"[UDP] Rejected queued input from {entry.Key}: {rejectionReason}", ConsoleColor.Yellow);
