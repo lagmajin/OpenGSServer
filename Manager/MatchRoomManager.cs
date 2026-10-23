@@ -221,6 +221,10 @@ namespace OpenGSServer
                     // the next projectile tick notices that the room stopped.
                     OpenGSServer.Network.InGameMatchEventHandler.ClearRoomProjectiles(
                         matchRoom.Id.ToString());
+                    // The stable room ID is reused for rematches, so do not let
+                    // consumed grenade slots carry into the next match.
+                    OpenGSServer.Network.ServerGrenadeLoadoutStore.ClearRoom(
+                        matchRoom.Id.ToString());
                     OpenGSServer.Network.InGameMatchEventHandler.ClearRoomCombatEffects(
                         matchRoom.Id.ToString());
                     OpenGSServer.Network.InGameMatchEventHandler.ClearRoomFlagState(
