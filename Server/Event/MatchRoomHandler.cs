@@ -4150,6 +4150,9 @@ namespace OpenGSServer
             dirX /= directionLength;
             dirY /= directionLength;
             Console.WriteLine($"[Match] Room {room.Id} player {playerId} threw {objectType} ({objectId})");
+            var power = GetFloat(grenadeData.GetValue("Power"), 1.0f);
+            if (!IsFinite(power)) power = 1.0f;
+            power = Math.Clamp(power, 0.1f, 1.0f);
 
             var message = new JObject
             {
@@ -4164,7 +4167,7 @@ namespace OpenGSServer
                 ["PosZ"] = serverState.PositionZ,
                 ["DirX"] = dirX,
                 ["DirY"] = dirY,
-                ["Power"] = Math.Clamp(GetFloat(grenadeData.GetValue("Power"), 1.0f), 0.1f, 1.0f),
+                ["Power"] = power,
                 ["RemainingFuseSeconds"] = OpenGSServer.Network.ServerProjectileSimulator
                     .CalculateGrenadeFuse(objectType),
                 ["GrenadeType"] = objectType,
