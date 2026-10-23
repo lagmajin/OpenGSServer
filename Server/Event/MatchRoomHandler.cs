@@ -963,16 +963,22 @@ namespace OpenGSServer
                 return;
             }
 
-            var itemId = FindWeaponItem(itemManager, weaponType, playerId);
+            var isPickup = string.Equals(messageType, "WeaponPickup", StringComparison.OrdinalIgnoreCase);
+            var requestedItemId = isPickup ? ReadString(json, "ItemId", "ItemID") : string.Empty;
+            var itemId = FindWeaponItem(itemManager, weaponType, playerId, requestedItemId);
             if (string.IsNullOrEmpty(itemId))
             {
                 Console.WriteLine($"[Match] No weapon of type '{weaponType}' for '{playerId}' to claim in room {room.Id}");
+                if (isPickup && !string.IsNullOrWhiteSpace(requestedItemId) && requestedItemId.Length <= 128)
+                    BroadcastDroppedWeaponPickup(room, playerId, requestedItemId, weaponType, false);
                 return;
             }
 
             if (!itemManager.TrySetReservation(itemId, playerId, reserved))
             {
                 Console.WriteLine($"[Match] Refused weapon {(reserved ? "reservation" : "release")} of '{itemId}' by '{playerId}'");
+                if (isPickup)
+                    BroadcastDroppedWeaponPickup(room, playerId, itemId, weaponType, false);
                 return;
             }
 
@@ -984,8 +990,18 @@ namespace OpenGSServer
                 return;
             }
 
-            if (string.Equals(messageType, "WeaponPickup", StringComparison.OrdinalIgnoreCase))
+            if (isPickup)
             {
+                var state = MatchServerV2.Instance.ServerLagCompensationManager.GetPlayerState(playerId);
+                if (!string.Equals(state.PlayerId, playerId, StringComparison.OrdinalIgnoreCase) ||
+                    !state.HasAuthoritativePosition ||
+                    !itemManager.PickupItem(itemId, playerId, state.PositionX, state.PositionY, state.PositionZ))
+                {
+                    itemManager.TrySetReservation(itemId, playerId, reserved: false);
+                    BroadcastDroppedWeaponPickup(room, playerId, itemId, weaponType, false);
+                    return;
+                }
+
                 var pickedWeaponType = NormalizeWeaponType(item.WeaponType);
                 if (IsSpecialWeapon(pickedWeaponType))
                 {
@@ -998,6 +1014,10 @@ namespace OpenGSServer
                         pickedMagazine.ReadRemaining(), pickedMagazine.Capacity,
                         pickedMagazine.ReadReserve());
                 }
+                BroadcastDroppedWeaponPickup(
+                    room, playerId, itemId, item.WeaponType, true,
+                    item.MagazineAmmo, item.WeaponSlot);
+                return;
             }
 
             // Everyone is told, because a claim only works if the other players
@@ -1025,6 +1045,26 @@ namespace OpenGSServer
             });
         }
 
+        private static void BroadcastDroppedWeaponPickup(
+            MatchRoom room, string playerId, string itemId, string weaponType,
+            bool success, int magazineAmmo = -1, int slotIndex = -1)
+        {
+            GameMessageDispatcher.BroadcastToRoom(room.Id.ToString(), new JObject
+            {
+                ["MessageType"] = GameMessageTypes.FieldItemPickup,
+                ["RoomID"] = room.Id.ToString(),
+                ["ItemId"] = itemId,
+                ["ItemType"] = FieldItemTypeNames.ToWireName(EFieldItemType.WeaponItem),
+                ["PlayerID"] = playerId,
+                ["WeaponType"] = weaponType,
+                ["IsPlayerDroppedWeapon"] = true,
+                ["MagazineAmmo"] = magazineAmmo,
+                ["SlotIndex"] = slotIndex,
+                ["Success"] = success,
+                ["Timestamp"] = DateTime.UtcNow.ToString("o")
+            });
+        }
+
         /// <summary>
         /// Finds the weapon of a type that the claiming player is standing next to.
         /// <para>
@@ -1037,7 +1077,8 @@ namespace OpenGSServer
         private static string FindWeaponItem(
             OpenGSServer.Network.ServerFieldItemManager itemManager,
             string weaponType,
-            string playerId)
+            string playerId,
+            string? requestedItemId = null)
         {
             var state = MatchServerV2.Instance.ServerLagCompensationManager.GetPlayerState(playerId);
             if (string.IsNullOrEmpty(state.PlayerId) || !state.HasAuthoritativePosition)
@@ -1062,6 +1103,12 @@ namespace OpenGSServer
                 }
 
                 if (!string.Equals(item["WeaponType"]?.ToString(), weaponType, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (!string.IsNullOrWhiteSpace(requestedItemId) &&
+                    !string.Equals(item["ItemId"]?.ToString(), requestedItemId, StringComparison.OrdinalIgnoreCase))
                 {
                     continue;
                 }
