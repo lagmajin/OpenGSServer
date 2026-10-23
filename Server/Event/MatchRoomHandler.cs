@@ -724,6 +724,14 @@ namespace OpenGSServer
             var slot = ReadInt(json, -1, "SlotIndex", "WeaponSlot");
             var canonicalDropWeapon = NormalizeWeaponType(weaponType);
             if (IsSpecialWeapon(canonicalDropWeapon) &&
+                !HasSpecialWeapon(room.Id.ToString(), playerId, canonicalDropWeapon!))
+            {
+                Console.WriteLine(
+                    $"[Match] Refused {canonicalDropWeapon} drop from '{playerId}' without an equipped pickup");
+                return;
+            }
+
+            if (IsSpecialWeapon(canonicalDropWeapon) &&
                 ServerWeaponMagazineStore.TryPeek(playerId, canonicalDropWeapon!, out var heldSpecialMagazine))
             {
                 magazine = heldSpecialMagazine.ReadRemaining();
