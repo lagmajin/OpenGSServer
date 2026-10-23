@@ -310,6 +310,12 @@ namespace OpenGSServer
                 ElementalBulletEffects.TryRemove(key, out _);
         }
 
+        public static void ClearRoomMatchTimeState(string roomId)
+        {
+            if (!string.IsNullOrWhiteSpace(roomId))
+                LastMatchTimeBroadcasts.TryRemove(roomId, out _);
+        }
+
         /// <summary>What one kill is worth in the standings, on either damage path.</summary>
         private const int KillScore = 100;
 
@@ -2124,6 +2130,13 @@ namespace OpenGSServer
                 .ToList())
             {
                 LastFlagEvents.TryRemove(key, out _);
+            }
+
+            var flagPositionPrefix = roomId + ":";
+            foreach (var key in FlagPositions.Keys.Where(key =>
+                key.StartsWith(flagPositionPrefix, StringComparison.OrdinalIgnoreCase)).ToList())
+            {
+                FlagPositions.TryRemove(key, out _);
             }
 
             foreach (var key in EquippedSpecialWeapons.Keys

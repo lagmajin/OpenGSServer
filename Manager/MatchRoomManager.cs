@@ -218,6 +218,7 @@ namespace OpenGSServer
                         matchRoom.Id.ToString());
                     OpenGSServer.Network.InGameMatchEventHandler.ClearRoomFlagState(
                         matchRoom.Id.ToString());
+                    InGameMatchEventHandler.ClearRoomMatchTimeState(matchRoom.Id.ToString());
                     foreach (var player in matchRoom.Players)
                     {
                         OpenGSServer.Network.ServerWeaponMagazineStore.ResetPlayer(player.Id);
@@ -768,6 +769,7 @@ namespace OpenGSServer
         InGameMatchEventHandler.ClearRoomProjectiles(roomId);
         InGameMatchEventHandler.ClearRoomCombatEffects(roomId);
         InGameMatchEventHandler.ClearRoomFlagState(room.Id);
+        InGameMatchEventHandler.ClearRoomMatchTimeState(roomId);
         MissionEnemyRegistry.ClearRoom(room.Id);
         ClearMatchResults(roomId);
         foreach (var key in persistedMatchPlayers.Keys)
@@ -819,6 +821,7 @@ namespace OpenGSServer
             InGameMatchEventHandler.ClearRoomProjectiles(roomId);
             InGameMatchEventHandler.ClearRoomCombatEffects(roomId);
             InGameMatchEventHandler.ClearRoomFlagState(room.Id);
+            InGameMatchEventHandler.ClearRoomMatchTimeState(roomId);
             MissionEnemyRegistry.ClearRoom(room.Id);
             ClearMatchResults(roomId);
             foreach (var key in persistedMatchPlayers.Keys)
