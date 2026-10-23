@@ -29,6 +29,7 @@ namespace OpenGSServer.Network
         public static double NowSeconds => Clock.Elapsed.TotalSeconds;
         private const double DroppedWeaponPickupDelaySeconds = 1.0d;
         private const double DroppedWeaponLifetimeSeconds = 30.0d;
+        private const int MaxSnapshotItems = 128;
         /// <summary>
         /// アイテムデータ
         /// </summary>
@@ -288,6 +289,12 @@ namespace OpenGSServer.Network
 
             lock (_itemStateLock)
             {
+                if (_items.Values.Count(existing => existing.IsActive && existing.State == "Spawned") >=
+                    MaxSnapshotItems)
+                {
+                    return string.Empty;
+                }
+
                 _items[itemId] = item;
             }
 
@@ -360,10 +367,17 @@ namespace OpenGSServer.Network
             var now = NowSeconds;
 
             var expiredDrops = new List<FieldItem>();
+            var retiredDropIds = new List<string>();
             lock (_itemStateLock)
             {
                 foreach (var item in _items.Values)
                 {
+                    if (item.IsPlayerDroppedWeapon && !item.IsActive && item.State != "Spawned")
+                    {
+                        retiredDropIds.Add(item.ItemId);
+                        continue;
+                    }
+
                     if (!item.IsPlayerDroppedWeapon || !item.IsActive || item.State != "Spawned" ||
                         now - item.DroppedAtSeconds < DroppedWeaponLifetimeSeconds)
                         continue;
@@ -379,6 +393,16 @@ namespace OpenGSServer.Network
             {
                 Console.WriteLine($"[FieldItem] Expired dropped weapon {item.ItemId} ({item.WeaponType})");
                 onDespawned?.Invoke(item);
+                retiredDropIds.Add(item.ItemId);
+            }
+
+            if (retiredDropIds.Count > 0)
+            {
+                lock (_itemStateLock)
+                {
+                    foreach (var itemId in retiredDropIds)
+                        _items.TryRemove(itemId, out _);
+                }
             }
 
             foreach (var item in _items.Values
@@ -652,6 +676,12 @@ namespace OpenGSServer.Network
             {
                 foreach (var kvp in _items)
                 {
+                    if (!kvp.Value.IsActive || kvp.Value.State != "Spawned")
+                        continue;
+
+                    if (array.Count >= MaxSnapshotItems)
+                        break;
+
                     var item = new JObject
                     {
                         ["ItemId"] = kvp.Value.ItemId,
