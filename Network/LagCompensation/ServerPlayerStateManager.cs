@@ -369,11 +369,12 @@ namespace OpenGSServer.Network
             else if (input.IndependentVerticalInput && normalizedMoveZ > 0.01f)
             {
                 // Vertical input is the native booster control. Leaving the
-                // grounded flag set while it raises PosZ made gravity stop
-                // applying forever after the booster was released.
+                // grounded flag set while it raises PosZ would disable gravity
+                // permanently after the booster is released.
                 state.IsGrounded = false;
             }
 
+            var hasIndependentVerticalInput = input.IndependentVerticalInput && normalizedMoveZ > 0.01f;
             var hasIndependentVerticalInput = input.IndependentVerticalInput && normalizedMoveZ > 0.01f;
             if (!state.IsGrounded && !hasIndependentVerticalInput)
             {
