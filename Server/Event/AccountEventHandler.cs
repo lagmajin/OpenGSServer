@@ -283,7 +283,13 @@ namespace OpenGSServer
                 result = AccountManager.GetInstance().LogoutWithPassword(id, pass);
                 if ((bool?)result["Success"] == true)
                 {
-                    ResumeTokens.Revoke(id);
+                    SessionOwners.TryRemove(id, out _);
+                    PlayerSessionCleanup.Release(id, revokeResumeToken: true);
+                    if (session.PlayerID != null &&
+                        string.Equals(session.PlayerID, id, StringComparison.OrdinalIgnoreCase))
+                    {
+                        session.ClearPlayerID();
+                    }
                 }
             }
 
