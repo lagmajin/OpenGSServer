@@ -47,10 +47,9 @@ namespace OpenGSServer.Network
             /// <summary>
             /// What a dropped weapon is, and what is left in it.
             /// <para>
-            /// A weapon is the one item that travels with state: the rounds in its
-            /// magazine belong to the weapon, not to whoever drops it, so they have
-            /// to survive the drop and be handed over with it. The other item types
-            /// have nothing to carry and leave these alone.
+            /// A weapon is the one item that travels with ammunition state: its
+            /// magazine and reserve rounds survive the drop and are handed over to
+            /// the next carrier. Other item types leave these fields alone.
             /// </para>
             /// </summary>
             public string WeaponType { get; set; } = "";
@@ -63,6 +62,8 @@ namespace OpenGSServer.Network
             /// and the weapon is taken at its own value.
             /// </summary>
             public int MagazineAmmo { get; set; } = -1;
+            /// <summary>Reserve rounds; negative means use the weapon's default.</summary>
+            public int ReserveAmmo { get; set; } = -1;
             public bool IsPlayerDroppedWeapon { get; set; }
             public double DroppedAtSeconds { get; set; }
 
@@ -475,6 +476,7 @@ namespace OpenGSServer.Network
             WeaponType = item.WeaponType,
             WeaponSlot = item.WeaponSlot,
             MagazineAmmo = item.MagazineAmmo,
+            ReserveAmmo = item.ReserveAmmo,
             IsPlayerDroppedWeapon = item.IsPlayerDroppedWeapon,
             DroppedAtSeconds = item.DroppedAtSeconds,
             ConsumedAtSeconds = item.ConsumedAtSeconds,
@@ -667,6 +669,7 @@ namespace OpenGSServer.Network
                         ["WeaponType"] = kvp.Value.WeaponType,
                         ["WeaponSlot"] = kvp.Value.WeaponSlot,
                         ["MagazineAmmo"] = kvp.Value.MagazineAmmo,
+                        ["ReserveAmmo"] = kvp.Value.ReserveAmmo,
                         ["IsPlayerDroppedWeapon"] = kvp.Value.IsPlayerDroppedWeapon,
                         ["DroppedWeaponRemainingSeconds"] = kvp.Value.IsPlayerDroppedWeapon
                             ? Math.Clamp(DroppedWeaponLifetimeSeconds - (NowSeconds - kvp.Value.DroppedAtSeconds),
@@ -786,7 +789,8 @@ namespace OpenGSServer.Network
             float y,
             float z,
             int magazineAmmo = -1,
-            int slot = -1)
+            int slot = -1,
+            int reserveAmmo = -1)
         {
             if (string.IsNullOrWhiteSpace(weaponType) ||
                 !IsFinite(x) || !IsFinite(y) || !IsFinite(z))
@@ -808,6 +812,7 @@ namespace OpenGSServer.Network
                     // A negative count means the client did not say, and the weapon
                     // keeps whatever it was carrying rather than becoming empty.
                     item.MagazineAmmo = Math.Max(-1, magazineAmmo);
+                    item.ReserveAmmo = Math.Max(-1, reserveAmmo);
                     item.WeaponSlot = slot;
                     item.IsPlayerDroppedWeapon = true;
                     item.DroppedAtSeconds = NowSeconds;
@@ -854,6 +859,7 @@ namespace OpenGSServer.Network
                     WeaponType = itemObj["WeaponType"]?.ToString() ?? "",
                     WeaponSlot = itemObj["WeaponSlot"]?.Value<int>() ?? -1,
                     MagazineAmmo = itemObj["MagazineAmmo"]?.Value<int>() ?? -1,
+                    ReserveAmmo = itemObj["ReserveAmmo"]?.Value<int>() ?? -1,
                     IsPlayerDroppedWeapon = itemObj["IsPlayerDroppedWeapon"]?.Value<bool>() ?? false,
                     ReservedByPlayerId = itemObj["ReservedByPlayerId"]?.ToString() ?? ""
                 };

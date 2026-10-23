@@ -97,6 +97,14 @@ namespace OpenGSServer.Network
             }
         }
 
+        public void SetReserve(int reserve)
+        {
+            lock (Sync)
+            {
+                Reserve = Math.Clamp(reserve, 0, MaxReserve);
+            }
+        }
+
         public bool ReadIsReloading()
         {
             lock (Sync)

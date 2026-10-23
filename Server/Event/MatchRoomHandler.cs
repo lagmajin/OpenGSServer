@@ -734,6 +734,7 @@ namespace OpenGSServer
             // The client may request a drop, but its reported ammo is not the
             // server's magazine state.
             magazine = heldMagazine.ReadRemaining();
+            var reserveAmmo = heldMagazine.ReadReserve();
             if (IsSpecialWeapon(canonicalDropWeapon) &&
                 !HasSpecialWeapon(room.Id.ToString(), playerId, canonicalDropWeapon!))
             {
@@ -748,7 +749,8 @@ namespace OpenGSServer
                 state.PositionY,
                 state.PositionZ,
                 magazine,
-                slot);
+                slot,
+                reserveAmmo);
 
             if (string.IsNullOrEmpty(itemId))
             {
@@ -1250,23 +1252,16 @@ namespace OpenGSServer
 
                 var pickedWeaponType = ResolveWeaponType(
                     NormalizeWeaponType(item.WeaponType), item.WeaponType);
-                if (IsSpecialWeapon(pickedWeaponType))
-                {
-                    SetSpecialWeapon(room.Id.ToString(), playerId, pickedWeaponType!);
-                    var pickedMagazine = ServerWeaponMagazineStore.GetOrCreate(playerId, pickedWeaponType!);
-                    if (item.MagazineAmmo >= 0)
-                        pickedMagazine.SetRemaining(item.MagazineAmmo);
-                    GameMessageDispatcher.SendAmmoUpdate(
-                        room.Id.ToString(), playerId, pickedWeaponType!,
-                        pickedMagazine.ReadRemaining(), pickedMagazine.Capacity,
-                        pickedMagazine.ReadReserve());
-                }
-                else if (pickedWeaponType != null &&
+                if (pickedWeaponType != null &&
                     ServerWeaponMagazineStore.IsKnownWeapon(pickedWeaponType))
                 {
+                    if (IsSpecialWeapon(pickedWeaponType))
+                        SetSpecialWeapon(room.Id.ToString(), playerId, pickedWeaponType);
                     var pickedMagazine = ServerWeaponMagazineStore.GetOrCreate(playerId, pickedWeaponType);
                     if (item.MagazineAmmo >= 0)
                         pickedMagazine.SetRemaining(item.MagazineAmmo);
+                    if (item.ReserveAmmo >= 0)
+                        pickedMagazine.SetReserve(item.ReserveAmmo);
                     GameMessageDispatcher.SendAmmoUpdate(
                         room.Id.ToString(), playerId, pickedWeaponType,
                         pickedMagazine.ReadRemaining(), pickedMagazine.Capacity,
