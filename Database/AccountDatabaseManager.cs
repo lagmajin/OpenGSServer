@@ -224,31 +224,31 @@ namespace OpenGSServer
                 return;
             }
 
-            var database = EnsureDatabase();
-            var col = database.GetCollection<DBAccount>(accountTableName);
-            col.EnsureIndex(x => x.AccountId, true);
-
-            var rec = col.FindOne(Query.EQ(nameof(DBAccount.AccountId), player.AccountId));
-            if (rec == null)
+            lock (_accountMutationLock)
             {
-                ConsoleWrite.WriteMessage("[AccountDB] Account not found", ConsoleColor.Yellow);
-                return;
+                var database = EnsureDatabase();
+                var col = database.GetCollection<DBAccount>(accountTableName);
+                col.EnsureIndex(x => x.AccountId, true);
+
+                var rec = col.FindOne(Query.EQ(nameof(DBAccount.AccountId), player.AccountId));
+                if (rec == null)
+                {
+                    ConsoleWrite.WriteMessage("[AccountDB] Account not found", ConsoleColor.Yellow);
+                    return;
+                }
+
+                rec.DisplayName = player.DisplayName;
+                rec.Password = player.Password;
+                rec.HashedPassword = player.HashedPassword;
+                rec.Salt = player.Salt;
+                rec.Level = player.Level;
+                rec.Exp = player.Exp;
+                rec.LifeTimeScore = player.LifeTimeScore ?? new PlayerLifeTimeScore();
+                rec.Status = player.Status;
+                rec.LastUpdatedUtc = DateTime.UtcNow.ToString("O");
+
+                col.Update(rec);
             }
-
-            rec.DisplayName = player.DisplayName;
-            rec.Password = player.Password;
-            rec.HashedPassword = player.HashedPassword;
-            rec.Salt = player.Salt;
-            rec.Level = player.Level;
-            rec.Exp = player.Exp;
-            rec.PurchasedItems = ClonePurchasedItems(player.PurchasedItems);
-            rec.EquippedItems = CloneEquippedItems(player.EquippedItems);
-            rec.EquippedInstantItems = CloneEquippedInstantItems(player.EquippedInstantItems);
-            rec.LifeTimeScore = player.LifeTimeScore ?? new PlayerLifeTimeScore();
-            rec.Status = player.Status;
-            rec.LastUpdatedUtc = DateTime.UtcNow.ToString("O");
-
-            col.Update(rec);
         }
 
         public MatchResultResponse? UpdateMatchProgress(
@@ -619,26 +619,7 @@ namespace OpenGSServer
 
         public DBAccount? GetAccountWithInventory(string accountId)
         {
-            return GetAccount(accountId);
-        }
-
-        private static List<string> ClonePurchasedItems(List<string> items)
-        {
-            return items == null ? new List<string>() : new List<string>(items);
-        }
-
-        private static List<DBEquippedItem> CloneEquippedItems(List<DBEquippedItem> items)
-        {
-            return items == null
-                ? new List<DBEquippedItem>()
-                : items.Select(item => new DBEquippedItem(item)).ToList();
-        }
-
-        private static List<DBInstantEquippedItem> CloneEquippedInstantItems(List<DBInstantEquippedItem> items)
-        {
-            return items == null
-                ? new List<DBInstantEquippedItem>()
-                : items.Select(item => new DBInstantEquippedItem(item)).ToList();
+            return GetAccountSnapshot(accountId);
         }
 
         public void RemoveAllFriendFromAccount(in string id)
