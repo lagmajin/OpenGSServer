@@ -1298,6 +1298,13 @@ namespace OpenGSServer
             };
         }
 
+        private static string GrenadeLoadoutWireType(string? value)
+        {
+            if (string.IsNullOrEmpty(value)) return "Empty";
+            return string.Equals(value, "Magnet", StringComparison.OrdinalIgnoreCase)
+                ? "Magnetic" : value;
+        }
+
         private static bool TryGetGrenadePackType(EInstantItemType itemType, out string grenadeType)
         {
             grenadeType = itemType switch
@@ -1349,8 +1356,7 @@ namespace OpenGSServer
                 ["MessageType"] = "GrenadeLoadoutUpdate",
                 ["RoomID"] = roomId,
                 ["PlayerID"] = playerId,
-                ["GrenadeSlots"] = new JArray(slots.Select(slot =>
-                    string.IsNullOrEmpty(slot) ? "Empty" : slot)),
+                ["GrenadeSlots"] = new JArray(slots.Select(GrenadeLoadoutWireType)),
                 ["Timestamp"] = DateTime.UtcNow.ToString("o")
             };
             GameMessageDispatcher.SendToPlayer(playerId, message);
@@ -1364,8 +1370,7 @@ namespace OpenGSServer
                 ["MessageType"] = "GrenadeLoadoutUpdate",
                 ["RoomID"] = roomId,
                 ["PlayerID"] = playerId,
-                ["GrenadeSlots"] = new JArray(slots.Select(slot =>
-                    string.IsNullOrEmpty(slot) ? "Empty" : slot)),
+                ["GrenadeSlots"] = new JArray(slots.Select(GrenadeLoadoutWireType)),
                 ["Timestamp"] = DateTime.UtcNow.ToString("o")
             };
             GameMessageDispatcher.BroadcastToRoom(roomId, message);
