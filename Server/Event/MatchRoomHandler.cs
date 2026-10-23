@@ -3184,6 +3184,13 @@ namespace OpenGSServer
                 var speed = projectile.Velocity.Length();
                 if (!float.IsFinite(speed) || speed <= 0.001f) continue;
                 var direction = projectile.Velocity / speed;
+                var baseSpeed = projectile.GrenadeType.ToLowerInvariant() switch
+                {
+                    "rocketprojectile" => OpenGSServer.Network.ServerProjectileSimulator.RocketProjectileSpeed,
+                    "launchedgrenade" => OpenGSServer.Network.ServerProjectileSimulator.LaunchedGrenadeSpeed,
+                    "childclustergrenade" or "clusterchild" => 8.0f,
+                    _ => OpenGSServer.Network.ServerProjectileSimulator.GrenadeSpeed
+                };
                 GameMessageDispatcher.SendToPlayer(playerId, new JObject
                 {
                     ["MessageType"] = GameMessageTypes.GrenadeThrow,
@@ -3196,8 +3203,8 @@ namespace OpenGSServer
                     ["PosY"] = projectile.Position.Y,
                     ["DirX"] = direction.X,
                     ["DirY"] = direction.Y,
-                    ["Power"] = Math.Clamp(speed / OpenGSServer.Network.ServerProjectileSimulator.GrenadeSpeed,
-                        0.1f, 1.0f),
+                    ["Power"] = Math.Clamp(speed / baseSpeed, 0.1f, 1.0f),
+                    ["Speed"] = speed,
                     ["RemainingFuseSeconds"] = Math.Max(0.0f,
                         projectile.FuseTime - projectile.ElapsedFuse),
                     ["IsSnapshot"] = true,
@@ -3324,6 +3331,7 @@ namespace OpenGSServer
                     ["DirX"] = direction.X,
                     ["DirY"] = direction.Y,
                     ["Power"] = 1.0f,
+                    ["Speed"] = length,
                     ["RemainingFuseSeconds"] = Math.Max(0.0f,
                         projectile.FuseTime - projectile.ElapsedFuse),
                     ["GrenadeType"] = "ChildClusterGrenade",
