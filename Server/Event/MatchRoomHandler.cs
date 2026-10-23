@@ -745,6 +745,26 @@ namespace OpenGSServer
 
         private static readonly string[] TrackedWeaponTypes = { "Pistol", "SMG", "Shotgun", "Rifle", "Sniper" };
 
+        private static void SendAmmoStateToPlayer(string roomId, string playerId)
+        {
+            foreach (var magazine in ServerWeaponMagazineStore.ForPlayer(playerId))
+            {
+                GameMessageDispatcher.SendToPlayer(playerId, new JObject
+                {
+                    ["MessageType"] = GameMessageTypes.AmmoUpdate,
+                    ["RoomID"] = roomId,
+                    ["RoomId"] = roomId,
+                    ["PlayerID"] = playerId,
+                    ["PlayerId"] = playerId,
+                    ["WeaponType"] = magazine.WeaponType,
+                    ["CurrentAmmo"] = magazine.ReadRemaining(),
+                    ["MaxAmmo"] = magazine.Capacity,
+                    ["ReserveAmmo"] = magazine.ReadReserve(),
+                    ["Timestamp"] = DateTime.UtcNow.ToString("o")
+                });
+            }
+        }
+
         /// <summary>
         /// Answers a claim to spend an instant item that the server turned down.
         /// <para>
@@ -1647,17 +1667,17 @@ namespace OpenGSServer
             }
         }
 
-        public static void ClearPlayerState(string playerId)
+        public static void ClearPlayerState(string playerId, bool preserveMagazines = false)
         {
             if (string.IsNullOrWhiteSpace(playerId))
             {
                 return;
             }
 
-            // A player who left takes their magazines with them. Keeping them would
-            // mean a player who reconnects comes back to a half spent gun, or to a
-            // gun that was mid reload that nobody is going to finish.
-            ServerWeaponMagazineStore.ResetPlayer(playerId);
+            // A full player-session cleanup resets magazines. A transient UDP peer
+            // disconnect preserves them so MatchStatus can restore the same ammo.
+            if (!preserveMagazines)
+                ServerWeaponMagazineStore.ResetPlayer(playerId);
             LastShots.TryRemove(playerId, out _);
 
             // A player who left cannot be holding a flag, so the flag they were
@@ -1761,6 +1781,7 @@ namespace OpenGSServer
                 pistolMagazine.ReadRemaining(),
                 pistolMagazine.Capacity,
                 pistolMagazine.ReadReserve());
+            SendAmmoStateToPlayer(room.Id.ToString(), requestingPlayerId);
         }
 
         private static void HandlePositionUpdate(MatchRoom room, string playerId, JObject position)
