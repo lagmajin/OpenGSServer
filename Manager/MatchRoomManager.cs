@@ -214,6 +214,8 @@ namespace OpenGSServer
                     // the next projectile tick notices that the room stopped.
                     OpenGSServer.Network.InGameMatchEventHandler.ClearRoomProjectiles(
                         matchRoom.Id.ToString());
+                    OpenGSServer.Network.InGameMatchEventHandler.ClearRoomCombatEffects(
+                        matchRoom.Id.ToString());
                     // UDPで全プレイヤーに正規のマッチ終了通知を送る
                     var firstPlayer = matchRoom.Players.Find(p => !string.IsNullOrEmpty(p.Id));
                     if (firstPlayer != null)
