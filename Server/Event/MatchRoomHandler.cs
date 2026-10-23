@@ -2048,6 +2048,25 @@ namespace OpenGSServer
                 pistolMagazine.ReadRemaining(),
                 pistolMagazine.Capacity,
                 pistolMagazine.ReadReserve());
+
+            var isTeamMode = room.Setting.Mode is EGameMode.TeamDeathMatch or
+                EGameMode.CaptureTheFlag or EGameMode.TeamSurvival;
+            foreach (var roomPlayer in room.Players)
+            {
+                GameMessageDispatcher.SendToPlayer(requestingPlayerId, new JObject
+                {
+                    ["MessageType"] = "PlayerScoreState",
+                    ["RoomID"] = room.Id.ToString(),
+                    ["PlayerID"] = roomPlayer.Id,
+                    ["PlayerId"] = roomPlayer.Id,
+                    ["PlayerKills"] = roomPlayer.Kills,
+                    ["IsTeamMode"] = isTeamMode,
+                    ["RedTeamKills"] = room.TeamKillCount(ETeam.Red),
+                    ["BlueTeamKills"] = room.TeamKillCount(ETeam.Blue),
+                    ["Timestamp"] = DateTime.UtcNow.ToString("o")
+                });
+            }
+
             SendAmmoStateToPlayer(room.Id.ToString(), requestingPlayerId);
             if (ServerGrenadeLoadoutStore.TryRead(
                 room.Id.ToString(), requestingPlayerId, out var grenadeSlots))
