@@ -1043,7 +1043,7 @@ namespace OpenGSServer
                     if (clientSession is not null)
                     {
                         var loggedOutPlayerId = clientSession.PlayerID;
-                        PlayerSessionCleanup.Release(loggedOutPlayerId);
+                        PlayerSessionCleanup.Release(loggedOutPlayerId, revokeResumeToken: true);
                         clientSession.ClearPlayerID();
                         clientSession.SendAsyncJsonWithTimeStamp(new JObject
                         {

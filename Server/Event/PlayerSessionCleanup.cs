@@ -31,11 +31,23 @@ namespace OpenGSServer
         /// </summary>
         /// <param name="playerId">The player whose state should be released.</param>
         /// <returns>True when a player id was given and cleanup ran.</returns>
-        public static bool Release(string? playerId)
+        public static bool Release(string? playerId, bool revokeResumeToken = false)
         {
             if (string.IsNullOrWhiteSpace(playerId))
             {
                 return false;
+            }
+
+            if (revokeResumeToken)
+            {
+                try
+                {
+                    AccountEventHandler.RevokeResumeToken(playerId);
+                }
+                catch (Exception ex)
+                {
+                    ConsoleWrite.WriteMessage($"[Cleanup] Resume token revoke failed for {playerId}: {ex.Message}", ConsoleColor.Red);
+                }
             }
 
             // Each step is isolated so one failing subsystem cannot leave the

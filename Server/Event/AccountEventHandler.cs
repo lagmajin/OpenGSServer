@@ -162,11 +162,11 @@ namespace OpenGSServer
             if (session is ClientSession clientSession && !string.IsNullOrWhiteSpace(clientSession.PlayerID))
             {
                 AccountManager.GetInstance().Logout(clientSession.PlayerID, false);
-
-                // A token handed out before the logout must not be a way back in.
-                ResumeTokens.Revoke(clientSession.PlayerID);
+                RevokeResumeToken(clientSession.PlayerID);
             }
         }
+
+        internal static void RevokeResumeToken(string accountId) => ResumeTokens.Revoke(accountId);
 
         public static void Logout(ClientSession session, in IDictionary<string, JToken> dic)
         {
