@@ -216,7 +216,6 @@ namespace OpenGSServer
             {
                 return;
             }
-            _matchEventRateLimiters.TryRemove(playerId, out _);
             _pendingInputs.TryRemove(playerId, out _);
             _pendingPeers.TryRemove(peer.Id, out _);
             _unauthorizedPacketCounts.TryRemove(peer.Id, out _);
