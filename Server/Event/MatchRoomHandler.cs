@@ -2802,14 +2802,16 @@ namespace OpenGSServer
 
         public static void SendProjectileSnapshot(string roomId, string playerId)
         {
+            var snapshot = Projectiles.SnapshotActiveGrenades(roomId);
+            var timestamp = DateTime.UtcNow.ToString("o");
             GameMessageDispatcher.SendToPlayer(playerId, new JObject
             {
                 ["MessageType"] = "GrenadeSnapshotBegin",
                 ["RoomID"] = roomId,
-                ["Timestamp"] = DateTime.UtcNow.ToString("o")
+                ["Timestamp"] = timestamp
             });
 
-            foreach (var projectile in Projectiles.SnapshotActiveGrenades(roomId))
+            foreach (var projectile in snapshot)
             {
                 var speed = projectile.Velocity.Length();
                 if (!float.IsFinite(speed) || speed <= 0.001f) continue;
@@ -2831,9 +2833,17 @@ namespace OpenGSServer
                     ["IsSnapshot"] = true,
                     ["GrenadeType"] = projectile.GrenadeType,
                     ["ObjectType"] = projectile.GrenadeType,
-                    ["Direction"] = new JObject { ["X"] = direction.X, ["Y"] = direction.Y }
+                    ["Direction"] = new JObject { ["X"] = direction.X, ["Y"] = direction.Y },
+                    ["Timestamp"] = timestamp
                 });
             }
+
+            GameMessageDispatcher.SendToPlayer(playerId, new JObject
+            {
+                ["MessageType"] = "GrenadeSnapshotEnd",
+                ["RoomID"] = roomId,
+                ["Timestamp"] = timestamp
+            });
         }
 
         public static void ClearRoomProjectiles(string roomId)
@@ -2983,7 +2993,8 @@ namespace OpenGSServer
                 ["PlayerId"] = projectile.OwnerId,
                 ["RoomID"] = room.Id.ToString(),
                 ["PosX"] = projectile.Position.X,
-                ["PosY"] = projectile.Position.Y
+                ["PosY"] = projectile.Position.Y,
+                ["Timestamp"] = DateTime.UtcNow.ToString("o")
             });
         }
 
