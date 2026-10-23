@@ -1150,6 +1150,8 @@ namespace OpenGSServer
             // who never took part in it.
             clone.MaxHealth = Math.Max(1, maxHealth);
             clone.Health = clone.MaxHealth;
+            clone.Kills = 0;
+            clone.Deaths = 0;
             clone.Score = 0;
             return clone;
         }
