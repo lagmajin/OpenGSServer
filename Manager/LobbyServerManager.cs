@@ -50,11 +50,10 @@ namespace OpenGSServer
             if (won) _dailyService.AddProgress(playerId, "win_match", 1);
         }
 
-        public OpenGSServer.Network.MatchResultResponse RecordMatchResult(
+        public OpenGSServer.Network.MatchResultResponse? RecordMatchResult(
             string playerId, int matchScore, int kills, int deaths, bool won, EGameMode mode)
         {
-            var result = new OpenGSServer.Network.MatchResultResponse { PlayerId = playerId };
-            if (string.IsNullOrWhiteSpace(playerId)) return result;
+            if (string.IsNullOrWhiteSpace(playerId)) return null;
 
             var database = AccountDatabaseManager.GetInstance();
             return database.UpdateMatchProgress(playerId, account =>
@@ -93,7 +92,7 @@ namespace OpenGSServer
                         break;
                 }
                 return calculated;
-            }) ?? result;
+            });
         }
 
         public void RecordDamageDailyProgress(string playerId, int amount)

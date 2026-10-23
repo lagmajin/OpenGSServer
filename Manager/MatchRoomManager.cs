@@ -203,27 +203,54 @@ namespace OpenGSServer
                             continue;
                         }
 
-                        LobbyServerManager.Instance.RecordMatchDailyProgress(p.Id, winners.Contains(p.Id));
-                        var persisted = LobbyServerManager.Instance.RecordMatchResult(
-                            p.Id,
-                            p.Score,
-                            p.Kills,
-                            p.Deaths,
-                            winners.Contains(p.Id),
-                            matchRoom.Setting.Mode);
-                        var perPlayerResult = BuildMatchResultEnvelope(matchRoom, result, p);
-                        perPlayerResult["XpGained"] = persisted.XpGained;
-                        perPlayerResult["TotalExp"] = persisted.NewTotalXp;
-                        perPlayerResult["NewLevel"] = persisted.NewLevel;
-                        perPlayerResult["IsLevelUp"] = persisted.IsLevelUp;
-                        RememberMatchPlayerResult(matchRoom.Id.ToString(), p.Id, perPlayerResult);
-                        var session = LobbyServerManager.Instance.GetSession(p.Id);
-                        if (session != null)
+                        var matchResultPersisted = false;
+                        try
                         {
-                            session.SendAsyncJsonWithTimeStamp((JObject)perPlayerResult.DeepClone());
-                        }
+                            var won = winners.Contains(p.Id);
+                            var persisted = LobbyServerManager.Instance.RecordMatchResult(
+                                p.Id,
+                                p.Score,
+                                p.Kills,
+                                p.Deaths,
+                                won,
+                                matchRoom.Setting.Mode);
+                            if (persisted == null)
+                            {
+                                throw new InvalidOperationException(
+                                    $"No account record was updated for match player '{p.Id}'.");
+                            }
 
-                        RecordStanding(matchRoom, p);
+                            // Keep the idempotency marker after the durable XP
+                            // update, so a later notification failure cannot
+                            // award the same match twice on a repeated event.
+                            matchResultPersisted = true;
+                            LobbyServerManager.Instance.RecordMatchDailyProgress(p.Id, won);
+
+                            var perPlayerResult = BuildMatchResultEnvelope(matchRoom, result, p);
+                            perPlayerResult["XpGained"] = persisted.XpGained;
+                            perPlayerResult["TotalExp"] = persisted.NewTotalXp;
+                            perPlayerResult["NewLevel"] = persisted.NewLevel;
+                            perPlayerResult["IsLevelUp"] = persisted.IsLevelUp;
+                            RememberMatchPlayerResult(matchRoom.Id.ToString(), p.Id, perPlayerResult);
+                            var session = LobbyServerManager.Instance.GetSession(p.Id);
+                            if (session != null)
+                            {
+                                session.SendAsyncJsonWithTimeStamp((JObject)perPlayerResult.DeepClone());
+                            }
+
+                            RecordStanding(matchRoom, p);
+                        }
+                        catch (Exception ex)
+                        {
+                            if (!matchResultPersisted)
+                            {
+                                persistedMatchPlayers.TryRemove(resultKey, out _);
+                            }
+
+                            ConsoleWrite.WriteMessage(
+                                $"[Match] Failed to settle results for player '{p.Id}' in room '{matchRoom.Id}': {ex.Message}",
+                                ConsoleColor.Red);
+                        }
                     }
                 };
                 bus.OnGameEnded += () => {
