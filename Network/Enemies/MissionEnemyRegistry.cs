@@ -318,6 +318,17 @@ namespace OpenGSServer
                 {
                     if (PendingEnemyStates.TryRemove(key, out var enemy))
                     {
+                        // The state may have been superseded or the enemy may
+                        // have been removed after it left the pending queue.
+                        // Recheck the authoritative simulator at send time so
+                        // stale movement cannot follow a newer event.
+                        var simulator = TryGet(enemy.RoomId);
+                        if (simulator == null ||
+                            !simulator.TryPeek(enemy.EnemyId, out var latest) ||
+                            !latest.IsAlive ||
+                            latest.Timestamp.CompareTo(enemy.Timestamp) > 0)
+                            continue;
+
                         GameMessageDispatcher.BroadcastToRoom(enemy.RoomId, BuildEnemyMessage(
                             "EnemyState", enemy));
                     }
@@ -447,11 +458,7 @@ namespace OpenGSServer
                 return;
             }
 
-            // Enemy events and snapshots share the simulator's monotonic
-            // timestamp sequence. Using wall-clock time here can place a
-            // player-damage event before a later snapshot boundary even
-            // though the attack was resolved after that snapshot was taken.
-            var damageTimestamp = ParseEnemyTimestamp(enemy.Timestamp);
+            var damageTimestamp = DateTime.UtcNow;
             GameMessageDispatcher.BroadcastToRoom(enemy.RoomId, new JObject
             {
                 ["MessageType"] = GameMessageTypes.PlayerDamaged,
@@ -619,14 +626,6 @@ namespace OpenGSServer
                     ? DateTime.UtcNow.ToString("o")
                     : enemy.Timestamp
             };
-        }
-
-        private static DateTime ParseEnemyTimestamp(string timestamp)
-        {
-            return DateTime.TryParse(timestamp, null,
-                System.Globalization.DateTimeStyles.RoundtripKind, out var parsed)
-                ? parsed
-                : DateTime.UtcNow;
         }
     }
 }
