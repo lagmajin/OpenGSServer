@@ -178,7 +178,20 @@ namespace OpenGSServer
         private static void SetSpecialWeapon(string roomId, string playerId, string weaponType)
         {
             if (IsSpecialWeapon(weaponType))
-                EquippedSpecialWeapons[SpecialWeaponKey(roomId, playerId)] = weaponType;
+            {
+                var key = SpecialWeaponKey(roomId, playerId);
+                if (EquippedSpecialWeapons.TryGetValue(key, out var previousWeapon) &&
+                    !string.Equals(previousWeapon, weaponType, StringComparison.OrdinalIgnoreCase))
+                {
+                    // There is one special weapon slot on the client. Replacing
+                    // that slot must also retire the previous server magazine, or
+                    // a reconnect snapshot can resurrect a weapon the player no
+                    // longer owns.
+                    ServerWeaponMagazineStore.RemoveWeapon(playerId, previousWeapon);
+                }
+
+                EquippedSpecialWeapons[key] = weaponType;
+            }
         }
 
         private static bool HasSpecialWeapon(string roomId, string playerId, string weaponType) =>
