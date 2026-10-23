@@ -2292,8 +2292,6 @@ namespace OpenGSServer
                     EquippedSpecialWeapons.TryRemove(key, out _);
                 }
             }
-            ClearShotCooldowns(playerId);
-
             // A player who left cannot be holding a flag, so the flag they were
             // holding goes back to its stand rather than staying in the air. This
             // used to drop the carrier record, which left the flag itself with no
@@ -2389,7 +2387,8 @@ namespace OpenGSServer
                 LastFlagEvents.TryRemove(entry, out _);
             }
 
-            ClearShotCooldowns(playerId);
+            if (!preserveMagazines)
+                ClearShotCooldowns(playerId);
         }
 
         private static void HandleFlagScoreUpdate(MatchRoom room)
