@@ -2393,6 +2393,8 @@ namespace OpenGSServer
 
             if (!preserveMagazines)
                 ClearShotCooldowns(playerId);
+            if (!preserveRoomMembership)
+                ItemPickupBudget.Clear(playerId);
         }
 
         private static void HandleFlagScoreUpdate(MatchRoom room)
