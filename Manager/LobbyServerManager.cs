@@ -1425,6 +1425,7 @@ namespace OpenGSServer
             var category = data?["Category"]?.ToString() ?? "Weapon";
             var slot = ReadInt(data?["Slot"]);
             var db = AccountDatabaseManager.GetInstance();
+            var shopItem = ResolveShopItem(itemId);
 
             if (string.IsNullOrWhiteSpace(accountId) || string.IsNullOrWhiteSpace(itemId))
             {
@@ -1440,7 +1441,7 @@ namespace OpenGSServer
                 return;
             }
 
-            if (!db.IsPurchased(accountId, itemId))
+            if (shopItem == null || !db.IsPurchased(accountId, shopItem.Value.ItemId))
             {
                 session.SendAsyncJsonWithTimeStamp(new JObject
                 {
@@ -1454,6 +1455,7 @@ namespace OpenGSServer
                 return;
             }
 
+            itemId = shopItem.Value.ItemId;
             var success = category.Equals("InstantItem", StringComparison.OrdinalIgnoreCase)
                 ? db.SetEquippedInstantItem(accountId, slot, itemId)
                 : db.SetEquippedItem(accountId, category, itemId);
