@@ -85,6 +85,8 @@ namespace OpenGSServer
         public string AdvertisedIp { get; private set; } = string.Empty;
         public double AverageFrameTime => _averageFrameTime;
         public ServerLagCompensationManager ServerLagCompensationManager => _serverLagCompensationManager;
+        public bool IsPlayerConnected(string playerId) =>
+            _udpServer?.IsPlayerConnected(playerId) ?? true;
 
         public string IssueUdpConnectionToken(string playerId)
         {
