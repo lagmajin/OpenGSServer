@@ -174,6 +174,30 @@ namespace OpenGSServer
             return simulator.ApplyPlayerDamage(enemyId, attackerId, damage, hitPosition);
         }
 
+        public static void ApplyGrenadeDamageToEnemies(
+            string roomId,
+            string attackerId,
+            Vector2 centre,
+            int totalDamage,
+            float radius)
+        {
+            if (totalDamage <= 0 || radius <= 0f || !float.IsFinite(radius) ||
+                !float.IsFinite(centre.X) || !float.IsFinite(centre.Y))
+                return;
+
+            var simulator = TryGet(roomId);
+            if (simulator == null) return;
+
+            foreach (var enemy in simulator.Snapshot())
+            {
+                var distance = Vector2.Distance(centre, enemy.Position);
+                var damage = ServerDamageResolver.BlastDamage(totalDamage, distance, radius);
+                if (damage <= 0) continue;
+
+                simulator.ApplyPlayerDamage(enemy.EnemyId, attackerId, damage, centre);
+            }
+        }
+
         /// <summary>
         /// Starts a mission's objective off, so there is something to fight.
         /// <summary>

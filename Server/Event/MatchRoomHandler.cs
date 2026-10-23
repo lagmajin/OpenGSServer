@@ -2547,6 +2547,10 @@ namespace OpenGSServer
                 MissionEnemyRegistry.TryResolveAnyEnemyAt(point, 0.35f, out _);
             Projectiles.OnBulletHitEnemy = (ownerId, hit, damage) =>
                 HandleBulletHitEnemy(ownerId, hit, damage);
+            Projectiles.OnGrenadeExplode = grenade =>
+                MissionEnemyRegistry.ApplyGrenadeDamageToEnemies(
+                    grenade.RoomId, grenade.OwnerId, grenade.Position,
+                    grenade.ExplosionDamage, grenade.ExplosionRadius);
 
             Projectiles.Update(deltaSeconds);
         }

@@ -108,6 +108,9 @@ namespace OpenGSServer.Network
         /// </summary>
         public Action<string, Vector2, int>? OnBulletHitEnemy { get; set; }
 
+        /// <summary>Called when a grenade blast can damage mission enemies.</summary>
+        public Action<ServerProjectileState>? OnGrenadeExplode { get; set; }
+
         public int ActiveCount => _projectiles.Count;
 
         public IReadOnlyList<ServerProjectileState> SnapshotActiveGrenades(string roomId)
@@ -247,6 +250,7 @@ namespace OpenGSServer.Network
 
             List<ServerProjectileState> spawned = new();
             List<ServerProjectileState> expired = new();
+            List<ServerProjectileState> detonated = new();
             List<(ServerProjectileState Grenade, string TargetId, int Damage, Vector2 Hit)> hits = new();
             List<(string OwnerId, Vector2 Hit, int Damage)> enemyHits = new();
 
@@ -290,10 +294,11 @@ namespace OpenGSServer.Network
                     else
                     {
                         projectile.ElapsedFuse += deltaSeconds;
-                        if (projectile.ElapsedFuse >= projectile.FuseTime || projectile.RemainingLifetime <= 0f)
+                        if (projectile.ElapsedFuse >= projectile.FuseTime)
                         {
                             CollectClusterChildren(projectile, spawned);
                             CollectGrenadeHits(projectile, hits);
+                            detonated.Add(projectile);
                             Retire(projectile, expired);
                             continue;
                         }
@@ -319,6 +324,11 @@ namespace OpenGSServer.Network
             foreach (var hit in hits)
             {
                 OnDamage?.Invoke(hit.TargetId, hit.Grenade.OwnerId, hit.Damage, hit.Hit);
+            }
+
+            foreach (var grenade in detonated)
+            {
+                OnGrenadeExplode?.Invoke(grenade);
             }
 
             foreach (var enemyHit in enemyHits)
