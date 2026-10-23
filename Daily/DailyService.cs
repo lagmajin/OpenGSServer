@@ -72,12 +72,16 @@ namespace OpenGSServer
         }
 
         public bool AddProgress(string playerId, string dailyId, int amount)
+            => AddProgress(playerId, dailyId, amount, DateTime.UtcNow);
+
+        public bool AddProgress(string playerId, string dailyId, int amount, DateTime occurredAtUtc)
         {
             if (string.IsNullOrWhiteSpace(playerId) || amount <= 0 || Definitions.All(x => x.Id != dailyId)) return false;
             playerId = ResolveCanonicalPlayerId(playerId);
             lock (_sync)
             {
-                var record = GetOrCreate(playerId, dailyId, DateTime.UtcNow.ToString("yyyy-MM-dd"));
+                var date = occurredAtUtc.ToUniversalTime().ToString("yyyy-MM-dd");
+                var record = GetOrCreate(playerId, dailyId, date);
                 var target = Definitions.First(x => x.Id == dailyId).Target;
                 record.Progress = (int)Math.Min(
                     target, (long)Math.Max(0, record.Progress) + amount);

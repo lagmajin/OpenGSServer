@@ -43,11 +43,11 @@ namespace OpenGSServer
         private readonly Timer _connectionCheckTimer;
         private readonly DailyService _dailyService = new();
 
-        public void RecordMatchDailyProgress(string playerId, bool won)
+        public void RecordMatchDailyProgress(string playerId, bool won, DateTime completedAtUtc)
         {
             if (string.IsNullOrWhiteSpace(playerId)) return;
-            _dailyService.AddProgress(playerId, "play_match", 1);
-            if (won) _dailyService.AddProgress(playerId, "win_match", 1);
+            _dailyService.AddProgress(playerId, "play_match", 1, completedAtUtc);
+            if (won) _dailyService.AddProgress(playerId, "win_match", 1, completedAtUtc);
         }
 
         public OpenGSServer.Network.MatchResultResponse? RecordMatchResult(

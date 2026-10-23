@@ -838,6 +838,8 @@ namespace OpenGSServer
             new(StringComparer.OrdinalIgnoreCase);
         private static readonly ConcurrentDictionary<string, JObject> lastPlayerMatchResults =
             new(StringComparer.OrdinalIgnoreCase);
+        private static readonly ConcurrentDictionary<string, DateTime> matchResultCompletedAtUtc =
+            new(StringComparer.OrdinalIgnoreCase);
 
         private static string PlayerMatchResultKey(string roomId, string playerId) =>
             $"{roomId}:{playerId}";
@@ -853,6 +855,7 @@ namespace OpenGSServer
         private static void ClearMatchResults(string roomId)
         {
             lastMatchResults.TryRemove(roomId, out _);
+            matchResultCompletedAtUtc.TryRemove(roomId, out _);
             var prefix = $"{roomId}:";
             foreach (var key in lastPlayerMatchResults.Keys)
             {
@@ -868,7 +871,10 @@ namespace OpenGSServer
                 return;
             }
 
-            lastMatchResults[roomId] = (JObject)result.DeepClone();
+            if (lastMatchResults.TryAdd(roomId, (JObject)result.DeepClone()))
+            {
+                matchResultCompletedAtUtc.TryAdd(roomId, DateTime.UtcNow);
+            }
         }
 
         private static JObject? LastMatchResult(string roomId)
@@ -882,7 +888,11 @@ namespace OpenGSServer
             var roomId = room.Id.ToString();
             if (lastPlayerMatchResults.TryGetValue(
                 PlayerMatchResultKey(roomId, player.Id), out var existingResult))
+            {
+                TryRecordMatchDailyProgress(player.Id, roomId,
+                    ExtractWinnerIds(result).Contains(player.Id));
                 return (JObject)existingResult.DeepClone();
+            }
 
             var resultKey = PlayerMatchResultKey(roomId, player.Id);
             if (!persistedMatchPlayers.TryAdd(resultKey, 0))
@@ -922,7 +932,7 @@ namespace OpenGSServer
                 perPlayerResult["IsLevelUp"] = persisted.IsLevelUp;
                 RememberMatchPlayerResult(roomId, player.Id, perPlayerResult);
 
-                LobbyServerManager.Instance.RecordMatchDailyProgress(player.Id, won);
+                TryRecordMatchDailyProgress(player.Id, roomId, won);
                 RecordStanding(room, player);
                 return (JObject)perPlayerResult.DeepClone();
             }
@@ -939,6 +949,23 @@ namespace OpenGSServer
                 return lastPlayerMatchResults.TryGetValue(resultKey, out existingResult)
                     ? (JObject)existingResult.DeepClone()
                     : null;
+            }
+        }
+
+        private static void TryRecordMatchDailyProgress(string playerId, string roomId, bool won)
+        {
+            try
+            {
+                var completedAtUtc = matchResultCompletedAtUtc.TryGetValue(roomId, out var recordedAt)
+                    ? recordedAt
+                    : DateTime.UtcNow;
+                LobbyServerManager.Instance.RecordMatchDailyProgress(playerId, won, completedAtUtc);
+            }
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage(
+                    $"[Daily] Could not record match progress for {playerId} in room {roomId}: {ex.Message}",
+                    ConsoleColor.Yellow);
             }
         }
 
