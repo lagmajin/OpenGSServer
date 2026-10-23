@@ -1738,6 +1738,9 @@ namespace OpenGSServer
         {
             Console.WriteLine($"Player {damagedPlayerId} took {damage} damage");
 
+            if (remainingHealth.HasValue && remainingHealth.Value <= 0)
+                MatchServerV2.Instance?.ServerLagCompensationManager.SetMovementLocked(damagedPlayerId, true);
+
             GameMessageDispatcher.BroadcastToRoom(room.Id.ToString(), new JObject
             {
                 // The same name the projectile path uses. A client that adopts the
@@ -2739,6 +2742,7 @@ namespace OpenGSServer
 
             MatchServerV2.Instance?.ServerLagCompensationManager.SetPlayerPosition(
                 playerId, spawnX, spawnY, spawnZ, clearPendingInputs: true);
+            MatchServerV2.Instance?.ServerLagCompensationManager.SetMovementLocked(playerId, false);
             ClearPlayerCombatEffects(room.Id.ToString(), playerId);
 
             // Coming back with the gun that was on its last round would make a
@@ -3484,6 +3488,8 @@ namespace OpenGSServer
             {
                 return;
             }
+
+            MatchServerV2.Instance?.ServerLagCompensationManager.SetMovementLocked(targetId, true);
 
             // The health change is the authority for a kill now, not a client
             // claiming one. A self hit counts as a death without crediting an

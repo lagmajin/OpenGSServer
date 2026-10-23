@@ -85,6 +85,11 @@ namespace OpenGSServer.Network
             Log.Info($"[ServerLagCompensation] Player {playerId} suspended from match {m_MatchId}");
         }
 
+        public void SetMovementLocked(string playerId, bool locked)
+        {
+            m_PlayerStateManager.SetMovementLocked(playerId, locked);
+        }
+
         /// <summary>
         /// クライアントからの入力を処理する
         /// </summary>

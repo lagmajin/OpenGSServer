@@ -41,6 +41,7 @@ namespace OpenGSServer.Network
             public bool HasAcceptedSequence;
             public bool HasAuthoritativePosition;
             public bool IsSuspended;
+            public bool IsMovementLocked;
             public Queue<ClientInputData> InputQueue = new Queue<ClientInputData>();
             public DateTime LastUpdateTime = DateTime.UtcNow;
             public bool IsGrounded = true;
@@ -145,6 +146,11 @@ namespace OpenGSServer.Network
                         rejectionReason = "Player input is suspended";
                         return false;
                     }
+                    if (state.IsMovementLocked)
+                    {
+                        rejectionReason = "Player movement is locked";
+                        return false;
+                    }
 
                     if (!IsFiniteInput(input))
                     {
@@ -239,6 +245,27 @@ namespace OpenGSServer.Network
             }
         }
 
+        public void SetMovementLocked(string playerId, bool locked)
+        {
+            if (string.IsNullOrWhiteSpace(playerId) || !m_PlayerStates.TryGetValue(playerId, out var state))
+            {
+                return;
+            }
+
+            lock (state.SyncRoot)
+            {
+                state.IsMovementLocked = locked;
+                if (locked)
+                {
+                    state.InputQueue.Clear();
+                    state.VelX = 0f;
+                    state.VelY = 0f;
+                    state.VelZ = 0f;
+                    state.IsGrounded = state.PosZ <= GroundHeight;
+                }
+            }
+        }
+
         /// <summary>
         /// 全てのプレイヤーの入力を処理する
         /// </summary>
@@ -275,7 +302,7 @@ namespace OpenGSServer.Network
         {
             lock (state.SyncRoot)
             {
-                if (state.IsSuspended)
+                if (state.IsSuspended || state.IsMovementLocked)
                 {
                     return;
                 }
