@@ -55,9 +55,19 @@ namespace OpenGSServer
             // A token replaces the password for the reconnect, never alongside it:
             // a client holding a live token that also sends a password is a
             // client whose token should not decide who it is.
-            if (TryReadString(dic, "ResumeToken", out var resumeToken) &&
-                ResumeTokens.TryRedeem(resumeToken, out var resumedAccountId))
+            if (TryReadString(dic, "ResumeToken", out var resumeToken))
             {
+                if (!ResumeTokens.TryRedeem(resumeToken, out var resumedAccountId))
+                {
+                    session.SendAsyncJsonWithTimeStamp(new JObject
+                    {
+                        [ServerMessageTypes.MessageType] = MessageType.LoginResponse,
+                        ["Success"] = false,
+                        ["Error"] = "ResumeToken is invalid or expired"
+                    });
+                    return null;
+                }
+
                 return CompleteLogin(session, resumedAccountId, replaceStaleSession: true);
             }
 
