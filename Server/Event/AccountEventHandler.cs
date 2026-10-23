@@ -272,7 +272,7 @@ namespace OpenGSServer
 
         internal static void RevokeResumeToken(string accountId) => ResumeTokens.Revoke(accountId);
 
-        internal static bool KickPlayerSession(string playerId)
+        internal static bool KickPlayerSession(string playerId, Func<bool>? condition = null)
         {
             if (string.IsNullOrWhiteSpace(playerId)) return false;
 
@@ -280,6 +280,7 @@ namespace OpenGSServer
             {
                 var accountManager = AccountManager.GetInstance();
                 if (!accountManager.ExistID(playerId)) return false;
+                if (condition != null && !condition()) return false;
 
                 SessionOwners.TryRemove(playerId, out _);
                 PlayerSessionCleanup.Release(playerId, revokeResumeToken: true);

@@ -34,7 +34,6 @@ namespace OpenGSServer
         private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, byte>> _pendingFriendRequests = new(StringComparer.OrdinalIgnoreCase);
         private readonly PingManager _pingManager = new();
         private readonly ReaderWriterLockSlim _lobbyLock = new();
-        private readonly Timer _cleanupTimer;
         
         // NetCoreServer TCP機能
         private LobbyTcpServer? _tcpServer;
@@ -119,14 +118,6 @@ namespace OpenGSServer
         {
             InitializeLobby();
             
-            // 定期的にクリーンアップ（5分ごと）
-            _cleanupTimer = new Timer(
-                callback: _ => CleanupInactivePlayers(),
-                state: null,
-                dueTime: TimeSpan.FromMinutes(5),
-                period: TimeSpan.FromMinutes(5)
-            );
-
             // アイドルチェックタイマー（1分ごと）
             _idleCheckTimer = new Timer(
                 callback: _ => CheckIdlePlayers(),
@@ -146,27 +137,6 @@ namespace OpenGSServer
         private void InitializeLobby()
         {
             ConsoleWrite.WriteMessage("[LOBBY] Lobby server initialized", ConsoleColor.Cyan);
-        }
-
-        private void CleanupInactivePlayers()
-        {
-            try
-            {
-                var inactivePlayers = _connectedPlayers
-                    .Where(kvp => (DateTime.UtcNow - kvp.Value.JoinedAt).TotalMinutes > 30)
-                    .Select(kvp => kvp.Key)
-                    .ToList();
-
-                foreach (var playerId in inactivePlayers)
-                {
-                    ConsoleWrite.WriteMessage($"[LOBBY] Removing inactive player: {playerId}", ConsoleColor.Yellow);
-                    PlayerLeaveLobby(playerId);
-                }
-            }
-            catch (Exception ex)
-            {
-                ConsoleWrite.WriteMessage($"[LOBBY] Cleanup error: {ex.Message}", ConsoleColor.Red);
-            }
         }
 
         private void CheckIdlePlayers()
@@ -194,11 +164,16 @@ namespace OpenGSServer
                     _lobbyLock.ExitReadLock();
                 }
 
-                // スナップショットに基づいて書き込み操作を行う（PlayerLeaveLobbyは内部でロックを取得する）
+                // Recheck activity under the account gate before tearing down a session.
+                var cutoff = now.AddMinutes(-15);
                 foreach (var playerId in idlePlayers)
                 {
-                    ConsoleWrite.WriteMessage($"[LOBBY] Kicking idle player: {playerId}", ConsoleColor.Yellow);
-                    PlayerLeaveLobby(playerId);
+                    if (AccountEventHandler.KickPlayerSession(playerId, () =>
+                        _connectedPlayers.TryGetValue(playerId, out var current) &&
+                        current.LastActivity <= cutoff))
+                    {
+                        ConsoleWrite.WriteMessage($"[LOBBY] Kicked idle player: {playerId}", ConsoleColor.Yellow);
+                    }
                 }
             }
             catch (Exception ex)
@@ -1006,7 +981,11 @@ namespace OpenGSServer
             {
                 var playerId = session.PlayerID!;
                 AccountEventHandler.RunIfOwnedSession(
-                    session, playerId, () => HandleMessageCore(messageType, data, session));
+                    session, playerId, () =>
+                    {
+                        UpdatePlayerActivity(playerId);
+                        HandleMessageCore(messageType, data, session);
+                    });
                 return;
             }
 
@@ -2239,7 +2218,6 @@ namespace OpenGSServer
             // TCPサーバー停止
             StopTcpServer();
 
-            _cleanupTimer?.Dispose();
             _idleCheckTimer?.Dispose();
             _connectionCheckTimer?.Dispose();
             _lobbyLock?.Dispose();
