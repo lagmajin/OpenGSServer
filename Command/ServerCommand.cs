@@ -791,18 +791,19 @@ namespace OpenGSServer
             try
             {
                 var matchRoomManager = MatchRoomManager.Instance;
-                // ダミーの設定とイベントバスを使用
-                var dummySetting = new DeathMatchSetting(); // または他の適切な設定
-                var dummyBus = new MatchRoomEventBus();
-                var newMatchRoom = new OpenGSCore.MatchRoom(
-                    roomNumber: 0, // 仮のルームナンバー
-                    roomName: roomName,
-                    roomOwnerId: "ServerAdmin", // 仮のオーナーID
-                    setting: dummySetting,
-                    bus: dummyBus
-                );
-                matchRoomManager.AddRoom(newMatchRoom);
-                ConsoleWrite.WriteMessage($"[OK] Match room '{roomName}' (ID: {newMatchRoom.Id}) created successfully", ConsoleColor.Green);
+                var result = matchRoomManager.CreateNewDeathMatchRoom(
+                    roomName, "ServerAdmin");
+                if (result.Result != ECreateNewRoomResult.Successful)
+                {
+                    ConsoleWrite.WriteMessage(
+                        $"[ERR] Failed to create match room '{roomName}': {result.Message()}",
+                        ConsoleColor.Red);
+                    return;
+                }
+
+                ConsoleWrite.WriteMessage(
+                    $"[OK] Match room '{roomName}' (ID: {result.RoomId}) created successfully",
+                    ConsoleColor.Green);
             }
             catch (Exception ex)
             {
