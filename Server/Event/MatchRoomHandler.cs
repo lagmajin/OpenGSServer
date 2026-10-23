@@ -2557,6 +2557,13 @@ namespace OpenGSServer
 
         public static void SendProjectileSnapshot(string roomId, string playerId)
         {
+            GameMessageDispatcher.SendToPlayer(playerId, new JObject
+            {
+                ["MessageType"] = "GrenadeSnapshotBegin",
+                ["RoomID"] = roomId,
+                ["Timestamp"] = DateTime.UtcNow.ToString("o")
+            });
+
             foreach (var projectile in Projectiles.SnapshotActiveGrenades(roomId))
             {
                 var speed = projectile.Velocity.Length();
