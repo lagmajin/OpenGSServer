@@ -1344,7 +1344,7 @@ namespace OpenGSServer
             }
 
             var db = AccountDatabaseManager.GetInstance();
-            var account = db.GetAccount(accountId);
+            var account = db.GetAccountSnapshot(accountId);
             if (account == null)
             {
                 session.SendAsyncJsonWithTimeStamp(new JObject
@@ -1361,7 +1361,7 @@ namespace OpenGSServer
                 ["MessageType"] = MessageType.ShopStateResponse,
                 ["Success"] = true,
                 ["Credits"] = account.Credits,
-                ["PurchasedItems"] = new JArray(db.GetPurchasedItems(accountId)),
+                ["PurchasedItems"] = new JArray(account.PurchasedItems ?? new List<string>()),
                 ["EquippedItems"] = new JArray((account.EquippedItems ?? new List<DBEquippedItem>()).Select(item => new JObject
                 {
                     ["Category"] = item.Category,

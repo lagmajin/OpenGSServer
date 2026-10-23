@@ -66,14 +66,25 @@ namespace OpenGSServer
             this.Salt = player.Salt;
             this.HashedPassword = player.HashedPassword;
             this.DisplayName = player.DisplayName;
+            this.CreatedTimeUtc = player.CreatedTimeUtc;
+            this.TimeEncode = player.TimeEncode;
+            this.FirstAccessIPAddress = player.FirstAccessIPAddress;
+            this.LastAccessIPAddress = player.LastAccessIPAddress;
+            this.LastLoginIPAddress = player.LastLoginIPAddress;
+            this.LastLoginTimeUtc = player.LastLoginTimeUtc;
+            this.LastUpdatedUtc = player.LastUpdatedUtc;
+            this.Status = player.Status;
+            this.Level = player.Level;
+            this.Exp = player.Exp;
             this.Credits = player.Credits;
             this.PurchasedItems = new List<string>(player.PurchasedItems ?? new List<string>());
             this.EquippedItems = new List<DBEquippedItem>((player.EquippedItems ?? new List<DBEquippedItem>()).Select(item => new DBEquippedItem(item)));
             this.EquippedInstantItems = new List<DBInstantEquippedItem>((player.EquippedInstantItems ?? new List<DBInstantEquippedItem>()).Select(item => new DBInstantEquippedItem(item)));
+            this.LifeTimeScore = player.LifeTimeScore == null ? new PlayerLifeTimeScore() : new PlayerLifeTimeScore(player.LifeTimeScore);
             this.ClaimedDailyRewards = new List<string>(player.ClaimedDailyRewards ?? new List<string>());
-
-            FirstAccessIPAddress = player.FirstAccessIPAddress;
+            this.ProfileTags = new List<string>(player.ProfileTags ?? new List<string>());
         }
+
 
 
         public DBAccount(in string accountID, in string hashedPassword, in string salt, in string displayName)

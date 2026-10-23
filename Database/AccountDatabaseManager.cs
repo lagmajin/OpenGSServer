@@ -122,6 +122,20 @@ namespace OpenGSServer
                 ?? col.FindOne(Query.EQ(nameof(DBAccount.Id), accountId));
         }
 
+        public DBAccount? GetAccountSnapshot(string accountId)
+        {
+            if (string.IsNullOrWhiteSpace(accountId))
+            {
+                return null;
+            }
+
+            lock (_accountMutationLock)
+            {
+                var account = GetAccount(accountId);
+                return account == null ? null : new DBAccount(account);
+            }
+        }
+
         public void GetPlayerInfo(in string account)
         {
             var accountInfo = GetAccount(account);
