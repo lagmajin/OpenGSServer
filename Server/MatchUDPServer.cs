@@ -68,15 +68,25 @@ namespace OpenGSServer
             !string.IsNullOrWhiteSpace(playerId) && _connectedPlayers.ContainsKey(playerId);
         public int? UdpPort { get; private set; }
 
-        public string IssueConnectionToken(string playerId)
+        public string IssueConnectionToken(string playerId, string? roomId = null)
         {
             if (string.IsNullOrWhiteSpace(playerId))
             {
                 return string.Empty;
             }
 
+            roomId = string.IsNullOrWhiteSpace(roomId) ? null : roomId.Trim();
+            if (roomId != null)
+            {
+                var room = MatchRoomManager.Instance.SearchRoomByMemberID(playerId);
+                if (room == null || !string.Equals(
+                        room.Id.ToString(), roomId, StringComparison.OrdinalIgnoreCase))
+                    return string.Empty;
+            }
+
             var token = Guid.NewGuid().ToString("N");
-            _connectionTokenInfo[playerId] = new ConnectionTokenInfo(token, DateTime.UtcNow.AddMinutes(ConnectionTokenLifetimeMinutes));
+            _connectionTokenInfo[playerId] = new ConnectionTokenInfo(
+                token, DateTime.UtcNow.AddMinutes(ConnectionTokenLifetimeMinutes), roomId);
             return token;
         }
 
@@ -456,9 +466,7 @@ namespace OpenGSServer
                     ? null
                     : MatchRoomManager.Instance.SearchRoomByMemberID(messagePlayerId);
                 if (string.IsNullOrWhiteSpace(messagePlayerId) ||
-                    string.IsNullOrWhiteSpace(requestedRoomId) || matchRoom == null ||
-                    !string.Equals(requestedRoomId, matchRoom.Id.ToString(),
-                        StringComparison.OrdinalIgnoreCase))
+                    string.IsNullOrWhiteSpace(requestedRoomId))
                 {
                     ConsoleWrite.WriteMessage(
                         $"[UDP] Rejected ClientConnect for player '{messagePlayerId}' with room '{requestedRoomId}'",
@@ -469,11 +477,13 @@ namespace OpenGSServer
 
                 var token = message["UdpToken"]?.ToString() ?? message["Token"]?.ToString();
                 if (!_connectionTokenInfo.TryGetValue(messagePlayerId, out var tokenInfo) ||
-                    tokenInfo.IsExpired ||
-                    string.IsNullOrWhiteSpace(token) ||
-                    !string.Equals(tokenInfo.Token, token, StringComparison.Ordinal))
+                    !tokenInfo.MatchesRoom(requestedRoomId,
+                        matchRoom?.Id.ToString()) ||
+                    !tokenInfo.TryAuthorize(token, peer.Id))
                 {
-                    ConsoleWrite.WriteMessage($"[UDP] Rejected ClientConnect without a valid token for {messagePlayerId}", ConsoleColor.Yellow);
+                    ConsoleWrite.WriteMessage(
+                        $"[UDP] Rejected ClientConnect with an invalid token or room for {messagePlayerId}",
+                        ConsoleColor.Yellow);
                     peer.Disconnect();
                     return;
                 }
@@ -1607,14 +1617,49 @@ namespace OpenGSServer
 
     internal sealed class ConnectionTokenInfo
     {
-        public ConnectionTokenInfo(string token, DateTime expiresAtUtc)
+        private readonly object _sync = new();
+        private int? _authorizedPeerId;
+
+        public ConnectionTokenInfo(string token, DateTime expiresAtUtc, string? roomId = null)
         {
             Token = token;
             ExpiresAtUtc = expiresAtUtc;
+            RoomId = roomId;
         }
 
         public string Token { get; }
         public DateTime ExpiresAtUtc { get; }
+        public string? RoomId { get; }
         public bool IsExpired => DateTime.UtcNow >= ExpiresAtUtc;
+
+        public bool MatchesRoom(string requestedRoomId, string? currentRoomId)
+        {
+            if (string.IsNullOrWhiteSpace(requestedRoomId)) return false;
+            if (!string.IsNullOrEmpty(RoomId))
+            {
+                return string.Equals(RoomId, requestedRoomId, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(RoomId, currentRoomId, StringComparison.OrdinalIgnoreCase);
+            }
+
+            // Roomless tokens are issued only by internal server integrations
+            // and test probes. If that player is in a room, still bind the
+            // handshake to the current membership.
+            return string.IsNullOrEmpty(currentRoomId) ||
+                string.Equals(requestedRoomId, currentRoomId, StringComparison.OrdinalIgnoreCase);
+        }
+
+        public bool TryAuthorize(string? token, int peerId)
+        {
+            lock (_sync)
+            {
+                if (IsExpired || string.IsNullOrWhiteSpace(token) ||
+                    !string.Equals(Token, token, StringComparison.Ordinal) ||
+                    (_authorizedPeerId.HasValue && _authorizedPeerId.Value != peerId))
+                    return false;
+
+                _authorizedPeerId = peerId;
+                return true;
+            }
+        }
     }
 }

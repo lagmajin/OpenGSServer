@@ -131,6 +131,11 @@ namespace OpenGSServer
                 var ownerId = waitRoom.GetFirstPlayerId();
                 var bus = new MatchRoomEventBus();
                 var matchRoom = MatchRoomFactory.CreateMatchRoom(roomNumberCount, waitRoom.RoomName, ownerId, setting, bus);
+                // The lobby and native client keep using the wait-room ID
+                // through loading and gameplay. Give the live MatchRoom that
+                // same canonical identity so UDP admission and match events
+                // remain bound to the room the client actually joined.
+                matchRoom.Id = waitRoom.RoomId;
                 matchRoom.AddNewPlayers(PreparePlayersForMatch(setting, waitRoom.AllPlayers()));
                 var itemManager = CreateFieldItemManager(matchRoom.Id);
 

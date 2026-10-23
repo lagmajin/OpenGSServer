@@ -1288,7 +1288,10 @@ namespace OpenGSServer
             infoJson["MessageType"] = MessageType.MatchServerInfoResponse;
             infoJson["Port"] = matchServer.TcpPort; // TcpPortプロパティを使用
             infoJson["UdpPort"] = matchServer.UdpPort;
-            var udpToken = matchServer.IssueUdpConnectionToken(session.PlayerID ?? string.Empty);
+            var roomId = data["RoomID"]?.ToString() ?? data["RoomId"]?.ToString();
+            var udpToken = string.IsNullOrWhiteSpace(roomId)
+                ? string.Empty
+                : matchServer.IssueUdpConnectionToken(session.PlayerID ?? string.Empty, roomId);
             if (!string.IsNullOrWhiteSpace(udpToken))
             {
                 infoJson["UdpToken"] = udpToken;
@@ -1298,7 +1301,6 @@ namespace OpenGSServer
                 infoJson["IP"] = matchServer.AdvertisedIp;
             }
 
-            var roomId = data["RoomID"]?.ToString() ?? data["RoomId"]?.ToString();
             if (!string.IsNullOrWhiteSpace(roomId))
             {
                 infoJson["RoomID"] = roomId;

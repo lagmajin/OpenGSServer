@@ -90,9 +90,9 @@ namespace OpenGSServer
         public bool IsPlayerConnected(string playerId) =>
             _udpServer?.IsPlayerConnected(playerId) ?? true;
 
-        public string IssueUdpConnectionToken(string playerId)
+        public string IssueUdpConnectionToken(string playerId, string? roomId = null)
         {
-            return _udpServer?.IssueConnectionToken(playerId) ?? string.Empty;
+            return _udpServer?.IssueConnectionToken(playerId, roomId) ?? string.Empty;
         }
 
         private MatchServerV2()
