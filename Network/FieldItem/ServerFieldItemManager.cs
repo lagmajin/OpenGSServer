@@ -857,58 +857,71 @@ namespace OpenGSServer.Network
         /// </summary>
         public void LoadFromJson(JArray array)
         {
-            _items.Clear();
+            var restoredItems = new List<FieldItem>();
 
-            if (array == null)
+            if (array != null)
             {
-                return;
+                foreach (var token in array)
+                {
+                    var itemObj = token as JObject;
+                    if (itemObj == null) continue;
+
+                    if (!FieldItemTypeNames.TryParse(itemObj["ItemType"]?.ToString(), out var parsedType))
+                    {
+                        continue;
+                    }
+
+                    var item = new FieldItem
+                    {
+                        ItemId = itemObj["ItemId"]?.ToString() ?? "",
+                        ItemType = parsedType,
+                        PosX = itemObj["PositionX"]?.Value<float>() ?? 0,
+                        PosY = itemObj["PositionY"]?.Value<float>() ?? 0,
+                        PosZ = itemObj["PositionZ"]?.Value<float>() ?? 0,
+                        SpawnPointId = itemObj["SpawnPointId"]?.Value<int>() ?? -1,
+                        SpawnPointName = itemObj["SpawnPointName"]?.ToString() ?? "",
+                        State = itemObj["State"]?.ToString() ?? "Spawned",
+                        PickedUpByPlayerId = itemObj["PickedUpByPlayerId"]?.ToString() ?? "",
+                        IsActive = itemObj["IsActive"]?.Value<bool>() ?? true,
+                        WeaponType = itemObj["WeaponType"]?.ToString() ?? "",
+                        WeaponSlot = itemObj["WeaponSlot"]?.Value<int>() ?? -1,
+                        MagazineAmmo = itemObj["MagazineAmmo"]?.Value<int>() ?? -1,
+                        ReserveAmmo = itemObj["ReserveAmmo"]?.Value<int>() ?? -1,
+                        IsPlayerDroppedWeapon = itemObj["IsPlayerDroppedWeapon"]?.Value<bool>() ?? false,
+                        ReservedByPlayerId = itemObj["ReservedByPlayerId"]?.ToString() ?? ""
+                    };
+
+                    if (item.IsPlayerDroppedWeapon)
+                    {
+                        var remaining = itemObj["DroppedWeaponRemainingSeconds"]?.Value<double>() ??
+                            DroppedWeaponLifetimeSeconds;
+                        remaining = Math.Clamp(remaining, 0d, DroppedWeaponLifetimeSeconds);
+                        item.DroppedAtSeconds = NowSeconds - (DroppedWeaponLifetimeSeconds - remaining);
+                    }
+
+                    if (string.IsNullOrWhiteSpace(item.ItemId) ||
+                        !IsFinite(item.PosX) || !IsFinite(item.PosY) || !IsFinite(item.PosZ))
+                    {
+                        continue;
+                    }
+
+                    restoredItems.Add(item);
+                }
             }
 
-            foreach (var token in array)
+            lock (_itemStateLock)
             {
-                var itemObj = token as JObject;
-                if (itemObj == null) continue;
-
-                if (!FieldItemTypeNames.TryParse(itemObj["ItemType"]?.ToString(), out var parsedType))
+                _items.Clear();
+                var activeItems = 0;
+                foreach (var item in restoredItems)
                 {
-                    continue;
+                    var isActive = item.IsActive && item.State == "Spawned";
+                    if (isActive && activeItems >= MaxSnapshotItems)
+                        continue;
+
+                    if (_items.TryAdd(item.ItemId, item) && isActive)
+                        activeItems++;
                 }
-
-                var item = new FieldItem
-                {
-                    ItemId = itemObj["ItemId"]?.ToString() ?? "",
-                    ItemType = parsedType,
-                    PosX = itemObj["PositionX"]?.Value<float>() ?? 0,
-                    PosY = itemObj["PositionY"]?.Value<float>() ?? 0,
-                    PosZ = itemObj["PositionZ"]?.Value<float>() ?? 0,
-                    SpawnPointId = itemObj["SpawnPointId"]?.Value<int>() ?? -1,
-                    SpawnPointName = itemObj["SpawnPointName"]?.ToString() ?? "",
-                    State = itemObj["State"]?.ToString() ?? "Spawned",
-                    PickedUpByPlayerId = itemObj["PickedUpByPlayerId"]?.ToString() ?? "",
-                    IsActive = itemObj["IsActive"]?.Value<bool>() ?? true,
-                    WeaponType = itemObj["WeaponType"]?.ToString() ?? "",
-                    WeaponSlot = itemObj["WeaponSlot"]?.Value<int>() ?? -1,
-                    MagazineAmmo = itemObj["MagazineAmmo"]?.Value<int>() ?? -1,
-                    ReserveAmmo = itemObj["ReserveAmmo"]?.Value<int>() ?? -1,
-                    IsPlayerDroppedWeapon = itemObj["IsPlayerDroppedWeapon"]?.Value<bool>() ?? false,
-                    ReservedByPlayerId = itemObj["ReservedByPlayerId"]?.ToString() ?? ""
-                };
-
-                if (item.IsPlayerDroppedWeapon)
-                {
-                    var remaining = itemObj["DroppedWeaponRemainingSeconds"]?.Value<double>() ??
-                        DroppedWeaponLifetimeSeconds;
-                    remaining = Math.Clamp(remaining, 0d, DroppedWeaponLifetimeSeconds);
-                    item.DroppedAtSeconds = NowSeconds - (DroppedWeaponLifetimeSeconds - remaining);
-                }
-
-                if (string.IsNullOrWhiteSpace(item.ItemId) ||
-                    !IsFinite(item.PosX) || !IsFinite(item.PosY) || !IsFinite(item.PosZ))
-                {
-                    continue;
-                }
-
-                _items[item.ItemId] = item;
             }
         }
 
