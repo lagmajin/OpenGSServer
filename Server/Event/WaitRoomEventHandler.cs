@@ -556,42 +556,37 @@ namespace OpenGSServer
             return false;
         }
 
-        private static List<EInstantItemType> ParseInstantItems(JToken token)
+        private static List<EInstantItemType> ResolveEquippedInstantItems(string accountId)
         {
-            var instantItems = new List<EInstantItemType>();
-
-            if (token?.Type != JTokenType.Array)
+            var equipped = new EInstantItemType[3];
+            var account = AccountDatabaseManager.GetInstance().GetAccountSnapshot(accountId);
+            if (account != null)
             {
-                return instantItems;
-            }
-
-            foreach (var itemToken in token.Children())
-            {
-                if (itemToken == null)
+                var purchasedItems = new HashSet<string>(
+                    account.PurchasedItems ?? new List<string>(),
+                    StringComparer.OrdinalIgnoreCase);
+                foreach (var entry in account.EquippedInstantItems ?? new List<DBInstantEquippedItem>())
                 {
-                    continue;
-                }
+                    if (entry.Slot < 0 || entry.Slot >= equipped.Length ||
+                        string.IsNullOrWhiteSpace(entry.ItemId) ||
+                        !purchasedItems.Contains(entry.ItemId) ||
+                        !Enum.TryParse(entry.ItemId, true, out EInstantItemType itemType) ||
+                        !InstantItemRules.IsUsable(itemType))
+                    {
+                        continue;
+                    }
 
-                var raw = itemToken.ToString();
-                if (string.IsNullOrWhiteSpace(raw))
-                {
-                    continue;
-                }
-
-                if (Enum.TryParse(raw, true, out EInstantItemType parsed))
-                {
-                    instantItems.Add(parsed);
-                    continue;
-                }
-
-                if (int.TryParse(raw, out var numeric) &&
-                    Enum.IsDefined(typeof(EInstantItemType), numeric))
-                {
-                    instantItems.Add((EInstantItemType)numeric);
+                    equipped[entry.Slot] = itemType;
                 }
             }
 
-            return instantItems;
+            if (equipped.All(item => item == EInstantItemType.None))
+            {
+                equipped[0] = EInstantItemType.HealthKit;
+                equipped[1] = EInstantItemType.PowerGrenadePack;
+            }
+
+            return equipped.ToList();
         }
 
         public static void ChangePlayerSettting(in ClientSession session, IDictionary<string, JToken> dic)
@@ -606,6 +601,9 @@ namespace OpenGSServer
                 return;
             }
 
+            var equippedInstantItems = dic.ContainsKey("EquipInstantItems")
+                ? ResolveEquippedInstantItems(playerId)
+                : null;
             bool changed = false;
             lock (waitRoom)
             {
@@ -621,9 +619,11 @@ namespace OpenGSServer
                     changed = true;
                 }
 
-                if (dic.TryGetValue("EquipInstantItems", out var instantItemToken))
+                if (equippedInstantItems != null)
                 {
-                    player.EquipInstantItems = ParseInstantItems(instantItemToken);
+                    // The client field remains the sync trigger for wire compatibility;
+                    // ownership and slot selection come from the account's persisted shop state.
+                    player.EquipInstantItems = equippedInstantItems;
                     changed = true;
                 }
             }
