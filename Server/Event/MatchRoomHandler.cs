@@ -722,19 +722,24 @@ namespace OpenGSServer
 
             var magazine = ReadInt(json, -1, "MagazineAmmo", "Ammo", "CurrentAmmo");
             var slot = ReadInt(json, -1, "SlotIndex", "WeaponSlot");
-            var canonicalDropWeapon = NormalizeWeaponType(weaponType);
+            var canonicalDropWeapon = ResolveWeaponType(
+                NormalizeWeaponType(weaponType), weaponType);
+            if (canonicalDropWeapon == null ||
+                !ServerWeaponMagazineStore.TryPeek(playerId, canonicalDropWeapon, out var heldMagazine))
+            {
+                Console.WriteLine($"[Match] Refused drop of unowned weapon '{weaponType}' from '{playerId}'");
+                return;
+            }
+
+            // The client may request a drop, but its reported ammo is not the
+            // server's magazine state.
+            magazine = heldMagazine.ReadRemaining();
             if (IsSpecialWeapon(canonicalDropWeapon) &&
                 !HasSpecialWeapon(room.Id.ToString(), playerId, canonicalDropWeapon!))
             {
                 Console.WriteLine(
                     $"[Match] Refused {canonicalDropWeapon} drop from '{playerId}' without an equipped pickup");
                 return;
-            }
-
-            if (IsSpecialWeapon(canonicalDropWeapon) &&
-                ServerWeaponMagazineStore.TryPeek(playerId, canonicalDropWeapon!, out var heldSpecialMagazine))
-            {
-                magazine = heldSpecialMagazine.ReadRemaining();
             }
 
             var itemId = itemManager.DropWeapon(
@@ -751,6 +756,7 @@ namespace OpenGSServer
                 return;
             }
 
+            ServerWeaponMagazineStore.RemoveWeapon(playerId, canonicalDropWeapon);
             if (IsSpecialWeapon(canonicalDropWeapon))
                 ClearSpecialWeapon(room.Id.ToString(), playerId, canonicalDropWeapon);
 
@@ -1242,7 +1248,8 @@ namespace OpenGSServer
                     return;
                 }
 
-                var pickedWeaponType = NormalizeWeaponType(item.WeaponType);
+                var pickedWeaponType = ResolveWeaponType(
+                    NormalizeWeaponType(item.WeaponType), item.WeaponType);
                 if (IsSpecialWeapon(pickedWeaponType))
                 {
                     SetSpecialWeapon(room.Id.ToString(), playerId, pickedWeaponType!);
@@ -1251,6 +1258,17 @@ namespace OpenGSServer
                         pickedMagazine.SetRemaining(item.MagazineAmmo);
                     GameMessageDispatcher.SendAmmoUpdate(
                         room.Id.ToString(), playerId, pickedWeaponType!,
+                        pickedMagazine.ReadRemaining(), pickedMagazine.Capacity,
+                        pickedMagazine.ReadReserve());
+                }
+                else if (pickedWeaponType != null &&
+                    ServerWeaponMagazineStore.IsKnownWeapon(pickedWeaponType))
+                {
+                    var pickedMagazine = ServerWeaponMagazineStore.GetOrCreate(playerId, pickedWeaponType);
+                    if (item.MagazineAmmo >= 0)
+                        pickedMagazine.SetRemaining(item.MagazineAmmo);
+                    GameMessageDispatcher.SendAmmoUpdate(
+                        room.Id.ToString(), playerId, pickedWeaponType,
                         pickedMagazine.ReadRemaining(), pickedMagazine.Capacity,
                         pickedMagazine.ReadReserve());
                 }
@@ -2477,6 +2495,12 @@ namespace OpenGSServer
                 return;
             }
 
+            if (!ServerWeaponMagazineStore.TryPeek(playerId, weaponType, out _))
+            {
+                Console.WriteLine($"[Match] Ignored {weaponType} shot from '{playerId}' without a held magazine");
+                return;
+            }
+
             var shooterState = MatchServerV2.Instance.ServerLagCompensationManager.GetPlayerState(playerId);
             var direction = ReadVector2(shotData, "Dir", "Direction", "AimDirection");
             var directionLength = direction.Length();
@@ -3560,6 +3584,12 @@ namespace OpenGSServer
             if (player.Health <= 0)
             {
                 Console.WriteLine($"[Match] Ignored reload from a player that is down: '{playerId}'");
+                return;
+            }
+
+            if (!ServerWeaponMagazineStore.TryPeek(playerId, weaponType, out _))
+            {
+                Console.WriteLine($"[Match] Ignored reload of unowned {weaponType} from '{playerId}'");
                 return;
             }
 

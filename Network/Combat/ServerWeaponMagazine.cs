@@ -388,6 +388,17 @@ namespace OpenGSServer.Network
                    byWeapon.TryGetValue(weaponType, out magazine!);
         }
 
+        public static bool RemoveWeapon(string playerId, string weaponType)
+        {
+            if (string.IsNullOrWhiteSpace(playerId) || string.IsNullOrWhiteSpace(weaponType) ||
+                !Magazines.TryGetValue(playerId, out var byWeapon))
+            {
+                return false;
+            }
+
+            return byWeapon.TryRemove(weaponType, out _);
+        }
+
         public static IReadOnlyList<ServerMagazine> ForPlayer(string playerId)
         {
             return Magazines.TryGetValue(playerId, out var byWeapon)
