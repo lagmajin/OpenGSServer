@@ -166,6 +166,7 @@ namespace OpenGSServer
                 .Snapshot();
         }
         private static readonly ConcurrentDictionary<string, DateTime> LastShots = new();
+        private static readonly ConcurrentDictionary<string, long> LastGrenadeThrows = new();
         private static readonly ConcurrentDictionary<string, string> EquippedSpecialWeapons =
             new(StringComparer.OrdinalIgnoreCase);
 
@@ -3585,10 +3586,15 @@ namespace OpenGSServer
             var hasGrenadeLoadout = ServerGrenadeLoadoutStore.TryRead(
                 room.Id.ToString(), playerId, out _);
             var remainingGrenadeSlots = Array.Empty<string>();
+            var loadoutType = NormalizeGrenadeLoadoutType(grenadeType);
             if (hasGrenadeLoadout)
             {
-                var loadoutType = NormalizeGrenadeLoadoutType(grenadeType);
                 if (string.IsNullOrEmpty(loadoutType) ||
+                    !ServerGrenadeLoadoutStore.TryRead(
+                        room.Id.ToString(), playerId, out var currentGrenadeSlots) ||
+                    !currentGrenadeSlots.Any(slot => string.Equals(
+                        slot, loadoutType, StringComparison.OrdinalIgnoreCase)) ||
+                    !TryAcceptGrenadeThrow(playerId) ||
                     !ServerGrenadeLoadoutStore.TryConsume(
                         room.Id.ToString(), playerId, loadoutType,
                         out var tracked, out remainingGrenadeSlots) || !tracked)
@@ -3598,6 +3604,11 @@ namespace OpenGSServer
                     return;
                 }
                 grenadeType = loadoutType;
+            }
+            else if (!TryAcceptGrenadeThrow(playerId))
+            {
+                Console.WriteLine($"[Match] Ignored rapid grenade throw from '{playerId}'");
+                return;
             }
 
             // The server now owns the flight, the fuse, and the blast. The throw
@@ -3880,6 +3891,26 @@ namespace OpenGSServer
         private static string ShotCooldownKey(string playerId, string weaponType) =>
             $"{playerId.ToLowerInvariant()}:{weaponType.ToLowerInvariant()}";
 
+        private static bool TryAcceptGrenadeThrow(string playerId)
+        {
+            var key = playerId.ToLowerInvariant();
+            var now = Environment.TickCount64;
+            while (true)
+            {
+                if (LastGrenadeThrows.TryGetValue(key, out var previous))
+                {
+                    if (now - previous < 500)
+                        return false;
+                    if (LastGrenadeThrows.TryUpdate(key, now, previous))
+                        return true;
+                }
+                else if (LastGrenadeThrows.TryAdd(key, now))
+                {
+                    return true;
+                }
+            }
+        }
+
         private static void ClearShotCooldowns(string playerId)
         {
             var prefix = $"{playerId.ToLowerInvariant()}:";
@@ -3888,6 +3919,7 @@ namespace OpenGSServer
             {
                 LastShots.TryRemove(key, out _);
             }
+            LastGrenadeThrows.TryRemove(playerId.ToLowerInvariant(), out _);
         }
 
         /// <summary>
