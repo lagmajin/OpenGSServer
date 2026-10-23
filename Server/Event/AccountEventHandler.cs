@@ -62,7 +62,7 @@ namespace OpenGSServer
             // client whose token should not decide who it is.
             if (TryReadString(dic, "ResumeToken", out var resumeToken))
             {
-                if (!ResumeTokens.TryRedeem(resumeToken, out var resumedAccountId))
+                if (!ResumeTokens.TryGetAccountId(resumeToken, out var resumedAccountId))
                 {
                     session.SendAsyncJsonWithTimeStamp(new JObject
                     {
@@ -73,7 +73,8 @@ namespace OpenGSServer
                     return null;
                 }
 
-                return CompleteLogin(session, resumedAccountId, replaceStaleSession: true);
+                return CompleteLogin(
+                    session, resumedAccountId, replaceStaleSession: true, resumeToken: resumeToken);
             }
 
             if (!TryReadFirstString(dic, out var id, "id", "AccountID", "AccountId", "PlayerID") ||
@@ -107,11 +108,12 @@ namespace OpenGSServer
             in IClientSession session,
             string accountId,
             bool replaceStaleSession,
-            string? playerName = null)
+            string? playerName = null,
+            string? resumeToken = null)
         {
             lock (SessionGates.GetOrAdd(accountId, static _ => new object()))
             {
-                return CompleteLoginCore(session, accountId, replaceStaleSession, playerName);
+                return CompleteLoginCore(session, accountId, replaceStaleSession, playerName, resumeToken);
             }
         }
 
@@ -119,8 +121,17 @@ namespace OpenGSServer
             in IClientSession session,
             string accountId,
             bool replaceStaleSession,
-            string? playerName)
+            string? playerName,
+            string? resumeToken)
         {
+            if (replaceStaleSession &&
+                (string.IsNullOrWhiteSpace(resumeToken) ||
+                 !ResumeTokens.TryRedeem(resumeToken, out var tokenAccountId) ||
+                 !string.Equals(tokenAccountId, accountId, StringComparison.OrdinalIgnoreCase)))
+            {
+                return SendLoginFailure(session, new LoginResult(accountId, eLoginResultType.Unknown));
+            }
+
             // The account has to be a known one before a token is minted for it.
             // A resumed token names an account that existed when it was issued, but
             // the account may have been deleted since.
@@ -255,8 +266,7 @@ namespace OpenGSServer
         {
             if (session is ClientSession clientSession && !string.IsNullOrWhiteSpace(clientSession.PlayerID))
             {
-                AccountManager.GetInstance().Logout(clientSession.PlayerID, false);
-                RevokeResumeToken(clientSession.PlayerID);
+                ReleaseOwnedSession(clientSession, clientSession.PlayerID, revokeResumeToken: true);
             }
         }
 
@@ -267,8 +277,15 @@ namespace OpenGSServer
             var id = dic.TryGetValue("id", out var idToken) ? idToken.ToString() : string.Empty;
             var pass = dic.TryGetValue("pass", out var passToken) ? passToken.ToString() : string.Empty;
 
-            var result = AccountManager.GetInstance().LogoutWithPassword(id, pass);
-            ResumeTokens.Revoke(id);
+            JObject result;
+            lock (SessionGates.GetOrAdd(id, static _ => new object()))
+            {
+                result = AccountManager.GetInstance().LogoutWithPassword(id, pass);
+                if ((bool?)result["Success"] == true)
+                {
+                    ResumeTokens.Revoke(id);
+                }
+            }
 
             session.SendAsyncJsonWithTimeStamp(result);
         }

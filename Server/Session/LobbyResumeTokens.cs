@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Security.Cryptography;
 
 namespace OpenGSServer
@@ -72,6 +73,29 @@ namespace OpenGSServer
 
             if (entry.ExpiresAtUtc <= DateTime.UtcNow)
             {
+                return false;
+            }
+
+            accountId = entry.AccountId;
+            return true;
+        }
+
+        /// <summary>
+        /// Looks up a token's account without spending the token. Callers must
+        /// redeem it later while holding that account's session gate.
+        /// </summary>
+        public bool TryGetAccountId(string token, out string accountId)
+        {
+            accountId = string.Empty;
+            if (string.IsNullOrWhiteSpace(token) || !_entries.TryGetValue(token, out var entry))
+            {
+                return false;
+            }
+
+            if (entry.ExpiresAtUtc <= DateTime.UtcNow)
+            {
+                ((ICollection<KeyValuePair<string, Entry>>)_entries).Remove(
+                    new KeyValuePair<string, Entry>(token, entry));
                 return false;
             }
 
