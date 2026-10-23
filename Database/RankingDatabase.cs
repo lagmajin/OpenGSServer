@@ -59,6 +59,7 @@ namespace OpenGSServer
         private const string CollectionName = "rankings";
 
         private LiteDatabase? rankingDB;
+        private readonly object syncRoot = new();
 
         public static string rankingDBfileName = "ranking.db";
 
@@ -108,27 +109,56 @@ namespace OpenGSServer
             }
 
             var key = BuildKey(accountId, mode);
-            var entries = Entries();
-
-            var existing = entries.FindById(key);
-            if (existing == null)
+            lock (syncRoot)
             {
-                existing = new RankingEntry
+                var entries = Entries();
+                var matching = entries.Find(Query.EQ(nameof(RankingEntry.Mode), mode.ToString()))
+                    .Where(entry => string.Equals(
+                        entry.AccountId, accountId, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+                var existing = entries.FindById(key);
+                if (existing != null && matching.All(entry => entry.Id != existing.Id))
+                {
+                    matching.Add(existing);
+                }
+
+                var totalScore = matching.Sum(entry => Math.Max(0, entry.TotalScore));
+                var matchCount = matching.Sum(entry => Math.Max(0, entry.Matches));
+                var bestScore = matching.Select(entry => Math.Max(0, entry.BestScore))
+                    .DefaultIfEmpty(0)
+                    .Max();
+                var lastPlayed = matching.Select(entry => entry.LastPlayedUtc)
+                    .DefaultIfEmpty(DateTime.MinValue)
+                    .Max();
+
+                existing ??= new RankingEntry
                 {
                     Id = key,
                     AccountId = accountId,
                     Mode = mode.ToString()
                 };
+
+                foreach (var duplicate in matching.Where(entry => entry.Id != key))
+                {
+                    entries.Delete(duplicate.Id);
+                }
+
+                existing.Id = key;
+                existing.AccountId = accountId;
+                existing.Mode = mode.ToString();
+                existing.DisplayName = string.IsNullOrWhiteSpace(displayName) ? accountId : displayName;
+                existing.TotalScore = totalScore + Math.Max(0, score);
+                existing.BestScore = Math.Max(bestScore, Math.Max(0, score));
+                existing.Matches = matchCount + 1;
+                existing.LastPlayedUtc = playedUtc ?? DateTime.UtcNow;
+                if (lastPlayed > existing.LastPlayedUtc)
+                {
+                    existing.LastPlayedUtc = lastPlayed;
+                }
+
+                entries.Upsert(existing);
+                return existing;
             }
-
-            existing.DisplayName = string.IsNullOrWhiteSpace(displayName) ? accountId : displayName;
-            existing.TotalScore += Math.Max(0, score);
-            existing.BestScore = Math.Max(existing.BestScore, Math.Max(0, score));
-            existing.Matches += 1;
-            existing.LastPlayedUtc = playedUtc ?? DateTime.UtcNow;
-
-            entries.Upsert(existing);
-            return existing;
         }
 
         public void AddDMKillRanking(string accountId, string displayName, int kill)
@@ -163,6 +193,24 @@ namespace OpenGSServer
 
             return Entries()
                 .Find(Query.EQ("Mode", mode.ToString()))
+                .GroupBy(entry => entry.AccountId, StringComparer.OrdinalIgnoreCase)
+                .Select(group =>
+                {
+                    var bestEntry = group.OrderByDescending(entry => entry.BestScore)
+                        .ThenByDescending(entry => entry.Matches)
+                        .First();
+                    return new RankingEntry
+                    {
+                        Id = BuildKey(bestEntry.AccountId, mode),
+                        AccountId = bestEntry.AccountId,
+                        DisplayName = bestEntry.DisplayName,
+                        Mode = mode.ToString(),
+                        BestScore = group.Max(entry => entry.BestScore),
+                        TotalScore = group.Sum(entry => Math.Max(0, entry.TotalScore)),
+                        Matches = group.Sum(entry => Math.Max(0, entry.Matches)),
+                        LastPlayedUtc = group.Max(entry => entry.LastPlayedUtc)
+                    };
+                })
                 .OrderByDescending(entry => entry.BestScore)
                 .ThenByDescending(entry => entry.Matches)
                 .ThenBy(entry => entry.DisplayName, StringComparer.Ordinal)
@@ -177,13 +225,17 @@ namespace OpenGSServer
                 return null;
             }
 
-            return Entries().FindById(BuildKey(accountId, mode));
+            var entries = Entries();
+            return entries.FindById(BuildKey(accountId, mode)) ??
+                entries.Find(Query.EQ(nameof(RankingEntry.Mode), mode.ToString()))
+                    .FirstOrDefault(entry => string.Equals(
+                        entry.AccountId, accountId, StringComparison.OrdinalIgnoreCase));
         }
 
         private static string BuildKey(string accountId, EGameMode mode)
         {
             // One row per account per mode, so the key has to carry both.
-            return $"{mode}:{accountId}";
+            return $"{mode}:{accountId.ToUpperInvariant()}";
         }
 
         public void Dispose()
