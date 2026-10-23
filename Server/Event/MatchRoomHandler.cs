@@ -567,6 +567,21 @@ namespace OpenGSServer
                 return;
             }
 
+            if (!TryGetActiveCombatant(room, playerId, out _))
+            {
+                UdpBroadcastToRoom(room.Id.ToString(), new JObject
+                {
+                    ["MessageType"] = GameMessageTypes.FieldItemPickup,
+                    ["RoomID"] = room.Id.ToString(),
+                    ["ItemId"] = itemId,
+                    ["PlayerID"] = playerId,
+                    ["Success"] = false,
+                    ["Reason"] = "PlayerInactive",
+                    ["Timestamp"] = DateTime.UtcNow.ToString("o")
+                });
+                return;
+            }
+
             var itemManager = MatchRoomManager.Instance.GetFieldItemManager(room.Id);
             if (itemManager == null)
             {
@@ -701,6 +716,12 @@ namespace OpenGSServer
         /// </summary>
         private static void HandleWeaponDrop(MatchRoom room, string playerId, JObject json)
         {
+            if (!TryGetActiveCombatant(room, playerId, out _))
+            {
+                Console.WriteLine($"[Match] Ignored weapon drop from inactive or downed player '{playerId}'");
+                return;
+            }
+
             var weaponType = ReadString(json, "WeaponType", "WeaponID", "WeaponId");
             if (string.IsNullOrWhiteSpace(weaponType))
             {
@@ -1213,6 +1234,16 @@ namespace OpenGSServer
 
             var isPickup = string.Equals(messageType, "WeaponPickup", StringComparison.OrdinalIgnoreCase);
             var requestedItemId = isPickup ? ReadString(json, "ItemId", "ItemID") : string.Empty;
+            if (isPickup && !TryGetActiveCombatant(room, playerId, out _))
+            {
+                if (!string.IsNullOrWhiteSpace(requestedItemId) && requestedItemId.Length <= 128)
+                {
+                    BroadcastDroppedWeaponPickup(room, playerId,
+                        requestedItemId, weaponType, false);
+                }
+                return;
+            }
+
             var itemId = FindWeaponItem(itemManager, weaponType, playerId, requestedItemId);
             if (string.IsNullOrEmpty(itemId))
             {
