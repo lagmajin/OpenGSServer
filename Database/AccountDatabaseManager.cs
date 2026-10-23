@@ -273,24 +273,6 @@ namespace OpenGSServer
             }
         }
 
-        public MatchResultResponse? UpdateMatchProgress(
-            string accountId, Func<DBAccount, MatchResultResponse> updateProgress)
-        {
-            if (string.IsNullOrWhiteSpace(accountId) || updateProgress == null)
-                return null;
-
-            lock (_accountMutationLock)
-            {
-                var col = EnsureDatabase().GetCollection<DBAccount>(accountTableName);
-                var rec = FindAccountRecord(col, accountId);
-                if (rec == null) return null;
-                var result = updateProgress(rec);
-                if (result == null) return null;
-                rec.LastUpdatedUtc = DateTime.UtcNow.ToString("O");
-                return col.Update(rec) ? result : null;
-            }
-        }
-
         public MatchResultResponse? SettleMatchProgress(
             string matchId, string accountId, Func<DBAccount, MatchResultResponse> updateProgress)
         {
@@ -324,7 +306,8 @@ namespace OpenGSServer
                     existingReceipt = receipts.FindById(receiptId);
                     if (existingReceipt != null)
                     {
-                        database.Commit();
+                        if (!database.Commit())
+                            throw new InvalidOperationException("Could not close match settlement transaction.");
                         return existingReceipt.ToResponse();
                     }
 
