@@ -169,6 +169,8 @@ namespace OpenGSServer
                 foreach (var playerId in idlePlayers)
                 {
                     if (AccountEventHandler.KickPlayerSession(playerId, () =>
+                        (!MatchServerV2.Instance.IsRunning ||
+                         !MatchServerV2.Instance.IsPlayerConnected(playerId)) &&
                         _connectedPlayers.TryGetValue(playerId, out var current) &&
                         current.LastActivity <= cutoff))
                     {
