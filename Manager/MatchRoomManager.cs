@@ -405,6 +405,11 @@ namespace OpenGSServer
             {
                 InGameMatchEventHandler.BeginMissionEnemies(
                     matchRoom, missionEnemyCount.Value, new System.Numerics.Vector2(0f, 0f));
+                // Individual spawn events keep clients responsive, while this
+                // room snapshot gives every current player one authoritative
+                // baseline after the initial wave has been created.
+                OpenGSServer.Network.MissionEnemyRegistry.PublishSnapshot(
+                    matchRoom.Id.ToString());
                 OpenGSServer.Network.MissionEnemyRegistry.PublishObjectiveProgress(
                     matchRoom.Id.ToString());
             }
