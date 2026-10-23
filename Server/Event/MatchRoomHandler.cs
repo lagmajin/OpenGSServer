@@ -2397,6 +2397,12 @@ namespace OpenGSServer
 
         private static void HandlePlayerRespawn(MatchRoom room, string playerId, JObject json)
         {
+            if (!room.Playing || room.Finished)
+            {
+                Console.WriteLine($"[Match] Ignored respawn from '{playerId}' outside an active match");
+                return;
+            }
+
             // The client may request a respawn, but it never chooses the
             // position. Until map-specific spawn tables are configured, keep
             // the authoritative server position and ignore client coordinates.
@@ -2412,7 +2418,7 @@ namespace OpenGSServer
             var spawnZ = serverState.PositionZ;
             var respawnedPlayer = room.Players.FirstOrDefault(player =>
                 string.Equals(player.Id, playerId, StringComparison.OrdinalIgnoreCase));
-            if (respawnedPlayer == null || respawnedPlayer.Health > 0)
+            if (respawnedPlayer == null || !ServerDamageResolver.IsDown(respawnedPlayer))
             {
                 Console.WriteLine($"[Match] Ignored respawn request from living or unknown player '{playerId}'");
                 return;
@@ -2447,10 +2453,14 @@ namespace OpenGSServer
                 ["Y"] = spawnY,
                 ["Z"] = spawnZ
             };
+            if (!ServerDamageResolver.TryRevive(respawnedPlayer))
+            {
+                Console.WriteLine($"[Match] Ignored duplicate respawn from '{playerId}'");
+                return;
+            }
+
             MatchServerV2.Instance?.ServerLagCompensationManager.SetPlayerPosition(
                 playerId, spawnX, spawnY, spawnZ);
-
-            ServerDamageResolver.Revive(respawnedPlayer);
             ClearCombatBuffs(room.Id.ToString(), playerId);
 
             // Coming back with the gun that was on its last round would make a
@@ -2465,6 +2475,12 @@ namespace OpenGSServer
 
         private static void HandlePlayerPose(MatchRoom room, string playerId, JObject json)
         {
+            if (!TryGetActiveCombatant(room, playerId, out _))
+            {
+                Console.WriteLine($"[Match] Ignored pose update from inactive or downed player '{playerId}'");
+                return;
+            }
+
             var poseState = ReadString(json, "PoseState", "Pose", "Posture") ?? "Stand";
             if (!Enum.TryParse<EPlayerPoseState>(poseState, true, out var pose) ||
                 !Enum.IsDefined(typeof(EPlayerPoseState), pose))

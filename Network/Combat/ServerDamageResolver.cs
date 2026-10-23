@@ -133,6 +133,26 @@ namespace OpenGSServer.Network
             }
         }
 
+        /// <summary>Revives only a downed player and reports whether it won the race.</summary>
+        public static bool TryRevive(PlayerInfo? player)
+        {
+            if (player == null)
+            {
+                return false;
+            }
+
+            lock (HealthLock(player))
+            {
+                if (player.Health > 0)
+                {
+                    return false;
+                }
+
+                player.Health = player.MaxHealth > 0 ? player.MaxHealth : 100;
+                return true;
+            }
+        }
+
         /// <summary>Restores health without racing a simultaneous hit or revive.</summary>
         public static int Heal(PlayerInfo? player, int amount)
         {
