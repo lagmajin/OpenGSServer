@@ -617,19 +617,24 @@ namespace OpenGSServer
                     return false;
                 }
 
+                var normalizedItemId = itemId?.Trim() ?? string.Empty;
+                account.PurchasedItems ??= new List<string>();
+                if (normalizedItemId.Length > 0 && !account.PurchasedItems.Any(existing =>
+                    string.Equals(existing, normalizedItemId, StringComparison.OrdinalIgnoreCase)))
+                {
+                    return false;
+                }
+
                 account.EquippedItems ??= new List<DBEquippedItem>();
-                var existing = account.EquippedItems.FirstOrDefault(item => string.Equals(item.Category, category, StringComparison.OrdinalIgnoreCase));
-                if (existing == null)
+                account.EquippedItems.RemoveAll(item => item == null ||
+                    string.Equals(item.Category, category, StringComparison.OrdinalIgnoreCase));
+                if (normalizedItemId.Length > 0)
                 {
                     account.EquippedItems.Add(new DBEquippedItem
                     {
                         Category = category,
-                        ItemId = itemId ?? string.Empty
+                        ItemId = normalizedItemId
                     });
-                }
-                else
-                {
-                    existing.ItemId = itemId ?? string.Empty;
                 }
 
                 account.LastUpdatedUtc = DateTime.UtcNow.ToString("O");
@@ -639,7 +644,7 @@ namespace OpenGSServer
 
         public bool SetEquippedInstantItem(string accountId, int slot, string itemId)
         {
-            if (string.IsNullOrWhiteSpace(accountId) || slot < 0)
+            if (string.IsNullOrWhiteSpace(accountId) || slot < 0 || slot >= 3)
             {
                 return false;
             }
@@ -652,19 +657,23 @@ namespace OpenGSServer
                     return false;
                 }
 
+                var normalizedItemId = itemId?.Trim() ?? string.Empty;
+                account.PurchasedItems ??= new List<string>();
+                if (normalizedItemId.Length > 0 && !account.PurchasedItems.Any(existing =>
+                    string.Equals(existing, normalizedItemId, StringComparison.OrdinalIgnoreCase)))
+                {
+                    return false;
+                }
+
                 account.EquippedInstantItems ??= new List<DBInstantEquippedItem>();
-                var existing = account.EquippedInstantItems.FirstOrDefault(item => item.Slot == slot);
-                if (existing == null)
+                account.EquippedInstantItems.RemoveAll(item => item == null || item.Slot == slot);
+                if (normalizedItemId.Length > 0)
                 {
                     account.EquippedInstantItems.Add(new DBInstantEquippedItem
                     {
                         Slot = slot,
-                        ItemId = itemId ?? string.Empty
+                        ItemId = normalizedItemId
                     });
-                }
-                else
-                {
-                    existing.ItemId = itemId ?? string.Empty;
                 }
 
                 account.LastUpdatedUtc = DateTime.UtcNow.ToString("O");
