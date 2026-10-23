@@ -23,9 +23,13 @@ namespace OpenGSServer
     /// </summary>
     public static class MissionEnemyRegistry
     {
+        private const double EnemyStateBroadcastIntervalSeconds = 0.10;
         private static readonly ConcurrentDictionary<string, ServerEnemySimulator> Simulators =
             new(StringComparer.OrdinalIgnoreCase);
+        private static readonly ConcurrentDictionary<string, ServerEnemyState> PendingEnemyStates =
+            new(StringComparer.OrdinalIgnoreCase);
         private static readonly object SimulatorLifecycleLock = new();
+        private static double NextEnemyStateBroadcastAtSeconds;
 
         /// <summary>
         /// Where a room's players are, read from the same lag compensation state
@@ -301,6 +305,18 @@ namespace OpenGSServer
                 {
                     entry.Value.Update(deltaSeconds, nowSeconds);
                 }
+
+                if (nowSeconds < NextEnemyStateBroadcastAtSeconds)
+                    return;
+                NextEnemyStateBroadcastAtSeconds = nowSeconds + EnemyStateBroadcastIntervalSeconds;
+                foreach (var key in PendingEnemyStates.Keys)
+                {
+                    if (PendingEnemyStates.TryRemove(key, out var enemy))
+                    {
+                        GameMessageDispatcher.BroadcastToRoom(enemy.RoomId, BuildEnemyMessage(
+                            "EnemyState", enemy));
+                    }
+                }
             }
         }
 
@@ -504,8 +520,11 @@ namespace OpenGSServer
 
         private static void BroadcastEnemyState(ServerEnemyState enemy)
         {
-            GameMessageDispatcher.BroadcastToRoom(enemy.RoomId, BuildEnemyMessage(
-                "EnemyState", enemy));
+            var key = enemy.RoomId + "\n" + enemy.EnemyId;
+            PendingEnemyStates.AddOrUpdate(key, enemy,
+                (_, current) => current.Timestamp.CompareTo(enemy.Timestamp) >= 0
+                    ? current
+                    : enemy);
         }
 
         private static void BroadcastEnemySpawn(ServerEnemyState enemy)
