@@ -429,6 +429,46 @@ namespace OpenGSServer.Network
             return false;
         }
 
+        public bool TryResolveEnemyOnSegment(
+            Vector2 segmentStart,
+            Vector2 segmentEnd,
+            float radius,
+            out ServerEnemyState enemy,
+            out Vector2 hitPosition)
+        {
+            enemy = null!;
+            hitPosition = segmentEnd;
+            var segment = segmentEnd - segmentStart;
+            var segmentLengthSquared = segment.LengthSquared();
+            var hitRadius = Math.Max(0f, radius) + DefaultHitRadius;
+            var hitRadiusSquared = hitRadius * hitRadius;
+            var firstImpactAlong = float.PositiveInfinity;
+
+            foreach (var candidate in Snapshot())
+            {
+                var closestAlong = segmentLengthSquared > 0.000001f
+                    ? Math.Clamp(Vector2.Dot(candidate.Position - segmentStart, segment) /
+                        segmentLengthSquared, 0f, 1f)
+                    : 0f;
+                var closestPoint = segmentStart + segment * closestAlong;
+                var distanceSquared = Vector2.DistanceSquared(closestPoint, candidate.Position);
+                if (distanceSquared > hitRadiusSquared) continue;
+
+                var entryOffset = segmentLengthSquared > 0.000001f
+                    ? MathF.Sqrt(Math.Max(0f, hitRadiusSquared - distanceSquared) /
+                        segmentLengthSquared)
+                    : 0f;
+                var impactAlong = Math.Max(0f, closestAlong - entryOffset);
+                if (impactAlong >= firstImpactAlong) continue;
+
+                firstImpactAlong = impactAlong;
+                enemy = candidate;
+                hitPosition = segmentStart + segment * impactAlong;
+            }
+
+            return !float.IsPositiveInfinity(firstImpactAlong);
+        }
+
         public void Remove(ServerEnemyState enemy)
         {
             if (enemy == null)

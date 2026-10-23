@@ -2847,12 +2847,14 @@ namespace OpenGSServer
             Projectiles.OnDamage = (targetId, attackerId, damage, hit) =>
                 HandleProjectileDamage(targetId, attackerId, damage, hit);
 
-            // A bullet in a mission stops at an enemy. It used to be resolved
-            // against players only, so it went through every enemy on its line.
-            Projectiles.IsPointInsideEnemy = (roomId, point) =>
-                MissionEnemyRegistry.TryResolveEnemyAt(roomId, point, 0.35f, out _);
-            Projectiles.OnBulletHitEnemy = (roomId, ownerId, hit, damage) =>
-                HandleBulletHitEnemy(roomId, ownerId, hit, damage);
+            Projectiles.ResolveEnemyOnSegment = (roomId, segmentStart, segmentEnd) =>
+            {
+                MissionEnemyRegistry.TryResolveEnemyOnSegment(
+                    roomId, segmentStart, segmentEnd, 0.35f, out var enemyId, out var hitPosition);
+                return (enemyId, hitPosition);
+            };
+            Projectiles.OnBulletHitEnemy = (roomId, enemyId, ownerId, hit, damage) =>
+                HandleBulletHitEnemy(roomId, enemyId, ownerId, hit, damage);
             Projectiles.OnGrenadeExplode = grenade =>
                 MissionEnemyRegistry.ApplyGrenadeDamageToEnemies(
                     grenade.RoomId, grenade.OwnerId, grenade.Position,
@@ -2917,16 +2919,11 @@ namespace OpenGSServer
         /// Settles a simulated bullet that reached an enemy.
         /// </summary>
         private static void HandleBulletHitEnemy(
-            string roomId, string ownerId, Vector2 hit, int damage)
+            string roomId, string enemyId, string ownerId, Vector2 hit, int damage)
         {
             var room = MatchRoomManager.Instance.GetRoomById(roomId);
             if (room == null || !room.Playing || !room.Players.Any(player =>
                     string.Equals(player.Id, ownerId, StringComparison.OrdinalIgnoreCase)))
-            {
-                return;
-            }
-
-            if (!MissionEnemyRegistry.TryResolveEnemyAt(roomId, hit, 0.35f, out var enemyId))
             {
                 return;
             }

@@ -97,21 +97,18 @@ namespace OpenGSServer.Network
         public Action<string, string, int, Vector2>? OnDamage { get; set; }
 
         /// <summary>
-        /// Asked whether a point on a bullet's flight is inside an enemy in the
-        /// projectile's room. It is a question rather than a hit report because
-        /// the simulator owns the flight and the caller owns enemy state.
-        /// <para>
-        /// A bullet used to be resolved against players only, so in a mission it
-        /// went through every enemy on its line and hit whatever was behind.
-        /// </para>
+        /// Resolves the first enemy touched by a bullet segment in its room.
+        /// The caller owns enemy state and returns the enemy ID and impact point;
+        /// the simulator compares that hit with player collisions.
         /// </summary>
-        public Func<string, Vector2, bool>? IsPointInsideEnemy { get; set; }
+        public Func<string, Vector2, Vector2, (string EnemyId, Vector2 HitPosition)>?
+            ResolveEnemyOnSegment { get; set; }
 
         /// <summary>
-        /// Called when a bullet reaches an enemy, so the caller can settle the
-        /// damage against it. The owner, the hit point and the damage.
+        /// Called when a bullet reaches an enemy. Includes its room, enemy ID,
+        /// owner, impact point, and damage.
         /// </summary>
-        public Action<string, string, Vector2, int>? OnBulletHitEnemy { get; set; }
+        public Action<string, string, string, Vector2, int>? OnBulletHitEnemy { get; set; }
 
         /// <summary>Called when a grenade blast can damage mission enemies.</summary>
         public Action<ServerProjectileState>? OnGrenadeExplode { get; set; }
@@ -283,7 +280,7 @@ namespace OpenGSServer.Network
             List<ServerProjectileState> expired = new();
             List<ServerProjectileState> detonated = new();
             List<(ServerProjectileState Grenade, string TargetId, int Damage, Vector2 Hit)> hits = new();
-            List<(string RoomId, string OwnerId, Vector2 Hit, int Damage)> enemyHits = new();
+            List<(string RoomId, string EnemyId, string OwnerId, Vector2 Hit, int Damage)> enemyHits = new();
 
             lock (_lock)
             {
@@ -329,8 +326,11 @@ namespace OpenGSServer.Network
 
                     if (projectile.Kind == ServerProjectileKind.Bullet)
                     {
-                        var hitEnemy = TryResolveBulletEnemyHit(
-                            projectile, previousPosition, out var enemyHitPosition);
+                        var enemyHit = ResolveEnemyOnSegment?.Invoke(
+                            projectile.RoomId, previousPosition, projectile.Position) ??
+                            (string.Empty, projectile.Position);
+                        var hitEnemy = !string.IsNullOrEmpty(enemyHit.EnemyId);
+                        var enemyHitPosition = enemyHit.HitPosition;
                         var hitPlayer = TryResolveBulletHit(
                             projectile, previousPosition, out var playerId, out var playerHitPosition);
 
@@ -340,7 +340,7 @@ namespace OpenGSServer.Network
                                 Vector2.DistanceSquared(previousPosition, enemyHitPosition) <=
                                 Vector2.DistanceSquared(previousPosition, playerHitPosition)))
                         {
-                            enemyHits.Add((projectile.RoomId, projectile.OwnerId,
+                            enemyHits.Add((projectile.RoomId, enemyHit.EnemyId, projectile.OwnerId,
                                 enemyHitPosition, projectile.Damage));
                             Retire(projectile, expired);
                             continue;
@@ -408,8 +408,8 @@ namespace OpenGSServer.Network
 
             foreach (var enemyHit in enemyHits)
             {
-                OnBulletHitEnemy?.Invoke(
-                    enemyHit.RoomId, enemyHit.OwnerId, enemyHit.Hit, enemyHit.Damage);
+                OnBulletHitEnemy?.Invoke(enemyHit.RoomId, enemyHit.EnemyId,
+                    enemyHit.OwnerId, enemyHit.Hit, enemyHit.Damage);
             }
         }
 
@@ -459,29 +459,6 @@ namespace OpenGSServer.Network
             projectile.IsActive = false;
             _projectiles.TryRemove(projectile.ProjectileId, out _);
             expired.Add(projectile);
-        }
-
-        private bool TryResolveBulletEnemyHit(
-            ServerProjectileState projectile, Vector2 segmentStart, out Vector2 hitPosition)
-        {
-            hitPosition = projectile.Position;
-            if (IsPointInsideEnemy == null) return false;
-
-            var segment = projectile.Position - segmentStart;
-            var distance = segment.Length();
-            if (!float.IsFinite(distance)) return false;
-            const float maximum_sample_spacing = 0.25f;
-            var sample_count = Math.Max(1, (int)MathF.Ceiling(distance / maximum_sample_spacing));
-            for (var sample = 0; sample <= sample_count; ++sample)
-            {
-                var fraction = (float)sample / sample_count;
-                var point = segmentStart + segment * fraction;
-                if (!IsPointInsideEnemy(projectile.RoomId, point)) continue;
-                hitPosition = point;
-                return true;
-            }
-
-            return false;
         }
 
         private bool TryResolveBulletHit(

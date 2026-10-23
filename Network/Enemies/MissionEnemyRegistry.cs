@@ -127,31 +127,35 @@ namespace OpenGSServer
                 return false;
             }
 
-            // The point on the line the shot is at, sampled the whole way along it,
-            // because an enemy is a point and the shot is a line and a line never
-            // passes exactly through a point.
-            var step = MathF.Max(0.5f, range / 24f);
-            for (var travelled = 0f; travelled <= range; travelled += step)
+            if (!float.IsFinite(originX) || !float.IsFinite(originY) ||
+                !float.IsFinite(range) || range < 0f)
             {
-                var point = new Vector2(originX + (dirX * travelled), originY + (dirY * travelled));
-                if (simulator.TryResolveEnemyAt(point, 0.35f, out var enemy))
-                {
-                    enemyId = enemy.EnemyId;
-                    hitDistance = travelled;
-                    return true;
-                }
+                return false;
             }
 
-            return false;
+            var origin = new Vector2(originX, originY);
+            var direction = new Vector2(dirX, dirY);
+            var directionLengthSquared = direction.LengthSquared();
+            if (!float.IsFinite(direction.X) || !float.IsFinite(direction.Y) ||
+                !float.IsFinite(directionLengthSquared) || directionLengthSquared <= 0.000001f)
+                return false;
+            direction /= MathF.Sqrt(directionLengthSquared);
+            var end = origin + direction * range;
+            if (!float.IsFinite(end.X) || !float.IsFinite(end.Y)) return false;
+            if (!simulator.TryResolveEnemyOnSegment(
+                    origin, end, 0.35f, out var enemy, out var hitPosition))
+                return false;
+
+            enemyId = enemy.EnemyId;
+            hitDistance = Vector2.Distance(origin, hitPosition);
+            return true;
         }
 
         /// <summary>
-        /// Whether any enemy in a room is at this point.
+        /// Whether an enemy in any active room is at this point.
         /// <para>
-        /// Used by the bullet simulation, which is stepping a point along a flight
-        /// and asking what is at it. It searches every room, because a bullet
-        /// carries only its own owner's identity and the room it belongs to is the
-        /// one that owner's room.
+        /// Use the room-scoped overload for match projectiles. This lookup is only
+        /// for callers that have no room identity to constrain the search.
         /// </para>
         /// </summary>
         public static bool TryResolveAnyEnemyAt(Vector2 point, float radius, out string enemyId)
@@ -180,6 +184,27 @@ namespace OpenGSServer
             }
 
             enemyId = string.Empty;
+            return false;
+        }
+
+        public static bool TryResolveEnemyOnSegment(
+            string roomId,
+            Vector2 segmentStart,
+            Vector2 segmentEnd,
+            float radius,
+            out string enemyId,
+            out Vector2 hitPosition)
+        {
+            var simulator = TryGet(roomId);
+            if (simulator != null && simulator.TryResolveEnemyOnSegment(
+                    segmentStart, segmentEnd, radius, out var enemy, out hitPosition))
+            {
+                enemyId = enemy.EnemyId;
+                return true;
+            }
+
+            enemyId = string.Empty;
+            hitPosition = segmentEnd;
             return false;
         }
 
