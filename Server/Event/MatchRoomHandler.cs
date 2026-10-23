@@ -1362,6 +1362,12 @@ namespace OpenGSServer
             GameMessageDispatcher.SendToPlayer(playerId, message);
         }
 
+        private static void SendGrenadeLoadoutSnapshotIfTracked(string roomId, string playerId)
+        {
+            if (ServerGrenadeLoadoutStore.TryRead(roomId, playerId, out var slots))
+                SendGrenadeLoadoutUpdate(roomId, playerId, slots);
+        }
+
         private static void BroadcastGrenadeLoadoutUpdate(
             string roomId, string playerId, IReadOnlyList<string> slots)
         {
@@ -3524,6 +3530,7 @@ namespace OpenGSServer
             if (!TryGetActiveCombatant(room, playerId, out _))
             {
                 Console.WriteLine($"[Match] Ignored grenade throw from inactive or downed player '{playerId}'");
+                SendGrenadeLoadoutSnapshotIfTracked(room.Id.ToString(), playerId);
                 return;
             }
 
@@ -3534,6 +3541,7 @@ namespace OpenGSServer
                 grenadeType.Equals("LaunchedGrenade", StringComparison.OrdinalIgnoreCase))
             {
                 Console.WriteLine($"[Match] Refused client-supplied launcher projectile from '{playerId}'");
+                SendGrenadeLoadoutSnapshotIfTracked(room.Id.ToString(), playerId);
                 return;
             }
             var origin = ReadVector2(grenadeData, "Position", "Origin");
@@ -3554,6 +3562,7 @@ namespace OpenGSServer
                 !throwerState.HasAuthoritativePosition)
             {
                 Console.WriteLine($"[Match] Ignored grenade throw from '{playerId}' with no authoritative origin");
+                SendGrenadeLoadoutSnapshotIfTracked(room.Id.ToString(), playerId);
                 return;
             }
 
@@ -3568,6 +3577,7 @@ namespace OpenGSServer
                 !IsFinite(directionLength) || directionLength < 0.001f)
             {
                 Console.WriteLine($"[Match] Ignored grenade throw with no direction from '{playerId}'");
+                SendGrenadeLoadoutSnapshotIfTracked(room.Id.ToString(), playerId);
                 return;
             }
             direction /= directionLength;
@@ -3584,9 +3594,7 @@ namespace OpenGSServer
                         out var tracked, out remainingGrenadeSlots) || !tracked)
                 {
                     Console.WriteLine($"[Match] Refused grenade throw without a matching server slot from '{playerId}'");
-                    if (ServerGrenadeLoadoutStore.TryRead(
-                        room.Id.ToString(), playerId, out var currentGrenadeSlots))
-                        SendGrenadeLoadoutUpdate(room.Id.ToString(), playerId, currentGrenadeSlots);
+                    SendGrenadeLoadoutSnapshotIfTracked(room.Id.ToString(), playerId);
                     return;
                 }
                 grenadeType = loadoutType;
