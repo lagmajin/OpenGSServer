@@ -583,28 +583,31 @@ namespace OpenGSServer.Network
         {
             var array = new JArray();
 
-            foreach (var kvp in _items)
+            lock (_itemStateLock)
             {
-                var item = new JObject
+                foreach (var kvp in _items)
                 {
-                    ["ItemId"] = kvp.Value.ItemId,
-                    ["ItemType"] = FieldItemTypeNames.ToWireName(kvp.Value.ItemType),
-                    ["PositionX"] = kvp.Value.PosX,
-                    ["PositionY"] = kvp.Value.PosY,
-                    ["PositionZ"] = kvp.Value.PosZ,
-                    ["SpawnPointId"] = kvp.Value.SpawnPointId,
-                    ["SpawnPointName"] = kvp.Value.SpawnPointName,
-                    ["State"] = kvp.Value.State,
-                    ["PickedUpByPlayerId"] = kvp.Value.PickedUpByPlayerId,
-                    ["IsActive"] = kvp.Value.IsActive,
-                    // Carried with the weapon, so it has to survive the round trip
-                    // or a dropped weapon comes back empty after a state sync.
-                    ["WeaponType"] = kvp.Value.WeaponType,
-                    ["WeaponSlot"] = kvp.Value.WeaponSlot,
-                    ["MagazineAmmo"] = kvp.Value.MagazineAmmo,
-                    ["ReservedByPlayerId"] = kvp.Value.ReservedByPlayerId
-                };
-                array.Add(item);
+                    var item = new JObject
+                    {
+                        ["ItemId"] = kvp.Value.ItemId,
+                        ["ItemType"] = FieldItemTypeNames.ToWireName(kvp.Value.ItemType),
+                        ["PositionX"] = kvp.Value.PosX,
+                        ["PositionY"] = kvp.Value.PosY,
+                        ["PositionZ"] = kvp.Value.PosZ,
+                        ["SpawnPointId"] = kvp.Value.SpawnPointId,
+                        ["SpawnPointName"] = kvp.Value.SpawnPointName,
+                        ["State"] = kvp.Value.State,
+                        ["PickedUpByPlayerId"] = kvp.Value.PickedUpByPlayerId,
+                        ["IsActive"] = kvp.Value.IsActive,
+                        // Carried with the weapon, so it has to survive the round trip
+                        // or a dropped weapon comes back empty after a state sync.
+                        ["WeaponType"] = kvp.Value.WeaponType,
+                        ["WeaponSlot"] = kvp.Value.WeaponSlot,
+                        ["MagazineAmmo"] = kvp.Value.MagazineAmmo,
+                        ["ReservedByPlayerId"] = kvp.Value.ReservedByPlayerId
+                    };
+                    array.Add(item);
+                }
             }
 
             return array;
