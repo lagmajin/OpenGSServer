@@ -82,6 +82,11 @@ namespace OpenGSServer.Network
     /// </summary>
     public sealed class ServerEnemySimulator
     {
+        // EnemySnapshot is bounded to this many records by the native client
+        // codec. Keep the authoritative room state within that wire limit so a
+        // single oversized mission wave cannot make the entire snapshot fail.
+        public const int MaxEnemiesPerRoom = 256;
+
         public const float DefaultHitRadius = 0.6f;
 
         private readonly ConcurrentDictionary<string, ServerEnemyState> _enemies =
@@ -189,8 +194,14 @@ namespace OpenGSServer.Network
             int health = 60,
             int attackDamage = 15)
         {
-            var spawned = new List<ServerEnemyState>(Math.Max(0, count));
-            var total = Math.Max(0, count);
+            int availableSlots;
+            lock (_lock)
+            {
+                availableSlots = Math.Max(0, MaxEnemiesPerRoom - _enemies.Count);
+            }
+
+            var total = Math.Clamp(count, 0, availableSlots);
+            var spawned = new List<ServerEnemyState>(total);
 
             for (var i = 0; i < total; i++)
             {

@@ -372,8 +372,20 @@ namespace OpenGSServer
             if (matchRoom.Setting?.Mode == EGameMode.Mission &&
                 matchRoom.Setting is MissionMatchSetting missionSetting)
             {
+                var requestedEnemyCount = Math.Max(0, missionSetting.ObjectiveCount);
+                var supportedEnemyCount = Math.Min(
+                    requestedEnemyCount,
+                    OpenGSServer.Network.ServerEnemySimulator.MaxEnemiesPerRoom);
+                if (supportedEnemyCount != requestedEnemyCount)
+                {
+                    missionSetting.ObjectiveCount = supportedEnemyCount;
+                    ConsoleWrite.WriteMessage(
+                        $"[Mission] Room {matchRoom.Id} objective count was capped at {supportedEnemyCount} enemies to fit the snapshot protocol",
+                        ConsoleColor.Yellow);
+                }
+
                 InGameMatchEventHandler.BeginMissionEnemies(
-                    matchRoom, missionSetting.ObjectiveCount, new System.Numerics.Vector2(0f, 0f));
+                    matchRoom, supportedEnemyCount, new System.Numerics.Vector2(0f, 0f));
                 OpenGSServer.Network.MissionEnemyRegistry.PublishObjectiveProgress(
                     matchRoom.Id.ToString());
             }
