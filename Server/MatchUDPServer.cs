@@ -216,16 +216,41 @@ namespace OpenGSServer
             _pendingInputs.TryRemove(playerId, out _);
             _pendingPeers.TryRemove(peer.Id, out _);
             _unauthorizedPacketCounts.TryRemove(peer.Id, out _);
-            InGameMatchEventHandler.ClearPlayerState(
-                playerId, preserveMagazines: true, preserveRoomMembership: true);
-            MatchServerV2.Instance.ServerLagCompensationManager.SuspendPlayer(playerId);
+            try
+            {
+                InGameMatchEventHandler.ClearPlayerState(
+                    playerId, preserveMagazines: true, preserveRoomMembership: true);
+            }
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage(
+                    $"[UDP] Match state cleanup failed for {playerId}: {ex.Message}", ConsoleColor.Red);
+            }
+
+            try
+            {
+                MatchServerV2.Instance.ServerLagCompensationManager.SuspendPlayer(playerId);
+            }
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage(
+                    $"[UDP] Lag compensation suspension failed for {playerId}: {ex.Message}", ConsoleColor.Red);
+            }
 
             ConsoleWrite.WriteMessage(
                 $"[UDP] Player disconnected: {playerId} ({peer.Id}) (Reason: {info.Reason})", 
                 ConsoleColor.Yellow);
             ConsoleWrite.WriteMessage($"[UDP] Total players: {_connectedPlayers.Count}", ConsoleColor.Cyan);
 
-            NotifyPlayerLeft(playerId);
+            try
+            {
+                NotifyPlayerLeft(playerId);
+            }
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage(
+                    $"[UDP] Match departure notification failed for {playerId}: {ex.Message}", ConsoleColor.Red);
+            }
         }
 
         /// <summary>
