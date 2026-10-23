@@ -680,7 +680,7 @@ namespace OpenGSServer.Network
                     GrenadeType = "ClusterChild",
                     ExplosionDamage = 30,
                     ExplosionRadius = 2.5f,
-                    FuseTime = float.PositiveInfinity,
+                    FuseTime = 0.9f,
                     Gravity = 30.0f
                 };
 
