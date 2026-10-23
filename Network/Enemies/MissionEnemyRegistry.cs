@@ -383,10 +383,30 @@ namespace OpenGSServer
             Vector2 hit)
         {
             var room = MatchRoomManager.Instance.GetRoomById(enemy.RoomId);
-            if (room == null || !room.TryGetPlayer(playerId, out var player) || player == null)
+            if (room == null || !room.Playing || room.Finished ||
+                !MatchServerV2.Instance.IsPlayerConnected(playerId) ||
+                !room.TryGetPlayer(playerId, out var player) || player == null ||
+                ServerDamageResolver.IsDown(player))
             {
                 return;
             }
+
+            var simulator = TryGet(enemy.RoomId);
+            if (simulator == null || !simulator.TryPeek(enemy.EnemyId, out var liveEnemy) ||
+                !liveEnemy.IsAlive)
+                return;
+
+            var playerState = MatchServerV2.Instance.ServerLagCompensationManager
+                .GetPlayerState(playerId);
+            var attackReach = enemy.AttackRange + ServerEnemySimulator.DefaultHitRadius;
+            var dx = playerState.PositionX - hit.X;
+            var dy = playerState.PositionY - hit.Y;
+            var distanceSquared = (dx * dx) + (dy * dy);
+            if (!playerState.HasAuthoritativePosition ||
+                !string.Equals(playerState.PlayerId, playerId, StringComparison.OrdinalIgnoreCase) ||
+                !float.IsFinite(distanceSquared) || !float.IsFinite(attackReach) ||
+                distanceSquared > attackReach * attackReach)
+                return;
 
             var pose = room.GetPlayerPoseState(playerId);
             var outcome = ServerDamageResolver.Apply(player, damage, pose,
