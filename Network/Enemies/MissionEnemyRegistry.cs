@@ -232,6 +232,25 @@ namespace OpenGSServer
             // The despawn is broadcast by the simulator's own OnDespawn when the
             // dead enemy is swept, so it is not sent again here.
             room.RecordObjectiveProgress(1);
+            PublishObjectiveProgress(enemy.RoomId);
+        }
+
+        public static void PublishObjectiveProgress(string roomId)
+        {
+            var room = MatchRoomManager.Instance.GetRoomById(roomId);
+            if (room?.CurrentSituation is not MissionMatchSituation mission)
+            {
+                return;
+            }
+
+            GameMessageDispatcher.BroadcastToRoom(roomId, new JObject
+            {
+                ["MessageType"] = GameMessageTypes.MissionObjectiveProgress,
+                ["RoomID"] = roomId,
+                ["ObjectiveCount"] = mission.ObjectiveCount,
+                ["ObjectiveProgress"] = mission.ObjectiveProgress,
+                ["Timestamp"] = DateTime.UtcNow.ToString("o")
+            });
         }
 
         private static void ApplyEnemyDamageOnPlayer(
