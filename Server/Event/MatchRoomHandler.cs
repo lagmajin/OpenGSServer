@@ -1667,7 +1667,10 @@ namespace OpenGSServer
             }
         }
 
-        public static void ClearPlayerState(string playerId, bool preserveMagazines = false)
+        public static void ClearPlayerState(
+            string playerId,
+            bool preserveMagazines = false,
+            bool preserveRoomMembership = false)
         {
             if (string.IsNullOrWhiteSpace(playerId))
             {
@@ -1723,7 +1726,8 @@ namespace OpenGSServer
             // could never arrive while a ghost was holding a team up. It also let
             // the result name somebody who had left as the winner.
             var matchRoom = MatchRoomManager.Instance.SearchRoomByMemberID(playerId);
-            matchRoom?.RemovePlayer(playerId);
+            if (!preserveRoomMembership)
+                matchRoom?.RemovePlayer(playerId);
 
             foreach (var entry in LastFlagEvents.Keys.Where(key => key.Contains($":{playerId}:", StringComparison.OrdinalIgnoreCase)))
             {
