@@ -230,7 +230,7 @@ namespace OpenGSServer
             return damage >= int.MaxValue / 2 ? int.MaxValue : damage * 2;
         }
 
-        private static bool HasDefenseBuff(string roomId, string playerId) =>
+        internal static bool HasDefenseBuff(string roomId, string playerId) =>
             IsBuffActive(DefenseBuffExpires, roomId, playerId);
 
         private static void SendTimedBuffSnapshot(string roomId, string playerId)

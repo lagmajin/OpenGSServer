@@ -345,7 +345,8 @@ namespace OpenGSServer
             }
 
             var pose = room.GetPlayerPoseState(playerId);
-            var outcome = ServerDamageResolver.Apply(player, damage, pose);
+            var outcome = ServerDamageResolver.Apply(player, damage, pose,
+                InGameMatchEventHandler.HasDefenseBuff(enemy.RoomId, playerId));
             if (outcome.Applied <= 0)
             {
                 return;
