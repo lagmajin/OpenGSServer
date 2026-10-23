@@ -221,6 +221,7 @@ namespace OpenGSServer
                     foreach (var player in matchRoom.Players)
                     {
                         OpenGSServer.Network.ServerWeaponMagazineStore.ResetPlayer(player.Id);
+                        InGameMatchEventHandler.ClearPlayerShotCooldowns(player.Id);
                     }
                     // UDPで全プレイヤーに正規のマッチ終了通知を送る
                     var firstPlayer = matchRoom.Players.Find(p => !string.IsNullOrEmpty(p.Id));
@@ -789,6 +790,8 @@ namespace OpenGSServer
                 MatchRoomManager.Instance.SearchRoomByMemberID(playerId) == null)
             .ToList();
         OpenGSServer.Network.ServerWeaponMagazineStore.ClearRoomPlayers(playerIds);
+        foreach (var playerId in playerIds)
+            InGameMatchEventHandler.ClearPlayerShotCooldowns(playerId);
     }
 
     public void RemoveAllRooms(bool forceShutdownNowPlayingRooms = false)

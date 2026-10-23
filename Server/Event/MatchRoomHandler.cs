@@ -288,6 +288,12 @@ namespace OpenGSServer
             ClearCombatBuffs(roomId, playerId);
         }
 
+        public static void ClearPlayerShotCooldowns(string playerId)
+        {
+            if (!string.IsNullOrWhiteSpace(playerId))
+                ClearShotCooldowns(playerId);
+        }
+
         public static void ClearRoomCombatEffects(string roomId)
         {
             if (string.IsNullOrWhiteSpace(roomId)) return;
