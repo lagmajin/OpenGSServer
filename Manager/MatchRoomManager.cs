@@ -336,6 +336,8 @@ namespace OpenGSServer
             {
                 InGameMatchEventHandler.BeginMissionEnemies(
                     matchRoom, missionSetting.ObjectiveCount, new System.Numerics.Vector2(0f, 0f));
+                OpenGSServer.Network.MissionEnemyRegistry.PublishObjectiveProgress(
+                    matchRoom.Id.ToString());
             }
 
             ConsoleWrite.WriteMessage(
