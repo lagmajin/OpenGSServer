@@ -2452,6 +2452,7 @@ namespace OpenGSServer
                     ["PlayerID"] = roomPlayer.Id,
                     ["PlayerId"] = roomPlayer.Id,
                     ["PlayerKills"] = roomPlayer.Kills,
+                    ["Deaths"] = roomPlayer.Deaths,
                     ["IsTeamMode"] = isTeamMode,
                     ["RedTeamKills"] = room.TeamKillCount(ETeam.Red),
                     ["BlueTeamKills"] = room.TeamKillCount(ETeam.Blue),
