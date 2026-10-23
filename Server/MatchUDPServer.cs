@@ -35,8 +35,6 @@ namespace OpenGSServer
             new(StringComparer.OrdinalIgnoreCase); // PlayerIDをstringに
         private readonly ConcurrentDictionary<string, byte> _playersNotifiedLeft =
             new(StringComparer.OrdinalIgnoreCase);
-        private readonly ConcurrentDictionary<string, string> _connectionTokens =
-            new(StringComparer.OrdinalIgnoreCase);
         private readonly ConcurrentDictionary<string, ConnectionTokenInfo> _connectionTokenInfo =
             new(StringComparer.OrdinalIgnoreCase);
         private readonly ConcurrentDictionary<int, DateTime> _pendingPeers = new();
@@ -68,7 +66,6 @@ namespace OpenGSServer
             }
 
             var token = Guid.NewGuid().ToString("N");
-            _connectionTokens[playerId] = token;
             _connectionTokenInfo[playerId] = new ConnectionTokenInfo(token, DateTime.UtcNow.AddMinutes(ConnectionTokenLifetimeMinutes));
             return token;
         }
@@ -434,11 +431,9 @@ namespace OpenGSServer
                 }
 
                 var token = message["UdpToken"]?.ToString() ?? message["Token"]?.ToString();
-                if (!_connectionTokens.TryGetValue(messagePlayerId, out var expectedToken) ||
-                    !_connectionTokenInfo.TryGetValue(messagePlayerId, out var tokenInfo) ||
+                if (!_connectionTokenInfo.TryGetValue(messagePlayerId, out var tokenInfo) ||
                     tokenInfo.IsExpired ||
                     string.IsNullOrWhiteSpace(token) ||
-                    !string.Equals(expectedToken, token, StringComparison.Ordinal) ||
                     !string.Equals(tokenInfo.Token, token, StringComparison.Ordinal))
                 {
                     ConsoleWrite.WriteMessage($"[UDP] Rejected ClientConnect without a valid token for {messagePlayerId}", ConsoleColor.Yellow);
@@ -1218,7 +1213,6 @@ namespace OpenGSServer
                 if (!entry.Value.IsExpired) continue;
 
                 _connectionTokenInfo.TryRemove(entry.Key, out _);
-                _connectionTokens.TryRemove(entry.Key, out _);
             }
         }
 
@@ -1348,7 +1342,7 @@ namespace OpenGSServer
             if (_server == null)
             {
                 _connectedPlayers.Clear();
-                _connectionTokens.Clear();
+                _playersNotifiedLeft.Clear();
                 _connectionTokenInfo.Clear();
                 _pendingPeers.Clear();
                 _unauthorizedPacketCounts.Clear();
@@ -1373,7 +1367,7 @@ namespace OpenGSServer
             _server = null;
             UdpPort = null;
             _connectedPlayers.Clear();
-            _connectionTokens.Clear();
+            _playersNotifiedLeft.Clear();
             _connectionTokenInfo.Clear();
             _pendingPeers.Clear();
             _unauthorizedPacketCounts.Clear();
