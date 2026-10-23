@@ -735,7 +735,27 @@ namespace OpenGSServer.Network
         /// <returns>True when the claim changed, false when it was refused or already stood.</returns>
         public bool TrySetReservation(string itemId, string playerId, bool reserved)
         {
+            return TrySetReservation(itemId, playerId, reserved, null, null, null);
+        }
+
+        /// <summary>
+        /// Sets a reservation while checking the player's authoritative position.
+        /// A reservation is used to coordinate a nearby pickup, so it must not
+        /// be possible to claim an item from outside the pickup radius.
+        /// </summary>
+        public bool TrySetReservation(
+            string itemId, string playerId, bool reserved,
+            float? playerX, float? playerY, float? playerZ)
+        {
             if (string.IsNullOrWhiteSpace(itemId) || string.IsNullOrWhiteSpace(playerId))
+            {
+                return false;
+            }
+
+            var hasPosition = playerX.HasValue || playerY.HasValue || playerZ.HasValue;
+            if (hasPosition &&
+                (!playerX.HasValue || !playerY.HasValue || !playerZ.HasValue ||
+                 !IsFinite(playerX.Value) || !IsFinite(playerY.Value) || !IsFinite(playerZ.Value)))
             {
                 return false;
             }
@@ -749,6 +769,9 @@ namespace OpenGSServer.Network
 
                 if (reserved)
                 {
+                    if (hasPosition && !IsWithinPickupRange(item, playerX!.Value, playerY!.Value, playerZ!.Value))
+                        return false;
+
                     if (item.IsPlayerDroppedWeapon &&
                         NowSeconds - item.DroppedAtSeconds < DroppedWeaponPickupDelaySeconds)
                         return false;

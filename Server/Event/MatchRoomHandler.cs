@@ -1430,6 +1430,15 @@ namespace OpenGSServer
                 return;
             }
 
+            var playerState = MatchServerV2.Instance.ServerLagCompensationManager.GetPlayerState(playerId);
+            if (reserved &&
+                (!TryGetActiveCombatant(room, playerId, out _) ||
+                 !string.Equals(playerState.PlayerId, playerId, StringComparison.OrdinalIgnoreCase) ||
+                 !playerState.HasAuthoritativePosition))
+            {
+                return;
+            }
+
             var itemId = FindWeaponItem(itemManager, weaponType, playerId, requestedItemId);
             if (string.IsNullOrEmpty(itemId))
             {
@@ -1439,7 +1448,12 @@ namespace OpenGSServer
                 return;
             }
 
-            if (!itemManager.TrySetReservation(itemId, playerId, reserved))
+            var reservationChanged = reserved
+                ? itemManager.TrySetReservation(
+                    itemId, playerId, reserved: true,
+                    playerState.PositionX, playerState.PositionY, playerState.PositionZ)
+                : itemManager.TrySetReservation(itemId, playerId, reserved: false);
+            if (!reservationChanged)
             {
                 Console.WriteLine($"[Match] Refused weapon {(reserved ? "reservation" : "release")} of '{itemId}' by '{playerId}'");
                 if (isPickup)
@@ -1457,10 +1471,9 @@ namespace OpenGSServer
 
             if (isPickup)
             {
-                var state = MatchServerV2.Instance.ServerLagCompensationManager.GetPlayerState(playerId);
-                if (!string.Equals(state.PlayerId, playerId, StringComparison.OrdinalIgnoreCase) ||
-                    !state.HasAuthoritativePosition ||
-                    !itemManager.PickupItem(itemId, playerId, state.PositionX, state.PositionY, state.PositionZ))
+                if (!itemManager.PickupItem(
+                        itemId, playerId,
+                        playerState.PositionX, playerState.PositionY, playerState.PositionZ))
                 {
                     itemManager.TrySetReservation(itemId, playerId, reserved: false);
                     BroadcastDroppedWeaponPickup(room, playerId, itemId, weaponType, false);
