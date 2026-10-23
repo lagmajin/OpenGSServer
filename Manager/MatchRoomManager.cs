@@ -127,6 +127,8 @@ namespace OpenGSServer
 
             lock (matchRoomsLock)
             {
+                if (!waitRoom.CanStartMatch()) return null;
+
                 var setting = waitRoom.GetOrCreateSetting();
                 var ownerId = waitRoom.GetFirstPlayerId();
                 var bus = new MatchRoomEventBus();
@@ -286,6 +288,18 @@ namespace OpenGSServer
         /// </summary>
         public OpenGSCore.MatchRoom? StartMatchFromWaitRoom(WaitRoom waitRoom)
         {
+            if (waitRoom == null || !waitRoom.CanStartMatch()) return null;
+
+            var previousRoom = GetRoomById(waitRoom.RoomId);
+            if (previousRoom != null)
+            {
+                // A finished MatchRoom keeps its result state available until
+                // the next match starts. Reuse the stable wait-room ID only
+                // after its detached-room cleanup has released that identity.
+                if (!previousRoom.Finished) return null;
+                RemoveRoom(waitRoom.RoomId);
+            }
+
             var matchRoom = CreateMatchRoomByWaitRoom(waitRoom);
             if (matchRoom == null) return null;
             matchRoom.StartLoading();
