@@ -443,16 +443,18 @@ namespace OpenGSServer.Network
         /// </summary>
         public bool IsWithinPickupRange(string itemId, float x, float y, float z)
         {
-            if (!_items.TryGetValue(itemId, out var item))
-            {
-                return false;
-            }
-
             if (!IsFinite(x) || !IsFinite(y) || !IsFinite(z))
-            {
                 return false;
-            }
 
+            lock (_itemStateLock)
+            {
+                return _items.TryGetValue(itemId, out var item) &&
+                    IsWithinPickupRange(item, x, y, z);
+            }
+        }
+
+        private static bool IsWithinPickupRange(FieldItem item, float x, float y, float z)
+        {
             var dx = item.PosX - x;
             var dy = item.PosY - y;
             var dz = item.PosZ - z;
@@ -466,35 +468,25 @@ namespace OpenGSServer.Network
         /// </summary>
         public bool PickupItem(string itemId, string playerId, float? playerX, float? playerY, float? playerZ)
         {
-            if (playerX.HasValue || playerY.HasValue || playerZ.HasValue)
-            {
-                if (!playerX.HasValue || !playerY.HasValue || !playerZ.HasValue)
-                {
-                    // A half supplied position is a client bug, not a free pass.
-                    return false;
-                }
-
-                if (!IsWithinPickupRange(itemId, playerX.Value, playerY.Value, playerZ.Value))
-                {
-                    return false;
-                }
-            }
-
-            return PickupItem(itemId, playerId);
+            return TryPickupItem(itemId, playerId, playerX, playerY, playerZ);
         }
 
         public bool PickupItem(string itemId, string playerId)
         {
-            if (string.IsNullOrWhiteSpace(itemId) || string.IsNullOrWhiteSpace(playerId))
-            {
-                return false;
-            }
+            return TryPickupItem(itemId, playerId, null, null, null);
+        }
 
-            // Somebody else is reaching for this. Taking it now would leave two
-            // players who both believe they have the weapon, and only one of them
-            // does.
-            if (IsReservedByAnother(itemId, playerId))
+        private bool TryPickupItem(
+            string itemId, string playerId, float? playerX, float? playerY, float? playerZ)
+        {
+            if (string.IsNullOrWhiteSpace(itemId) || string.IsNullOrWhiteSpace(playerId))
+                return false;
+
+            var hasPosition = playerX.HasValue || playerY.HasValue || playerZ.HasValue;
+            if (hasPosition && (!playerX.HasValue || !playerY.HasValue || !playerZ.HasValue ||
+                !IsFinite(playerX.Value) || !IsFinite(playerY.Value) || !IsFinite(playerZ.Value)))
             {
+                // A partial or invalid position is not a free pass.
                 return false;
             }
 
@@ -502,7 +494,10 @@ namespace OpenGSServer.Network
             bool picked = false;
             lock (_itemStateLock)
             {
-                if (_items.TryGetValue(itemId, out var item) && item.IsActive && item.State == "Spawned")
+                if (_items.TryGetValue(itemId, out var item) && item.IsActive && item.State == "Spawned" &&
+                    (string.IsNullOrEmpty(item.ReservedByPlayerId) ||
+                        string.Equals(item.ReservedByPlayerId, playerId, StringComparison.OrdinalIgnoreCase)) &&
+                    (!hasPosition || IsWithinPickupRange(item, playerX!.Value, playerY!.Value, playerZ!.Value)))
                 {
                     item.State = "PickedUp";
                     item.PickedUpByPlayerId = playerId;
@@ -514,9 +509,7 @@ namespace OpenGSServer.Network
             }
 
             if (!picked)
-            {
                 return false;
-            }
 
             OnItemPickedUp?.Invoke(itemId, playerId, itemType);
             Console.WriteLine($"[FieldItem] Picked up: {itemId} by {playerId}");
@@ -571,6 +564,7 @@ namespace OpenGSServer.Network
                     item.State = "Spawned";
                     item.IsActive = true;
                     item.PickedUpByPlayerId = "";
+                    item.ReservedByPlayerId = "";
                     item.SpawnTime = (float)NowSeconds;
                 }
             }
