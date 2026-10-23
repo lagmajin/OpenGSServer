@@ -90,6 +90,9 @@ namespace OpenGSServer
                     // death match wins: a number they can see, and simply wrong.
                     account.LifeTimeScore.RecordCaptureTheFlagResult(won);
                     break;
+                case EGameMode.Mission:
+                    account.LifeTimeScore.RecordMissionResult(won);
+                    break;
                 default:
                     account.LifeTimeScore.RecordDeathMatchResult(won);
                     break;
