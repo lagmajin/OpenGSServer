@@ -781,7 +781,8 @@ namespace OpenGSServer
                     grantedItem = FieldItemTypeNames.GrantsInstantItem(type);
                 if (grantedItem != EInstantItemType.None)
                 {
-                    carrier.EquipInstantItems.Add(grantedItem);
+                    lock (carrier)
+                        carrier.EquipInstantItems.Add(grantedItem);
                 }
             }
 
@@ -1009,28 +1010,97 @@ namespace OpenGSServer
                 return;
             }
 
-            // Carrying it is the difference between using an item and asking for
-            // one. Without this a client could spend an item it never picked up.
-            if (!player.EquipInstantItems.Contains(itemType))
+            // TCP and UDP handlers can reach this point on different callback
+            // threads. Serialize ownership check, effect, and consumption so a
+            // repeated request cannot apply an effect twice before either call
+            // removes the carried item.
+            lock (player)
             {
-                Console.WriteLine($"[Match] Refused item use of {itemType} by '{playerId}': not carried");
-                RefuseItemUse(room, playerId, itemType, "NotCarried");
-                return;
-            }
-
-            if (TryGetGrenadePackType(itemType, out var grenadeType))
-            {
-                if (!ServerGrenadeLoadoutStore.TryAdd(
-                    room.Id.ToString(), playerId, grenadeType, out var grenadeSlots))
+                // Carrying it is the difference between using an item and asking for
+                // one. Without this a client could spend an item it never picked up.
+                if (!player.EquipInstantItems.Contains(itemType))
                 {
-                    RefuseItemUse(room, playerId, itemType, "GrenadeSlotsFull");
-                    if (ServerGrenadeLoadoutStore.TryRead(
-                        room.Id.ToString(), playerId, out var currentGrenadeSlots))
-                        SendGrenadeLoadoutUpdate(room.Id.ToString(), playerId, currentGrenadeSlots);
+                    Console.WriteLine($"[Match] Refused item use of {itemType} by '{playerId}': not carried");
+                    RefuseItemUse(room, playerId, itemType, "NotCarried");
                     return;
                 }
 
+                if (TryGetGrenadePackType(itemType, out var grenadeType))
+                {
+                    if (!ServerGrenadeLoadoutStore.TryAdd(
+                        room.Id.ToString(), playerId, grenadeType, out var grenadeSlots))
+                    {
+                        RefuseItemUse(room, playerId, itemType, "GrenadeSlotsFull");
+                        if (ServerGrenadeLoadoutStore.TryRead(
+                            room.Id.ToString(), playerId, out var currentGrenadeSlots))
+                            SendGrenadeLoadoutUpdate(room.Id.ToString(), playerId, currentGrenadeSlots);
+                        return;
+                    }
+
+                    player.EquipInstantItems.Remove(itemType);
+                    GameMessageDispatcher.BroadcastToRoom(room.Id.ToString(), new JObject
+                    {
+                        ["MessageType"] = GameMessageTypes.ItemUsed,
+                        ["RoomID"] = room.Id.ToString(),
+                        ["PlayerID"] = playerId,
+                        ["PlayerId"] = playerId,
+                        ["ItemType"] = itemType.ToString(),
+                        ["Effect"] = "GrenadeLoadout",
+                        ["RestoredHealth"] = 0,
+                        ["RoundsAdded"] = 0,
+                        ["Health"] = player.Health,
+                        ["MaxHealth"] = player.MaxHealth,
+                        ["Timestamp"] = DateTime.UtcNow.ToString("o")
+                    });
+                    BroadcastGrenadeLoadoutUpdate(room.Id.ToString(), playerId, grenadeSlots);
+                    return;
+                }
+
+                var effect = InstantItemRules.EffectOf(itemType);
+                if (effect == null)
+                {
+                    Console.WriteLine($"[Match] Ignored item use of {itemType} by '{playerId}': it does nothing");
+                    RefuseItemUse(room, playerId, itemType, "NoEffect");
+                    return;
+                }
+
+                var healthBefore = player.Health;
+                var restored = 0;
+                var roundsAdded = 0;
+                var elementalDamageType = itemType.ToString() switch
+                {
+                    "FireBullet" => "Fire",
+                    "PoisonBullet" => "Poison",
+                    _ => string.Empty
+                };
+                if (effect.Value == EInstantItemEffect.Heal)
+                {
+                    restored = HealPlayer(player);
+                }
+                else if (elementalDamageType.Length > 0)
+                {
+                    ElementalBulletEffects[TimedBuffKey(room.Id.ToString(), playerId)] =
+                        (elementalDamageType, DateTime.UtcNow.AddSeconds(30));
+                }
+                else if (effect.Value == EInstantItemEffect.Ammo)
+                {
+                    // An ammo pack used to be spent and did nothing at all, because the
+                    // server held no magazine for it to refill. It tops the reserve up
+                    // across every weapon the player is carrying, which is the thing a
+                    // player reaching for the pack is asking for.
+                    roundsAdded = ServerWeaponMagazineStore.RefillAllReserve(playerId, AmmoReservePerPack);
+                    BroadcastAmmoForAllWeapons(room, playerId);
+                }
+
                 player.EquipInstantItems.Remove(itemType);
+                var resolvedEffect = elementalDamageType.Length > 0
+                    ? elementalDamageType
+                    : effect.Value.ToString();
+
+                Console.WriteLine(
+                    $"[Match] {playerId} used {itemType} ({resolvedEffect}), " +
+                    $"health {healthBefore} -> {player.Health}, rounds added {roundsAdded}");
+
                 GameMessageDispatcher.BroadcastToRoom(room.Id.ToString(), new JObject
                 {
                     ["MessageType"] = GameMessageTypes.ItemUsed,
@@ -1038,76 +1108,14 @@ namespace OpenGSServer
                     ["PlayerID"] = playerId,
                     ["PlayerId"] = playerId,
                     ["ItemType"] = itemType.ToString(),
-                    ["Effect"] = "GrenadeLoadout",
-                    ["RestoredHealth"] = 0,
-                    ["RoundsAdded"] = 0,
+                    ["Effect"] = resolvedEffect,
+                    ["RestoredHealth"] = restored,
+                    ["RoundsAdded"] = roundsAdded,
                     ["Health"] = player.Health,
                     ["MaxHealth"] = player.MaxHealth,
                     ["Timestamp"] = DateTime.UtcNow.ToString("o")
                 });
-                BroadcastGrenadeLoadoutUpdate(room.Id.ToString(), playerId, grenadeSlots);
-                return;
             }
-
-            var effect = InstantItemRules.EffectOf(itemType);
-            if (effect == null)
-            {
-                Console.WriteLine($"[Match] Ignored item use of {itemType} by '{playerId}': it does nothing");
-                RefuseItemUse(room, playerId, itemType, "NoEffect");
-                return;
-            }
-
-            var healthBefore = player.Health;
-            var restored = 0;
-            var roundsAdded = 0;
-            var elementalDamageType = itemType.ToString() switch
-            {
-                "FireBullet" => "Fire",
-                "PoisonBullet" => "Poison",
-                _ => string.Empty
-            };
-            if (effect.Value == EInstantItemEffect.Heal)
-            {
-                restored = HealPlayer(player);
-            }
-            else if (elementalDamageType.Length > 0)
-            {
-                ElementalBulletEffects[TimedBuffKey(room.Id.ToString(), playerId)] =
-                    (elementalDamageType, DateTime.UtcNow.AddSeconds(30));
-            }
-            else if (effect.Value == EInstantItemEffect.Ammo)
-            {
-                // An ammo pack used to be spent and did nothing at all, because the
-                // server held no magazine for it to refill. It tops the reserve up
-                // across every weapon the player is carrying, which is the thing a
-                // player reaching for the pack is asking for.
-                roundsAdded = ServerWeaponMagazineStore.RefillAllReserve(playerId, AmmoReservePerPack);
-                BroadcastAmmoForAllWeapons(room, playerId);
-            }
-
-            player.EquipInstantItems.Remove(itemType);
-            var resolvedEffect = elementalDamageType.Length > 0
-                ? elementalDamageType
-                : effect.Value.ToString();
-
-            Console.WriteLine(
-                $"[Match] {playerId} used {itemType} ({resolvedEffect}), " +
-                $"health {healthBefore} -> {player.Health}, rounds added {roundsAdded}");
-
-            GameMessageDispatcher.BroadcastToRoom(room.Id.ToString(), new JObject
-            {
-                ["MessageType"] = GameMessageTypes.ItemUsed,
-                ["RoomID"] = room.Id.ToString(),
-                ["PlayerID"] = playerId,
-                ["PlayerId"] = playerId,
-                ["ItemType"] = itemType.ToString(),
-                ["Effect"] = resolvedEffect,
-                ["RestoredHealth"] = restored,
-                ["RoundsAdded"] = roundsAdded,
-                ["Health"] = player.Health,
-                ["MaxHealth"] = player.MaxHealth,
-                ["Timestamp"] = DateTime.UtcNow.ToString("o")
-            });
         }
 
         /// <summary>How much reserve ammo one ammo pack is worth.</summary>
@@ -2414,6 +2422,10 @@ namespace OpenGSServer
             }
             var pistolMagazine = ServerWeaponMagazineStore.GetOrCreateStartingWeapon(
                 requestingPlayerId, "Pistol");
+            string[] carriedItems;
+            lock (player)
+                carriedItems = player.EquipInstantItems
+                    .Select(item => item.ToString()).ToArray();
             var status = $"Match Active - Players: {room.Players.Count}";
             Console.WriteLine($"Sending status to {requestingPlayerId}: {status}");
             JObject? ctfState = null;
@@ -2458,7 +2470,7 @@ namespace OpenGSServer
                 room.Setting.Mode is EGameMode.TeamDeathMatch or EGameMode.CaptureTheFlag or EGameMode.TeamSurvival,
                 room.TeamKillCount(ETeam.Red),
                 room.TeamKillCount(ETeam.Blue),
-                player.EquipInstantItems.Select(item => item.ToString()).ToArray(),
+                carriedItems,
                 pistolMagazine?.WeaponType ?? string.Empty,
                 pistolMagazine?.ReadRemaining() ?? -1,
                 pistolMagazine?.Capacity ?? -1,
