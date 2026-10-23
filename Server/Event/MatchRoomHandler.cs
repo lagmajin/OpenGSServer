@@ -2063,6 +2063,11 @@ namespace OpenGSServer
                     ["Items"] = fieldItemManager.ToJson()
                 });
             }
+
+            // A client can receive the UDP-join snapshot before its native map is
+            // ready and discard it. MatchStatusRequest is sent again after the
+            // client enters the match, so include a fresh mission snapshot here.
+            MissionEnemyRegistry.PublishSnapshot(room.Id.ToString(), requestingPlayerId);
         }
 
         private static void HandlePositionUpdate(MatchRoom room, string playerId, JObject position)
