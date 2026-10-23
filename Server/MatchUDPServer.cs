@@ -1167,8 +1167,23 @@ namespace OpenGSServer
                 input.PlayerId,
                 _ => new ConcurrentQueue<QueuedClientInput>());
 
-            // 古い入力を無限に溜めず、遅延が増えた場合は最新側を優先する。
-            while (queue.Count >= MaxInputsPerPlayerPerTick * 4 && queue.TryDequeue(out _)) { }
+            // Keep the queue bounded and movement fresh, but carry one-shot
+            // actions forward when their older movement sample is discarded.
+            var preserveJump = false;
+            var preserveFire = false;
+            while (queue.Count >= MaxInputsPerPlayerPerTick * 4 && queue.TryDequeue(out var dropped))
+            {
+                if (dropped.PeerId != peer.Id)
+                {
+                    continue;
+                }
+
+                preserveJump |= dropped.Input.Jump;
+                preserveFire |= dropped.Input.Fire;
+            }
+
+            input.Jump |= preserveJump;
+            input.Fire |= preserveFire;
             queue.Enqueue(new QueuedClientInput(peer.Id, input));
         }
 
