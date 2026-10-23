@@ -335,6 +335,29 @@ namespace OpenGSServer.Network
             _projectiles.Clear();
         }
 
+        public void ClearRoom(string roomId)
+        {
+            if (string.IsNullOrWhiteSpace(roomId)) return;
+
+            List<ServerProjectileState> removed = new();
+            lock (_lock)
+            {
+                foreach (var projectile in _projectiles.Values)
+                {
+                    if (!string.Equals(projectile.RoomId, roomId, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    projectile.IsActive = false;
+                    if (_projectiles.TryRemove(projectile.ProjectileId, out _))
+                        removed.Add(projectile);
+                }
+            }
+
+            foreach (var projectile in removed)
+            {
+                OnExpire?.Invoke(projectile);
+            }
+        }
+
         private void Add(ServerProjectileState projectile)
         {
             lock (_lock)

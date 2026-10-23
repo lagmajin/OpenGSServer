@@ -668,6 +668,7 @@ namespace OpenGSServer
                     return;
                 }
 
+                InGameMatchEventHandler.ClearRoomProjectiles(roomId);
                 matchRooms.Remove(roomId);
                 roomEventBuses.Remove(roomId);
 
@@ -702,6 +703,7 @@ namespace OpenGSServer
             {
                 foreach (var roomId in matchRooms.Keys.ToList())
                 {
+                    InGameMatchEventHandler.ClearRoomProjectiles(roomId);
                     InGameMatchEventHandler.ClearRoomFlagState(roomId);
                     MissionEnemyRegistry.ClearRoom(roomId);
                 }
@@ -727,6 +729,7 @@ namespace OpenGSServer
 
                 foreach (var roomId in roomsToRemove)
                 {
+                    InGameMatchEventHandler.ClearRoomProjectiles(roomId);
                     matchRooms.Remove(roomId);
                     roomEventBuses.Remove(roomId);
                     InGameMatchEventHandler.ClearRoomFlagState(roomId);

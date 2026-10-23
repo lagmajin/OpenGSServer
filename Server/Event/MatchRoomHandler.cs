@@ -2257,6 +2257,11 @@ namespace OpenGSServer
         /// <summary>
         /// Settles a simulated bullet that reached an enemy.
         /// </summary>
+        public static void ClearRoomProjectiles(string roomId)
+        {
+            Projectiles.ClearRoom(roomId);
+        }
+
         private static void HandleBulletHitEnemy(string ownerId, Vector2 hit, int damage)
         {
             var room = MatchRoomManager.Instance.SearchRoomByMemberID(ownerId);
