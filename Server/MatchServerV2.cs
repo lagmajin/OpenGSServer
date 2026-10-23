@@ -508,8 +508,32 @@ namespace OpenGSServer
 
             _gameLoopTimer?.Stop();
             _gameLoopTimer = null;
-            _udpServer?.Shutdown();
-            _tcpServer?.Stop();
+            try
+            {
+                _udpServer?.Dispose();
+            }
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage($"[Match] UDP shutdown failed: {ex.Message}", ConsoleColor.Red);
+            }
+            finally
+            {
+                _udpServer = null;
+            }
+
+            try
+            {
+                _tcpServer?.Stop();
+                _tcpServer?.Dispose();
+            }
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage($"[Match] TCP shutdown failed: {ex.Message}", ConsoleColor.Red);
+            }
+            finally
+            {
+                _tcpServer = null;
+            }
 
             AdvertisedIp = string.Empty;
             IsRunning = false;
@@ -523,10 +547,6 @@ namespace OpenGSServer
 
             Shutdown();
 
-            _gameLoopTimer?.Stop();
-            // TickTimerにDisposeがない場合はStopのみ
-            _tcpServer?.Dispose();
-            _udpServer?.Dispose();
             _performanceTimer?.Stop();
 
             _disposed = true;

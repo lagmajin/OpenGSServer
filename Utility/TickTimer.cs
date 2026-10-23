@@ -26,6 +26,9 @@ namespace OpenGSServer
 
         public TickTimer(TimerCallback callback, object state, int dueTime, int period)
         {
+            if (dueTime < 0) throw new ArgumentOutOfRangeException(nameof(dueTime));
+            if (period <= 0) throw new ArgumentOutOfRangeException(nameof(period));
+
             _cb = callback;
             _dueTime = dueTime;
             _period = period;
@@ -35,6 +38,8 @@ namespace OpenGSServer
         }
         public TickTimer(TimerCallback callback, int period)
         {
+            if (period <= 0) throw new ArgumentOutOfRangeException(nameof(period));
+
             _cb = callback;
             _period = period;
             _sw = new Stopwatch();
@@ -48,7 +53,6 @@ namespace OpenGSServer
             }
 
             Volatile.Write(ref _loop, 1);
-            _dueTime = 0;
             _task.Start(state);
         }
 
