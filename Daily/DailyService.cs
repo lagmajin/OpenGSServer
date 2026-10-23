@@ -97,7 +97,8 @@ namespace OpenGSServer
                 if (record.Progress < definition.Target) return (false, "Daily is not complete", 0);
 
                 var creditResult = AccountDatabaseManager.GetInstance()
-                    .TryAddCredits(playerId, definition.RewardCredits);
+                    .TryClaimDailyReward(
+                        playerId, $"{record.ResetDateUtc}:{record.DailyId}", definition.RewardCredits);
                 if (!creditResult.Success)
                     return (false, "Failed to grant reward", 0);
                 record.Claimed = true;

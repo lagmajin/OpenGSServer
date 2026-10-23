@@ -49,6 +49,7 @@ namespace OpenGSServer
         public List<DBEquippedItem> EquippedItems { get; set; } = new();
         public List<DBInstantEquippedItem> EquippedInstantItems { get; set; } = new();
         public PlayerLifeTimeScore LifeTimeScore { get; set; } = new();
+        public List<string> ClaimedDailyRewards { get; set; } = new();
         public List<string> ProfileTags { get; set; } = new();
 
         public DBAccount()
@@ -69,6 +70,7 @@ namespace OpenGSServer
             this.PurchasedItems = new List<string>(player.PurchasedItems ?? new List<string>());
             this.EquippedItems = new List<DBEquippedItem>((player.EquippedItems ?? new List<DBEquippedItem>()).Select(item => new DBEquippedItem(item)));
             this.EquippedInstantItems = new List<DBInstantEquippedItem>((player.EquippedInstantItems ?? new List<DBInstantEquippedItem>()).Select(item => new DBInstantEquippedItem(item)));
+            this.ClaimedDailyRewards = new List<string>(player.ClaimedDailyRewards ?? new List<string>());
 
             FirstAccessIPAddress = player.FirstAccessIPAddress;
         }

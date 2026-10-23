@@ -307,19 +307,30 @@ namespace OpenGSServer
             return account?.Credits ?? 0;
         }
 
-        public (bool Success, long Granted, long Credits) TryAddCredits(string accountId, long amount)
+        public (bool Success, long Granted, long Credits) TryClaimDailyReward(
+            string accountId, string claimId, long amount)
         {
-            if (string.IsNullOrWhiteSpace(accountId) || amount < 0)
+            if (string.IsNullOrWhiteSpace(accountId) || string.IsNullOrWhiteSpace(claimId) || amount < 0)
                 return (false, 0, 0);
 
             lock (_accountMutationLock)
             {
                 var account = GetAccount(accountId);
                 if (account == null) return (false, 0, 0);
+                account.ClaimedDailyRewards ??= new List<string>();
                 var current = Math.Max(0L, account.Credits);
+                if (account.ClaimedDailyRewards.Contains(claimId, StringComparer.OrdinalIgnoreCase))
+                    return (true, 0, current);
+
                 var next = (long)Math.Min(
                     (decimal)long.MaxValue, (decimal)current + amount);
                 account.Credits = next;
+                account.ClaimedDailyRewards.Add(claimId);
+                // Daily progress is retained for sixty days, so this bounded
+                // receipt window still covers every claim that can be retried.
+                if (account.ClaimedDailyRewards.Count > 512)
+                    account.ClaimedDailyRewards.RemoveRange(
+                        0, account.ClaimedDailyRewards.Count - 512);
                 account.LastUpdatedUtc = DateTime.UtcNow.ToString("O");
                 var updated = EnsureDatabase().GetCollection<DBAccount>(accountTableName).Update(account);
                 return updated ? (true, next - current, next) : (false, 0, current);
