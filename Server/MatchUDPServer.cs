@@ -839,6 +839,17 @@ namespace OpenGSServer
 
             SendJsonToPeer(peer, joined, DeliveryMethod.ReliableOrdered);
             SendJsonToPeer(peer, CreateRoomSnapshotMessage(room), DeliveryMethod.ReliableOrdered);
+            // Transform broadcasts are intentionally unreliable. Send one
+            // reliable baseline to a newly admitted peer so packet loss cannot
+            // leave its remote-player tracks uninitialized until a later update.
+            var lagCompensation = MatchServerV2.Instance.ServerLagCompensationManager;
+            foreach (var roomPlayer in room.Players)
+            {
+                var state = lagCompensation.GetPlayerState(roomPlayer.Id);
+                if (!string.IsNullOrWhiteSpace(state.PlayerId))
+                    SendJsonToPeer(peer, CreateTransformStateMessage(state),
+                        DeliveryMethod.ReliableOrdered);
+            }
             // ClientConnect may be retried on the same peer when the first
             // admission response was lost. Replay live simulation state as well
             // as room state so this path has the same recovery guarantees as a
