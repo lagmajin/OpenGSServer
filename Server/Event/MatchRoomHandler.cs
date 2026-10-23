@@ -1921,6 +1921,17 @@ namespace OpenGSServer
                 pistolMagazine.Capacity,
                 pistolMagazine.ReadReserve());
             SendAmmoStateToPlayer(room.Id.ToString(), requestingPlayerId);
+
+            var fieldItemManager = MatchRoomManager.Instance.GetFieldItemManager(room.Id);
+            if (fieldItemManager != null)
+            {
+                GameMessageDispatcher.SendToPlayer(requestingPlayerId, new JObject
+                {
+                    ["MessageType"] = MessageType.FieldItemStateSync,
+                    ["RoomID"] = room.Id.ToString(),
+                    ["Items"] = fieldItemManager.ToJson()
+                });
+            }
         }
 
         private static void HandlePositionUpdate(MatchRoom room, string playerId, JObject position)
