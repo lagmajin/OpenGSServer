@@ -2489,7 +2489,7 @@ namespace OpenGSServer
                     ["PlayerID"] = roomPlayer.Id,
                     ["PlayerId"] = roomPlayer.Id,
                     ["PoseState"] = room.GetPlayerPoseState(roomPlayer.Id).ToString(),
-                    ["Timestamp"] = DateTime.UtcNow.ToString("o")
+                    ["Timestamp"] = GameMessageDispatcher.NextPlayerPoseTimestamp()
                 });
             }
 

@@ -404,7 +404,7 @@ namespace OpenGSServer
             BroadcastToRoom(roomId, message);
         }
 
-        private static string NextPlayerPoseTimestamp()
+        public static string NextPlayerPoseTimestamp()
         {
             var ticks = DateTime.UtcNow.Ticks;
             while (true)
