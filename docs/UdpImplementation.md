@@ -46,6 +46,7 @@ points are on the ground plane at Z=0. A settings file containing the exact prio
 built-in spawn list is migrated to the new ground-plane layout when loaded; custom
 spawn lists are preserved. An empty list or one with no valid entries falls back to
 the built-in points, so a malformed configuration cannot respawn players at death.
+Configured coordinates must be finite, within ±100,000, and use a non-negative Z.
 Example:
 
 ```json

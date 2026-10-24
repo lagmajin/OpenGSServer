@@ -174,7 +174,7 @@ namespace OpenGSServer
             for (var index = 0; index < expected.Count; index++)
             {
                 if (source[index] is not JObject json ||
-                    !ServerRespawnPoint.TryParse(json, out var point) ||
+                    !ServerRespawnPoint.TryParse(json, out var point, allowBelowGround: true) ||
                     point.Team != expected[index].Team ||
                     point.X != expected[index].X ||
                     point.Y != expected[index].Y ||
@@ -382,6 +382,8 @@ public bool TryGetRespawnPoint(ETeam team, int slot, out ServerRespawnPoint poin
 
 public sealed class ServerRespawnPoint
 {
+    private const float MaximumCoordinateMagnitude = 100000.0f;
+
     public ETeam Team { get; init; } = ETeam.NoTeam;
     public float X { get; init; }
     public float Y { get; init; }
@@ -407,7 +409,11 @@ public sealed class ServerRespawnPoint
         ["Z"] = Z
     };
 
-    public static bool TryParse(JObject json, out ServerRespawnPoint point)
+    public static bool TryParse(JObject json, out ServerRespawnPoint point) =>
+        TryParse(json, out point, allowBelowGround: false);
+
+    internal static bool TryParse(
+        JObject json, out ServerRespawnPoint point, bool allowBelowGround)
     {
         point = null!;
 
@@ -425,7 +431,11 @@ public sealed class ServerRespawnPoint
             !float.TryParse(json["Y"]?.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var y) ||
             !float.TryParse(json["Z"]?.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var z) ||
             float.IsNaN(x) || float.IsNaN(y) || float.IsNaN(z) ||
-            float.IsInfinity(x) || float.IsInfinity(y) || float.IsInfinity(z))
+            float.IsInfinity(x) || float.IsInfinity(y) || float.IsInfinity(z) ||
+            MathF.Abs(x) > MaximumCoordinateMagnitude ||
+            MathF.Abs(y) > MaximumCoordinateMagnitude ||
+            MathF.Abs(z) > MaximumCoordinateMagnitude ||
+            (!allowBelowGround && z < 0.0f))
         {
             return false;
         }
