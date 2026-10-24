@@ -201,6 +201,12 @@ namespace OpenGSServer
                 lagCompensation.SetPlayerPosition(playerId,
                     initialSpawn.X, initialSpawn.Y, initialSpawn.Z);
             }
+            if (matchRoom != null && peer.ConnectionState == ConnectionState.Connected)
+            {
+                SendJsonToPeer(peer, CreateMatchJoinedMessage(matchRoom, playerId),
+                    DeliveryMethod.ReliableOrdered);
+            }
+
             MatchServerV2.Instance.ServerLagCompensationManager.RegisterClientCallback(
                 playerId,
                 state => SendTransformStateToClient(peer, state)
@@ -866,20 +872,8 @@ namespace OpenGSServer
                 return;
             }
 
-            var joined = new JObject
-            {
-                ["MessageType"] = MessageType.MatchJoined,
-                ["PlayerID"] = playerId,
-                ["PlayerId"] = playerId,
-                ["RoomID"] = room.Id.ToString(),
-                ["RoomId"] = room.Id.ToString(),
-                ["RoomName"] = room.RoomName,
-                ["IsPlaying"] = room.Playing,
-                ["PlayerCount"] = room.PlayerCount,
-                ["Timestamp"] = DateTime.UtcNow.ToString("o")
-            };
-
-            SendJsonToPeer(peer, joined, DeliveryMethod.ReliableOrdered);
+            SendJsonToPeer(peer, CreateMatchJoinedMessage(room, playerId),
+                DeliveryMethod.ReliableOrdered);
             SendJsonToPeer(peer, CreateRoomSnapshotMessage(room), DeliveryMethod.ReliableOrdered);
             // Transform broadcasts are intentionally unreliable. Send one
             // reliable baseline to a newly admitted peer so packet loss cannot
@@ -898,6 +892,22 @@ namespace OpenGSServer
             // fresh peer admission.
             MissionEnemyRegistry.PublishSnapshot(room.Id.ToString(), playerId);
             MatchRoomHandler.SendProjectileSnapshot(room.Id.ToString(), playerId);
+        }
+
+        private static JObject CreateMatchJoinedMessage(MatchRoom room, string playerId)
+        {
+            return new JObject
+            {
+                ["MessageType"] = MessageType.MatchJoined,
+                ["PlayerID"] = playerId,
+                ["PlayerId"] = playerId,
+                ["RoomID"] = room.Id.ToString(),
+                ["RoomId"] = room.Id.ToString(),
+                ["RoomName"] = room.RoomName,
+                ["IsPlaying"] = room.Playing,
+                ["PlayerCount"] = room.PlayerCount,
+                ["Timestamp"] = DateTime.UtcNow.ToString("o")
+            };
         }
 
         private void RegisterUnauthorizedPacket(NetPeer peer)
