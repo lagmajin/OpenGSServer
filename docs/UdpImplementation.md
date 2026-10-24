@@ -47,6 +47,8 @@ built-in spawn list is migrated to the new ground-plane layout when loaded; cust
 spawn lists are preserved. An empty list or one with no valid entries falls back to
 the built-in points, so a malformed configuration cannot respawn players at death.
 Configured coordinates must be finite, within ±100,000, and use a non-negative Z.
+The server cycles through a player's team spawn points using their room slot and
+death count, so successive respawns rotate between configured locations.
 Example:
 
 ```json

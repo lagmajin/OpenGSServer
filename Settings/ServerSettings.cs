@@ -192,7 +192,7 @@ namespace OpenGSServer
             return true;
         }
 
-public bool TryGetRespawnPoint(ETeam team, int slot, out ServerRespawnPoint point)
+public bool TryGetRespawnPoint(ETeam team, long selectionIndex, out ServerRespawnPoint point)
         {
             var candidates = CandidatesFor(team);
             if (candidates.Count == 0)
@@ -201,7 +201,9 @@ public bool TryGetRespawnPoint(ETeam team, int slot, out ServerRespawnPoint poin
                 return false;
             }
 
-            point = candidates[Math.Abs(slot) % candidates.Count];
+            var count = candidates.Count;
+            var normalizedIndex = (int)((selectionIndex % count + count) % count);
+            point = candidates[normalizedIndex];
             return true;
         }
 

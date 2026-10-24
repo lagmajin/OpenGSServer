@@ -2723,7 +2723,7 @@ namespace OpenGSServer
 
             if (ServerManager.Instance.Settings.TryGetRespawnPoint(
                     respawnedPlayer.Team,
-                    room.Players.IndexOf(respawnedPlayer),
+                    (long)room.Players.IndexOf(respawnedPlayer) + Math.Max(0, respawnedPlayer.Deaths),
                     out var configuredSpawn))
             {
                 spawnX = configuredSpawn.X;
