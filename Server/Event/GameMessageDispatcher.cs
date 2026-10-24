@@ -364,6 +364,7 @@ namespace OpenGSServer
                 ["RedTeamKills"] = redTeamKills,
                 ["BlueTeamKills"] = blueTeamKills,
                 ["CarriedItems"] = new JArray(carriedItems),
+                ["SupportsItemUseRequestIds"] = true,
                 ["Timestamp"] = DateTime.UtcNow.ToString("o")
             };
             message["RespawnDelaySeconds"] =
