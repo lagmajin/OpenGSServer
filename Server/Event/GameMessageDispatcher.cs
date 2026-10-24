@@ -415,6 +415,7 @@ namespace OpenGSServer
                 ["SpawnPosition"] = spawnPosition,
                 ["PosX"] = spawnPosition.GetValue("X") ?? spawnPosition.GetValue("x") ?? 0f,
                 ["PosY"] = spawnPosition.GetValue("Y") ?? spawnPosition.GetValue("y") ?? 0f,
+                ["PosZ"] = spawnPosition.GetValue("Z") ?? spawnPosition.GetValue("z") ?? 0f,
                 ["CurrentHealth"] = currentHealth,
                 ["MaxHealth"] = maxHealth,
                 ["Timestamp"] = DateTime.UtcNow.ToString("o")
