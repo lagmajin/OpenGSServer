@@ -44,7 +44,8 @@ so clients can show the same countdown. Coordinates from the client are ignored.
 Spawn points use X/Y for the movement plane and Z for vertical height; the default
 points are on the ground plane at Z=0. A settings file containing the exact prior
 built-in spawn list is migrated to the new ground-plane layout when loaded; custom
-spawn lists are preserved.
+spawn lists are preserved. An empty list or one with no valid entries falls back to
+the built-in points, so a malformed configuration cannot respawn players at death.
 Example:
 
 ```json

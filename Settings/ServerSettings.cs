@@ -155,6 +155,11 @@ namespace OpenGSServer
                         _respawnPoints.Add(point);
                     }
                 }
+
+                if (_respawnPoints.Count == 0)
+                {
+                    _respawnPoints.AddRange(DefaultRespawnPoints);
+                }
             }
         }
 
