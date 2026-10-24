@@ -541,7 +541,8 @@ namespace OpenGSServer
             }
 
             var raw = token.ToString();
-            if (Enum.TryParse(raw, true, out EPlayerCharacter parsed))
+            if (Enum.TryParse(raw, true, out EPlayerCharacter parsed) &&
+                Enum.IsDefined(typeof(EPlayerCharacter), parsed))
             {
                 playerCharacter = parsed;
                 return true;
@@ -554,6 +555,11 @@ namespace OpenGSServer
             }
 
             return false;
+        }
+
+        private static bool IsStarterCharacter(EPlayerCharacter playerCharacter)
+        {
+            return playerCharacter is EPlayerCharacter.Ami or EPlayerCharacter.Yumi or EPlayerCharacter.Misty;
         }
 
         private static List<EInstantItemType> ResolveEquippedInstantItems(string accountId)
@@ -597,7 +603,16 @@ namespace OpenGSServer
             var equippedInstantItems = dic.ContainsKey("EquipInstantItems")
                 ? ResolveEquippedInstantItems(playerId)
                 : null;
+            EPlayerCharacter requestedCharacter = default;
+            var hasCharacterRequest = dic.TryGetValue("PlayerCharacter", out var playerCharacterToken) &&
+                TryParsePlayerCharacter(playerCharacterToken, out requestedCharacter);
+            var requestedCharacterAllowed = hasCharacterRequest &&
+                (IsStarterCharacter(requestedCharacter) ||
+                    AccountDatabaseManager.GetInstance().GetEquippedItems(playerId).Any(item =>
+                        string.Equals(item.Category, "Character", StringComparison.OrdinalIgnoreCase) &&
+                        string.Equals(item.ItemId, requestedCharacter.ToString(), StringComparison.OrdinalIgnoreCase)));
             bool changed = false;
+            bool rejectedCharacter = hasCharacterRequest && !requestedCharacterAllowed;
             lock (waitRoom)
             {
                 if (!waitRoom.Players.TryGetValue(playerId, out var player))
@@ -605,11 +620,13 @@ namespace OpenGSServer
                     return;
                 }
 
-                if (dic.TryGetValue("PlayerCharacter", out var playerCharacterToken) &&
-                    TryParsePlayerCharacter(playerCharacterToken, out var playerCharacter))
+                if (requestedCharacterAllowed)
                 {
-                    player.playerCharacter = playerCharacter;
-                    changed = true;
+                    if (player.playerCharacter != requestedCharacter)
+                    {
+                        player.playerCharacter = requestedCharacter;
+                        changed = true;
+                    }
                 }
 
                 if (equippedInstantItems != null)
@@ -621,7 +638,7 @@ namespace OpenGSServer
                 }
             }
 
-            if (changed)
+            if (changed || rejectedCharacter)
             {
                 BroadcastRoomUpdate(waitRoom, MessageType.WaitRoomUpdateNotification);
             }
