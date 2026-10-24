@@ -702,13 +702,16 @@ namespace OpenGSServer
         private static readonly FieldItemPickupRateLimiter ItemPickupBudget = new();
 
         private static void RefuseFieldItemPickup(
-            MatchRoom room, string playerId, string itemId, string reason)
+            MatchRoom room, string playerId, string itemId, string reason,
+            string requestId, int slotIndex)
         {
             UdpBroadcastToRoom(room.Id.ToString(), new JObject
             {
                 ["MessageType"] = GameMessageTypes.FieldItemPickup,
                 ["RoomID"] = room.Id.ToString(),
                 ["ItemId"] = itemId,
+                ["RequestId"] = requestId,
+                ["SlotIndex"] = slotIndex,
                 ["PlayerID"] = playerId,
                 ["Success"] = false,
                 ["Reason"] = reason,
@@ -727,11 +730,16 @@ namespace OpenGSServer
             }
 
             var itemId = ReadString(json, "ItemId", "itemId", "ItemID") ?? string.Empty;
+            var requestId = ReadString(json, "RequestId", "RequestID") ?? string.Empty;
+            var slotIndex = ReadInt(json, -1, "SlotIndex", "WeaponSlot");
             if (string.IsNullOrWhiteSpace(itemId))
             {
                 Console.WriteLine($"[Match] Ignored field item pickup with no item id from '{playerId}'");
                 return;
             }
+            if (requestId.Length > 64 || slotIndex is < -1 or > 2 ||
+                (!string.IsNullOrEmpty(requestId) && slotIndex < 0))
+                return;
 
             // A client supplied player id is not evidence of who is asking.
             var claimed = ReadString(json, "PlayerID", "PlayerId");
@@ -744,7 +752,7 @@ namespace OpenGSServer
 
             if (!TryGetActiveCombatant(room, playerId, out _))
             {
-                RefuseFieldItemPickup(room, playerId, itemId, "PlayerInactive");
+                RefuseFieldItemPickup(room, playerId, itemId, "PlayerInactive", requestId, slotIndex);
                 return;
             }
 
@@ -752,7 +760,7 @@ namespace OpenGSServer
             if (itemManager == null)
             {
                 Console.WriteLine($"[Match] Field item pickup for '{playerId}' with no item manager in room '{room.Id}'");
-                RefuseFieldItemPickup(room, playerId, itemId, "ItemManagerUnavailable");
+                RefuseFieldItemPickup(room, playerId, itemId, "ItemManagerUnavailable", requestId, slotIndex);
                 return;
             }
 
@@ -763,7 +771,7 @@ namespace OpenGSServer
                 // the origin, so checking the id alone would treat "position unknown"
                 // as "standing at 0,0,0" and hand out an item that is spawning there.
                 Console.WriteLine($"[Match] Refused field item pickup for '{playerId}': no authoritative position");
-                RefuseFieldItemPickup(room, playerId, itemId, "PositionUnavailable");
+                RefuseFieldItemPickup(room, playerId, itemId, "PositionUnavailable", requestId, slotIndex);
                 return;
             }
 
@@ -773,7 +781,7 @@ namespace OpenGSServer
             // successful pickup into a lost reward with no ruling broadcast.
             if (!itemManager.TryGetItem(itemId, out var item) || item == null)
             {
-                RefuseFieldItemPickup(room, playerId, itemId, "ItemUnavailable");
+                RefuseFieldItemPickup(room, playerId, itemId, "ItemUnavailable", requestId, slotIndex);
                 return;
             }
 
@@ -787,7 +795,7 @@ namespace OpenGSServer
                 // by silence leaves the effect in place until the client's own
                 // timeout takes it back. The player should not have to wait out a
                 // timer to find out the server said no.
-                RefuseFieldItemPickup(room, playerId, itemId, "OutOfReachOrTaken");
+                RefuseFieldItemPickup(room, playerId, itemId, "OutOfReachOrTaken", requestId, slotIndex);
                 return;
             }
 
@@ -852,6 +860,8 @@ namespace OpenGSServer
                 ["MessageType"] = GameMessageTypes.FieldItemPickup,
                 ["RoomID"] = room.Id.ToString(),
                 ["ItemId"] = itemId,
+                ["RequestId"] = requestId,
+                ["SlotIndex"] = slotIndex,
                 ["PlayerID"] = playerId,
                 ["ItemType"] = FieldItemTypeNames.ToWireName(type),
                 ["GrantedInstantItem"] = grantedItem.ToString(),
@@ -1478,6 +1488,10 @@ namespace OpenGSServer
 
             var isPickup = string.Equals(messageType, "WeaponPickup", StringComparison.OrdinalIgnoreCase);
             var requestedItemId = isPickup ? ReadString(json, "ItemId", "ItemID") : string.Empty;
+            var requestId = isPickup ? ReadString(json, "RequestId", "RequestID") ?? string.Empty : string.Empty;
+            var requestedSlot = isPickup ? ReadInt(json, -1, "SlotIndex", "WeaponSlot") : -1;
+            if (isPickup && (requestId.Length > 64 || requestedSlot is < 0 or > 2))
+                return;
             if (isPickup && (string.IsNullOrWhiteSpace(requestedItemId) || requestedItemId.Length > 128))
             {
                 Console.WriteLine($"[Match] Ignored weapon pickup without a valid item id from '{playerId}'");
@@ -1486,7 +1500,7 @@ namespace OpenGSServer
             if (isPickup && !TryGetActiveCombatant(room, playerId, out _))
             {
                 BroadcastDroppedWeaponPickup(room, playerId,
-                    requestedItemId, weaponType, false);
+                    requestedItemId, weaponType, false, slotIndex: requestedSlot, requestId: requestId);
                 return;
             }
 
@@ -1516,7 +1530,8 @@ namespace OpenGSServer
             {
                 Console.WriteLine($"[Match] No weapon of type '{weaponType}' for '{playerId}' to claim in room {room.Id}");
                 if (isPickup)
-                    BroadcastDroppedWeaponPickup(room, playerId, requestedItemId, weaponType, false);
+                    BroadcastDroppedWeaponPickup(room, playerId, requestedItemId, weaponType, false,
+                        slotIndex: requestedSlot, requestId: requestId);
                 return;
             }
 
@@ -1529,7 +1544,8 @@ namespace OpenGSServer
             {
                 Console.WriteLine($"[Match] Refused weapon {(reserved ? "reservation" : "release")} of '{itemId}' by '{playerId}'");
                 if (isPickup)
-                    BroadcastDroppedWeaponPickup(room, playerId, itemId, weaponType, false);
+                    BroadcastDroppedWeaponPickup(room, playerId, itemId, weaponType, false,
+                        slotIndex: requestedSlot, requestId: requestId);
                 return;
             }
 
@@ -1548,7 +1564,8 @@ namespace OpenGSServer
                         playerState.PositionX, playerState.PositionY, playerState.PositionZ))
                 {
                     itemManager.TrySetReservation(itemId, playerId, reserved: false);
-                    BroadcastDroppedWeaponPickup(room, playerId, itemId, weaponType, false);
+                    BroadcastDroppedWeaponPickup(room, playerId, itemId, weaponType, false,
+                        slotIndex: requestedSlot, requestId: requestId);
                     return;
                 }
 
@@ -1568,7 +1585,7 @@ namespace OpenGSServer
                 }
                 BroadcastDroppedWeaponPickup(
                     room, playerId, itemId, item.WeaponType, true,
-                    item.MagazineAmmo, item.WeaponSlot, item.ReserveAmmo);
+                    item.MagazineAmmo, requestedSlot, item.ReserveAmmo, requestId);
                 return;
             }
 
@@ -1599,13 +1616,15 @@ namespace OpenGSServer
 
         private static void BroadcastDroppedWeaponPickup(
             MatchRoom room, string playerId, string itemId, string weaponType,
-            bool success, int magazineAmmo = -1, int slotIndex = -1, int reserveAmmo = -1)
+            bool success, int magazineAmmo = -1, int slotIndex = -1, int reserveAmmo = -1,
+            string requestId = "")
         {
             GameMessageDispatcher.BroadcastToRoom(room.Id.ToString(), new JObject
             {
                 ["MessageType"] = GameMessageTypes.FieldItemPickup,
                 ["RoomID"] = room.Id.ToString(),
                 ["ItemId"] = itemId,
+                ["RequestId"] = requestId,
                 ["ItemType"] = FieldItemTypeNames.ToWireName(EFieldItemType.WeaponItem),
                 ["PlayerID"] = playerId,
                 ["WeaponType"] = weaponType,
