@@ -90,6 +90,11 @@ namespace OpenGSServer
         public bool IsPlayerConnected(string playerId) =>
             _udpServer?.IsPlayerConnected(playerId) ?? true;
 
+        public void DiscardPendingMovementInputs(string playerId)
+        {
+            _udpServer?.DiscardPendingInputs(playerId);
+        }
+
         public string IssueUdpConnectionToken(string playerId, string? roomId = null)
         {
             return _udpServer?.IssueConnectionToken(playerId, roomId) ?? string.Empty;

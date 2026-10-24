@@ -1739,7 +1739,10 @@ namespace OpenGSServer
             Console.WriteLine($"Player {damagedPlayerId} took {damage} damage");
 
             if (remainingHealth.HasValue && remainingHealth.Value <= 0)
+            {
+                MatchServerV2.Instance?.DiscardPendingMovementInputs(damagedPlayerId);
                 MatchServerV2.Instance?.ServerLagCompensationManager.SetMovementLocked(damagedPlayerId, true);
+            }
 
             GameMessageDispatcher.BroadcastToRoom(room.Id.ToString(), new JObject
             {
@@ -2740,6 +2743,7 @@ namespace OpenGSServer
                 return;
             }
 
+            MatchServerV2.Instance?.DiscardPendingMovementInputs(playerId);
             MatchServerV2.Instance?.ServerLagCompensationManager.SetPlayerPosition(
                 playerId, spawnX, spawnY, spawnZ, clearPendingInputs: true);
             MatchServerV2.Instance?.ServerLagCompensationManager.SetMovementLocked(playerId, false);
@@ -3489,6 +3493,7 @@ namespace OpenGSServer
                 return;
             }
 
+            MatchServerV2.Instance?.DiscardPendingMovementInputs(targetId);
             MatchServerV2.Instance?.ServerLagCompensationManager.SetMovementLocked(targetId, true);
 
             // The health change is the authority for a kill now, not a client

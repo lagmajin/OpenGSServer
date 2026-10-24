@@ -1315,6 +1315,16 @@ namespace OpenGSServer
             ExpireConnectionTokens();
         }
 
+        public void DiscardPendingInputs(string playerId)
+        {
+            if (string.IsNullOrWhiteSpace(playerId) || !_pendingInputs.TryGetValue(playerId, out var queue))
+            {
+                return;
+            }
+
+            while (queue.TryDequeue(out _)) { }
+        }
+
         private void QueueInput(NetPeer peer, ClientInputData input)
         {
             if (peer == null || string.IsNullOrWhiteSpace(input.PlayerId)) return;
