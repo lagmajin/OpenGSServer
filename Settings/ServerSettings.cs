@@ -35,6 +35,8 @@ namespace OpenGSServer
 
         private readonly List<EGameMode> _allowGameModes = new();
         private readonly List<ServerRespawnPoint> _respawnPoints = new();
+        private readonly IReadOnlyList<EGameMode> _allowGameModesView;
+        private readonly IReadOnlyList<ServerRespawnPoint> _respawnPointsView;
 
         public int MaxRoom { get; private set; } = 32;
         public int MaxUser { get; private set; } = 200;
@@ -42,11 +44,14 @@ namespace OpenGSServer
         public float RespawnDelaySeconds { get; private set; } = 5f;
         public bool CanRegisterAccounts { get; private set; } = true;
 
-        public IReadOnlyList<EGameMode> AllowGameModes => _allowGameModes;
-        public IReadOnlyList<ServerRespawnPoint> RespawnPoints => _respawnPoints;
+        public IReadOnlyList<EGameMode> AllowGameModes => _allowGameModesView;
+        public IReadOnlyList<ServerRespawnPoint> RespawnPoints => _respawnPointsView;
 
         public ServerSettings()
         {
+            _allowGameModesView = _allowGameModes.AsReadOnly();
+            _respawnPointsView = _respawnPoints.AsReadOnly();
+
             // allow the most common modes by default
             _allowGameModes.AddRange(new[]
             {
