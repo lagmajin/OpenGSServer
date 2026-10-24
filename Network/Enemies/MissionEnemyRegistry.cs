@@ -24,12 +24,14 @@ namespace OpenGSServer
     public static class MissionEnemyRegistry
     {
         private const double EnemyStateBroadcastIntervalSeconds = 0.10;
+        private const double EnemySnapshotBroadcastIntervalSeconds = 1.0;
         private static readonly ConcurrentDictionary<string, ServerEnemySimulator> Simulators =
             new(StringComparer.OrdinalIgnoreCase);
         private static readonly ConcurrentDictionary<string, ServerEnemyState> PendingEnemyStates =
             new(StringComparer.OrdinalIgnoreCase);
         private static readonly object SimulatorLifecycleLock = new();
         private static double NextEnemyStateBroadcastAtSeconds;
+        private static double NextEnemySnapshotBroadcastAtSeconds;
 
         /// <summary>
         /// Where a room's players are, read from the same lag compensation state
@@ -311,27 +313,40 @@ namespace OpenGSServer
                     entry.Value.Update(deltaSeconds, nowSeconds);
                 }
 
-                if (nowSeconds < NextEnemyStateBroadcastAtSeconds)
-                    return;
-                NextEnemyStateBroadcastAtSeconds = nowSeconds + EnemyStateBroadcastIntervalSeconds;
-                foreach (var key in PendingEnemyStates.Keys)
+                if (nowSeconds >= NextEnemyStateBroadcastAtSeconds)
                 {
-                    if (PendingEnemyStates.TryRemove(key, out var enemy))
+                    NextEnemyStateBroadcastAtSeconds = nowSeconds + EnemyStateBroadcastIntervalSeconds;
+                    foreach (var key in PendingEnemyStates.Keys)
                     {
-                        // The state may have been superseded or the enemy may
-                        // have been removed after it left the pending queue.
-                        // Recheck the authoritative simulator at send time so
-                        // stale movement cannot follow a newer event.
-                        var simulator = TryGet(enemy.RoomId);
-                        if (simulator == null ||
-                            !simulator.TryPeek(enemy.EnemyId, out var latest) ||
-                            !latest.IsAlive ||
-                            latest.Timestamp.CompareTo(enemy.Timestamp) > 0)
-                            continue;
+                        if (PendingEnemyStates.TryRemove(key, out var enemy))
+                        {
+                            // The state may have been superseded or the enemy may
+                            // have been removed after it left the pending queue.
+                            // Recheck the authoritative simulator at send time so
+                            // stale movement cannot follow a newer event.
+                            var simulator = TryGet(enemy.RoomId);
+                            if (simulator == null ||
+                                !simulator.TryPeek(enemy.EnemyId, out var latest) ||
+                                !latest.IsAlive ||
+                                latest.Timestamp.CompareTo(enemy.Timestamp) > 0)
+                                continue;
 
-                        GameMessageDispatcher.BroadcastToRoom(enemy.RoomId, BuildEnemyMessage(
-                            "EnemyState", enemy));
+                            GameMessageDispatcher.BroadcastToRoom(enemy.RoomId, BuildEnemyMessage(
+                                "EnemyState", enemy));
+                        }
                     }
+                }
+
+                if (nowSeconds < NextEnemySnapshotBroadcastAtSeconds)
+                    return;
+                NextEnemySnapshotBroadcastAtSeconds = nowSeconds + EnemySnapshotBroadcastIntervalSeconds;
+                foreach (var roomId in Simulators.Keys)
+                {
+                    // Incremental state is carried by the existing event path.
+                    // A periodic full view repairs missed spawn, movement, or
+                    // despawn messages and lets an empty snapshot clear stale
+                    // client-side enemies after a missed removal.
+                    PublishSnapshot(roomId);
                 }
             }
         }
@@ -352,7 +367,10 @@ namespace OpenGSServer
                         PendingEnemyStates.TryRemove(key, out _);
                 }
                 if (Simulators.IsEmpty)
+                {
                     NextEnemyStateBroadcastAtSeconds = 0.0;
+                    NextEnemySnapshotBroadcastAtSeconds = 0.0;
+                }
             }
         }
 
