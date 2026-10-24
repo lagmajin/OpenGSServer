@@ -63,6 +63,15 @@ namespace OpenGSServer.Network
             Log.Info($"[ServerLagCompensation] Player {playerId} resumed in match {m_MatchId}");
         }
 
+        public bool ConfigurePlayerBooster(
+            string playerId, float maxFuelSeconds, float fuelRecoverRate,
+            float groundedRecoveryDelay, float acceleration, float maxSpeed, float gravity)
+        {
+            return m_PlayerStateManager.ConfigurePlayerBooster(
+                playerId, maxFuelSeconds, fuelRecoverRate,
+                groundedRecoveryDelay, acceleration, maxSpeed, gravity);
+        }
+
         /// <summary>
         /// プレイヤーをマッチから退出させる
         /// </summary>

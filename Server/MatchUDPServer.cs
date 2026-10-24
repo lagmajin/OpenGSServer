@@ -192,6 +192,13 @@ namespace OpenGSServer
             var matchRoom = MatchRoomManager.Instance.SearchRoomByMemberID(playerId);
             var roomPlayer = matchRoom?.Players.FirstOrDefault(player =>
                 string.Equals(player.Id, playerId, StringComparison.OrdinalIgnoreCase));
+            var greenHillBooster = string.Equals(matchRoom?.Map.ToString(),
+                "GreenHillSide1", StringComparison.OrdinalIgnoreCase);
+            lagCompensation.ConfigurePlayerBooster(playerId,
+                greenHillBooster ? 3.54f : 2f, 0.5f, 0.5f,
+                greenHillBooster ? 31.4f : 10f,
+                greenHillBooster ? 35.9f : 5f,
+                greenHillBooster ? 2.57f : 3f);
             if (!preservePosition && matchRoom != null && roomPlayer != null &&
                 ServerManager.Instance.Settings.TryGetRespawnPoint(
                     roomPlayer.Team,
@@ -339,6 +346,7 @@ namespace OpenGSServer
                 ["VelocityX"] = state.VelocityX,
                 ["VelocityY"] = state.VelocityY,
                 ["VelocityZ"] = state.VelocityZ,
+                ["BoosterFuelPercent"] = state.BoosterFuelPercent,
                 ["Timestamp"] = state.Timestamp,
                 ["SequenceNumber"] = state.SequenceNumber
             };
@@ -552,6 +560,8 @@ namespace OpenGSServer
                 MoveY = ReadJsonFloat(message, "VelY", "MoveY"),
                 MoveZ = ReadJsonFloat(message, "VelZ", "MoveZ"),
                 IndependentVerticalInput = ReadJsonBool(message, "IndependentVerticalInput"),
+                BoosterActive = ReadJsonBool(message, "BoosterActive"),
+                BoosterActiveSpecified = message.Property("BoosterActive") != null,
                 LookX = ReadJsonFloat(direction, "X", "DirX"),
                 LookY = ReadJsonFloat(direction, "Y", "DirY"),
                 Jump = ReadJsonBool(message, "Jump"),

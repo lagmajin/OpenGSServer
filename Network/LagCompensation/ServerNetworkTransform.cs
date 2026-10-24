@@ -21,6 +21,7 @@ namespace OpenGSServer.Network
         public float VelocityZ;
         public float Timestamp;
         public byte SequenceNumber;
+        public float BoosterFuelPercent;
 
         /// <summary>
         /// Whether the position has ever been established.
@@ -79,6 +80,8 @@ namespace OpenGSServer.Network
         // Opts into independent horizontal and vertical movement axes.
         // Older clients keep the legacy normalized 3D movement vector.
         public bool IndependentVerticalInput;
+        public bool BoosterActive;
+        public bool BoosterActiveSpecified;
         public float LookX;
         public float LookY;
         public bool Jump;

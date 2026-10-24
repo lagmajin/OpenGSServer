@@ -45,6 +45,16 @@ namespace OpenGSServer.Network
             public Queue<ClientInputData> InputQueue = new Queue<ClientInputData>();
             public DateTime LastUpdateTime = DateTime.UtcNow;
             public bool IsGrounded = true;
+            public float BoosterMaxFuelSeconds = 2f;
+            public float BoosterFuelSeconds = 2f;
+            public float BoosterFuelRecoverRate = 0.5f;
+            public float BoosterGroundedRecoveryDelay = 0.5f;
+            public float BoosterAcceleration = 10f;
+            public float BoosterMaxSpeed = 5f;
+            public float BoosterGravity = 3f;
+            public float BoosterSpeed;
+            public float BoosterGroundedFor;
+            public bool BoosterWasActive;
             public float ViolationScore = 0f;
             public int PendingInputs
             {
@@ -107,6 +117,35 @@ namespace OpenGSServer.Network
                     state.IsSuspended = false;
                 }
             }
+        }
+
+        public bool ConfigurePlayerBooster(
+            string playerId, float maxFuelSeconds, float fuelRecoverRate,
+            float groundedRecoveryDelay, float acceleration, float maxSpeed, float gravity)
+        {
+            if (string.IsNullOrWhiteSpace(playerId) ||
+                !float.IsFinite(maxFuelSeconds) || maxFuelSeconds <= 0f || maxFuelSeconds > 60f ||
+                !float.IsFinite(fuelRecoverRate) || fuelRecoverRate < 0f || fuelRecoverRate > 60f ||
+                !float.IsFinite(groundedRecoveryDelay) || groundedRecoveryDelay < 0f || groundedRecoveryDelay > 30f ||
+                !float.IsFinite(acceleration) || acceleration < 0f || acceleration > 1000f ||
+                !float.IsFinite(maxSpeed) || maxSpeed < 0f || maxSpeed > 1000f ||
+                !float.IsFinite(gravity) || gravity < 0f || gravity > 1000f)
+                return false;
+            RegisterPlayer(playerId);
+            if (!m_PlayerStates.TryGetValue(playerId, out var state)) return false;
+            lock (state.SyncRoot)
+            {
+                var fuelRatio = state.BoosterMaxFuelSeconds > 0f
+                    ? state.BoosterFuelSeconds / state.BoosterMaxFuelSeconds : 1f;
+                state.BoosterMaxFuelSeconds = maxFuelSeconds;
+                state.BoosterFuelSeconds = Math.Clamp(fuelRatio, 0f, 1f) * maxFuelSeconds;
+                state.BoosterFuelRecoverRate = fuelRecoverRate;
+                state.BoosterGroundedRecoveryDelay = groundedRecoveryDelay;
+                state.BoosterAcceleration = acceleration;
+                state.BoosterMaxSpeed = maxSpeed;
+                state.BoosterGravity = gravity;
+            }
+            return true;
         }
 
         /// <summary>
@@ -397,6 +436,8 @@ namespace OpenGSServer.Network
             var targetVelX = normalizedMoveX * MaxHorizontalSpeed;
             var targetVelY = normalizedMoveY * MaxHorizontalSpeed;
             var targetVelZ = normalizedMoveZ * MaxVerticalSpeed;
+            var serverBoosterInput = input.IndependentVerticalInput && input.BoosterActiveSpecified;
+            var legacyVerticalInput = input.IndependentVerticalInput && !input.BoosterActiveSpecified;
 
             state.VelX = MoveTowards(state.VelX, targetVelX, MoveAcceleration * dt);
             state.VelY = MoveTowards(state.VelY, targetVelY, MoveAcceleration * dt);
@@ -406,7 +447,7 @@ namespace OpenGSServer.Network
                 state.VelZ = MathF.Max(state.VelZ, JumpImpulse);
                 state.IsGrounded = false;
             }
-            else if (input.IndependentVerticalInput && normalizedMoveZ > 0.01f)
+            else if (legacyVerticalInput && normalizedMoveZ > 0.01f)
             {
                 // Vertical input is the native booster control. Leaving the
                 // grounded flag set while it raises PosZ would disable gravity
@@ -414,18 +455,54 @@ namespace OpenGSServer.Network
                 state.IsGrounded = false;
             }
 
-            var hasIndependentVerticalInput = input.IndependentVerticalInput && normalizedMoveZ > 0.01f;
+            var boosterActive = serverBoosterInput && input.BoosterActive &&
+                state.BoosterFuelSeconds > 0f;
+            if (boosterActive)
+            {
+                if (state.IsGrounded && !state.BoosterWasActive)
+                    state.VelZ = MathF.Max(state.VelZ, 2f);
+                state.IsGrounded = false;
+                state.BoosterFuelSeconds = MathF.Max(0f, state.BoosterFuelSeconds - dt);
+                state.BoosterSpeed = Math.Clamp(
+                    MathF.Max(state.BoosterSpeed, 2f) + state.BoosterAcceleration * dt,
+                    0f, state.BoosterMaxSpeed);
+                state.VelZ = MathF.Min(10f,
+                    state.VelZ + (state.BoosterSpeed - state.BoosterGravity) * dt);
+                state.BoosterGroundedFor = 0f;
+            }
+            else
+            {
+                state.BoosterSpeed = 0f;
+                if (serverBoosterInput || state.BoosterWasActive)
+                    state.BoosterGroundedFor = 0f;
+                if (!serverBoosterInput && legacyVerticalInput && normalizedMoveZ > 0.01f)
+                {
+                    state.IsGrounded = false;
+                }
+            }
+            state.BoosterWasActive = boosterActive;
+
+            var hasIndependentVerticalInput = legacyVerticalInput && normalizedMoveZ > 0.01f;
             if (!state.IsGrounded && !hasIndependentVerticalInput)
             {
-                state.VelZ -= Gravity * dt;
+                if (!boosterActive)
+                    state.VelZ -= Gravity * dt;
             }
 
-            if (hasIndependentVerticalInput)
+            if (hasIndependentVerticalInput && !serverBoosterInput)
                 state.VelZ = MoveTowards(state.VelZ, targetVelZ, MoveAcceleration * dt);
             else if (state.IsGrounded)
                 state.VelZ = MoveTowards(state.VelZ, 0f, MoveDrag * dt);
-            if (input.IndependentVerticalInput)
+            if (input.IndependentVerticalInput && !serverBoosterInput)
                 state.VelZ = Clamp(state.VelZ, -MaxVerticalSpeed, MaxVerticalSpeed);
+
+            if (state.IsGrounded)
+                state.BoosterGroundedFor += dt;
+            else
+                state.BoosterGroundedFor = 0f;
+            if (!boosterActive && state.BoosterGroundedFor >= state.BoosterGroundedRecoveryDelay)
+                state.BoosterFuelSeconds = MathF.Min(state.BoosterMaxFuelSeconds,
+                    state.BoosterFuelSeconds + state.BoosterFuelRecoverRate * dt);
 
             state.PosX += state.VelX * dt;
             state.PosY += state.VelY * dt;
@@ -544,6 +621,8 @@ namespace OpenGSServer.Network
                         VelocityX = state.VelX,
                         VelocityY = state.VelY,
                         VelocityZ = state.VelZ,
+                        BoosterFuelPercent = state.BoosterMaxFuelSeconds > 0f
+                            ? state.BoosterFuelSeconds / state.BoosterMaxFuelSeconds * 100f : 0f,
                         Timestamp = (float)(DateTime.UtcNow - state.LastUpdateTime).TotalSeconds,
                         SequenceNumber = state.LastProcessedSequence,
                         HasAuthoritativePosition = state.HasAuthoritativePosition
@@ -570,6 +649,10 @@ namespace OpenGSServer.Network
                     state.VelY = 0f;
                     state.VelZ = 0f;
                     state.IsGrounded = MathF.Abs(z - GroundHeight) < 0.01f;
+                    state.BoosterFuelSeconds = state.BoosterMaxFuelSeconds;
+                    state.BoosterSpeed = 0f;
+                    state.BoosterGroundedFor = 0f;
+                    state.BoosterWasActive = false;
                     if (clearPendingInputs)
                         state.InputQueue.Clear();
                     state.LastUpdateTime = DateTime.UtcNow;
