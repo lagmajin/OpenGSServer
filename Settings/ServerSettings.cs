@@ -45,12 +45,12 @@ namespace OpenGSServer
             {
                 new ServerRespawnPoint(ETeam.NoTeam, -6f, 0f, 0f),
                 new ServerRespawnPoint(ETeam.NoTeam, 6f, 0f, 0f),
-                new ServerRespawnPoint(ETeam.NoTeam, 0f, 0f, -6f),
-                new ServerRespawnPoint(ETeam.NoTeam, 0f, 0f, 6f),
-                new ServerRespawnPoint(ETeam.Red, -12f, 0f, -12f),
-                new ServerRespawnPoint(ETeam.Red, -12f, 0f, 12f),
-                new ServerRespawnPoint(ETeam.Blue, 12f, 0f, -12f),
-                new ServerRespawnPoint(ETeam.Blue, 12f, 0f, 12f)
+                new ServerRespawnPoint(ETeam.NoTeam, 0f, -6f, 0f),
+                new ServerRespawnPoint(ETeam.NoTeam, 0f, 6f, 0f),
+                new ServerRespawnPoint(ETeam.Red, -12f, -12f, 0f),
+                new ServerRespawnPoint(ETeam.Red, -12f, 12f, 0f),
+                new ServerRespawnPoint(ETeam.Blue, 12f, -12f, 0f),
+                new ServerRespawnPoint(ETeam.Blue, 12f, 12f, 0f)
             });
         }
 

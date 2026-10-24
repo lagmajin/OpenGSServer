@@ -41,6 +41,8 @@ The server settings file can provide team-owned spawn points and an authoritativ
 respawn delay (default 5 seconds, configurable from 0 to 60). The server records
 the down time and refuses early requests; the delay is included in `MatchStatus`
 so clients can show the same countdown. Coordinates from the client are ignored.
+Spawn points use X/Y for the movement plane and Z for vertical height; the default
+points are on the ground plane at Z=0.
 Example:
 
 ```json
