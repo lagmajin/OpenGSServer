@@ -266,6 +266,19 @@ namespace OpenGSServer.Network
             }
         }
 
+        public bool IsMovementLocked(string playerId)
+        {
+            if (string.IsNullOrWhiteSpace(playerId) || !m_PlayerStates.TryGetValue(playerId, out var state))
+            {
+                return false;
+            }
+
+            lock (state.SyncRoot)
+            {
+                return state.IsSuspended || state.IsMovementLocked;
+            }
+        }
+
         /// <summary>
         /// 全てのプレイヤーの入力を処理する
         /// </summary>

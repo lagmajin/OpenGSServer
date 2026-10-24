@@ -1328,6 +1328,8 @@ namespace OpenGSServer
         private void QueueInput(NetPeer peer, ClientInputData input)
         {
             if (peer == null || string.IsNullOrWhiteSpace(input.PlayerId)) return;
+            if (MatchServerV2.Instance.ServerLagCompensationManager.IsMovementLocked(input.PlayerId))
+                return;
 
             var queue = _pendingInputs.GetOrAdd(
                 input.PlayerId,

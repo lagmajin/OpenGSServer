@@ -90,6 +90,11 @@ namespace OpenGSServer.Network
             m_PlayerStateManager.SetMovementLocked(playerId, locked);
         }
 
+        public bool IsMovementLocked(string playerId)
+        {
+            return m_PlayerStateManager.IsMovementLocked(playerId);
+        }
+
         /// <summary>
         /// クライアントからの入力を処理する
         /// </summary>
