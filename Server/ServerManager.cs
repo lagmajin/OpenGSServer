@@ -130,7 +130,9 @@ namespace OpenGSServer
             {
                 string jsonStr = File.ReadAllText(absolutePath, Encoding.UTF8);
                 var json = JObject.Parse(jsonStr);
-                settings.SetFromJson(json);
+                var loadedSettings = new ServerSettings();
+                loadedSettings.SetFromJson(json);
+                settings = loadedSettings;
                 ConsoleWrite.WriteMessage($"[SERVER] Settings loaded from {absolutePath}.", ConsoleColor.Green);
             }
             catch (Exception ex)
