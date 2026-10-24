@@ -280,6 +280,16 @@ namespace OpenGSServer
                     AddRemaining(AttackBuffExpires, "PowerUpItem");
                     AddRemaining(DefenseBuffExpires, "DefenceUpItem");
                     AddRemaining(SpeedBuffExpires, "SpeedUpItem");
+                    if (ElementalBulletEffects.TryGetValue(
+                        TimedBuffKey(roomId, targetPlayerId), out var elemental) &&
+                        elemental.ExpiresAt > now)
+                    {
+                        buffs.Add(new JObject
+                        {
+                            ["ItemType"] = elemental.DamageType == "Fire" ? "FireBullet" : "PoisonBullet",
+                            ["Duration"] = (elemental.ExpiresAt - now).TotalSeconds
+                        });
+                    }
                 }
                 AddRemaining(StealthBuffExpires, "StealthItem");
                 GameMessageDispatcher.SendToPlayer(targetPlayerId, new JObject
