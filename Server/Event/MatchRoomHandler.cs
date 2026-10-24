@@ -1032,6 +1032,9 @@ namespace OpenGSServer
         /// </summary>
         private static void HandleItemUse(MatchRoom room, string playerId, JObject json)
         {
+            var requestId = ReadString(json, "RequestId", "RequestID") ?? string.Empty;
+            if (requestId.Length > 64)
+                requestId = string.Empty;
             // A player id in the message is a claim about who is spending it, and
             // the connection's own player is the one that counts. Both spellings
             // are checked: the message carries PlayerId and PlayerID for the same
@@ -1058,7 +1061,7 @@ namespace OpenGSServer
 
             if (!TryGetActiveCombatant(room, playerId, out _))
             {
-                RefuseItemUse(room, playerId, itemType, "PlayerInactive");
+                RefuseItemUse(room, playerId, itemType, "PlayerInactive", requestId);
                 return;
             }
 
@@ -1078,7 +1081,7 @@ namespace OpenGSServer
                 if (!player.EquipInstantItems.Contains(itemType))
                 {
                     Console.WriteLine($"[Match] Refused item use of {itemType} by '{playerId}': not carried");
-                    RefuseItemUse(room, playerId, itemType, "NotCarried");
+                    RefuseItemUse(room, playerId, itemType, "NotCarried", requestId);
                     return;
                 }
 
@@ -1087,7 +1090,7 @@ namespace OpenGSServer
                     if (!ServerGrenadeLoadoutStore.TryAdd(
                         room.Id.ToString(), playerId, grenadeType, out var grenadeSlots))
                     {
-                        RefuseItemUse(room, playerId, itemType, "GrenadeSlotsFull");
+                        RefuseItemUse(room, playerId, itemType, "GrenadeSlotsFull", requestId);
                         if (ServerGrenadeLoadoutStore.TryRead(
                             room.Id.ToString(), playerId, out var currentGrenadeSlots))
                             SendGrenadeLoadoutUpdate(room.Id.ToString(), playerId, currentGrenadeSlots);
@@ -1102,6 +1105,7 @@ namespace OpenGSServer
                         ["PlayerID"] = playerId,
                         ["PlayerId"] = playerId,
                         ["ItemType"] = itemType.ToString(),
+                        ["RequestId"] = requestId,
                         ["Effect"] = "GrenadeLoadout",
                         ["RestoredHealth"] = 0,
                         ["RoundsAdded"] = 0,
@@ -1117,7 +1121,7 @@ namespace OpenGSServer
                 if (effect == null)
                 {
                     Console.WriteLine($"[Match] Ignored item use of {itemType} by '{playerId}': it does nothing");
-                    RefuseItemUse(room, playerId, itemType, "NoEffect");
+                    RefuseItemUse(room, playerId, itemType, "NoEffect", requestId);
                     return;
                 }
 
@@ -1165,6 +1169,7 @@ namespace OpenGSServer
                     ["PlayerID"] = playerId,
                     ["PlayerId"] = playerId,
                     ["ItemType"] = itemType.ToString(),
+                    ["RequestId"] = requestId,
                     ["Effect"] = resolvedEffect,
                     ["RestoredHealth"] = restored,
                     ["RoundsAdded"] = roundsAdded,
@@ -1226,7 +1231,9 @@ namespace OpenGSServer
         /// have shown all along.
         /// </para>
         /// </summary>
-        private static void RefuseItemUse(MatchRoom room, string playerId, EInstantItemType itemType, string reason)
+        private static void RefuseItemUse(
+            MatchRoom room, string playerId, EInstantItemType itemType, string reason,
+            string requestId = "")
         {
             if (!room.TryGetPlayer(playerId, out var player) || player == null)
             {
@@ -1240,6 +1247,7 @@ namespace OpenGSServer
                 ["PlayerID"] = playerId,
                 ["PlayerId"] = playerId,
                 ["ItemType"] = itemType.ToString(),
+                ["RequestId"] = requestId,
                 ["Reason"] = reason,
                 ["RestoredHealth"] = 0,
                 ["Health"] = player.Health,
