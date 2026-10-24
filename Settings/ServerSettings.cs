@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using OpenGSCore; // OpenGSCore.eGameModeを使用
 using Newtonsoft.Json.Linq;
@@ -8,6 +9,30 @@ namespace OpenGSServer
 {
     public class ServerSettings
     {
+        private static readonly ServerRespawnPoint[] DefaultRespawnPoints =
+        {
+            new ServerRespawnPoint(ETeam.NoTeam, -6f, 0f, 0f),
+            new ServerRespawnPoint(ETeam.NoTeam, 6f, 0f, 0f),
+            new ServerRespawnPoint(ETeam.NoTeam, 0f, -6f, 0f),
+            new ServerRespawnPoint(ETeam.NoTeam, 0f, 6f, 0f),
+            new ServerRespawnPoint(ETeam.Red, -12f, -12f, 0f),
+            new ServerRespawnPoint(ETeam.Red, -12f, 12f, 0f),
+            new ServerRespawnPoint(ETeam.Blue, 12f, -12f, 0f),
+            new ServerRespawnPoint(ETeam.Blue, 12f, 12f, 0f)
+        };
+
+        private static readonly ServerRespawnPoint[] LegacyDefaultRespawnPoints =
+        {
+            new ServerRespawnPoint(ETeam.NoTeam, -6f, 0f, 0f),
+            new ServerRespawnPoint(ETeam.NoTeam, 6f, 0f, 0f),
+            new ServerRespawnPoint(ETeam.NoTeam, 0f, 0f, -6f),
+            new ServerRespawnPoint(ETeam.NoTeam, 0f, 0f, 6f),
+            new ServerRespawnPoint(ETeam.Red, -12f, 0f, -12f),
+            new ServerRespawnPoint(ETeam.Red, -12f, 0f, 12f),
+            new ServerRespawnPoint(ETeam.Blue, 12f, 0f, -12f),
+            new ServerRespawnPoint(ETeam.Blue, 12f, 0f, 12f)
+        };
+
         private readonly List<EGameMode> _allowGameModes = new();
         private readonly List<ServerRespawnPoint> _respawnPoints = new();
 
@@ -41,17 +66,7 @@ namespace OpenGSServer
             // of it. These defaults are rough, symmetric and separated, so a team
             // respawns into its own half rather than into its own grave. A settings
             // file replaces them.
-            _respawnPoints.AddRange(new[]
-            {
-                new ServerRespawnPoint(ETeam.NoTeam, -6f, 0f, 0f),
-                new ServerRespawnPoint(ETeam.NoTeam, 6f, 0f, 0f),
-                new ServerRespawnPoint(ETeam.NoTeam, 0f, -6f, 0f),
-                new ServerRespawnPoint(ETeam.NoTeam, 0f, 6f, 0f),
-                new ServerRespawnPoint(ETeam.Red, -12f, -12f, 0f),
-                new ServerRespawnPoint(ETeam.Red, -12f, 12f, 0f),
-                new ServerRespawnPoint(ETeam.Blue, 12f, -12f, 0f),
-                new ServerRespawnPoint(ETeam.Blue, 12f, 12f, 0f)
-            });
+            _respawnPoints.AddRange(DefaultRespawnPoints);
         }
 
         public void SetMaxRoom(int value) => MaxRoom = Math.Max(1, value);
@@ -127,6 +142,12 @@ namespace OpenGSServer
             if (json["RespawnPoints"] is JArray respawnPoints)
             {
                 _respawnPoints.Clear();
+                if (MatchesRespawnPoints(respawnPoints, LegacyDefaultRespawnPoints))
+                {
+                    _respawnPoints.AddRange(DefaultRespawnPoints);
+                    return;
+                }
+
                 foreach (var token in respawnPoints.OfType<JObject>())
                 {
                     if (ServerRespawnPoint.TryParse(token, out var point))
@@ -135,6 +156,30 @@ namespace OpenGSServer
                     }
                 }
             }
+        }
+
+        private static bool MatchesRespawnPoints(
+            JArray source, IReadOnlyList<ServerRespawnPoint> expected)
+        {
+            if (source.Count != expected.Count)
+            {
+                return false;
+            }
+
+            for (var index = 0; index < expected.Count; index++)
+            {
+                if (source[index] is not JObject json ||
+                    !ServerRespawnPoint.TryParse(json, out var point) ||
+                    point.Team != expected[index].Team ||
+                    point.X != expected[index].X ||
+                    point.Y != expected[index].Y ||
+                    point.Z != expected[index].Z)
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
 public bool TryGetRespawnPoint(ETeam team, int slot, out ServerRespawnPoint point)
@@ -341,9 +386,9 @@ public sealed class ServerRespawnPoint
             return false;
         }
 
-        if (!float.TryParse(json["X"]?.ToString(), out var x) ||
-            !float.TryParse(json["Y"]?.ToString(), out var y) ||
-            !float.TryParse(json["Z"]?.ToString(), out var z) ||
+        if (!float.TryParse(json["X"]?.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var x) ||
+            !float.TryParse(json["Y"]?.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var y) ||
+            !float.TryParse(json["Z"]?.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var z) ||
             float.IsNaN(x) || float.IsNaN(y) || float.IsNaN(z) ||
             float.IsInfinity(x) || float.IsInfinity(y) || float.IsInfinity(z))
         {
