@@ -305,7 +305,30 @@ public bool TryGetRespawnPoint(ETeam team, int slot, out ServerRespawnPoint poin
                    TickRate == other.TickRate &&
                    RespawnDelaySeconds.Equals(other.RespawnDelaySeconds) &&
                    CanRegisterAccounts == other.CanRegisterAccounts &&
-                   _allowGameModes.SequenceEqual(other._allowGameModes);
+                   _allowGameModes.SequenceEqual(other._allowGameModes) &&
+                   RespawnPointsEqual(_respawnPoints, other._respawnPoints);
+        }
+
+        private static bool RespawnPointsEqual(
+            IReadOnlyList<ServerRespawnPoint> left, IReadOnlyList<ServerRespawnPoint> right)
+        {
+            if (left.Count != right.Count)
+            {
+                return false;
+            }
+
+            for (var index = 0; index < left.Count; index++)
+            {
+                if (left[index].Team != right[index].Team ||
+                    left[index].X != right[index].X ||
+                    left[index].Y != right[index].Y ||
+                    left[index].Z != right[index].Z)
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         public override int GetHashCode()
@@ -319,6 +342,13 @@ public bool TryGetRespawnPoint(ETeam team, int slot, out ServerRespawnPoint poin
             foreach (var mode in _allowGameModes)
             {
                 hash.Add(mode);
+            }
+            foreach (var point in _respawnPoints)
+            {
+                hash.Add(point.Team);
+                hash.Add(point.X);
+                hash.Add(point.Y);
+                hash.Add(point.Z);
             }
 
             return hash.ToHashCode();
