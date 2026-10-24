@@ -195,7 +195,7 @@ namespace OpenGSServer
             if (!preservePosition && matchRoom != null && roomPlayer != null &&
                 ServerManager.Instance.Settings.TryGetRespawnPoint(
                     roomPlayer.Team,
-                    matchRoom.Players.IndexOf(roomPlayer),
+                    (long)matchRoom.Players.IndexOf(roomPlayer) + Math.Max(0, roomPlayer.Deaths),
                     out var initialSpawn))
             {
                 lagCompensation.SetPlayerPosition(playerId,
