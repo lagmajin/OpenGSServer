@@ -2795,6 +2795,7 @@ namespace OpenGSServer
             // respawn a way to dodge a reload, so a respawn refills what the
             // player is holding.
             ServerWeaponMagazineStore.RefillAllMagazines(playerId);
+            SendAmmoStateToPlayer(room.Id.ToString(), playerId);
 
             var armorSnapshot = ServerDamageResolver.GetArmor(respawnedPlayer);
             GameMessageDispatcher.SendPlayerRespawn(
