@@ -3309,6 +3309,7 @@ namespace OpenGSServer
                     ["DirY"] = direction.Y,
                     ["Power"] = Math.Clamp(speed / baseSpeed, 0.1f, 1.0f),
                     ["Speed"] = speed,
+                    ["GravityScale"] = projectile.Gravity / 9.81f,
                     ["RemainingFuseSeconds"] = Math.Max(0.0f,
                         projectile.FuseTime - projectile.ElapsedFuse),
                     ["IsSnapshot"] = true,
@@ -3416,8 +3417,7 @@ namespace OpenGSServer
                 return;
             }
 
-            if (projectile.Kind == OpenGSServer.Network.ServerProjectileKind.Grenade &&
-                string.Equals(spawnType, "ChildClusterGrenade", StringComparison.OrdinalIgnoreCase))
+            if (projectile.Kind == OpenGSServer.Network.ServerProjectileKind.Grenade)
             {
                 var length = projectile.Velocity.Length();
                 if (length <= 0.001f || !IsFinite(length)) return;
@@ -3436,10 +3436,11 @@ namespace OpenGSServer
                     ["DirY"] = direction.Y,
                     ["Power"] = 1.0f,
                     ["Speed"] = length,
+                    ["GravityScale"] = projectile.Gravity / 9.81f,
                     ["RemainingFuseSeconds"] = Math.Max(0.0f,
                         projectile.FuseTime - projectile.ElapsedFuse),
-                    ["GrenadeType"] = "ChildClusterGrenade",
-                    ["ObjectType"] = "ChildClusterGrenade",
+                    ["GrenadeType"] = spawnType,
+                    ["ObjectType"] = spawnType,
                     ["Direction"] = new JObject { ["X"] = direction.X, ["Y"] = direction.Y }
                 });
                 return;
