@@ -7,6 +7,10 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using OpenGSServer.Utility;
+
+#nullable enable
 
 namespace OpenGSServer;
 
@@ -45,6 +49,8 @@ public sealed class ServerBatchService : IDisposable
     /// </summary>
     public void Start()
     {
+        if (_disposed) throw new ObjectDisposedException(nameof(ServerBatchService));
+
         if (_isRunning)
         {
             ConsoleWrite.WriteMessage("[Batch] Service already running", ConsoleColor.Yellow);
@@ -140,39 +146,47 @@ public sealed class ServerBatchService : IDisposable
         {
             var lobby = LobbyServerManager.Instance;
             var match = MatchServerV2.Instance;
+            using var process = Process.GetCurrentProcess();
+            var serverStartedUtc = process.StartTime.ToUniversalTime();
 
             var lobbyStatsResult = lobby.GetLobbyStats();
             var matchStats = match.GetStats();
 
-            object? lobbyData = null;
+            JObject? lobbyData = null;
             lobbyStatsResult.Match(
                 onSuccess: s =>
                 {
-                    lobbyData = new
+                    lobbyData = new JObject
                     {
-                        s.TotalPlayers,
-                        s.ActiveRooms,
-                        s.AveragePing
+                        ["TotalPlayers"] = s.TotalPlayers,
+                        ["ActiveRooms"] = s.ActiveRooms,
+                        ["AveragePing"] = s.AveragePing
                     };
                 },
                 onError: _ => { }
             );
 
-            var stats = new
+            var stats = new JObject
             {
-                Timestamp = DateTime.UtcNow,
-                Lobby = lobbyData,
-                Match = new
+                ["Timestamp"] = DateTime.UtcNow,
+                ["ServerStartedUtc"] = serverStartedUtc,
+                ["ServerUptimeSeconds"] = Math.Max(0, (DateTime.UtcNow - serverStartedUtc).TotalSeconds),
+                ["ProcessId"] = process.Id,
+                ["MemoryUsageMB"] = process.WorkingSet64 / (1024 * 1024),
+                ["CpuThreads"] = process.Threads.Count,
+                ["ConnectedMasters"] = ManagementServer.Instance.GetConnectedClientCount(),
+                ["Lobby"] = lobbyData,
+                ["Match"] = new JObject
                 {
-                    matchStats.TotalFrames,
-                    matchStats.AverageFrameTime,
-                    matchStats.ActiveRooms,
-                    matchStats.PlayingRooms,
-                    matchStats.TotalPlayers
+                    ["TotalFrames"] = matchStats.TotalFrames,
+                    ["AverageFrameTime"] = matchStats.AverageFrameTime,
+                    ["ActiveRooms"] = matchStats.ActiveRooms,
+                    ["PlayingRooms"] = matchStats.PlayingRooms,
+                    ["TotalPlayers"] = matchStats.TotalPlayers
                 }
             };
 
-            var json = JsonConvert.SerializeObject(stats, Formatting.Indented);
+            var json = stats.ToString(Formatting.Indented);
             File.WriteAllText(_statsFilePath, json);
 
             ConsoleWrite.WriteMessage($"[Batch] Server stats saved to {_statsFilePath}", ConsoleColor.Gray);
@@ -197,7 +211,7 @@ public sealed class ServerBatchService : IDisposable
                 onSuccess: stats =>
                 {
                     var pingFile = Path.Combine(_dataPath, $"ping_stats_{DateTime.UtcNow:yyyyMMdd_HHmmss}.json");
-                    var json = JsonConvert.SerializeObject(stats, Formatting.Indented);
+                    var json = SerializePingStats(stats);
                     File.WriteAllText(pingFile, json);
 
                     ConsoleWrite.WriteMessage($"[Batch] Ping stats saved ({stats.Count} players)", ConsoleColor.Gray);
@@ -212,6 +226,27 @@ public sealed class ServerBatchService : IDisposable
         {
             ConsoleWrite.WriteMessage($"[Batch] Error saving ping stats: {ex.Message}", ConsoleColor.Red);
         }
+        }
+
+    private static string SerializePingStats(Dictionary<string, PingStats> stats)
+    {
+        var root = new JObject();
+        foreach (var (playerId, ping) in stats)
+        {
+            root[playerId] = new JObject
+            {
+                ["AveragePing"] = ping.AveragePing,
+                ["MinPing"] = ping.MinPing,
+                ["MaxPing"] = ping.MaxPing,
+                ["Jitter"] = ping.Jitter,
+                ["SampleCount"] = ping.SampleCount,
+                ["PacketLoss"] = ping.PacketLoss,
+                ["Quality"] = ping.Quality.ToString(),
+                ["LatencyCompensation"] = ping.LatencyCompensation
+            };
+        }
+
+        return root.ToString(Formatting.Indented);
     }
 
     /// <summary>
@@ -499,6 +534,8 @@ public sealed class ServerBatchService : IDisposable
 
         _hourlyTimer?.Dispose();
         _dailyTimer?.Dispose();
+        _hourlyTimer = null;
+        _dailyTimer = null;
 
         _disposed = true;
     }

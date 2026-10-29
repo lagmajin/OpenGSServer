@@ -3,6 +3,8 @@ using System.Collections.Generic;
 
 using Newtonsoft.Json.Linq;
 
+#nullable enable
+
 namespace OpenGSServer
 {
     public class ServerEventHandler

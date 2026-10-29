@@ -1,9 +1,8 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using Antlr4.Runtime.Tree.Pattern;
 using OpenGSCore;
 using Newtonsoft.Json.Linq;
 
@@ -28,22 +27,28 @@ namespace OpenGSServer
 
     public class MatchRoomEventBus : OpenGSCore.MatchRoomEventBus
     {
-        public void PublishLoadingStart()
+        // The base class declares these as non-virtual, so they can only be
+        // hidden, not overridden. The base implementations raise the events the
+        // manager subscribes to, so each method here has to reach them.
+        // PublishLoadingStart and PublishGameStart used to stop at a
+        // Console.WriteLine, which silently swallowed the event for anything
+        // holding a server typed bus reference.
+        public new void PublishLoadingStart()
         {
-            Console.WriteLine("LoadingStart");
+            base.PublishLoadingStart();
         }
 
-        public void PublishGameStart()
+        public new void PublishGameStart()
         {
-            Console.WriteLine("GameStart");
+            base.PublishGameStart();
         }
 
-        public void PublishGameEnd()
+        public new void PublishGameEnd()
         {
             base.PublishGameEnd();
         }
 
-        public void PublishGameEndWithResult(JObject result)
+        public new void PublishGameEndWithResult(JObject result)
         {
             base.PublishGameEndWithResult(result);
         }
@@ -68,12 +73,12 @@ namespace OpenGSServer
             Console.WriteLine($"Player left: {player.Name} from {room.RoomName}");
         }
 
-        public void PublishItemSpawn(EFieldItemType type, int spawnPointId)
+        public new void PublishItemSpawn(EFieldItemType type, int spawnPointId)
         {
             base.PublishItemSpawn(type, spawnPointId);
         }
 
-        public void PublishItemDespawn()
+        public new void PublishItemDespawn()
         {
             base.PublishItemDespawn();
         }

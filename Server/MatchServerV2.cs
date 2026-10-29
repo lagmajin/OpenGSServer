@@ -6,8 +6,11 @@ using System.Net;
 using System.Net.Sockets;
 using System.Threading.Tasks;
 using System.Timers;
+using Newtonsoft.Json.Linq;
 using OpenGSCore; // OpenGSCoreのMatchRoom使用
 using OpenGSServer.Network; // ServerLagCompensationManagerを使用
+
+#nullable enable
 
 namespace OpenGSServer
 {
@@ -57,7 +60,7 @@ namespace OpenGSServer
     /// MatchServerV2 - ゲームマッチサーバー
     /// C# 14.0: OpenGSCore.MatchRoomを使用
     /// </summary>
-    public sealed class MatchServerV2 : IDisposable
+    public sealed class MatchServerV2 : IDisposable, IGameMessageSender
     {
         private static readonly MatchServerV2 _instance = new();
         public static MatchServerV2 Instance => _instance;
@@ -65,6 +68,7 @@ namespace OpenGSServer
         private MatchTcpServer? _tcpServer;
         private MatchUDPServer? _udpServer;
         private TickTimer? _gameLoopTimer;
+        private bool _multiCoreEnabled;
         private readonly Stopwatch _performanceTimer = new();
         private bool _disposed;
 
@@ -77,36 +81,36 @@ namespace OpenGSServer
         private readonly object _statsLock = new();
 
         public bool IsRunning { get; private set; }
-        public int? TcpPort => _tcpServer?.Endpoint.Port;
-        public int? UdpPort { get; private set; }
+        public int? TcpPort => IsRunning ? _tcpServer?.Endpoint.Port : null;
+        public int? UdpPort => IsRunning ? _udpServer?.UdpPort : null;
+        public string AdvertisedIp { get; private set; } = string.Empty;
         public double AverageFrameTime => _averageFrameTime;
         public ServerLagCompensationManager ServerLagCompensationManager => _serverLagCompensationManager;
 
-        public string GetOrCreateUdpToken(string roomId, string playerId) =>
-            _udpServer?.GetOrCreateUdpToken(roomId, playerId) ?? string.Empty;
+        public bool IsPlayerConnected(string playerId) =>
+            _udpServer?.IsPlayerConnected(playerId) ?? true;
 
-        public void ClearUdpRoomState(string roomId) => _udpServer?.ClearRoomState(roomId);
+        public void DiscardPendingMovementInputs(string playerId)
+        {
+            _udpServer?.DiscardPendingInputs(playerId);
+        }
+
+        public string IssueUdpConnectionToken(string playerId, string? roomId = null)
+        {
+            return _udpServer?.IssueConnectionToken(playerId, roomId) ?? string.Empty;
+        }
 
         private MatchServerV2()
         {
             ConsoleWrite.WriteMessage("[Match] Server initializing...", ConsoleColor.Cyan);
             _serverLagCompensationManager = new ServerLagCompensationManager(); // ラグ補償マネージャーを初期化
-            InitializeGameLoop();
-        }
-
-        /// <summary>
-        /// ゲームループを初期化（40ms = 25Hz）
-        /// </summary>
-        private void InitializeGameLoop()
-        {
-            _gameLoopTimer = new TickTimer(GameLoopCallback, 40);
-            ConsoleWrite.WriteMessage("[Match] Game loop initialized (25Hz)", ConsoleColor.Green);
+            GameMessageDispatcher.Initialize(this);
         }
 
         /// <summary>
         /// TCP/UDPサーバーを起動
         /// </summary>
-        public void Listen(int tcpPort, int udpPort)
+        public void Listen(int tcpPort, int udpPort, string? advertisedIp = null)
         {
             if (IsRunning)
             {
@@ -116,6 +120,7 @@ namespace OpenGSServer
 
             try
             {
+                AdvertisedIp = advertisedIp?.Trim() ?? string.Empty;
                 // TCPサーバー起動
                 _tcpServer = new MatchTcpServer(IPAddress.Any, tcpPort);
                 _tcpServer.Start();
@@ -124,11 +129,19 @@ namespace OpenGSServer
                 // UDPサーバー起動
                 _udpServer = new MatchUDPServer();
                 _udpServer.Listen(udpPort);
-                UdpPort = udpPort;
                 ConsoleWrite.WriteMessage($"[Match] UDP Server started on port {udpPort}", ConsoleColor.Green);
 
+                // The room state a client reads to learn what it is in. This was
+                // never started, so the snapshot the client waits for was never
+                // sent even though the server had everything it needed to build
+                // one. It is a timer rather than part of the match loop because
+                // the room state only changes when something in the room does.
+                _udpServer.StartSnapshotBroadcast(MatchUDPServer.SnapshotCheckIntervalMs);
+
                 // ゲームループ開始
-                _gameLoopTimer?.Start();
+                _gameLoopTimer = new TickTimer(
+                    _multiCoreEnabled ? MultiCoreGameLoopCallback : GameLoopCallback, 40);
+                _gameLoopTimer.Start();
                 IsRunning = true;
 
                 ConsoleWrite.WriteMessage("[Match] Server fully operational", ConsoleColor.Cyan);
@@ -136,6 +149,31 @@ namespace OpenGSServer
             catch (Exception ex)
             {
                 ConsoleWrite.WriteMessage($"[Match] Failed to start server: {ex.Message}", ConsoleColor.Red);
+
+                _gameLoopTimer?.Stop();
+                _gameLoopTimer = null;
+                try
+                {
+                    _udpServer?.Dispose();
+                }
+                catch (Exception cleanupException)
+                {
+                    ConsoleWrite.WriteMessage($"[Match] UDP cleanup failed: {cleanupException.Message}", ConsoleColor.Red);
+                }
+
+                try
+                {
+                    _tcpServer?.Dispose();
+                }
+                catch (Exception cleanupException)
+                {
+                    ConsoleWrite.WriteMessage($"[Match] TCP cleanup failed: {cleanupException.Message}", ConsoleColor.Red);
+                }
+
+                _udpServer = null;
+                _tcpServer = null;
+                AdvertisedIp = string.Empty;
+                IsRunning = false;
                 throw;
             }
         }
@@ -149,6 +187,11 @@ namespace OpenGSServer
 
             try
             {
+                // ネットワークイベントをTickの先頭で取り込み、同じTickで入力を
+                // 検証・適用できるようにする。末尾でポーリングすると入力が
+                // 常に1Tick遅れて処理される。
+                _udpServer?.PollingEvent();
+
                 // MatchRoomManagerから全ルームを取得
                 var matchRoomManager = MatchRoomManager.Instance;
                 var allRooms = matchRoomManager.AllRooms();
@@ -159,12 +202,10 @@ namespace OpenGSServer
                     if (room is MatchRoom matchRoom)
                     {
                         UpdateMatchRoom(matchRoom);
-                        _serverLagCompensationManager.Update((_gameLoopTimer?.IntervalMs ?? 40) / 1000.0f);
                     }
                 }
 
-                // UDPイベントをポーリング
-                _udpServer?.PollingEvent();
+                UpdateServerOwnedSystems(matchRoomManager);
 
                 // TCPフレームカウント更新
                 _tcpServer?.IncrementFrame();
@@ -184,13 +225,15 @@ namespace OpenGSServer
         /// </summary>
         private void UpdateMatchRoom(MatchRoom room)
         {
+            InGameMatchEventHandler.UpdateMatchTime(room);
             if (room.Playing && !room.Finished)
             {
                 // ゲームシーン更新（OpenGSCore.MatchRoom使用）
                 room.GameUpdate();
 
-                // ラグ補償システムにルーム内のプレイヤーを登録（一時的な場所、本来はプレイヤー参加時に行う）
-                foreach(var player in room.Players)
+                // Ensure room members have state, without resuming peers whose
+                // UDP session is suspended.
+                foreach (var player in room.Players)
                 {
                     _serverLagCompensationManager.AddPlayer(player.Id);
                 }
@@ -203,6 +246,92 @@ namespace OpenGSServer
         public void BroadcastToRoom(int senderIdForRoom, string messageType, Action<LiteNetLib.Utils.NetDataWriter> writeData)
         {
             _udpServer?.BroadcastToRoom(senderIdForRoom, messageType, writeData);
+        }
+
+        public void BroadcastToRoom(string senderPlayerId, string messageType)
+        {
+            _udpServer?.BroadcastToRoom(senderPlayerId, messageType);
+        }
+
+        /// <summary>
+        /// Sends a message to a room with a payload attached, for a message whose
+        /// meaning is in what it carries.
+        /// <para>
+        /// A match end notification used to go out as a type and a room and
+        /// nothing else, so a client had to work out the winner from a score it
+        /// had never been told. That is a message nobody can act on, and the two
+        /// sides could finish a match disagreeing about the result.
+        /// </para>
+        /// </summary>
+        public void BroadcastToRoom(string senderPlayerId, string messageType, Newtonsoft.Json.Linq.JObject? extras)
+        {
+            _udpServer?.BroadcastToRoom(senderPlayerId, messageType, extras);
+        }
+
+        public void BroadcastMatchMessage(string roomId, JObject message)
+        {
+            _udpServer?.BroadcastMatchMessage(roomId, message);
+        }
+
+        public void NotifyPlayerLeft(string playerId)
+        {
+            if (!string.IsNullOrWhiteSpace(playerId))
+            {
+                _udpServer?.NotifyPlayerLeft(playerId);
+            }
+        }
+
+        public void DisconnectPlayerSession(string playerId)
+        {
+            if (!string.IsNullOrWhiteSpace(playerId))
+            {
+                _udpServer?.DisconnectPlayerSession(playerId);
+            }
+        }
+
+        public void ForgetPlayerLeft(string playerId)
+        {
+            if (!string.IsNullOrWhiteSpace(playerId))
+            {
+                _udpServer?.ForgetPlayerLeft(playerId);
+            }
+        }
+
+        public void SendToPlayer(string playerId, JObject message)
+        {
+            if (!string.IsNullOrWhiteSpace(playerId) && message != null)
+            {
+                LobbyServerManager.Instance.SendToPlayer(playerId, message);
+            }
+        }
+
+        public void BroadcastToRoom(string roomId, JObject message)
+        {
+            if (string.IsNullOrWhiteSpace(roomId) || message == null) return;
+
+            var room = MatchRoomManager.Instance.AllRooms()
+                .OfType<MatchRoom>()
+                .FirstOrDefault(candidate =>
+                    string.Equals(candidate.Id, roomId, StringComparison.OrdinalIgnoreCase));
+            if (room == null) return;
+
+            foreach (var player in room.Players)
+            {
+                SendToPlayer(player.Id, message);
+            }
+        }
+
+        public void BroadcastToAll(JObject message)
+        {
+            if (message == null) return;
+
+            foreach (var room in MatchRoomManager.Instance.AllRooms().OfType<MatchRoom>())
+            {
+                foreach (var player in room.Players)
+                {
+                    SendToPlayer(player.Id, message);
+                }
+            }
         }
 
         /// <summary>
@@ -240,6 +369,8 @@ namespace OpenGSServer
 
             try
             {
+                // Preserve the single-threaded loop's receive/update ordering.
+                _udpServer?.PollingEvent();
                 var matchRoomManager = MatchRoomManager.Instance;
                 var allRooms = matchRoomManager.AllRooms();
 
@@ -254,11 +385,10 @@ namespace OpenGSServer
                     if (room is MatchRoom matchRoom)
                     {
                         UpdateMatchRoom(matchRoom);
-                        _serverLagCompensationManager.Update((_gameLoopTimer?.IntervalMs ?? 40) / 1000.0f);
                     }
                 });
 
-                _udpServer?.PollingEvent();
+                UpdateServerOwnedSystems(matchRoomManager);
                 _tcpServer?.IncrementFrame();
                 _totalFrames++;
             }
@@ -269,6 +399,28 @@ namespace OpenGSServer
 
             _performanceTimer.Stop();
             UpdatePerformanceStats(_gameLoopTimer?.IntervalMs ?? 40);
+        }
+
+        /// <summary>
+        /// Advances systems that are authoritative for all match rooms. Both
+        /// loop modes use this sequence so parallel room updates cannot disable
+        /// combat, reloads, items, or timed flags.
+        /// </summary>
+        private void UpdateServerOwnedSystems(MatchRoomManager roomManager)
+        {
+            var tickSeconds = (_gameLoopTimer?.IntervalMs ?? 40) / 1000.0f;
+            _udpServer?.Tick(tickSeconds);
+            InGameMatchEventHandler.UpdateProjectiles(tickSeconds);
+            InGameMatchEventHandler.UpdateEnemies(tickSeconds);
+            InGameMatchEventHandler.UpdateReloads();
+            InGameMatchEventHandler.UpdateFieldItemSpawns(tickSeconds);
+
+            foreach (var matchRoom in roomManager.AllRooms().OfType<MatchRoom>())
+            {
+                InGameMatchEventHandler.ReturnTimedOutFlags(matchRoom);
+            }
+
+            _serverLagCompensationManager.Update(tickSeconds);
         }
 
         /// <summary>
@@ -298,11 +450,13 @@ namespace OpenGSServer
         {
             if (!IsRunning)
             {
+                AdvertisedIp = string.Empty;
                 ConsoleWrite.WriteMessage("[Match] Server not running", ConsoleColor.Yellow);
                 return;
             }
 
             _gameLoopTimer?.Stop();
+            _multiCoreEnabled = true;
             _gameLoopTimer = new TickTimer(MultiCoreGameLoopCallback, 40);
             _gameLoopTimer.Start();
 
@@ -345,9 +499,35 @@ namespace OpenGSServer
             ConsoleWrite.WriteMessage("[Match] Server shutting down...", ConsoleColor.Yellow);
 
             _gameLoopTimer?.Stop();
-            _udpServer?.Shutdown();
-            _tcpServer?.Stop();
+            _gameLoopTimer = null;
+            try
+            {
+                _udpServer?.Dispose();
+            }
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage($"[Match] UDP shutdown failed: {ex.Message}", ConsoleColor.Red);
+            }
+            finally
+            {
+                _udpServer = null;
+            }
 
+            try
+            {
+                _tcpServer?.Stop();
+                _tcpServer?.Dispose();
+            }
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage($"[Match] TCP shutdown failed: {ex.Message}", ConsoleColor.Red);
+            }
+            finally
+            {
+                _tcpServer = null;
+            }
+
+            AdvertisedIp = string.Empty;
             IsRunning = false;
 
             ConsoleWrite.WriteMessage("[Match] Server shutdown complete", ConsoleColor.Green);
@@ -359,10 +539,6 @@ namespace OpenGSServer
 
             Shutdown();
 
-            _gameLoopTimer?.Stop();
-            // TickTimerにDisposeがない場合はStopのみ
-            _tcpServer?.Dispose();
-            _udpServer?.Dispose();
             _performanceTimer?.Stop();
 
             _disposed = true;

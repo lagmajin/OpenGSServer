@@ -18,22 +18,28 @@ namespace OpenGSServer
         Stopwatch _sw;
         int _dueTime;
         int _period;
-        bool _loop = true;
-        Thread _task;
+        int _loop = 1;
+        int _started;
+        readonly Thread _task;
 
         public int IntervalMs => _period;
 
         public TickTimer(TimerCallback callback, object state, int dueTime, int period)
         {
+            if (dueTime < 0) throw new ArgumentOutOfRangeException(nameof(dueTime));
+            if (period <= 0) throw new ArgumentOutOfRangeException(nameof(period));
+
             _cb = callback;
             _dueTime = dueTime;
             _period = period;
             _sw = new Stopwatch();
             _task = new Thread(OnTimer);
-            _task.Start(state);
+            Start(state);
         }
         public TickTimer(TimerCallback callback, int period)
         {
+            if (period <= 0) throw new ArgumentOutOfRangeException(nameof(period));
+
             _cb = callback;
             _period = period;
             _sw = new Stopwatch();
@@ -41,15 +47,24 @@ namespace OpenGSServer
         }
         public void Start(object state = null)
         {
-            _dueTime = 0;
+            if (Interlocked.CompareExchange(ref _started, 1, 0) != 0)
+            {
+                throw new InvalidOperationException("A TickTimer instance can only be started once.");
+            }
+
+            Volatile.Write(ref _loop, 1);
             _task.Start(state);
         }
 
         public void Stop()
         {
-            _loop = false;
+            Volatile.Write(ref _loop, 0);
+            if (_task.IsAlive && Thread.CurrentThread != _task)
+            {
+                _task.Join();
+            }
         }
-        private async void OnTimer(object state)
+        private void OnTimer(object state)
         {
             Thread.Sleep(_dueTime);
             
@@ -57,7 +72,7 @@ namespace OpenGSServer
 
             //Thread.Yield();
             _sw.Restart();
-            while (_loop)
+            while (Volatile.Read(ref _loop) != 0)
             {
                 long msec = _sw.ElapsedMilliseconds;
                 int rest = _period - (int)(msec % _period);
@@ -72,11 +87,12 @@ namespace OpenGSServer
                 // 200msecの間、ちょうどになるまでループで待つ
                 while (true)
                 {
-                    if (_sw.ElapsedMilliseconds >= msec + rest)
+                    if (Volatile.Read(ref _loop) == 0 || _sw.ElapsedMilliseconds >= msec + rest)
                     {
                         break;
                     }
                 }
+                if (Volatile.Read(ref _loop) == 0) break;
                 if (_cb != null)
                 {
                     _cb(state);

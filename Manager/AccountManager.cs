@@ -9,6 +9,8 @@ using Newtonsoft.Json.Linq;
 using OpenGSCore;
 
 
+#nullable enable
+
 namespace OpenGSServer
 {
     enum EDealWithDuplicateLogin
@@ -41,12 +43,14 @@ namespace OpenGSServer
         /// <summary>
         /// スレッドセーフなログイン中のプレイヤーアカウント管理
         /// </summary>
-        private readonly ConcurrentDictionary<string, PlayerAccount> _logonUsers = new();
+        private readonly ConcurrentDictionary<string, PlayerAccount> _logonUsers =
+            new(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>
         /// スレッドセーフなプレイヤーサーバー情報管理
         /// </summary>
-        private readonly ConcurrentDictionary<string, PlayerServerInformation> _playerInfo = new();
+        private readonly ConcurrentDictionary<string, PlayerServerInformation> _playerInfo =
+            new(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>
         /// プレイヤーアカウントデータの統合管理（将来用）
@@ -171,7 +175,7 @@ namespace OpenGSServer
         /// 非推奨: GetPlayerInformationを使用してください
         /// </summary>
         [Obsolete("GetPlayerInformation(string id)を使用してください")]
-        public PlayerServerInformation PlayerInformation(in string id)
+        public PlayerServerInformation? PlayerInformation(in string id)
         {
             return GetPlayerInformation(id);
         }
@@ -205,8 +209,9 @@ namespace OpenGSServer
 
             try
             {
-                databaseManager.AddNewPlayerData(dbAccount);
-                return new CreateNewAccountResult(eCreateAccountResult.Succeeful);
+                return databaseManager.TryAddNewPlayerData(dbAccount)
+                    ? new CreateNewAccountResult(eCreateAccountResult.Succeeful)
+                    : new CreateNewAccountResult(eCreateAccountResult.ExistAlreadySameAccount);
             }
             catch (Exception ex)
             {
@@ -277,7 +282,9 @@ namespace OpenGSServer
                 return false;
             }
 
-            return _logonUsers.TryRemove(id, out _);
+            var userRemoved = _logonUsers.TryRemove(id, out _);
+            var infoRemoved = _playerInfo.TryRemove(id, out _);
+            return userRemoved || infoRemoved;
         }
 
         /// <summary>

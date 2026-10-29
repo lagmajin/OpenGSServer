@@ -28,7 +28,7 @@ namespace OpenGSServer
         public void AddPlayer(WaitRoomPlayerInfo player)
         {
             if (player == null) return;
-            if (players.Any(p => p.PlayerId == player.PlayerId)) return;
+            if (players.Any(p => string.Equals(p.PlayerId, player.PlayerId, System.StringComparison.OrdinalIgnoreCase))) return;
             players.Add(player);
             if (string.IsNullOrWhiteSpace(ownerId_))
             {
@@ -39,8 +39,8 @@ namespace OpenGSServer
         public void RemovePlayer(string playerId)
         {
             if (string.IsNullOrWhiteSpace(playerId)) return;
-            players.RemoveAll(p => p.PlayerId == playerId);
-            if (ownerId_ == playerId)
+            players.RemoveAll(p => string.Equals(p.PlayerId, playerId, System.StringComparison.OrdinalIgnoreCase));
+            if (string.Equals(ownerId_, playerId, System.StringComparison.OrdinalIgnoreCase))
             {
                 ChangeRoomOwnerRandom();
             }

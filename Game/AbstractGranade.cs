@@ -7,6 +7,8 @@ using System;
 using Newtonsoft.Json.Linq;
 using OpenGSCore;
 
+#nullable enable
+
 namespace OpenGSServer
 {
     public enum eGranadeType : int
@@ -93,7 +95,7 @@ namespace OpenGSServer
             }
         }
 
-        public override bool Equals(object obj)
+        public override bool Equals(object? obj)
         {
             return obj is GranadeType type &&
                    type_ == type.type_;
@@ -139,14 +141,14 @@ namespace OpenGSServer
         public event Action<AbstractGrenade>? Exploded;
         public event Action<AbstractGrenade>? ChildGrenadeCreated;
 
-        public int StoppingPower { get => stoppingPower; set => stoppingPower = value; }
+        public int StoppingPower { get => stoppingPower; set => stoppingPower = Math.Max(0, value); }
         public int Angle { get => angle; set => angle = value; }
-        public int Speed { get => speed; set => speed = value; }
-        public int ExplosionDamage { get => explosionDamage; set => explosionDamage = value; }
-        public int Damage { get => damage; set => damage = value; }
+        public int Speed { get => speed; set => speed = Math.Max(0, value); }
+        public int ExplosionDamage { get => explosionDamage; set => explosionDamage = Math.Max(0, value); }
+        public int Damage { get => damage; set => damage = Math.Max(0, value); }
         public string OwnerId { get => ownerId; set => ownerId = value; }
         public GranadeType GranadeType { get => granadeType; set => granadeType = value; }
-        public float LifeTime { get => lifeTime; set => lifeTime = value; }
+        public float LifeTime { get => lifeTime; set => lifeTime = Math.Max(0f, value); }
         public float FuseTime { get => fuseTime; set => fuseTime = Math.Max(0f, value); }
         public float ExplosionRadius { get => explosionRadius; set => explosionRadius = Math.Max(0f, value); }
         public GrenadeState State => state;

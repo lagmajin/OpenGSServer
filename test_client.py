@@ -1,10 +1,12 @@
 import socket
 import json
 import time
+import argparse
+import os
 
 # 管理サーバーの接続情報
-HOST = '127.0.0.1'
-PORT = 50020
+HOST = os.environ.get('OPENGS_MANAGEMENT_HOST', '127.0.0.1')
+PORT = int(os.environ.get('OPENGS_MANAGEMENT_PORT', '50020'))
 
 def send_json(sock, data):
     message = json.dumps(data) + '\n'
@@ -27,11 +29,19 @@ def receive_json(sock):
                 continue
 
 def main():
+    parser = argparse.ArgumentParser(description='OpenGS management server smoke client')
+    parser.add_argument('--host', default=HOST)
+    parser.add_argument('--port', type=int, default=PORT)
+    parser.add_argument('--admin-id', default=os.environ.get('OPENGS_ADMIN_ID', 'admin'))
+    parser.add_argument('--admin-password', default=os.environ.get('OPENGS_ADMIN_PASSWORD', 'admin123'))
+    args = parser.parse_args()
+
     try:
         # ソケット接続
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.connect((HOST, PORT))
-        print(f"管理サーバーに接続しました: {HOST}:{PORT}")
+        sock.settimeout(10)
+        sock.connect((args.host, args.port))
+        print(f"管理サーバーに接続しました: {args.host}:{args.port}")
         
         # 接続成功メッセージの受信
         response = receive_json(sock)
@@ -41,8 +51,8 @@ def main():
         # 管理者ログイン
         login_data = {
             "MessageType": "AdminLoginRequest",
-            "AdminID": "admin",
-            "AdminPassword": "admin123"
+            "AdminID": args.admin_id,
+            "AdminPassword": args.admin_password
         }
         send_json(sock, login_data)
         response = receive_json(sock)

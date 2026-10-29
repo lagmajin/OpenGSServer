@@ -17,6 +17,7 @@ namespace OpenGSServer
         public string OwnerId { get; set; } = string.Empty;
         public float Lifetime { get; protected set; } = 10f;
         public bool IsActive { get; set; } = true;
+        private bool lastIsActive = true;
 
         // 計算プロパティ
         public Vector2 Position => new(Posx, Posy);
@@ -29,11 +30,11 @@ namespace OpenGSServer
         {
             // OpenGSCore.AbstractGameObjectのSetPosメソッドを使用
             SetPos(x, y);
-            Speed = speed;
-            StoppingPower = stoppingPower;
-            Damage = damage;
+            Speed = MathF.Max(0f, speed);
+            StoppingPower = MathF.Max(0f, stoppingPower);
+            Damage = MathF.Max(0f, damage);
             Angle = angle;
-            ObjectType = eGameObjectType.Character; // OpenGSCoreのenum
+            ObjectType = eGameObjectType.Bullet;
         }
 
         public override void Update()
@@ -57,7 +58,7 @@ namespace OpenGSServer
 
         protected virtual void UpdateLifetime(float deltaTime)
         {
-            Lifetime -= deltaTime;
+            Lifetime = MathF.Max(0f, Lifetime - MathF.Max(0f, deltaTime));
             if (Lifetime <= 0)
             {
                 IsActive = false;
@@ -79,7 +80,13 @@ namespace OpenGSServer
 
         public override bool HasChanged()
         {
-            return IsActive && base.HasChanged(); // OpenGSCoreのメソッド使用
+            return base.HasChanged() || IsActive != lastIsActive;
+        }
+
+        public override void SaveSyncState()
+        {
+            base.SaveSyncState();
+            lastIsActive = IsActive;
         }
     }
 

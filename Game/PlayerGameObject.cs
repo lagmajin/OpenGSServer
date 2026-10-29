@@ -3,7 +3,7 @@ using Newtonsoft.Json.Linq;
 
 namespace OpenGSServer
 {
-    public class PlayerGameObject : AbstractGameObject
+    public class PlayerGameObject : OpenGSCore.AbstractGameObject
     {
         public string PlayerId { get; set; }
         public string DisplayName { get; set; }
@@ -14,10 +14,15 @@ namespace OpenGSServer
 
         public int MaxHp { get; private set; } = 100;
         public int Hp { get; private set; } = 100;
+        private int lastHp = 100;
+        private float lastRotation;
+        private float lastVelocityX;
+        private float lastVelocityY;
+        private bool lastIsAlive = true;
 
         public bool IsAlive => Hp > 0;
 
-        public PlayerGameObject(string playerId, string displayName, float x = 0f, float y = 0f) : base(x, y)
+        public PlayerGameObject(string playerId, string displayName, float x = 0f, float y = 0f)
         {
             PlayerId = playerId ?? string.Empty;
             DisplayName = displayName ?? string.Empty;
@@ -51,14 +56,18 @@ namespace OpenGSServer
 
         public override bool HasChanged()
         {
-            return base.HasChanged() || Rotation != 0f || VelocityX != 0f || VelocityY != 0f || !IsAlive;
+            return base.HasChanged() || Hp != lastHp || Rotation != lastRotation ||
+                   VelocityX != lastVelocityX || VelocityY != lastVelocityY || IsAlive != lastIsAlive;
         }
 
         public override void SaveSyncState()
         {
-            // reset sync state
-            lastPosx = Posx;
-            lastPosy = Posy;
+            base.SaveSyncState();
+            lastHp = Hp;
+            lastRotation = Rotation;
+            lastVelocityX = VelocityX;
+            lastVelocityY = VelocityY;
+            lastIsAlive = IsAlive;
         }
 
         public override Newtonsoft.Json.Linq.JObject ToJSon()

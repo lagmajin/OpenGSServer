@@ -37,13 +37,22 @@ namespace OpenGSServer
                 return;
             }
 
-            var tokens = Tokenize(args);
+            string[] tokens;
+            try
+            {
+                tokens = Tokenize(args);
+            }
+            catch (FormatException ex)
+            {
+                ConsoleWrite.WriteMessage($"[ERR] {ex.Message}", ConsoleColor.Red);
+                return;
+            }
             if (tokens.Length == 0)
             {
                 return;
             }
 
-            var command = tokens[0].ToLower();
+            var command = tokens[0].ToLowerInvariant();
             var parameters = tokens.Skip(1).ToList();
 
             ExecuteCommand(command, parameters);
@@ -57,6 +66,7 @@ namespace OpenGSServer
         {
             var tokens = new List<string>();
             var current = new StringBuilder();
+            var tokenStarted = false;
             var inQuotes = false;
             var quoteChar = '\0';
 
@@ -72,6 +82,7 @@ namespace OpenGSServer
                         if (next == quoteChar || next == '\\')
                         {
                             current.Append(next);
+                            tokenStarted = true;
                             i++;
                             continue;
                         }
@@ -92,10 +103,11 @@ namespace OpenGSServer
 
                 if (char.IsWhiteSpace(ch))
                 {
-                    if (current.Length > 0)
+                    if (tokenStarted)
                     {
                         tokens.Add(current.ToString());
                         current.Clear();
+                        tokenStarted = false;
                     }
 
                     continue;
@@ -105,15 +117,22 @@ namespace OpenGSServer
                 {
                     inQuotes = true;
                     quoteChar = ch;
+                    tokenStarted = true;
                     continue;
                 }
 
                 current.Append(ch);
+                tokenStarted = true;
             }
 
-            if (current.Length > 0)
+            if (tokenStarted)
             {
                 tokens.Add(current.ToString());
+            }
+
+            if (inQuotes)
+            {
+                throw new FormatException("Unterminated quoted argument");
             }
 
             return tokens.ToArray();
@@ -772,18 +791,19 @@ namespace OpenGSServer
             try
             {
                 var matchRoomManager = MatchRoomManager.Instance;
-                // ダミーの設定とイベントバスを使用
-                var dummySetting = new DeathMatchSetting(); // または他の適切な設定
-                var dummyBus = new MatchRoomEventBus();
-                var newMatchRoom = new OpenGSCore.MatchRoom(
-                    roomNumber: 0, // 仮のルームナンバー
-                    roomName: roomName,
-                    roomOwnerId: "ServerAdmin", // 仮のオーナーID
-                    setting: dummySetting,
-                    bus: dummyBus
-                );
-                matchRoomManager.AddRoom(newMatchRoom);
-                ConsoleWrite.WriteMessage($"[OK] Match room '{roomName}' (ID: {newMatchRoom.Id}) created successfully", ConsoleColor.Green);
+                var result = matchRoomManager.CreateNewDeathMatchRoom(
+                    roomName, "ServerAdmin");
+                if (result.Result != ECreateNewRoomResult.Successful)
+                {
+                    ConsoleWrite.WriteMessage(
+                        $"[ERR] Failed to create match room '{roomName}': {result.Message()}",
+                        ConsoleColor.Red);
+                    return;
+                }
+
+                ConsoleWrite.WriteMessage(
+                    $"[OK] Match room '{roomName}' (ID: {result.RoomId}) created successfully",
+                    ConsoleColor.Green);
             }
             catch (Exception ex)
             {
@@ -799,17 +819,90 @@ namespace OpenGSServer
             try
             {
                 var matchRoomManager = MatchRoomManager.Instance;
+                // The operator usually has the wait room id, while the match
+                // room is keyed by its own id, so fall back to matching on the
+                // linked wait room.
                 var room = matchRoomManager.FindRoom(matchId) as OpenGSCore.MatchRoom;
+                if (room == null)
+                {
+                    room = matchRoomManager.AllRooms()
+                        .OfType<OpenGSCore.MatchRoom>()
+                        .FirstOrDefault(candidate =>
+                            candidate.WaitRoomLink != null &&
+                            string.Equals(candidate.WaitRoomLink.RoomId, matchId, StringComparison.OrdinalIgnoreCase));
+                }
                 if (room == null)
                 {
                     ConsoleWrite.WriteMessage($"[ERR] Match room with ID '{matchId}' not found.", ConsoleColor.Red);
                     return;
                 }
 
-                // ダミーのPlayerInfoを作成
-                var playerInfo = new PlayerInfo(id: playerId, name: $"Player_{playerId}");
+                if (string.IsNullOrWhiteSpace(playerId))
+                {
+                    ConsoleWrite.WriteMessage("[ERR] Player ID is required.", ConsoleColor.Red);
+                    return;
+                }
+
+                var account = AccountDatabaseManager.GetInstance().GetAccountSnapshot(playerId);
+                if (account == null || account.Status != DBAccount.EAccountStatus.Active)
+                {
+                    ConsoleWrite.WriteMessage(
+                        $"[ERR] Active player account '{playerId}' was not found.",
+                        ConsoleColor.Red);
+                    return;
+                }
+
+                if (room.Playing)
+                {
+                    ConsoleWrite.WriteMessage(
+                        $"[ERR] Match '{room.RoomName}' has already started.",
+                        ConsoleColor.Red);
+                    return;
+                }
+
+                var existingRoom = matchRoomManager.SearchRoomByMemberID(account.AccountId);
+                if (existingRoom != null &&
+                    !string.Equals(existingRoom.Id, room.Id, StringComparison.OrdinalIgnoreCase))
+                {
+                    ConsoleWrite.WriteMessage(
+                        $"[ERR] Player '{account.AccountId}' is already in another match.",
+                        ConsoleColor.Red);
+                    return;
+                }
+
+                if (room.ContainsPlayer(account.AccountId))
+                {
+                    ConsoleWrite.WriteMessage(
+                        $"[ERR] Player '{account.AccountId}' is already in match '{room.RoomName}'.",
+                        ConsoleColor.Yellow);
+                    return;
+                }
+
+                if (room.Players.Count >= room.Setting.MaxPlayerCount)
+                {
+                    ConsoleWrite.WriteMessage(
+                        $"[ERR] Match '{room.RoomName}' is full.",
+                        ConsoleColor.Red);
+                    return;
+                }
+
+                var playerInfo = new PlayerInfo(
+                    id: account.AccountId,
+                    name: account.DisplayName,
+                    level: account.Level,
+                    exp: Math.Max(0L, account.Exp));
                 room.AddNewPlayer(playerInfo);
-                ConsoleWrite.WriteMessage($"[OK] Player '{playerId}' added to match '{room.RoomName}' (ID: {room.Id})", ConsoleColor.Green);
+                if (!room.ContainsPlayer(account.AccountId))
+                {
+                    ConsoleWrite.WriteMessage(
+                        $"[ERR] Player '{account.AccountId}' was not added to match '{room.RoomName}'.",
+                        ConsoleColor.Red);
+                    return;
+                }
+
+                ConsoleWrite.WriteMessage(
+                    $"[OK] Player '{account.AccountId}' added to match '{room.RoomName}' (ID: {room.Id})",
+                    ConsoleColor.Green);
             }
             catch (Exception ex)
             {
@@ -825,19 +918,173 @@ namespace OpenGSServer
             try
             {
                 var matchRoomManager = MatchRoomManager.Instance;
+                // The operator usually has the wait room id, while the match
+                // room is keyed by its own id, so fall back to matching on the
+                // linked wait room.
                 var room = matchRoomManager.FindRoom(matchId) as OpenGSCore.MatchRoom;
+                if (room == null)
+                {
+                    room = matchRoomManager.AllRooms()
+                        .OfType<OpenGSCore.MatchRoom>()
+                        .FirstOrDefault(candidate =>
+                            candidate.WaitRoomLink != null &&
+                            string.Equals(candidate.WaitRoomLink.RoomId, matchId, StringComparison.OrdinalIgnoreCase));
+                }
                 if (room == null)
                 {
                     ConsoleWrite.WriteMessage($"[ERR] Match room with ID '{matchId}' not found.", ConsoleColor.Red);
                     return;
                 }
 
-                room.GameStart();
+                if (!matchRoomManager.BeginMatch(room))
+                {
+                    ConsoleWrite.WriteMessage($"[ERR] Match '{room.RoomName}' is already starting or finished.", ConsoleColor.Yellow);
+                    return;
+                }
+
                 ConsoleWrite.WriteMessage($"[OK] Match '{room.RoomName}' (ID: {room.Id}) started!", ConsoleColor.Green);
             }
             catch (Exception ex)
             {
                 ConsoleWrite.WriteMessage($"[ERR] Failed to start match '{matchId}': {ex.Message}", ConsoleColor.Red);
+            }
+        }
+
+        /// <summary>
+        /// Ends a running match. The rule set decides the winner through the
+        /// result evaluator, so this takes the same path a real match end does.
+        /// Exposed as an admin command so a headless test can play a match to
+        /// completion without waiting out the match timer.
+        /// </summary>
+        /// <summary>
+        /// Shows the server side health and score of every player in a match.
+        /// <para>
+        /// Health used to change without anything reporting it, so a test could
+        /// not tell whether a hit landed. This makes the state the server keeps
+        /// readable from outside, which is what the damage smoke needs to check
+        /// against what the clients were told.
+        /// </para>
+        /// </summary>
+        /// <summary>
+        /// Prints the realtime port and a connection token for a player.
+        /// <para>
+        /// The realtime channel refuses anything without a token, so anything
+        /// that wants to drive it from outside the game, a probe or a smoke
+        /// test, has no way in. Printing the port and a token makes that path
+        /// reachable without a Unity client.
+        /// </para>
+        /// </summary>
+        public static void RealtimeAccess(string playerId)
+        {
+            try
+            {
+                var matchServer = MatchServerV2.Instance;
+                if (!matchServer.IsRunning)
+                {
+                    ConsoleWrite.WriteMessage("[ERR] The match server is not running.", ConsoleColor.Red);
+                    return;
+                }
+
+                var port = matchServer.UdpPort;
+                if (port == null)
+                {
+                    ConsoleWrite.WriteMessage("[ERR] The realtime channel has no port.", ConsoleColor.Red);
+                    return;
+                }
+
+                var token = matchServer.IssueUdpConnectionToken(playerId);
+                if (string.IsNullOrWhiteSpace(token))
+                {
+                    ConsoleWrite.WriteMessage($"[ERR] No realtime token was issued for '{playerId}'.", ConsoleColor.Red);
+                    return;
+                }
+
+                // Parsed by the smoke client, so the shape is part of the
+                // contract: REALTIME port=<port> playerId=<id> token=<token>
+                ConsoleWrite.WriteMessage(
+                    $"[OK] REALTIME port={port.Value} playerId={playerId} token={token}",
+                    ConsoleColor.Green);
+            }
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage($"[ERR] Failed to issue a realtime token for '{playerId}': {ex.Message}", ConsoleColor.Red);
+            }
+        }
+        public static void RoomStatus(string matchId)
+        {
+            try
+            {
+                var matchRoomManager = MatchRoomManager.Instance;
+                var room = matchRoomManager.FindRoom(matchId) as OpenGSCore.MatchRoom;
+                if (room == null)
+                {
+                    room = matchRoomManager.AllRooms()
+                        .OfType<OpenGSCore.MatchRoom>()
+                        .FirstOrDefault(candidate =>
+                            candidate.WaitRoomLink != null &&
+                            string.Equals(candidate.WaitRoomLink.RoomId, matchId, StringComparison.OrdinalIgnoreCase));
+                }
+
+                if (room == null)
+                {
+                    ConsoleWrite.WriteMessage($"[ERR] Match room with ID '{matchId}' not found.", ConsoleColor.Red);
+                    return;
+                }
+
+                ConsoleWrite.WriteMessage(
+                    $"[OK] Room '{room.RoomName}' (ID: {room.Id}) mode={room.Setting.Mode} " +
+                    $"playing={room.Playing} finished={room.Finished} players={room.Players.Count}",
+                    ConsoleColor.Cyan);
+
+                foreach (var player in room.Players)
+                {
+                    var pose = room.GetPlayerPoseState(player.Id);
+                    ConsoleWrite.WriteMessage(
+                        $"[OK] Player {player.Id} health={player.Health}/{player.MaxHealth} " +
+                        $"kills={player.Kills} deaths={player.Deaths} score={player.Score} pose={pose}",
+                        ConsoleColor.Green);
+                }
+            }
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage($"[ERR] Failed to read room status for '{matchId}': {ex.Message}", ConsoleColor.Red);
+            }
+        }
+        public static void EndMatch(string matchId)
+        {
+            try
+            {
+                var matchRoomManager = MatchRoomManager.Instance;
+                // The operator usually has the wait room id, while the match
+                // room is keyed by its own id, so fall back to matching on the
+                // linked wait room.
+                var room = matchRoomManager.FindRoom(matchId) as OpenGSCore.MatchRoom;
+                if (room == null)
+                {
+                    room = matchRoomManager.AllRooms()
+                        .OfType<OpenGSCore.MatchRoom>()
+                        .FirstOrDefault(candidate =>
+                            candidate.WaitRoomLink != null &&
+                            string.Equals(candidate.WaitRoomLink.RoomId, matchId, StringComparison.OrdinalIgnoreCase));
+                }
+                if (room == null)
+                {
+                    ConsoleWrite.WriteMessage($"[ERR] Match room with ID '{matchId}' not found.", ConsoleColor.Red);
+                    return;
+                }
+
+                if (!room.Playing)
+                {
+                    ConsoleWrite.WriteMessage($"[ERR] Match '{room.RoomName}' (ID: {room.Id}) is not playing.", ConsoleColor.Yellow);
+                    return;
+                }
+
+                room.Finish();
+                ConsoleWrite.WriteMessage($"[OK] Match '{room.RoomName}' (ID: {room.Id}) ended.", ConsoleColor.Green);
+            }
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage($"[ERR] Failed to end match '{matchId}': {ex.Message}", ConsoleColor.Red);
             }
         }
 

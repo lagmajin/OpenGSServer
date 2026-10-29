@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 
+#nullable enable
+
 namespace OpenGSServer.Network
 {
     /// <summary>
@@ -22,7 +24,8 @@ namespace OpenGSServer.Network
         /// <summary>
         /// クライアントUDP送信コールバック
         /// </summary>
-        private readonly Dictionary<string, Action<byte[]>> m_ClientUdpSenders = new Dictionary<string, Action<byte[]>>();
+        private readonly Dictionary<string, Action<byte[]>> m_ClientUdpSenders =
+            new(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>
         /// クライアント位置の妥当性検証フック
@@ -46,7 +49,8 @@ namespace OpenGSServer.Network
             public DateTime LastUpdate;
         }
 
-        private readonly Dictionary<string, PlayerPositionData> m_PlayerPositions = new Dictionary<string, PlayerPositionData>();
+        private readonly Dictionary<string, PlayerPositionData> m_PlayerPositions =
+            new(StringComparer.OrdinalIgnoreCase);
 
         private float m_ElapsedTime = 0f;
         private bool m_IsEnabled = false;

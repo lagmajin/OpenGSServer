@@ -1,14 +1,18 @@
 using LiteDB;
 using OpenGSCore;
+using OpenGSServer.Network;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+
+#nullable enable
 
 namespace OpenGSServer
 {
     public class AccountDatabaseManager : IDisposable
     {
-        private LiteDatabase db;
+        private LiteDatabase? db;
+        private readonly object _accountMutationLock = new();
 
         public static AccountDatabaseManager Instance { get; set; } = new();
 
@@ -32,7 +36,26 @@ namespace OpenGSServer
                 Connect();
             }
 
-            return db;
+            return db!;
+        }
+
+        private static DBAccount? FindAccountRecord(
+            ILiteCollection<DBAccount> collection, string accountId)
+        {
+            return collection.FindOne(Query.EQ(nameof(DBAccount.AccountId), accountId))
+                ?? collection.FindOne(Query.EQ(nameof(DBAccount.Id), accountId))
+                ?? collection.FindAll().FirstOrDefault(account =>
+                    string.Equals(account.AccountId, accountId, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(account.Id, accountId, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static List<DBFriend> FindFriendRecords(
+            ILiteCollection<DBFriend> collection, string playerId)
+        {
+            return collection.FindAll()
+                .Where(friend => string.Equals(
+                    friend.PlayerID, playerId, StringComparison.OrdinalIgnoreCase))
+                .ToList();
         }
 
         public void Connect()
@@ -80,28 +103,22 @@ namespace OpenGSServer
 
             var database = EnsureDatabase();
             var col = database.GetCollection<DBAccount>(accountTableName);
-            return col.FindOne(Query.EQ(nameof(DBAccount.AccountId), accountID)) != null
-                || col.FindOne(Query.EQ(nameof(DBAccount.Id), accountID)) != null;
+            return FindAccountRecord(col, accountID) != null;
         }
 
         public DBAccount? GetDBPlayerInfoOld(in string id)
         {
-            var col = db?.GetCollection<DBAccount>(accountTableName);
-
-            DBAccount? data = null;
-            if (col != null)
+            if (string.IsNullOrWhiteSpace(id)) return null;
+            try
             {
-                try
-                {
-                    data = col.FindOne(Query.EQ(nameof(DBAccount.AccountId), id))
-                        ?? col.FindOne(Query.EQ(nameof(DBAccount.Id), id));
-                }
-                catch (Exception)
-                {
-                }
+                var col = EnsureDatabase().GetCollection<DBAccount>(accountTableName);
+                return FindAccountRecord(col, id);
             }
-
-            return data;
+            catch (Exception ex)
+            {
+                ConsoleWrite.WriteMessage($"[AccountDB] Account lookup failed: {ex.Message}", ConsoleColor.Red);
+                return null;
+            }
         }
 
         public DBAccount? GetAccount(string accountId)
@@ -114,8 +131,21 @@ namespace OpenGSServer
             var database = EnsureDatabase();
             var col = database.GetCollection<DBAccount>(accountTableName);
 
-            return col.FindOne(Query.EQ(nameof(DBAccount.AccountId), accountId))
-                ?? col.FindOne(Query.EQ(nameof(DBAccount.Id), accountId));
+            return FindAccountRecord(col, accountId);
+        }
+
+        public DBAccount? GetAccountSnapshot(string accountId)
+        {
+            if (string.IsNullOrWhiteSpace(accountId))
+            {
+                return null;
+            }
+
+            lock (_accountMutationLock)
+            {
+                var account = GetAccount(accountId);
+                return account == null ? null : new DBAccount(account);
+            }
         }
 
         public void GetPlayerInfo(in string account)
@@ -141,35 +171,42 @@ namespace OpenGSServer
 
         public void AddNewPlayerData(in DBAccount player)
         {
+            TryAddNewPlayerData(player);
+        }
+
+        public bool TryAddNewPlayerData(in DBAccount player)
+        {
             if (string.IsNullOrWhiteSpace(player.AccountId))
             {
                 ConsoleWrite.WriteMessage("[AccountDB] Skip insert: account ID is empty", ConsoleColor.Yellow);
-                return;
+                return false;
             }
 
-            var database = EnsureDatabase();
-            var col = database.GetCollection<DBAccount>(accountTableName);
-            var scoreCol = database.GetCollection<DBAccountScore>(accountScoreTableName);
-
-            var existing = col.FindOne(Query.EQ(nameof(DBAccount.AccountId), player.AccountId))
-                ?? col.FindOne(Query.EQ(nameof(DBAccount.Id), player.Id));
-
-            if (existing != null)
+            lock (_accountMutationLock)
             {
-                ConsoleWrite.WriteMessage($"[AccountDB] Already have data in db: {player.AccountId}", ConsoleColor.Yellow);
-                return;
-            }
+                var database = EnsureDatabase();
+                var col = database.GetCollection<DBAccount>(accountTableName);
+                var scoreCol = database.GetCollection<DBAccountScore>(accountScoreTableName);
 
-            player.LastUpdatedUtc = DateTime.UtcNow.ToString("O");
-            player.Credits = Math.Max(0, player.Credits);
-            col.Insert(player);
-
-            if (scoreCol.FindOne(Query.EQ(nameof(DBAccountScore.accountID), player.AccountId)) == null)
-            {
-                scoreCol.Insert(new DBAccountScore
+                if (FindAccountRecord(col, player.AccountId) != null)
                 {
-                    accountID = player.AccountId
-                });
+                    ConsoleWrite.WriteMessage($"[AccountDB] Already have data in db: {player.AccountId}", ConsoleColor.Yellow);
+                    return false;
+                }
+
+                player.LastUpdatedUtc = DateTime.UtcNow.ToString("O");
+                player.Credits = Math.Max(0, player.Credits);
+                col.Insert(player);
+
+                if (scoreCol.FindOne(Query.EQ(nameof(DBAccountScore.accountID), player.AccountId)) == null)
+                {
+                    scoreCol.Insert(new DBAccountScore
+                    {
+                        accountID = player.AccountId
+                    });
+                }
+
+                return true;
             }
         }
 
@@ -180,23 +217,26 @@ namespace OpenGSServer
                 return;
             }
 
-            var database = EnsureDatabase();
-            var col = database.GetCollection<DBFriend>(friendTableName);
-
-            foreach (var existing in col.Find(Query.EQ(nameof(DBFriend.PlayerID), account)))
+            lock (_accountMutationLock)
             {
-                if (string.Equals(existing.FriendAccountId, friendid, StringComparison.OrdinalIgnoreCase))
+                var database = EnsureDatabase();
+                var accounts = database.GetCollection<DBAccount>(accountTableName);
+                var ownerId = FindAccountRecord(accounts, account)?.AccountId ?? account;
+                var targetId = FindAccountRecord(accounts, friendid)?.AccountId ?? friendid;
+                var col = database.GetCollection<DBFriend>(friendTableName);
+                if (FindFriendRecords(col, ownerId).Any(existing => string.Equals(
+                    existing.FriendAccountId, targetId, StringComparison.OrdinalIgnoreCase)))
                 {
                     return;
                 }
-            }
 
-            col.Insert(new DBFriend
-            {
-                PlayerID = account,
-                FriendAccountId = friendid,
-                CreatedTimeUtc = DateTime.UtcNow.ToString("O")
-            });
+                col.Insert(new DBFriend
+                {
+                    PlayerID = ownerId,
+                    FriendAccountId = targetId,
+                    CreatedTimeUtc = DateTime.UtcNow.ToString("O")
+                });
+            }
         }
 
         public void UpdateAccountData(in DBAccount player)
@@ -206,31 +246,132 @@ namespace OpenGSServer
                 return;
             }
 
-            var database = EnsureDatabase();
-            var col = database.GetCollection<DBAccount>(accountTableName);
-            col.EnsureIndex(x => x.AccountId, true);
-
-            var rec = col.FindOne(Query.EQ(nameof(DBAccount.AccountId), player.AccountId));
-            if (rec == null)
+            lock (_accountMutationLock)
             {
-                ConsoleWrite.WriteMessage("[AccountDB] Account not found", ConsoleColor.Yellow);
-                return;
+                var database = EnsureDatabase();
+                var col = database.GetCollection<DBAccount>(accountTableName);
+                col.EnsureIndex(x => x.AccountId, true);
+
+                var rec = FindAccountRecord(col, player.AccountId);
+                if (rec == null)
+                {
+                    ConsoleWrite.WriteMessage("[AccountDB] Account not found", ConsoleColor.Yellow);
+                    return;
+                }
+
+                rec.DisplayName = player.DisplayName;
+                rec.Password = player.Password;
+                rec.HashedPassword = player.HashedPassword;
+                rec.Salt = player.Salt;
+                rec.Level = player.Level;
+                rec.Exp = player.Exp;
+                rec.LifeTimeScore = player.LifeTimeScore ?? new PlayerLifeTimeScore();
+                rec.Status = player.Status;
+                rec.LastUpdatedUtc = DateTime.UtcNow.ToString("O");
+
+                col.Update(rec);
             }
+        }
 
-            rec.DisplayName = player.DisplayName;
-            rec.Password = player.Password;
-            rec.HashedPassword = player.HashedPassword;
-            rec.Salt = player.Salt;
-            rec.Level = player.Level;
-            rec.Exp = player.Exp;
-            rec.Credits = Math.Max(0, player.Credits);
-            rec.PurchasedItems = ClonePurchasedItems(player.PurchasedItems);
-            rec.EquippedItems = CloneEquippedItems(player.EquippedItems);
-            rec.EquippedInstantItems = CloneEquippedInstantItems(player.EquippedInstantItems);
-            rec.Status = player.Status;
-            rec.LastUpdatedUtc = DateTime.UtcNow.ToString("O");
+        public MatchResultResponse? SettleMatchProgress(
+            string matchId, string accountId, Func<DBAccount, MatchResultResponse> updateProgress)
+        {
+            if (string.IsNullOrWhiteSpace(matchId) || string.IsNullOrWhiteSpace(accountId) || updateProgress == null)
+                return null;
 
-            col.Update(rec);
+            lock (_accountMutationLock)
+            {
+                var database = EnsureDatabase();
+                var accounts = database.GetCollection<DBAccount>(accountTableName);
+                var account = FindAccountRecord(accounts, accountId);
+                if (account == null) return null;
+
+                var receipts = database.GetCollection<DBMatchSettlementReceipt>("MatchSettlementReceipt");
+                var receiptId = $"{account.AccountId}:{matchId}";
+                var existingReceipt = receipts.FindById(receiptId);
+                if (existingReceipt != null) return existingReceipt.ToResponse();
+
+                if (!database.BeginTrans())
+                    throw new InvalidOperationException("Could not begin match settlement transaction.");
+
+                try
+                {
+                    account = FindAccountRecord(accounts, account.AccountId);
+                    if (account == null)
+                    {
+                        database.Rollback();
+                        return null;
+                    }
+
+                    existingReceipt = receipts.FindById(receiptId);
+                    if (existingReceipt != null)
+                    {
+                        if (!database.Commit())
+                            throw new InvalidOperationException("Could not close match settlement transaction.");
+                        return existingReceipt.ToResponse();
+                    }
+
+                    var response = updateProgress(account);
+                    if (response == null)
+                    {
+                        database.Rollback();
+                        return null;
+                    }
+
+                    account.LastUpdatedUtc = DateTime.UtcNow.ToString("O");
+                    if (!accounts.Update(account))
+                    {
+                        database.Rollback();
+                        return null;
+                    }
+                    receipts.Insert(new DBMatchSettlementReceipt
+                    {
+                        Id = receiptId,
+                        AccountId = account.AccountId,
+                        MatchId = matchId,
+                        PlayerId = response.PlayerId,
+                        XpGained = response.XpGained,
+                        NewTotalXp = response.NewTotalXp,
+                        NewLevel = response.NewLevel,
+                        LevelXp = response.LevelXp,
+                        IsLevelUp = response.IsLevelUp,
+                        CreatedUtc = DateTime.UtcNow.ToString("O")
+                    });
+
+                    if (!database.Commit())
+                        throw new InvalidOperationException("Could not commit match settlement transaction.");
+                    return response;
+                }
+                catch
+                {
+                    database.Rollback();
+                    throw;
+                }
+            }
+        }
+
+        private sealed class DBMatchSettlementReceipt
+        {
+            [BsonId] public string Id { get; set; } = string.Empty;
+            public string AccountId { get; set; } = string.Empty;
+            public string MatchId { get; set; } = string.Empty;
+            public string PlayerId { get; set; } = string.Empty;
+            public int XpGained { get; set; }
+            public int NewTotalXp { get; set; }
+            public int NewLevel { get; set; }
+            public int LevelXp { get; set; }
+            public bool IsLevelUp { get; set; }
+            public string CreatedUtc { get; set; } = string.Empty;
+
+            public MatchResultResponse ToResponse() => new()
+            {
+                PlayerId = PlayerId,
+                XpGained = XpGained,
+                NewTotalXp = NewTotalXp,
+                NewLevel = NewLevel,
+                LevelXp = LevelXp,
+                IsLevelUp = IsLevelUp
+            };
         }
 
         public void UpdateAccountScore(in string accountID, in DBAccountScore score)
@@ -241,10 +382,14 @@ namespace OpenGSServer
             }
 
             var database = EnsureDatabase();
+            var accounts = database.GetCollection<DBAccount>(accountTableName);
+            var canonicalId = FindAccountRecord(accounts, accountID)?.AccountId ?? accountID;
             var scoreCol = database.GetCollection<DBAccountScore>(accountScoreTableName);
 
-            var record = scoreCol.FindOne(Query.EQ(nameof(DBAccountScore.accountID), accountID));
-            score.accountID = accountID;
+            var record = scoreCol.FindOne(Query.EQ(nameof(DBAccountScore.accountID), canonicalId))
+                ?? scoreCol.FindAll().FirstOrDefault(existing => string.Equals(
+                    existing.accountID, canonicalId, StringComparison.OrdinalIgnoreCase));
+            score.accountID = canonicalId;
 
             if (record == null)
             {
@@ -285,22 +430,62 @@ namespace OpenGSServer
             return account?.Credits ?? 0;
         }
 
-        public bool UpdateCredits(string accountId, long credits)
+        public (bool Success, long Granted, long Credits) TryClaimDailyReward(
+            string accountId, string claimId, long amount)
         {
-            if (string.IsNullOrWhiteSpace(accountId))
-            {
-                return false;
-            }
+            if (string.IsNullOrWhiteSpace(accountId) || string.IsNullOrWhiteSpace(claimId) || amount < 0)
+                return (false, 0, 0);
 
-            var account = GetAccount(accountId);
-            if (account == null)
+            lock (_accountMutationLock)
             {
-                return false;
-            }
+                var account = GetAccount(accountId);
+                if (account == null) return (false, 0, 0);
+                account.ClaimedDailyRewards ??= new List<string>();
+                var current = Math.Max(0L, account.Credits);
+                if (account.ClaimedDailyRewards.Contains(claimId, StringComparer.OrdinalIgnoreCase))
+                    return (true, 0, current);
 
-            account.Credits = Math.Max(0, credits);
-            account.LastUpdatedUtc = DateTime.UtcNow.ToString("O");
-            return EnsureDatabase().GetCollection<DBAccount>(accountTableName).Update(account);
+                var next = (long)Math.Min(
+                    (decimal)long.MaxValue, (decimal)current + amount);
+                account.Credits = next;
+                account.ClaimedDailyRewards.Add(claimId);
+                // Daily progress is retained for sixty days, so this bounded
+                // receipt window still covers every claim that can be retried.
+                if (account.ClaimedDailyRewards.Count > 512)
+                    account.ClaimedDailyRewards.RemoveRange(
+                        0, account.ClaimedDailyRewards.Count - 512);
+                account.LastUpdatedUtc = DateTime.UtcNow.ToString("O");
+                var updated = EnsureDatabase().GetCollection<DBAccount>(accountTableName).Update(account);
+                return updated ? (true, next - current, next) : (false, 0, current);
+            }
+        }
+
+        public (bool Success, string Error, long Credits, bool AlreadyOwned) TryPurchaseItem(
+            string accountId, string itemId, long price)
+        {
+            if (string.IsNullOrWhiteSpace(accountId) || string.IsNullOrWhiteSpace(itemId) || price < 0)
+                return (false, "Account or item is invalid", 0, false);
+
+            lock (_accountMutationLock)
+            {
+                var account = GetAccount(accountId);
+                if (account == null) return (false, "Account not found", 0, false);
+                account.PurchasedItems ??= new List<string>();
+                var current = Math.Max(0L, account.Credits);
+                if (account.PurchasedItems.Any(existing =>
+                    string.Equals(existing, itemId, StringComparison.OrdinalIgnoreCase)))
+                    return (true, string.Empty, current, true);
+                if (current < price)
+                    return (false, "Insufficient credits", current, false);
+
+                account.Credits = current - price;
+                account.PurchasedItems.Add(itemId);
+                account.LastUpdatedUtc = DateTime.UtcNow.ToString("O");
+                var updated = EnsureDatabase().GetCollection<DBAccount>(accountTableName).Update(account);
+                return updated
+                    ? (true, string.Empty, account.Credits, false)
+                    : (false, "Failed to complete purchase", current, false);
+            }
         }
 
         public IReadOnlyList<string> GetPurchasedItems(string accountId)
@@ -316,27 +501,30 @@ namespace OpenGSServer
                 return false;
             }
 
-            var account = GetAccount(accountId);
-            if (account == null)
+            lock (_accountMutationLock)
             {
-                return false;
-            }
-
-            account.PurchasedItems ??= new List<string>();
-            if (purchased)
-            {
-                if (!account.PurchasedItems.Any(existing => string.Equals(existing, itemId, StringComparison.OrdinalIgnoreCase)))
+                var account = GetAccount(accountId);
+                if (account == null)
                 {
-                    account.PurchasedItems.Add(itemId);
+                    return false;
                 }
-            }
-            else
-            {
-                account.PurchasedItems.RemoveAll(existing => string.Equals(existing, itemId, StringComparison.OrdinalIgnoreCase));
-            }
 
-            account.LastUpdatedUtc = DateTime.UtcNow.ToString("O");
-            return EnsureDatabase().GetCollection<DBAccount>(accountTableName).Update(account);
+                account.PurchasedItems ??= new List<string>();
+                if (purchased)
+                {
+                    if (!account.PurchasedItems.Any(existing => string.Equals(existing, itemId, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        account.PurchasedItems.Add(itemId);
+                    }
+                }
+                else
+                {
+                    account.PurchasedItems.RemoveAll(existing => string.Equals(existing, itemId, StringComparison.OrdinalIgnoreCase));
+                }
+
+                account.LastUpdatedUtc = DateTime.UtcNow.ToString("O");
+                return EnsureDatabase().GetCollection<DBAccount>(accountTableName).Update(account);
+            }
         }
 
         public bool IsPurchased(string accountId, string itemId)
@@ -362,6 +550,45 @@ namespace OpenGSServer
                 ?.ItemId ?? string.Empty;
         }
 
+        public IReadOnlyList<DBEquippedItem> GetEquippedItems(string accountId)
+        {
+            var account = GetAccountSnapshot(accountId);
+            if (account == null)
+            {
+                return Array.Empty<DBEquippedItem>();
+            }
+
+            var purchasedItems = new HashSet<string>(
+                account.PurchasedItems ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
+            return (account.EquippedItems ?? new List<DBEquippedItem>())
+                .Where(item => item != null &&
+                    !string.IsNullOrWhiteSpace(item.Category) &&
+                    !string.IsNullOrWhiteSpace(item.ItemId) &&
+                    purchasedItems.Contains(item.ItemId))
+                .GroupBy(item => item.Category, StringComparer.OrdinalIgnoreCase)
+                .Select(group => new DBEquippedItem(group.First()))
+                .ToList();
+        }
+
+        public IReadOnlyList<DBInstantEquippedItem> GetEquippedInstantItems(string accountId)
+        {
+            var account = GetAccountSnapshot(accountId);
+            if (account == null)
+            {
+                return Array.Empty<DBInstantEquippedItem>();
+            }
+
+            var purchasedItems = new HashSet<string>(
+                account.PurchasedItems ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
+            return (account.EquippedInstantItems ?? new List<DBInstantEquippedItem>())
+                .Where(item => item != null && item.Slot >= 0 && item.Slot < 3 &&
+                    !string.IsNullOrWhiteSpace(item.ItemId) && purchasedItems.Contains(item.ItemId))
+                .GroupBy(item => item.Slot)
+                .Select(group => new DBInstantEquippedItem(group.First()))
+                .OrderBy(item => item.Slot)
+                .ToList();
+        }
+
         public string GetEquippedInstantItem(string accountId, int slot)
         {
             var account = GetAccount(accountId);
@@ -382,61 +609,76 @@ namespace OpenGSServer
                 return false;
             }
 
-            var account = GetAccount(accountId);
-            if (account == null)
+            lock (_accountMutationLock)
             {
-                return false;
-            }
-
-            account.EquippedItems ??= new List<DBEquippedItem>();
-            var existing = account.EquippedItems.FirstOrDefault(item => string.Equals(item.Category, category, StringComparison.OrdinalIgnoreCase));
-            if (existing == null)
-            {
-                account.EquippedItems.Add(new DBEquippedItem
+                var account = GetAccount(accountId);
+                if (account == null)
                 {
-                    Category = category,
-                    ItemId = itemId ?? string.Empty
-                });
-            }
-            else
-            {
-                existing.ItemId = itemId ?? string.Empty;
-            }
+                    return false;
+                }
 
-            account.LastUpdatedUtc = DateTime.UtcNow.ToString("O");
-            return EnsureDatabase().GetCollection<DBAccount>(accountTableName).Update(account);
+                var normalizedItemId = itemId?.Trim() ?? string.Empty;
+                account.PurchasedItems ??= new List<string>();
+                if (normalizedItemId.Length > 0 && !account.PurchasedItems.Any(existing =>
+                    string.Equals(existing, normalizedItemId, StringComparison.OrdinalIgnoreCase)))
+                {
+                    return false;
+                }
+
+                account.EquippedItems ??= new List<DBEquippedItem>();
+                account.EquippedItems.RemoveAll(item => item == null ||
+                    string.Equals(item.Category, category, StringComparison.OrdinalIgnoreCase));
+                if (normalizedItemId.Length > 0)
+                {
+                    account.EquippedItems.Add(new DBEquippedItem
+                    {
+                        Category = category,
+                        ItemId = normalizedItemId
+                    });
+                }
+
+                account.LastUpdatedUtc = DateTime.UtcNow.ToString("O");
+                return EnsureDatabase().GetCollection<DBAccount>(accountTableName).Update(account);
+            }
         }
 
         public bool SetEquippedInstantItem(string accountId, int slot, string itemId)
         {
-            if (string.IsNullOrWhiteSpace(accountId) || slot < 0)
+            if (string.IsNullOrWhiteSpace(accountId) || slot < 0 || slot >= 3)
             {
                 return false;
             }
 
-            var account = GetAccount(accountId);
-            if (account == null)
+            lock (_accountMutationLock)
             {
-                return false;
-            }
-
-            account.EquippedInstantItems ??= new List<DBInstantEquippedItem>();
-            var existing = account.EquippedInstantItems.FirstOrDefault(item => item.Slot == slot);
-            if (existing == null)
-            {
-                account.EquippedInstantItems.Add(new DBInstantEquippedItem
+                var account = GetAccount(accountId);
+                if (account == null)
                 {
-                    Slot = slot,
-                    ItemId = itemId ?? string.Empty
-                });
-            }
-            else
-            {
-                existing.ItemId = itemId ?? string.Empty;
-            }
+                    return false;
+                }
 
-            account.LastUpdatedUtc = DateTime.UtcNow.ToString("O");
-            return EnsureDatabase().GetCollection<DBAccount>(accountTableName).Update(account);
+                var normalizedItemId = itemId?.Trim() ?? string.Empty;
+                account.PurchasedItems ??= new List<string>();
+                if (normalizedItemId.Length > 0 && !account.PurchasedItems.Any(existing =>
+                    string.Equals(existing, normalizedItemId, StringComparison.OrdinalIgnoreCase)))
+                {
+                    return false;
+                }
+
+                account.EquippedInstantItems ??= new List<DBInstantEquippedItem>();
+                account.EquippedInstantItems.RemoveAll(item => item == null || item.Slot == slot);
+                if (normalizedItemId.Length > 0)
+                {
+                    account.EquippedInstantItems.Add(new DBInstantEquippedItem
+                    {
+                        Slot = slot,
+                        ItemId = normalizedItemId
+                    });
+                }
+
+                account.LastUpdatedUtc = DateTime.UtcNow.ToString("O");
+                return EnsureDatabase().GetCollection<DBAccount>(accountTableName).Update(account);
+            }
         }
 
         public bool RemoveFriend(string accountId, string friendId)
@@ -446,12 +688,26 @@ namespace OpenGSServer
                 return false;
             }
 
-            var database = EnsureDatabase();
-            var col = database.GetCollection<DBFriend>(friendTableName);
-            var removed = false;
-            removed |= col.DeleteMany(Query.And(Query.EQ(nameof(DBFriend.PlayerID), accountId), Query.EQ(nameof(DBFriend.FriendAccountId), friendId))) > 0;
-            removed |= col.DeleteMany(Query.And(Query.EQ(nameof(DBFriend.PlayerID), friendId), Query.EQ(nameof(DBFriend.FriendAccountId), accountId))) > 0;
-            return removed;
+            lock (_accountMutationLock)
+            {
+                var col = EnsureDatabase().GetCollection<DBFriend>(friendTableName);
+                var removed = false;
+                foreach (var friendship in FindFriendRecords(col, accountId)
+                    .Where(friend => string.Equals(
+                        friend.FriendAccountId, friendId, StringComparison.OrdinalIgnoreCase)))
+                {
+                    removed |= col.Delete(friendship.Id);
+                }
+
+                foreach (var friendship in FindFriendRecords(col, friendId)
+                    .Where(friend => string.Equals(
+                        friend.FriendAccountId, accountId, StringComparison.OrdinalIgnoreCase)))
+                {
+                    removed |= col.Delete(friendship.Id);
+                }
+
+                return removed;
+            }
         }
 
         public bool AddFriend(string accountId, string friendId)
@@ -461,34 +717,46 @@ namespace OpenGSServer
                 return false;
             }
 
-            var database = EnsureDatabase();
-            var col = database.GetCollection<DBFriend>(friendTableName);
-
-            var existing = col.Find(Query.EQ(nameof(DBFriend.PlayerID), accountId))
-                .Any(friend => string.Equals(friend.FriendAccountId, friendId, StringComparison.OrdinalIgnoreCase));
-            if (!existing)
+            lock (_accountMutationLock)
             {
-                col.Insert(new DBFriend
-                {
-                    PlayerID = accountId,
-                    FriendAccountId = friendId,
-                    CreatedTimeUtc = DateTime.UtcNow.ToString("O")
-                });
-            }
+                var database = EnsureDatabase();
+                var accounts = database.GetCollection<DBAccount>(accountTableName);
+                var owner = FindAccountRecord(accounts, accountId);
+                var friend = FindAccountRecord(accounts, friendId);
+                if (owner == null || friend == null) return false;
 
-            var reverseExisting = col.Find(Query.EQ(nameof(DBFriend.PlayerID), friendId))
-                .Any(friend => string.Equals(friend.FriendAccountId, accountId, StringComparison.OrdinalIgnoreCase));
-            if (!reverseExisting)
-            {
-                col.Insert(new DBFriend
-                {
-                    PlayerID = friendId,
-                    FriendAccountId = accountId,
-                    CreatedTimeUtc = DateTime.UtcNow.ToString("O")
-                });
-            }
+                accountId = owner.AccountId;
+                friendId = friend.AccountId;
+                var col = database.GetCollection<DBFriend>(friendTableName);
 
-            return true;
+                var existing = FindFriendRecords(col, accountId)
+                    .Any(record => string.Equals(
+                        record.FriendAccountId, friendId, StringComparison.OrdinalIgnoreCase));
+                if (!existing)
+                {
+                    col.Insert(new DBFriend
+                    {
+                        PlayerID = accountId,
+                        FriendAccountId = friendId,
+                        CreatedTimeUtc = DateTime.UtcNow.ToString("O")
+                    });
+                }
+
+                var reverseExisting = FindFriendRecords(col, friendId)
+                    .Any(record => string.Equals(
+                        record.FriendAccountId, accountId, StringComparison.OrdinalIgnoreCase));
+                if (!reverseExisting)
+                {
+                    col.Insert(new DBFriend
+                    {
+                        PlayerID = friendId,
+                        FriendAccountId = accountId,
+                        CreatedTimeUtc = DateTime.UtcNow.ToString("O")
+                    });
+                }
+
+                return true;
+            }
         }
 
         public List<string> GetFriendIds(string accountId)
@@ -499,9 +767,12 @@ namespace OpenGSServer
             }
 
             var database = EnsureDatabase();
+            var accounts = database.GetCollection<DBAccount>(accountTableName);
+            var ownerId = FindAccountRecord(accounts, accountId)?.AccountId ?? accountId;
             var col = database.GetCollection<DBFriend>(friendTableName);
-            return col.Find(Query.EQ(nameof(DBFriend.PlayerID), accountId))
-                .Select(friend => friend.FriendAccountId)
+            return FindFriendRecords(col, ownerId)
+                .Select(friendship => FindAccountRecord(accounts, friendship.FriendAccountId)?.AccountId
+                    ?? friendship.FriendAccountId)
                 .Where(friendId => !string.IsNullOrWhiteSpace(friendId))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
@@ -534,26 +805,7 @@ namespace OpenGSServer
 
         public DBAccount? GetAccountWithInventory(string accountId)
         {
-            return GetAccount(accountId);
-        }
-
-        private static List<string> ClonePurchasedItems(List<string> items)
-        {
-            return items == null ? new List<string>() : new List<string>(items);
-        }
-
-        private static List<DBEquippedItem> CloneEquippedItems(List<DBEquippedItem> items)
-        {
-            return items == null
-                ? new List<DBEquippedItem>()
-                : items.Select(item => new DBEquippedItem(item)).ToList();
-        }
-
-        private static List<DBInstantEquippedItem> CloneEquippedInstantItems(List<DBInstantEquippedItem> items)
-        {
-            return items == null
-                ? new List<DBInstantEquippedItem>()
-                : items.Select(item => new DBInstantEquippedItem(item)).ToList();
+            return GetAccountSnapshot(accountId);
         }
 
         public void RemoveAllFriendFromAccount(in string id)
@@ -564,8 +816,13 @@ namespace OpenGSServer
             }
 
             var database = EnsureDatabase();
+            var accounts = database.GetCollection<DBAccount>(accountTableName);
+            var ownerId = FindAccountRecord(accounts, id)?.AccountId ?? id;
             var col = database.GetCollection<DBFriend>(friendTableName);
-            col.DeleteMany(Query.EQ(nameof(DBFriend.PlayerID), id));
+            foreach (var friendship in FindFriendRecords(col, ownerId))
+            {
+                col.Delete(friendship.Id);
+            }
         }
 
         public void ChangePassword(in string id, in string currentPass, in string newPass)
@@ -579,7 +836,7 @@ namespace OpenGSServer
             var col = database.GetCollection<DBAccount>(accountTableName);
             col.EnsureIndex(player => player.Id, true);
 
-            var rec = col.FindOne(Query.EQ(nameof(DBAccount.AccountId), id));
+            var rec = FindAccountRecord(col, id);
             if (rec == null)
             {
                 return;
@@ -617,7 +874,7 @@ namespace OpenGSServer
 
             col.EnsureIndex(player => player.Id, true);
 
-            var rec = col.FindOne(Query.EQ(nameof(DBAccount.AccountId), accountID));
+            var rec = FindAccountRecord(col, accountID);
             if (rec == null)
             {
                 return;
@@ -633,10 +890,14 @@ namespace OpenGSServer
                 }
             }
 
-            col.DeleteMany(Query.EQ(nameof(DBAccount.AccountId), accountID));
-            scoreCol.DeleteMany(Query.EQ(nameof(DBAccountScore.accountID), accountID));
-            friendCol.DeleteMany(Query.EQ(nameof(DBFriend.PlayerID), accountID));
-            friendCol.DeleteMany(Query.EQ(nameof(DBFriend.FriendAccountId), accountID));
+            col.Delete(rec.Id);
+            scoreCol.DeleteMany(Query.EQ(nameof(DBAccountScore.accountID), rec.AccountId));
+            foreach (var friendship in friendCol.FindAll().Where(friend =>
+                string.Equals(friend.PlayerID, rec.AccountId, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(friend.FriendAccountId, rec.AccountId, StringComparison.OrdinalIgnoreCase)).ToList())
+            {
+                friendCol.Delete(friendship.Id);
+            }
         }
 
         public void RemoveAll()

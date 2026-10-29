@@ -1,0 +1,271 @@
+using System;
+using System.Collections.Generic;
+using System.Runtime.CompilerServices;
+using System.Diagnostics;
+using OpenGSCore;
+
+#nullable enable
+
+namespace OpenGSServer.Network
+{
+    /// <summary>
+    /// The outcome of applying damage to a player.
+    /// </summary>
+    public readonly struct DamageOutcome
+    {
+        public DamageOutcome(int requested, int applied, int remainingHealth, bool wasAlreadyDown,
+            bool isNowDown, float armorAbsorbed = 0f, float remainingArmor = 100f, float maxArmor = 100f)
+        {
+            Requested = requested;
+            Applied = applied;
+            RemainingHealth = remainingHealth;
+            WasAlreadyDown = wasAlreadyDown;
+            IsNowDown = isNowDown;
+            ArmorAbsorbed = armorAbsorbed;
+            RemainingArmor = remainingArmor;
+            MaxArmor = maxArmor;
+        }
+
+        /// <summary>Damage the attacker asked for, after the caller's scaling.</summary>
+        public int Requested { get; }
+
+        /// <summary>Damage actually taken. Zero when the player was already down.</summary>
+        public int Applied { get; }
+
+        public int RemainingHealth { get; }
+
+        /// <summary>True when the player had already reached zero.</summary>
+        public bool WasAlreadyDown { get; }
+
+        /// <summary>True when this hit is the one that took the player out.</summary>
+        public bool IsNowDown { get; }
+
+        public float ArmorAbsorbed { get; }
+        public float RemainingArmor { get; }
+        public float MaxArmor { get; }
+        public bool HasEffect => Applied > 0 || ArmorAbsorbed > 0f;
+    }
+
+    /// <summary>
+    /// Server owned damage arithmetic and the health it acts on.
+    /// <para>
+    /// Damage used to be computed in the message handler and broadcast without
+    /// being applied to anything, so nothing tracked a player's health, nothing
+    /// could detect a kill, and the match had no way to end. The arithmetic is
+    /// here so it can be reasoned about and tested on its own, away from the
+    /// transport that delivers it.
+    /// </para>
+    /// </summary>
+    public static class ServerDamageResolver
+    {
+        private static readonly ConditionalWeakTable<PlayerInfo, object> PlayerHealthLocks = new();
+        private sealed class PlayerArmorState
+        {
+            public float Current = 100f;
+            public long DownedAtTimestamp;
+            public const float Maximum = 100f;
+        }
+        private static readonly ConditionalWeakTable<PlayerInfo, PlayerArmorState> PlayerArmor = new();
+
+        private static object HealthLock(PlayerInfo player) =>
+            PlayerHealthLocks.GetValue(player, static _ => new object());
+
+        private static PlayerArmorState ArmorState(PlayerInfo player) =>
+            PlayerArmor.GetValue(player, static _ => new PlayerArmorState());
+
+        public static (float Current, float Maximum) GetArmor(PlayerInfo? player)
+        {
+            if (player == null) return (0f, PlayerArmorState.Maximum);
+            lock (HealthLock(player))
+            {
+                var armor = ArmorState(player);
+                return (armor.Current, PlayerArmorState.Maximum);
+            }
+        }
+
+        /// <summary>
+        /// Poses that reduce incoming damage, mirroring what the client shows.
+        /// </summary>
+        public static float PoseMultiplier(EPlayerPoseState pose)
+        {
+            return pose switch
+            {
+                EPlayerPoseState.Sit => 0.5f,
+                EPlayerPoseState.LieDown => 0.75f,
+                _ => 1f
+            };
+        }
+
+        /// <summary>
+        /// Applies damage to a player, mutating their health.
+        /// <para>
+        /// Health never goes below zero, a hit on a player who is already down
+        /// does nothing, and a hit that lands is never rounded away to nothing:
+        /// a player cannot be invulnerable by standing still.
+        /// </para>
+        /// </summary>
+        public static DamageOutcome Apply(
+            PlayerInfo? player, int requested, EPlayerPoseState pose, float armorAbsorptionMultiplier = 1f)
+        {
+            if (player == null)
+            {
+                return new DamageOutcome(requested, 0, 0, true, false);
+            }
+
+            lock (HealthLock(player))
+            {
+                var armor = ArmorState(player);
+                if (requested <= 0)
+                {
+                    return new DamageOutcome(0, 0, player.Health, player.Health <= 0, false,
+                        remainingArmor: armor.Current);
+                }
+
+                var wasDown = player.Health <= 0;
+                if (wasDown)
+                {
+                    return new DamageOutcome(requested, 0, 0, true, false,
+                        remainingArmor: armor.Current);
+                }
+
+                var scaled = (int)MathF.Round(requested * PoseMultiplier(pose));
+                var safeArmorMultiplier = float.IsFinite(armorAbsorptionMultiplier)
+                    ? Math.Max(0f, armorAbsorptionMultiplier)
+                    : 1f;
+                var absorbed = Math.Min(armor.Current, scaled * 0.1f * safeArmorMultiplier);
+                armor.Current = Math.Max(0f, armor.Current - absorbed);
+                var healthDamage = scaled - absorbed;
+                var applied = healthDamage <= 0f ? 0 : Math.Max(1, (int)MathF.Round(healthDamage));
+                if (applied > player.Health)
+                {
+                    applied = player.Health;
+                }
+
+                player.Health -= applied;
+                if (player.Health < 0)
+                {
+                    player.Health = 0;
+                }
+
+                if (player.Health <= 0)
+                    armor.DownedAtTimestamp = Stopwatch.GetTimestamp();
+
+                return new DamageOutcome(requested, applied, player.Health, false,
+                    player.Health <= 0, absorbed, armor.Current);
+            }
+        }
+
+        /// <summary>
+        /// Restores a player to full health, for a respawn or a match start.
+        /// </summary>
+        public static void Revive(PlayerInfo? player)
+        {
+            if (player == null)
+            {
+                return;
+            }
+
+            lock (HealthLock(player))
+            {
+                player.Health = player.MaxHealth > 0 ? player.MaxHealth : 100;
+                var armor = ArmorState(player);
+                armor.DownedAtTimestamp = 0;
+                armor.Current = PlayerArmorState.Maximum;
+            }
+        }
+
+        /// <summary>Revives only a downed player and reports whether it won the race.</summary>
+        public static bool TryRevive(PlayerInfo? player)
+        {
+            if (player == null)
+            {
+                return false;
+            }
+
+            lock (HealthLock(player))
+            {
+                if (player.Health > 0)
+                {
+                    return false;
+                }
+
+                player.Health = player.MaxHealth > 0 ? player.MaxHealth : 100;
+                var armor = ArmorState(player);
+                armor.DownedAtTimestamp = 0;
+                armor.Current = PlayerArmorState.Maximum;
+                return true;
+            }
+        }
+
+        public static bool IsRespawnDelayElapsed(PlayerInfo? player, float delaySeconds)
+        {
+            if (player == null || !float.IsFinite(delaySeconds) || delaySeconds < 0f)
+                return false;
+            lock (HealthLock(player))
+            {
+                var downedAt = ArmorState(player).DownedAtTimestamp;
+                return player.Health <= 0 && downedAt != 0 &&
+                    Stopwatch.GetElapsedTime(downedAt).TotalSeconds >= delaySeconds;
+            }
+        }
+
+        /// <summary>Restores health without racing a simultaneous hit or revive.</summary>
+        public static int Heal(PlayerInfo? player, int amount)
+        {
+            if (player == null || amount <= 0)
+            {
+                return 0;
+            }
+
+            lock (HealthLock(player))
+            {
+                // Healing is not a respawn path. Only the match rule's revive
+                // operation may bring a downed player back into play.
+                if (player.Health <= 0)
+                {
+                    return 0;
+                }
+
+                var maximum = Math.Max(0, player.MaxHealth);
+                var restored = Math.Min(Math.Max(0, maximum - player.Health), amount);
+                player.Health += restored;
+                return restored;
+            }
+        }
+
+        /// <summary>
+        /// True when the player has no health left.
+        /// </summary>
+        public static bool IsDown(PlayerInfo? player)
+        {
+            if (player == null) return true;
+            lock (HealthLock(player))
+            {
+                return player.Health <= 0;
+            }
+        }
+
+        /// <summary>
+        /// Linear falloff used by a blast, so a player near the centre of it takes
+        /// the most and a player at the rim takes the least. A blast always does
+        /// at least one point of damage, so standing in one is never free.
+        /// </summary>
+        public static int BlastDamage(int totalDamage, float distance, float radius)
+        {
+            if (totalDamage <= 0 || radius <= 0f)
+            {
+                return 0;
+            }
+
+            if (distance > radius)
+            {
+                return 0;
+            }
+
+            // Unity GrenadeExplosionDamageUtility uses Lerp(1.0, 0.35, distance/radius).
+            var normalizedDistance = Math.Clamp(distance / radius, 0f, 1f);
+            var falloff = 1f - (0.65f * normalizedDistance);
+            return Math.Max(1, (int)MathF.Round(totalDamage * falloff));
+        }
+    }
+}

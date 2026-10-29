@@ -1,7 +1,8 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
 using OpenGSCore;
-using System.Threading;
+
+#nullable enable
 
 namespace OpenGSServer
 {
@@ -21,30 +22,30 @@ namespace OpenGSServer
     public class Lobby : ILobby
     {
         private readonly ChatManager chatManager = new();
-        private readonly Dictionary<string, LobbyPlayerInfo> players = new();
+        private readonly Dictionary<string, LobbyPlayerInfo> players =
+            new(System.StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, LobbyRoomInfo> rooms = new();
         private int nextRoomId = 1;
-
-        // アイドルタイムアウト用
-        private Timer idleCheckTimer;
-        private const int IDLE_TIMEOUT_MINUTES = 15; // 15分
 
         internal ChatManager ChatManager => chatManager;
 
         public int UserCount() => players.Count;
 
-        public void AddPlayer()
-        {
-            // 基本実装
-        }
-
         public void AddChat(string playerName, string chat)
         {
+            if (string.IsNullOrWhiteSpace(playerName) || string.IsNullOrWhiteSpace(chat))
+            {
+                return;
+            }
+
             chatManager.NewChat("", playerName, chat, ChatType.All);
         }
 
         public bool AddPlayer(string playerId, string playerName)
         {
+            if (string.IsNullOrWhiteSpace(playerId) || string.IsNullOrWhiteSpace(playerName))
+                return false;
+
             if (players.ContainsKey(playerId))
                 return false;
 
@@ -53,7 +54,8 @@ namespace OpenGSServer
                 PlayerId = playerId,
                 PlayerName = playerName,
                 Status = LobbyPlayerStatus.Idle,
-                JoinedAt = System.DateTime.UtcNow
+                JoinedAt = System.DateTime.UtcNow,
+                LastActivity = System.DateTime.UtcNow
             };
 
             players[playerId] = lobbyPlayer;
@@ -62,6 +64,14 @@ namespace OpenGSServer
 
         public bool RemovePlayer(string playerId)
         {
+            if (!players.TryGetValue(playerId, out var player))
+                return false;
+
+            if (!string.IsNullOrEmpty(player.CurrentRoomId))
+            {
+                LeaveRoom(playerId);
+            }
+
             return players.Remove(playerId);
         }
 
@@ -72,7 +82,8 @@ namespace OpenGSServer
 
         public LobbyRoomInfo? CreateRoom(string roomName, string ownerId, EGameMode gameMode)
         {
-            if (!players.ContainsKey(ownerId))
+            if (string.IsNullOrWhiteSpace(roomName) || string.IsNullOrWhiteSpace(ownerId) ||
+                !players.TryGetValue(ownerId, out var owner) || !string.IsNullOrEmpty(owner.CurrentRoomId))
                 return null;
 
             var roomId = $"room_{nextRoomId++}";
@@ -89,24 +100,31 @@ namespace OpenGSServer
             };
 
             rooms[roomId] = room;
-            players[ownerId].CurrentRoomId = roomId;
-            players[ownerId].Status = LobbyPlayerStatus.InRoom;
+            owner.CurrentRoomId = roomId;
+            owner.Status = LobbyPlayerStatus.InRoom;
+            owner.LastActivity = System.DateTime.UtcNow;
 
             return room;
         }
 
         public bool JoinRoom(string roomId, string playerId)
         {
-            if (!players.ContainsKey(playerId) || !rooms.ContainsKey(roomId))
+            if (string.IsNullOrWhiteSpace(roomId) || string.IsNullOrWhiteSpace(playerId) ||
+                !players.TryGetValue(playerId, out var player) || !rooms.ContainsKey(roomId) ||
+                !string.IsNullOrEmpty(player.CurrentRoomId))
                 return false;
 
             var room = rooms[roomId];
+            if (room.Players.Any(id => string.Equals(id, playerId, System.StringComparison.OrdinalIgnoreCase)))
+                return false;
+
             if (room.Players.Count >= room.MaxPlayers)
                 return false;
 
             room.Players.Add(playerId);
-            players[playerId].CurrentRoomId = roomId;
-            players[playerId].Status = LobbyPlayerStatus.InRoom;
+            player.CurrentRoomId = roomId;
+            player.Status = LobbyPlayerStatus.InRoom;
+            player.LastActivity = System.DateTime.UtcNow;
 
             return true;
         }
@@ -134,14 +152,19 @@ namespace OpenGSServer
             if (rooms.ContainsKey(roomId))
             {
                 var room = rooms[roomId];
-                room.Players.Remove(playerId);
+                var playerIndex = room.Players.FindIndex(id =>
+                    string.Equals(id, playerId, System.StringComparison.OrdinalIgnoreCase));
+                if (playerIndex >= 0)
+                {
+                    room.Players.RemoveAt(playerIndex);
+                }
 
                 // ルームが空になったら削除
                 if (room.Players.Count == 0)
                 {
                     rooms.Remove(roomId);
                 }
-                else if (room.OwnerId == playerId)
+                else if (string.Equals(room.OwnerId, playerId, System.StringComparison.OrdinalIgnoreCase))
                 {
                     // オーナーが退出したら新しいオーナーを設定
                     room.OwnerId = room.Players.First();
@@ -150,6 +173,7 @@ namespace OpenGSServer
 
             player.CurrentRoomId = null;
             player.Status = LobbyPlayerStatus.Idle;
+            player.LastActivity = System.DateTime.UtcNow;
 
             return true;
         }

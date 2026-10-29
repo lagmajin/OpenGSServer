@@ -8,10 +8,10 @@ using System.Threading;
 namespace OpenGSServer;
 
 /// <summary>
-/// ŠÇ—ÒƒAƒJƒEƒ“ƒg‚ÌƒVƒ“ƒvƒ‹‚È‰i‘±‰»ƒ}ƒl[ƒWƒƒB
-/// - ¬‹K–Í‚Èï–¡ƒvƒƒWƒFƒNƒgŒü‚¯‚ÌÅ¬ŒÀ‚Ì‹@”\‚Ì‚İ’ñ‹Ÿ
-/// - JSONƒtƒ@ƒCƒ‹‚É‘SƒAƒJƒEƒ“ƒg‚ğ•Û‘¶/“Ç‚İ‚İ
-/// - ƒXƒŒƒbƒhƒZ[ƒti“à•”ƒƒbƒNj
+/// ï¿½Ç—ï¿½ï¿½ÒƒAï¿½Jï¿½Eï¿½ï¿½ï¿½gï¿½ÌƒVï¿½ï¿½ï¿½vï¿½ï¿½ï¿½È‰iï¿½ï¿½ï¿½ï¿½ï¿½}ï¿½lï¿½[ï¿½Wï¿½ï¿½ï¿½B
+/// - ï¿½ï¿½ï¿½Kï¿½Í‚Èï–¡ï¿½vï¿½ï¿½ï¿½Wï¿½Fï¿½Nï¿½gï¿½ï¿½ï¿½ï¿½ï¿½ÌÅï¿½ï¿½ï¿½ï¿½Ì‹@ï¿½\ï¿½Ì‚İ’ï¿½
+/// - JSONï¿½tï¿½@ï¿½Cï¿½ï¿½ï¿½É‘Sï¿½Aï¿½Jï¿½Eï¿½ï¿½ï¿½gï¿½ï¿½Û‘ï¿½/ï¿½Ç‚İï¿½ï¿½ï¿½
+/// - ï¿½Xï¿½ï¿½ï¿½bï¿½hï¿½Zï¿½[ï¿½tï¿½iï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½bï¿½Nï¿½j
 /// </summary>
 public sealed class AdminManager
 {
@@ -26,7 +26,7 @@ public sealed class AdminManager
     }
 
     /// <summary>
-    /// Œ»İ“o˜^‚³‚ê‚Ä‚¢‚éŠÇ—ÒIDˆê——iƒRƒs[j
+    /// ï¿½ï¿½ï¿½İ“oï¿½^ï¿½ï¿½ï¿½ï¿½Ä‚ï¿½ï¿½ï¿½Ç—ï¿½ï¿½ï¿½IDï¿½ê——ï¿½iï¿½Rï¿½sï¿½[ï¿½j
     /// </summary>
     public List<string> ListAdminIds()
     {
@@ -37,7 +37,7 @@ public sealed class AdminManager
     }
 
     /// <summary>
-    /// w’èƒtƒ@ƒCƒ‹‚©‚ç“Ç‚İ‚İi‘¶İ‚µ‚È‚¢ê‡‚Í‹ó‚Å•Ô‚·j
+    /// ï¿½wï¿½ï¿½tï¿½@ï¿½Cï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ç‚İï¿½ï¿½İiï¿½ï¿½ï¿½İ‚ï¿½ï¿½È‚ï¿½ï¿½ê‡ï¿½Í‹ï¿½Å•Ô‚ï¿½ï¿½j
     /// </summary>
     public void Load()
     {
@@ -50,7 +50,10 @@ public sealed class AdminManager
             var json = File.ReadAllText(FilePath);
             try
             {
-                var list = JsonSerializer.Deserialize<List<ServerAdminAccount>>(json);
+                // The server publishes with PublishAot, so reflection based
+                // serialization is unavailable. AdminJsonSerializerContext is
+                // the generated resolver for these types.
+                var list = JsonSerializer.Deserialize(json, AdminJsonSerializerContext.Default.ListServerAdminAccount);
                 if (list == null) return;
 
                 foreach (var a in list)
@@ -61,31 +64,31 @@ public sealed class AdminManager
             }
             catch (Exception)
             {
-                // “Ç‚İ‚İ¸”s‚Í–³‹‚µ‚Ä‹óó‘Ô‚É‚·‚éiƒƒO‚ÍŒÄ‚Ño‚µŒ³‚Å–]‚Ş‚È‚ç’Ç‰Á‰Â”\j
+                // ï¿½Ç‚İï¿½ï¿½İï¿½ï¿½sï¿½Í–ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä‹ï¿½ï¿½Ô‚É‚ï¿½ï¿½ï¿½iï¿½ï¿½ï¿½Oï¿½ÍŒÄ‚Ñoï¿½ï¿½ï¿½ï¿½ï¿½Å–]ï¿½Ş‚È‚ï¿½Ç‰ï¿½ï¿½Â”\ï¿½j
             }
         }
     }
 
     /// <summary>
-    /// Œ»İ‚ÌƒAƒJƒEƒ“ƒgˆê——‚ğƒtƒ@ƒCƒ‹‚É•Û‘¶iŒ´q“I‚É‘‚«‚Şj
+    /// ï¿½ï¿½ï¿½İ‚ÌƒAï¿½Jï¿½Eï¿½ï¿½ï¿½gï¿½ê——ï¿½ï¿½ï¿½tï¿½@ï¿½Cï¿½ï¿½ï¿½É•Û‘ï¿½ï¿½iï¿½ï¿½ï¿½qï¿½Iï¿½Éï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Şj
     /// </summary>
     public void Save()
     {
         lock (_lock)
         {
             var list = _accounts.Values.ToList();
-            var json = JsonSerializer.Serialize(list, new JsonSerializerOptions { WriteIndented = true });
+            var json = JsonSerializer.Serialize(list, AdminJsonSerializerContext.Default.ListServerAdminAccount);
 
             var tmp = FilePath + ".tmp";
             File.WriteAllText(tmp, json);
-            // ã‘‚«‚ÍŒ´q“I‚É
+            // ï¿½ã‘ï¿½ï¿½ï¿½ÍŒï¿½ï¿½qï¿½Iï¿½ï¿½
             File.Copy(tmp, FilePath, overwrite: true);
             File.Delete(tmp);
         }
     }
 
     /// <summary>
-    /// ŠÇ—Ò‚ğ’Ç‰ÁBŠù‚É‘¶İ‚·‚éID‚ª‚ ‚ê‚Îfalse‚ğ•Ô‚·B
+    /// ï¿½Ç—ï¿½ï¿½Ò‚ï¿½Ç‰ï¿½ï¿½Bï¿½ï¿½ï¿½É‘ï¿½ï¿½İ‚ï¿½ï¿½ï¿½IDï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½falseï¿½ï¿½Ô‚ï¿½ï¿½B
     /// </summary>
     public bool AddAdmin(string id, string plainPassword)
     {
@@ -102,7 +105,7 @@ public sealed class AdminManager
     }
 
     /// <summary>
-    /// ŠÇ—Ò‚ÌíœB‘¶İ‚·‚ê‚ÎtrueB
+    /// ï¿½Ç—ï¿½ï¿½Ò‚Ìíœï¿½Bï¿½ï¿½ï¿½İ‚ï¿½ï¿½ï¿½ï¿½trueï¿½B
     /// </summary>
     public bool RemoveAdmin(string id)
     {
@@ -114,7 +117,7 @@ public sealed class AdminManager
     }
 
     /// <summary>
-    /// w’èID‚ÌƒpƒXƒ[ƒh‚ğŒŸØ
+    /// ï¿½wï¿½ï¿½IDï¿½Ìƒpï¿½Xï¿½ï¿½ï¿½[ï¿½hï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
     /// </summary>
     public bool VerifyAdmin(string id, string plainPassword)
     {
@@ -127,7 +130,7 @@ public sealed class AdminManager
     }
 
     /// <summary>
-    /// ƒpƒXƒ[ƒh•ÏXB¬Œ÷‚·‚ê‚ÎtrueB
+    /// ï¿½pï¿½Xï¿½ï¿½ï¿½[ï¿½hï¿½ÏXï¿½Bï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½trueï¿½B
     /// </summary>
     public bool ChangePassword(string id, string currentPassword, string newPassword)
     {
@@ -146,7 +149,7 @@ public sealed class AdminManager
     }
 
     /// <summary>
-    /// ŠÇ——pƒtƒ@ƒCƒ‹‚ÌŠù’èƒpƒX‚ğg—p‚·‚éƒ†[ƒeƒBƒŠƒeƒB
+    /// ï¿½Ç—ï¿½ï¿½pï¿½tï¿½@ï¿½Cï¿½ï¿½ï¿½ÌŠï¿½ï¿½ï¿½pï¿½Xï¿½ï¿½ï¿½gï¿½pï¿½ï¿½ï¿½éƒ†ï¿½[ï¿½eï¿½Bï¿½ï¿½ï¿½eï¿½B
     /// </summary>
     public static AdminManager CreateDefault()
     {

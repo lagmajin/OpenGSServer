@@ -5,17 +5,19 @@ using System.IO;
 using System.Reflection;
 using Newtonsoft.Json.Linq;
 
+#nullable enable
+
 namespace OpenGSServer
 {
     internal class ServerInfoDatabaseManager
     {
         private const string ServerInfoCollectionName = "ServerInfo";
 
-        private LiteDatabase db;
+        private LiteDatabase? db;
         public static readonly string serverDatabaseName = "Database/serverInfo.db";
 
         public static string connectionString = $"Filename={serverDatabaseName};connection=shared";
-        public static ServerInfoDatabaseManager Instance { get; private set; }
+        public static ServerInfoDatabaseManager? Instance { get; private set; }
 
         public ServerInfoDatabaseManager()
         {
@@ -97,7 +99,22 @@ namespace OpenGSServer
 
             var record = db.GetCollection<ServerInfoRecord>(ServerInfoCollectionName)
                 .FindById("current");
-            return record == null ? null : JObject.FromObject(record);
+            if (record == null)
+            {
+                return null;
+            }
+
+            return new JObject
+            {
+                ["Id"] = record.Id,
+                ["ServerName"] = record.ServerName,
+                ["ProcessName"] = record.ProcessName,
+                ["AssemblyName"] = record.AssemblyName,
+                ["AssemblyVersion"] = record.AssemblyVersion,
+                ["TimeZoneId"] = record.TimeZoneId,
+                ["TimeZoneDisplayName"] = record.TimeZoneDisplayName,
+                ["UpdatedAtUtc"] = record.UpdatedAtUtc
+            };
         }
 
         public void RemoveDatabase()

@@ -1,10 +1,12 @@
 import os
 import re
 
+WORKSPACE_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+
 PROJECTS = {
-    "OpenGSCore": r"C:\dev\OpenGSCore",
-    "OpenGSServer": r"C:\dev\OpenGSServer",
-    "OpenGSR": r"C:\dev\OpenGSR"
+    "OpenGSCore": os.path.join(os.path.dirname(WORKSPACE_ROOT), "OpenGSCore"),
+    "OpenGSServer": WORKSPACE_ROOT,
+    "OpenGSR": os.path.join(os.path.dirname(WORKSPACE_ROOT), "OpenGSR")
 }
 
 # 未実装を示すキーワード (日本語・英語)
@@ -165,7 +167,7 @@ def main():
             for file in files:
                 if file.endswith(".cs"):
                     full_path = os.path.join(root, file)
-                    rel_path = os.path.relpath(full_path, r"C:\dev")
+                    rel_path = os.path.relpath(full_path, os.path.dirname(WORKSPACE_ROOT))
                     res = analyze_cs_file(full_path, project_name, rel_path)
                     if res and res["score"] > 0:
                         results.append(res)

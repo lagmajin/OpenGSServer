@@ -1,96 +1,75 @@
-﻿using OpenGSCore;
+using OpenGSCore;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace OpenGSServer
 {
     public partial class DeprecatedMatchRoom
     {
-        public bool IsOwner(in string id)
+        public bool IsOwner(string id)
         {
-            return false;
-        }
-
-        public bool ChangeOwner()
-        {
-            if (Players.Count <= 1)
+            if (string.IsNullOrEmpty(id) || Players.Count == 0)
             {
                 return false;
             }
 
-
-
-            return false;
+            return Players.Count > 0 && string.Equals(Players[0].Id, id, StringComparison.Ordinal);
         }
 
-        public void GetPlayer(PlayerID id)
+        public bool ChangeOwner(string newOwnerId)
         {
+            if (Players.Count <= 1 || string.IsNullOrEmpty(newOwnerId))
+            {
+                return false;
+            }
 
+            if (!IsMember(newOwnerId))
+            {
+                return false;
+            }
+
+            var target = Players.First(p => p.Id == newOwnerId);
+            Players.Remove(target);
+            Players.Insert(0, target);
+            return true;
+        }
+
+        public PlayerInfo GetPlayer(PlayerID id)
+        {
+            return Players.FirstOrDefault(p => p.Id == id.ToString());
         }
 
 #nullable enable
         public string? RoomOwnerName()
         {
-            if (Players.Count == 0)
-            {
-                return null;
-            }
-            else
-            {
-
-            }
-
-
-
-
-
-            return null;
+            var owner = RoomOwnerInfo();
+            return owner?.Name;
         }
+
         public PlayerInfo? RoomOwnerInfo()
         {
-
-            return null;
+            return Players.Count > 0 ? Players[0] : null;
         }
 
         public List<string> RoomMembersNameList()
         {
-            var result = new List<string>();
-
-            return result;
+            return Players.Select(p => p.Name ?? string.Empty).Where(n => !string.IsNullOrEmpty(n)).ToList();
         }
 
-        public List<PlayerInfo>? RoomMemberList()
+        public List<PlayerInfo> RoomMemberList()
         {
-            var info = new PlayerInfo();
-
-
-            return Players;
+            return new List<PlayerInfo>(Players);
         }
 
-        public bool IsMember(in string id)
+        public bool IsMember(string id)
         {
-            if (Players.Count == 0)
+            if (string.IsNullOrEmpty(id) || Players.Count == 0)
             {
                 return false;
             }
-            else
-            {
-                if (true)
-                {
 
-                    return true;
-                }
-
-            }
-
-            return false;
+            return Players.Exists(p => p.Id == id);
         }
-
     }
-
-
-
 }

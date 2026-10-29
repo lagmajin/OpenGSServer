@@ -1,4 +1,6 @@
 ﻿
+#nullable enable
+
 using System;
 using System.Collections.Generic;
 
@@ -10,8 +12,6 @@ namespace OpenGSServer
     {
         public static string? GetStringOrNull(this IDictionary<string,JToken> dic,in string name)
         {
-            string? result;
-
             if(dic.TryGetValue(name,out var jToken))
             {
 
@@ -35,7 +35,7 @@ namespace OpenGSServer
         public static string GetValueOrDefaultString(this IDictionary<string, JToken?> dic,string name,string defalut="")
         {
             string result = "";
-            result = dic.TryGetValue(name, out var token) ? token.ToString() : defalut;
+            result = dic.TryGetValue(name, out var token) ? token?.ToString() ?? defalut : defalut;
 
 
             
@@ -43,11 +43,11 @@ namespace OpenGSServer
             return result;
         }
 
-        public static string GetStringOrNull(this IDictionary<string, JToken?> dic, string name)
+        public static string? GetStringOrNull(this IDictionary<string, JToken?> dic, string name)
         {
             if (dic.TryGetValue(name, out var token))
             {
-                var temp = token.ToString();
+                var temp = token?.ToString();
 
                 return temp;
 
@@ -63,7 +63,7 @@ namespace OpenGSServer
             
             if(dic.TryGetValue(name,out var token))
             {
-                var temp=token.ToString();
+                var temp=token?.ToString();
 
                 if(Int32.TryParse(temp,out var val))
                 {
@@ -89,7 +89,7 @@ namespace OpenGSServer
 
             if (dic.TryGetValue(name, out var token))
             {
-                var temp = token.ToString();
+                var temp = token?.ToString();
 
                 if (float.TryParse(temp, out var val))
                 {

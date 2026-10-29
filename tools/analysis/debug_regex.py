@@ -1,7 +1,8 @@
 import re
 import os
 
-ranking_path = r"C:\dev\OpenGSServer\docs\ThinImplementationRanking.md"
+workspace_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+ranking_path = os.path.join(workspace_root, "docs", "ThinImplementationRanking.md")
 
 content = ""
 for enc in ["utf-8", "cp932", "shift_jis", "utf-8-sig"]:

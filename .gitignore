@@ -63,6 +63,9 @@ project.lock.json
 project.fragment.lock.json
 artifacts/
 
+# Local server databases may contain account and progress data.
+Database/*.db
+
 # ASP.NET Scaffolding
 ScaffoldingReadMe.txt
 
@@ -361,3 +364,16 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+# Smoke run output; the suite writes these next to the script.
+smoke*.txt
+smoke_server_*.log
+.err.log
+all.txt
+
+# written by the running server
+server_status.txt
+
+# logs written by a locally launched server
+srv.log
+srv.err

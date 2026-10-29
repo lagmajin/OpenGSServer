@@ -14,10 +14,8 @@ namespace OpenGSServer
     [Tag("PlayerAccount")]public class PlayerAccount
     {
         //private string pass;
-        private string dbUniqueId;
         //#PlayerID
         private string globalID = Guid.NewGuid().ToString("N");
-        private string localID = "";
 
         public int Wins { get; set; }
         public int Kill { get; set; }

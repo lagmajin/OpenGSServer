@@ -23,6 +23,19 @@ Done when:
 - configuration loading happens before network services depend on it
 - process exit leaves the server in a clean state
 
+Current status:
+- `Server/ServerHost.cs` owns the bootstrap and shutdown order; `Program.cs`
+  now only parses arguments and decides when to stop
+- configuration and admin credentials are loaded before any listener starts
+- `Shutdown` is idempotent and safe to call from both the normal path and
+  `AppDomain` exit; the instance mutex is always released
+- `Server/StartupBanner.cs` holds the startup log, so it can be removed or
+  redirected without touching the bootstrap sequence
+- `Tests/ServerHostTests.cs` covers single-instance locking, idempotent
+  shutdown, and option validation
+- `tools/run_smoke.ps1` repeats the full local bootstrap and smoke path in
+  one command, so startup and shutdown regressions fail fast
+
 ## S1. Authoritative Lobby And Account State
 
 Goal: move lobby and account behavior into a single backend source of truth.
@@ -43,6 +56,26 @@ Done when:
   same backend contract
 - server-side state survives reconnects in the intended environment
 - local test wrappers are clearly separated from the authoritative path
+
+Current status:
+- `lobby_smoke_client.py` already covers the shared contract: login, account
+  creation, room list, create, join, leave, and the same session refusing a
+  second login
+- `reconnect_smoke.py` covers a dropped connection: same account, same player
+  id, no ghost room left by the dead session, and a working account
+- `Server/Event/PlayerSessionCleanup.cs` is the single teardown path. It was
+  added because LogoutRequest and the dropped connection had drifted apart:
+  logout left in-game match state and the account session behind, while a
+  drop cleared all four
+- the client side has `NetworkAuthorityGate`, so a call site no longer has to
+  read `localServerTestMode` itself to know whether a request reaches the
+  backend or a local stub
+- giving `Assets/Scripts/NetworkTest` its own assembly is blocked, not
+  overlooked. `LocalTestTcpServer` holds a `NetworkRequestRouter` and
+  `LocalTestMatchRUDPServer` holds a `ServerReplayTape`, both in the OpenGSR
+  assembly, while OpenGSR registers both servers in its Autofac containers.
+  The dependency is bidirectional, so Unity reports a cyclic dependency.
+  Breaking it means moving those two types into a shared lower assembly
 
 ## S2. Match Server Core
 
@@ -66,20 +99,25 @@ Done when:
 - room state and match state stay in sync
 - broadcast paths are implemented instead of stubbed
 
-### S2-A. UDP Payload Format: JSON over LiteNetLib transport
-
-**LiteNetLib transport is kept on the server. Wire payload must be JSON.**
-
-- The Unity client (OpenGSR) cannot use LiteNetLib on its side due to platform
-  constraints. The server may continue using LiteNetLib for transport (socket
-  management, connection handling, delivery modes), but the message payload
-  written to `NetDataWriter` must be a JSON string — not LiteNetLib typed
-  binary (`Put(string)`, `Put(float)`, etc.).
-- `MatchUDPServer` and `MatchRUdpServer` must serialize outgoing data as JSON
-  and deserialize incoming data as JSON, matching the format the client sends
-  and expects.
-- This also means the server reads `reader.GetString()` on a full JSON payload,
-  not per-field `reader.GetFloat()` / `reader.GetInt()`.
+Current status:
+- `MatchServerV2` runs a 25Hz `TickTimer` and drives `room.GameUpdate()` for
+  every playing room
+- UDP input is applied on the fixed tick rather than in the receive callback,
+  and the lag compensation manager is ticked with the same delta
+- `BroadcastToRoom` and `BroadcastToAll` are implemented for both LiteNetLib
+  writers and JObject messages; no stubs remain in the file
+- the loop had nothing to drive until now. Nothing called
+  `MatchRoom.GameStart`, so `Playing` stayed false and the room was skipped.
+  `MatchRoomManager.BeginMatch` runs it from the loading gate, once every
+  player has reported completion
+- `match_playthrough_smoke.py` plays a match from two lobby clients through
+  to `MatchEndNotification`, so this is covered by a test rather than by
+  reading the code
+- `endmatch` and `ExecuteCommandRequest` on the management listener exist so
+  a headless test can end a match without waiting out the match timer
+- RUDP gameplay input is still not driven by any test; the playthrough covers
+  the server loop, the result evaluator, the result broadcast, and the
+  persistence path
 
 ## S3. Loading And Room Transition Handshake
 
@@ -100,6 +138,25 @@ Done when:
   the server path
 - timeout and fallback behavior are deterministic
 
+Current status:
+- start, progress, and completion are server handled, and `AllowEnterMap` is
+  correctly withheld until every player reports in
+- `MatchRoomManager` now registers the room as waiting when it announces
+  `LoadingStartedNotification`. It did not before, so the gate and the timeout
+  both had nothing to work with
+- `LoadingTimeoutMonitor` sweeps every 5s and, past the deadline, sends
+  `LoadingFailed` with the players that never reported, clears the loading
+  state, and releases the wait room. The deadline defaults to 60s and comes
+  from `OPENGS_LOADING_TIMEOUT_SECONDS` so tests need not wait it out
+- `WaitRoom.CancelPendingMatch` releases a room whose match never started.
+  Without it `NowPlaying` stayed true and `CanStartMatch()` returned false
+  forever, so the room could never be retried
+- the client already handles `LoadingFailed` in
+  `OnlineLoadingSceneNetworkManager` and returns to the wait room through
+  `OnlineLoadingScene.OnLoadingFailed`
+- `loading_timeout_smoke.py` covers the stall, the fallback message, and the
+  retry
+
 ## S4. Integration Checks And Observability
 
 Goal: make server regressions easier to catch.
@@ -117,6 +174,15 @@ Why this matters:
 Done when:
 - there is a repeatable login -> lobby -> room -> match smoke path
 - protocol changes fail fast in scripted validation or a small test harness
+
+Current status:
+- `test_client.py` drives the management listener
+- `tools/run_smoke.ps1` builds, boots a throwaway server, and runs
+  `lobby_smoke_client.py`, `two_player_loading_smoke.py`,
+  `mission_room_lifecycle_smoke.py`, `reconnect_smoke.py`, `loading_timeout_smoke.py`, and `match_playthrough_smoke.py` in one command
+- the same command runs in `.github/workflows/server-build.yml`
+- `ServerHostTests` and `ServerPlayerStateManagerTests` cover the
+  regression-prone server rules
 
 ## S5. Core-Only Runtime Harness
 
@@ -139,6 +205,31 @@ Done when:
 - core gameplay and room flow can be exercised without Unity assets
 - server smoke tests only rely on core/server code and a lightweight client
 - Unity-specific assumptions are no longer required for backend validation
+
+Current status:
+- the property already held and nothing was holding it. OpenGSServer and
+  OpenGSCore contain no `UnityEngine` reference and the server project file
+  names no Unity package; the smoke clients import only the Python standard
+  library. A change that broke either would have failed nothing, which is the
+  gap: not the state but the absence of a check for it
+- `tools/check_headless.ps1` makes the three properties a gate. It fails on a
+  Unity reference in the server, the shared package or either project file, on
+  a third party import in a smoke client, and on a smoke script the run script
+  drives that does not exist. Each failure names the file and the line, so it
+  is actionable rather than something to disable
+- the check runs in `.github/workflows/server-build.yml` before the smoke suite,
+  and takes the shared package as a parameter so this repository can still be
+  validated without its sibling
+- the smoke suite is already the headless validation path S5 describes: it is
+  driven by `tools/run_smoke.ps1`, it needs a Python install and nothing else,
+  and it covers login, room lifecycle, the loading handshake, a reconnect and a
+  match played to its end
+- what S5 does not yet cover is the shared package being validated on its own.
+  `OpenGSCore/.github/workflows/core-build.yml` now builds the package and runs
+  its tests, so the shared package fails its own build rather than only failing
+  downstream. That workflow runs in the OpenGSCore repository, not this one, so
+  it still does not gate a server change that needs a matching core change;
+  that pairing is what the smoke suite and the client workflow cover today
 
 ## Suggested Order
 

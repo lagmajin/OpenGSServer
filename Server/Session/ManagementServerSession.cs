@@ -1,5 +1,7 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
@@ -8,6 +10,8 @@ using System.Threading.Tasks;
 using NetCoreServer;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+
+#nullable enable
 
 namespace OpenGSServer
 {
@@ -103,8 +107,24 @@ namespace OpenGSServer
         protected override void OnConnected()
         {
             // クライアントのIPアドレスを取得
-            var remoteEndPoint = Socket.RemoteEndPoint as IPEndPoint;
-            _clientIp = remoteEndPoint?.Address.ToString() ?? "Unknown";
+            // The socket can already be disposed by the time this runs, if the peer
+            // hung up between the accept and this callback. Reading it then throws
+            // on the accept thread and takes the process with it, so an address
+            // that could not be read is reported as unknown instead.
+            try
+            {
+                var remoteEndPoint = Socket.RemoteEndPoint as IPEndPoint;
+                _clientIp = remoteEndPoint?.Address.ToString() ?? "Unknown";
+            }
+            catch (ObjectDisposedException)
+            {
+                _clientIp = "Unknown";
+            }
+            catch (Exception)
+            {
+                _clientIp = "Unknown";
+            }
+
             _clientId = Guid.NewGuid().ToString("N");
             _sessionStartTime = DateTime.UtcNow;
 
@@ -112,9 +132,22 @@ namespace OpenGSServer
                 $"[Management] クライアント接続: IP={_clientIp}, SessionID={Id}", 
                 ConsoleColor.Cyan);
 
-            // ソケット設定
-            Socket.ReceiveTimeout = 30000; // 30秒
-            Socket.SendTimeout = 10000;    // 10秒
+            // Socket settings. Same reason as the address read above: the socket can
+            // already be disposed here, and these are tuning rather than required
+            // state, so failing to apply them must not take the process down.
+            try
+            {
+                Socket.ReceiveTimeout = 30000; // 30秒
+                Socket.SendTimeout = 10000;    // 10秒
+            }
+            catch (ObjectDisposedException)
+            {
+                // The peer left before this ran; there is nothing left to tune.
+            }
+            catch (Exception)
+            {
+                // Tuning is best effort.
+            }
 
             // 接続成功メッセージを送信
             var responseJson = new JObject
@@ -229,6 +262,10 @@ namespace OpenGSServer
 
                 case NetworkingConstants.MessageType.ShutdownServerRequest:
                     HandleShutdownRequest(json);
+                    break;
+
+                case "ExecuteCommandRequest":
+                    HandleExecuteCommand(json);
                     break;
 
                 default:
@@ -381,11 +418,21 @@ namespace OpenGSServer
             }
 
             var accountManager = AccountManager.GetInstance();
+            using var process = Process.GetCurrentProcess();
+            var serverStartedUtc = process.StartTime.ToUniversalTime();
+            var uptimeSeconds = Math.Max(0, (DateTime.UtcNow - serverStartedUtc).TotalSeconds);
             var response = new JObject
             {
                 ["MessageType"] = NetworkingConstants.MessageType.ServerStatusResponse,
-                ["ServerUptime"] = (DateTime.UtcNow - _sessionStartTime).TotalSeconds,
+                ["ServerUptime"] = uptimeSeconds,
+                ["ServerUptimeSeconds"] = uptimeSeconds,
+                ["ServerStartedUtc"] = serverStartedUtc.ToString(UTF_FORMAT),
+                ["ProcessId"] = process.Id,
+                ["MemoryUsageMB"] = process.WorkingSet64 / (1024 * 1024),
+                ["CpuThreads"] = process.Threads.Count,
                 ["LoggedInUsers"] = accountManager.GetLoggedInUserCount(),
+                ["ActiveRooms"] = WaitRoomManager.Instance().GetAllRooms().Count,
+                ["ConnectedMasters"] = ManagementServer.Instance.GetConnectedClientCount(),
                 ["ServerTime"] = DateTime.UtcNow.ToString(UTF_FORMAT)
             };
 
@@ -434,12 +481,9 @@ namespace OpenGSServer
             }
 
             string playerId = json["PlayerID"]?.ToString() ?? "";
-            var accountManager = AccountManager.GetInstance();
 
-            if (accountManager.ExistID(playerId))
+            if (AccountEventHandler.KickPlayerSession(playerId))
             {
-                accountManager.Logout(playerId, true);
-                
                 var response = new JObject
                 {
                     ["MessageType"] = NetworkingConstants.MessageType.KickPlayerResponse,
@@ -503,6 +547,63 @@ namespace OpenGSServer
 
             SendJsonAsyncWithTimeStamp(response);
             ConsoleWrite.WriteMessage($"[Management] ブロードキャストメッセージ: {message} (送信者: {_adminId})", ConsoleColor.Cyan);
+        }
+
+        /// <summary>
+        /// Runs a console command over the management socket.
+        /// <para>
+        /// The server is usually started with --no-console, so a headless test
+        /// has no other way to drive the server side. The command goes through
+        /// the same parser an operator would use, and whatever the command
+        /// printed is returned so the caller can see what happened.
+        /// </para>
+        /// </summary>
+        private void HandleExecuteCommand(JObject json)
+        {
+            if (!_isAuthenticated)
+            {
+                SendErrorResponse("Authentication required");
+                return;
+            }
+
+            var command = json["Command"]?.ToString() ?? json["command"]?.ToString();
+            if (string.IsNullOrWhiteSpace(command))
+            {
+                SendErrorResponse("Command is required");
+                return;
+            }
+
+            var response = new JObject
+            {
+                ["MessageType"] = "ExecuteCommandResponse",
+                ["Command"] = command
+            };
+
+            try
+            {
+                var output = new StringWriter();
+                var previous = Console.Out;
+                Console.SetOut(output);
+                try
+                {
+                    var parser = new InteractiveCommandParser();
+                    parser.Execute(command);
+                }
+                finally
+                {
+                    Console.SetOut(previous);
+                }
+
+                response["Success"] = true;
+                response["Output"] = output.ToString();
+            }
+            catch (Exception ex)
+            {
+                response["Success"] = false;
+                response["ErrorMessage"] = ex.Message;
+            }
+
+            SendJsonAsyncWithTimeStamp(response);
         }
 
         /// <summary>

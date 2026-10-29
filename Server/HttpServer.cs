@@ -2,11 +2,14 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
+
+#nullable enable
 
 namespace OpenGSServer
 {
@@ -34,7 +37,7 @@ namespace OpenGSServer
             return result.ToString();
         }
 
-        public bool GetCacheValue(string key, out string value)
+        public bool GetCacheValue(string key, [NotNullWhen(true)] out string? value)
         {
             return _cache.TryGetValue(key, out value);
         }
@@ -44,13 +47,13 @@ namespace OpenGSServer
             _cache[key] = value;
         }
 
-        public bool DeleteCacheValue(string key, out string value)
+        public bool DeleteCacheValue(string key, [NotNullWhen(true)] out string? value)
         {
             return _cache.TryRemove(key, out value);
         }
 
         private readonly ConcurrentDictionary<string, string> _cache = new ConcurrentDictionary<string, string>();
-        private static CommonCache _instance;
+        private static CommonCache? _instance;
     }
 
     public class HttpsCacheSession : HttpsSession

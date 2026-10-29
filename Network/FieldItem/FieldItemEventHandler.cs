@@ -27,15 +27,18 @@ namespace OpenGSServer.Network
                 return;
             }
 
-            // アイテムを拾う
-            bool success = itemManager.PickupItem(itemId, playerId);
+// The server owns the decision. The client used to assert that it
+            // had touched an item and the server took that at face value, so
+            // any client could claim a spawn anywhere on the map. The claim is
+            // now checked against the authoritative player position.
+            bool success = TryClaimFromAuthoritativePosition(itemManager, json, playerId, itemId);
 
             if (success)
             {
                 // 成功したら全クライアントにブロードキャスト
                 var response = new JObject
                 {
-                    ["MessageType"] = "FieldItemPickup",
+                    ["MessageType"] = MessageType.FieldItemPickup,
                     ["ItemId"] = itemId,
                     ["PlayerID"] = playerId,
                     ["Success"] = true
@@ -50,7 +53,7 @@ namespace OpenGSServer.Network
                 // 失敗
                 var errorResponse = new JObject
                 {
-                    ["MessageType"] = "FieldItemPickup",
+                    ["MessageType"] = MessageType.FieldItemPickup,
                     ["ItemId"] = itemId,
                     ["PlayerID"] = playerId,
                     ["Success"] = false,
@@ -73,7 +76,7 @@ namespace OpenGSServer.Network
 
             var response = new JObject
             {
-                ["MessageType"] = "FieldItemStateSync",
+                ["MessageType"] = MessageType.FieldItemStateSync,
                 ["Items"] = itemsJson
             };
 
@@ -81,11 +84,35 @@ namespace OpenGSServer.Network
         }
 
         /// <summary>
+        /// Reads the authoritative position the server already tracks for the
+        /// player and uses it to validate the pickup. Falls back to the
+        /// unverified path when the player has no known position yet, so a
+        /// player who has not yet reported a position is not permanently locked
+        /// out of items; once a position exists the radius is enforced.
+        /// </summary>
+        private static bool TryClaimFromAuthoritativePosition(
+            ServerFieldItemManager itemManager,
+            JObject json,
+            string playerId,
+            string itemId)
+        {
+            var state = MatchServerV2.Instance.ServerLagCompensationManager.GetPlayerState(playerId);
+
+            if (string.IsNullOrEmpty(state.PlayerId))
+            {
+                // No authoritative position recorded for this player.
+                return itemManager.PickupItem(itemId, playerId);
+            }
+
+            return itemManager.PickupItem(
+                itemId, playerId, state.PositionX, state.PositionY, state.PositionZ);
+        }
+        /// <summary>
         /// アイテムをスポーンさせる（管理用）
         /// </summary>
         public static string SpawnItem(
             ServerFieldItemManager itemManager,
-            string itemType,
+            EFieldItemType itemType,
             float x, float y, float z,
             Action<JObject> broadcast)
         {
@@ -94,9 +121,9 @@ namespace OpenGSServer.Network
             // 全クライアントにスポーンを通知
             var spawnMessage = new JObject
             {
-                ["MessageType"] = "FieldItemSpawn",
+                ["MessageType"] = GameMessageTypes.FieldItemSpawn,
                 ["ItemId"] = itemId,
-                ["ItemType"] = itemType,
+                ["ItemType"] = FieldItemTypeNames.ToWireName(itemType),
                 ["PositionX"] = x,
                 ["PositionY"] = y,
                 ["PositionZ"] = z
@@ -114,7 +141,7 @@ namespace OpenGSServer.Network
         /// </summary>
         public static string SpawnItem(
             ServerFieldItemManager itemManager,
-            string itemType,
+            EFieldItemType itemType,
             int spawnPointId,
             Action<JObject> broadcast)
         {
@@ -127,9 +154,9 @@ namespace OpenGSServer.Network
 
             var spawnMessage = new JObject
             {
-                ["MessageType"] = "FieldItemSpawn",
+                ["MessageType"] = GameMessageTypes.FieldItemSpawn,
                 ["ItemId"] = itemId,
-                ["ItemType"] = itemType,
+                ["ItemType"] = FieldItemTypeNames.ToWireName(itemType),
                 ["SpawnPointId"] = item.SpawnPointId,
                 ["SpawnPointName"] = item.SpawnPointName,
                 ["PositionX"] = item.PosX,
@@ -156,7 +183,7 @@ namespace OpenGSServer.Network
 
             var despawnMessage = new JObject
             {
-                ["MessageType"] = "FieldItemDespawn",
+                ["MessageType"] = GameMessageTypes.FieldItemDespawn,
                 ["ItemId"] = itemId
             };
 
@@ -176,7 +203,7 @@ namespace OpenGSServer.Network
 
             var despawnMessage = new JObject
             {
-                ["MessageType"] = "FieldItemDespawn"
+                ["MessageType"] = GameMessageTypes.FieldItemDespawn
             };
 
             broadcast(despawnMessage);

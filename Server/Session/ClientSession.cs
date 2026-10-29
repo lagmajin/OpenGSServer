@@ -1,4 +1,4 @@
-﻿using NetCoreServer;
+using NetCoreServer;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System;
@@ -7,6 +7,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 //using Microsoft.VisualBasic;
 
@@ -18,6 +19,8 @@ using Cysharp.Text;
 
 
 
+
+#nullable enable
 
 namespace OpenGSServer
 {
@@ -33,39 +36,53 @@ namespace OpenGSServer
     //#
     public class ClientSession : TcpSession,IClientSession
     {
-        private string id = "";
         //readonly string rs = ((char)30).ToString();
 
         //readonly char unitSeperatorChar = (char)Convert.ToInt32("0x1f", 16);
 
         private string ip = "";
 
-        private string _utf_format = "";
-
         //private byte separator = 0x1F;
 
         private char separator = '\u001F';
 
         private Stopwatch forPing=new();
-
-        private string utcDefaultFormat = "HH:mm:ss:ffff";
+        private int _disconnected;
 
         public string? PlayerID { get; private set; }
+        public bool IsDisconnected => Volatile.Read(ref _disconnected) != 0;
 
         public void SetPlayerID(string id)
         {
             PlayerID = id;
         }
 
+        public void ClearPlayerID()
+        {
+            PlayerID = null;
+        }
+
         public ClientSession(TcpServer server) : base(server) { }
 
         private void setIPAddress()
         {
-            var endpoint = (IPEndPoint)Socket.RemoteEndPoint;
-
-            var v = IPAddress.Parse(endpoint.Address.ToString());
-
-            ip = v.ToString();
+            // The socket can already be disposed by the time this runs, if the peer
+            // hung up between the accept and this callback. Reading it then throws,
+            // and an address that could not be read is not a reason to fail.
+            try
+            {
+                if (Socket.RemoteEndPoint is IPEndPoint endpoint)
+                {
+                    ip = endpoint.Address.ToString();
+                }
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+            catch (Exception)
+            {
+                // The address stays unset, which callers already treat as unknown.
+            }
         }
         public string ClientIpAddress()
         {
@@ -74,10 +91,7 @@ namespace OpenGSServer
 
         public string ID()
         {
-            var result = Guid.NewGuid().ToString("N");
-
-
-            return id;
+            return Id.ToString();
         }
 
         public bool SendPing()
@@ -111,28 +125,20 @@ namespace OpenGSServer
 
         public void SendMessagePackWithTimeStamp(object obj)
         {
-            string utcFormat = "HH:mm:ss:ffff";
-
-            var serverTimeStamp = DateTime.UtcNow;
-
             byte[] serializedData = MessagePackSerializer.Serialize(obj);
+            var prefix = Encoding.UTF8.GetBytes("MP");
+            var separatorBytes = new[] { (byte)separator };
+            var frame = new byte[prefix.Length + serializedData.Length + separatorBytes.Length];
 
-            var str=new StringBuilder();
-            str.Append("MSG");
-            str.Append(serializedData);     // メッセージ
-            str.Append(separator);
+            System.Buffer.BlockCopy(prefix, 0, frame, 0, prefix.Length);
+            System.Buffer.BlockCopy(serializedData, 0, frame, prefix.Length, serializedData.Length);
+            System.Buffer.BlockCopy(separatorBytes, 0, frame, prefix.Length + serializedData.Length, separatorBytes.Length);
 
-
-
-            SendAsync(str.ToString());
+            SendAsync(frame);
 
         }
         public bool SendAsyncJsonWithTimeStamp2(JObject obj)
         {
-            string utcFormat = "HH:mm:ss:ffff";
-
-            var serverTimeStamp = DateTime.UtcNow;
-
             var str = new StringBuilder();
             str.Append("JS");
             str.Append(obj.ToString());     // メッセージ
@@ -151,11 +157,6 @@ namespace OpenGSServer
 
         public bool SendAsyncJsonWithTimeStamp(JObject obj)
         {
-            string utcFormat = "HH:mm:ss:ffff";
-
-            var serverTimeStamp = DateTime.UtcNow;
-
-
             //obj["ServerTimeStampFormat"] = utcFormat;
             //obj["ServerTimeStampUTC"] = utcDate.ToString(utcFormat);
 
@@ -175,7 +176,6 @@ namespace OpenGSServer
 
         public bool SendAsyncMemoryPack(byte[] data)
         {
-            string utcFormat = "HH:mm:ss:ffff";
             var prefix = Encoding.UTF8.GetBytes("MP");
             var separatorBytes = new byte[] { (byte)separator };  // `char` → `byte`
 
@@ -221,8 +221,22 @@ namespace OpenGSServer
 
             //Console.WriteLine(endpoint.ToString());
 
-            Socket.ReceiveTimeout = 6000;
-            //Socket.SendTimeout = 1000;
+            // Socket settings. Same reason as the address read: the socket can
+            // already be disposed here, and this is tuning rather than required
+            // state, so failing to apply it must not take the process down.
+            try
+            {
+                Socket.ReceiveTimeout = 6000;
+                //Socket.SendTimeout = 1000;
+            }
+            catch (ObjectDisposedException)
+            {
+                // The peer left before this ran; there is nothing left to tune.
+            }
+            catch (Exception)
+            {
+                // Tuning is best effort.
+            }
 
             var jobject = new JObject();
 
@@ -241,20 +255,25 @@ namespace OpenGSServer
             ConsoleWrite.WriteMessage($"TCP session with Id {Id} disconnected!", ConsoleColor.Red);
 
 
-            AccountEventHandler.Logout(this);
+            Interlocked.Exchange(ref _disconnected, 1);
+            AccountEventHandler.ReleaseOwnedSession(this, PlayerID);
 
-
-            Disconnect();
-
-        
-        }
-        private List<byte> receiveBuffer = new List<byte>();
+            receiveBuffer.Clear();
+        }
+        private const int MaxReceiveBufferBytes = 1024 * 1024;
+        private readonly List<byte> receiveBuffer = new();
         //private readonly byte delimiter = (byte)'\n'; // 制御文字
 
         protected override void OnReceived(byte[] buffer, long offset, long size)
         {
             // 受信データをバッファに追加
             receiveBuffer.AddRange(buffer.Skip((int)offset).Take((int)size));
+            if (receiveBuffer.Count > MaxReceiveBufferBytes)
+            {
+                ConsoleWrite.WriteMessage("[WARN] Client receive buffer exceeded 1 MiB; dropping buffered data.", ConsoleColor.Yellow);
+                receiveBuffer.Clear();
+                return;
+            }
 
             while (true)
             {
@@ -273,9 +292,11 @@ namespace OpenGSServer
                 // 最低3バイト（識別子+1バイト以上のデータ）がないと無効
                 if (completeData.Length < 3) continue;
 
-                // 先頭の識別子を取得
-                string identifier = Encoding.UTF8.GetString(completeData, 0, 2);
-                byte[] payload = completeData.Skip(2).ToArray();
+                // 先頭の識別子を取得。MPが現行形式で、MSGも旧形式として受け付ける。
+                int identifierLength = completeData.Length >= 3 &&
+                    Encoding.UTF8.GetString(completeData, 0, 3) == "MSG" ? 3 : 2;
+                string identifier = Encoding.UTF8.GetString(completeData, 0, identifierLength);
+                byte[] payload = completeData.Skip(identifierLength).ToArray();
 
                 if (identifier == "JS") // JSON処理
                 {
@@ -290,7 +311,7 @@ namespace OpenGSServer
                         ConsoleWrite.WriteMessage($"JSON parse error: {e.Message}", ConsoleColor.Red);
                     }
                 }
-                else if (identifier == "MSG") // MessagePack処理
+                else if (identifier == "MP" || identifier == "MSG") // MessagePack処理
                 {
                     try
                     {
@@ -380,8 +401,18 @@ namespace OpenGSServer
         // #networkcore
         private void ParseMessageFromClient(in JObject json)
         {
-            string messageType = json["MessageType"]?.ToString();
-            if (string.IsNullOrEmpty(messageType)) return;
+            var rawMessageType = json["MessageType"]?.ToString();
+            if (string.IsNullOrEmpty(rawMessageType)) return;
+
+            if (string.Equals(rawMessageType, "RequestEnvelope", StringComparison.Ordinal))
+            {
+                HandleRequestEnvelope(json);
+                return;
+            }
+
+            // Normalize legacy aliases once at the transport boundary so that
+            // lobby and match handlers both dispatch on the canonical contract.
+            string messageType = MessageType.Normalize(rawMessageType);
 
             // Delegate lobby traffic first, then match traffic.
             var lobbyManager = (Server as LobbyTcpServer)?.Manager;
@@ -400,6 +431,16 @@ namespace OpenGSServer
                     case GameMessageTypes.LoadingFinished:
                     case GameMessageTypes.MatchStatusRequest:
                     case GameMessageTypes.PlayerRespawn:
+                        if (string.IsNullOrWhiteSpace(PlayerID))
+                        {
+                            return;
+                        }
+
+                        // Match TCP events are authenticated by this session. Do
+                        // not allow the request payload to impersonate another
+                        // player before it reaches the game-event handler.
+                        json["PlayerID"] = PlayerID;
+                        json["PlayerId"] = PlayerID;
                         InGameMatchEventHandler.HandleTcpSystemEvent(json);
                         break;
                 }
@@ -413,6 +454,38 @@ namespace OpenGSServer
                     break;
                 // Add more session-specific messages here if needed.
             }
+        }
+
+        private void HandleRequestEnvelope(JObject envelope)
+        {
+            var requestId = envelope["RequestId"]?.ToString();
+            var route = envelope["Route"]?.ToString();
+            var response = new JObject
+            {
+                ["MessageType"] = "ResponseEnvelope",
+                ["RequestId"] = requestId ?? string.Empty,
+                ["Route"] = route ?? string.Empty,
+                ["Success"] = false
+            };
+
+            if (string.Equals(route, "foundation/ping", StringComparison.Ordinal))
+            {
+                var payload = envelope["Payload"] as JObject;
+                response["Success"] = true;
+                response["Payload"] = new JObject
+                {
+                    ["Nonce"] = payload?["Nonce"]?.ToString() ?? Guid.NewGuid().ToString("N"),
+                    ["EchoClientSentAtUtc"] = payload?["ClientSentAtUtc"]?.ToString() ?? string.Empty,
+                    ["ServerSentAtUtc"] = DateTime.UtcNow.ToString("O")
+                };
+            }
+            else
+            {
+                response["ErrorCode"] = "UnknownRoute";
+                response["ErrorMessage"] = $"Unknown request route: {route ?? string.Empty}";
+            }
+
+            SendAsyncJsonWithTimeStamp(response);
         }
 
         private void HandlePlayerInfoRequest(JObject requestJson)

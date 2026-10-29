@@ -50,11 +50,18 @@ public sealed class ServerAdminAccount
         if (string.IsNullOrWhiteSpace(plainPassword)) return false;
         if (string.IsNullOrEmpty(Salt) || string.IsNullOrEmpty(PasswordHash)) return false;
 
-        var saltBytes = Convert.FromBase64String(Salt);
-        var expectedHash = Convert.FromBase64String(PasswordHash);
-        var inputHash = HashPassword(plainPassword, saltBytes);
+        try
+        {
+            var saltBytes = Convert.FromBase64String(Salt);
+            var expectedHash = Convert.FromBase64String(PasswordHash);
+            var inputHash = HashPassword(plainPassword, saltBytes);
 
-        return CryptographicOperations.FixedTimeEquals(expectedHash, inputHash);
+            return CryptographicOperations.FixedTimeEquals(expectedHash, inputHash);
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
     }
 
     /// <summary>
@@ -64,12 +71,13 @@ public sealed class ServerAdminAccount
     {
         if (string.IsNullOrWhiteSpace(path)) throw new ArgumentException("Path is required", nameof(path));
 
-        var json = JsonSerializer.Serialize(this, new JsonSerializerOptions
-        {
-            WriteIndented = true
-        });
+        var json = JsonSerializer.Serialize(this, AdminJsonSerializerContext.Default.ServerAdminAccount);
 
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        var directory = Path.GetDirectoryName(path);
+        if (!string.IsNullOrWhiteSpace(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
         File.WriteAllText(path, json, Encoding.UTF8);
     }
 
@@ -81,14 +89,13 @@ public sealed class ServerAdminAccount
         if (!File.Exists(path)) throw new FileNotFoundException("Admin account file not found", path);
 
         var json = File.ReadAllText(path, Encoding.UTF8);
-        var account = JsonSerializer.Deserialize<ServerAdminAccount>(json);
+        var account = JsonSerializer.Deserialize(json, AdminJsonSerializerContext.Default.ServerAdminAccount);
         if (account == null) throw new InvalidDataException("Invalid admin account file");
         return account;
     }
 
     private static byte[] HashPassword(string password, byte[] salt)
     {
-        using var pbkdf2 = new Rfc2898DeriveBytes(password, salt, Iterations, HashAlgorithmName.SHA256);
-        return pbkdf2.GetBytes(HashSize);
+        return Rfc2898DeriveBytes.Pbkdf2(password, salt, Iterations, HashAlgorithmName.SHA256, HashSize);
     }
 }

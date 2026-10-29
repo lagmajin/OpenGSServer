@@ -8,12 +8,6 @@ namespace OpenGSServer.Network
 {
     class UDPReceiver : IDisposable
     {
-        string localIpString = "127.0.0.1";
-
-        System.Text.Encoding enc = System.Text.Encoding.UTF8;
-
-
-        int port = 66666;
         UdpClient udp = new UdpClient(1234);
 
         UDPReceiver()

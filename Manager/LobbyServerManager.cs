@@ -1,6 +1,7 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Net;
@@ -10,6 +11,8 @@ using OpenGSCore;
 using OpenGSServer.Utility;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+
+#nullable enable
 
 namespace OpenGSServer
 {
@@ -23,21 +26,82 @@ namespace OpenGSServer
             new(() => new LobbyServerManager(), LazyThreadSafetyMode.ExecutionAndPublication);
         
         private readonly Lobby _lobby = new();
-        private readonly ConcurrentDictionary<string, LobbyPlayerInfo> _connectedPlayers = new();
-        private readonly ConcurrentDictionary<string, PlayerRateLimiter> _rateLimiters = new();
+        private readonly ConcurrentDictionary<string, LobbyPlayerInfo> _connectedPlayers =
+            new(StringComparer.OrdinalIgnoreCase);
+        private readonly ConcurrentDictionary<string, PlayerRateLimiter> _rateLimiters =
+            new(StringComparer.OrdinalIgnoreCase);
         private readonly ConcurrentDictionary<PlayerID, string> _playerIdMapping = new();
         private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, byte>> _pendingFriendRequests = new(StringComparer.OrdinalIgnoreCase);
         private readonly PingManager _pingManager = new();
         private readonly ReaderWriterLockSlim _lobbyLock = new();
-        private readonly Timer _cleanupTimer;
         
         // NetCoreServer TCP機能
         private LobbyTcpServer? _tcpServer;
         
         // アイドルチェック用
         private readonly Timer _idleCheckTimer;
+        private readonly Timer _connectionCheckTimer;
+        private readonly DailyService _dailyService = new();
 
-        private bool _disposed;
+        public void RecordMatchDailyProgress(string playerId, bool won, DateTime completedAtUtc)
+        {
+            if (string.IsNullOrWhiteSpace(playerId)) return;
+            _dailyService.AddProgress(playerId, "play_match", 1, completedAtUtc);
+            if (won) _dailyService.AddProgress(playerId, "win_match", 1, completedAtUtc);
+        }
+
+        public OpenGSServer.Network.MatchResultResponse? RecordMatchResult(
+            string matchId, string playerId, int matchScore, int kills, int deaths, bool won, EGameMode mode)
+        {
+            if (string.IsNullOrWhiteSpace(matchId) || string.IsNullOrWhiteSpace(playerId)) return null;
+
+            var database = AccountDatabaseManager.GetInstance();
+            return database.SettleMatchProgress(matchId, playerId, account =>
+            {
+                var calculated = OpenGSServer.Network.MatchLevelCalculator.CreateMatchResultResponse(
+                    playerId,
+                    Math.Max(0, matchScore),
+                    Math.Max(0, kills),
+                    Math.Max(0, deaths),
+                    won,
+                    (int)Math.Clamp(account.Exp, 0, int.MaxValue));
+
+                account.Exp = calculated.NewTotalXp;
+                account.Level = calculated.NewLevel;
+                account.LifeTimeScore ??= new PlayerLifeTimeScore();
+                switch (mode)
+                {
+                    case EGameMode.TeamDeathMatch:
+                        account.LifeTimeScore.RecordTeamDeathMatchResult(won);
+                        break;
+                    case EGameMode.Survival:
+                        account.LifeTimeScore.RecordSurvivalResult(won, false);
+                        break;
+                    case EGameMode.TeamSurvival:
+                        account.LifeTimeScore.RecordSurvivalResult(won, true);
+                        break;
+                    case EGameMode.CaptureTheFlag:
+                        // Keep capture-the-flag records out of the death-match counters.
+                        account.LifeTimeScore.RecordCaptureTheFlagResult(won);
+                        break;
+                    case EGameMode.Mission:
+                        account.LifeTimeScore.RecordMissionResult(won);
+                        break;
+                    default:
+                        account.LifeTimeScore.RecordDeathMatchResult(won);
+                        break;
+                }
+                return calculated;
+            });
+        }
+
+        public void RecordDamageDailyProgress(string playerId, int amount)
+        {
+            if (string.IsNullOrWhiteSpace(playerId) || amount <= 0) return;
+            _dailyService.AddProgress(playerId, "deal_damage", amount);
+        }
+
+        private int _disposeState;
 
         public static LobbyServerManager Instance => _instance.Value;
 
@@ -53,14 +117,6 @@ namespace OpenGSServer
         {
             InitializeLobby();
             
-            // 定期的にクリーンアップ（5分ごと）
-            _cleanupTimer = new Timer(
-                callback: _ => CleanupInactivePlayers(),
-                state: null,
-                dueTime: TimeSpan.FromMinutes(5),
-                period: TimeSpan.FromMinutes(5)
-            );
-
             // アイドルチェックタイマー（1分ごと）
             _idleCheckTimer = new Timer(
                 callback: _ => CheckIdlePlayers(),
@@ -68,32 +124,18 @@ namespace OpenGSServer
                 dueTime: TimeSpan.FromMinutes(1),
                 period: TimeSpan.FromMinutes(1)
             );
+
+            _connectionCheckTimer = new Timer(
+                callback: _ => _tcpServer?.DisconnectStaleSessions(),
+                state: null,
+                dueTime: TimeSpan.FromSeconds(1),
+                period: TimeSpan.FromSeconds(1)
+            );
         }
 
         private void InitializeLobby()
         {
             ConsoleWrite.WriteMessage("[LOBBY] Lobby server initialized", ConsoleColor.Cyan);
-        }
-
-        private void CleanupInactivePlayers()
-        {
-            try
-            {
-                var inactivePlayers = _connectedPlayers
-                    .Where(kvp => (DateTime.UtcNow - kvp.Value.JoinedAt).TotalMinutes > 30)
-                    .Select(kvp => kvp.Key)
-                    .ToList();
-
-                foreach (var playerId in inactivePlayers)
-                {
-                    ConsoleWrite.WriteMessage($"[LOBBY] Removing inactive player: {playerId}", ConsoleColor.Yellow);
-                    PlayerLeaveLobby(playerId);
-                }
-            }
-            catch (Exception ex)
-            {
-                ConsoleWrite.WriteMessage($"[LOBBY] Cleanup error: {ex.Message}", ConsoleColor.Red);
-            }
         }
 
         private void CheckIdlePlayers()
@@ -121,11 +163,18 @@ namespace OpenGSServer
                     _lobbyLock.ExitReadLock();
                 }
 
-                // スナップショットに基づいて書き込み操作を行う（PlayerLeaveLobbyは内部でロックを取得する）
+                // Recheck activity under the account gate before tearing down a session.
+                var cutoff = now.AddMinutes(-15);
                 foreach (var playerId in idlePlayers)
                 {
-                    ConsoleWrite.WriteMessage($"[LOBBY] Kicking idle player: {playerId}", ConsoleColor.Yellow);
-                    PlayerLeaveLobby(playerId);
+                    if (AccountEventHandler.KickPlayerSession(playerId, () =>
+                        (!MatchServerV2.Instance.IsRunning ||
+                         !MatchServerV2.Instance.IsPlayerConnected(playerId)) &&
+                        _connectedPlayers.TryGetValue(playerId, out var current) &&
+                        current.LastActivity <= cutoff))
+                    {
+                        ConsoleWrite.WriteMessage($"[LOBBY] Kicked idle player: {playerId}", ConsoleColor.Yellow);
+                    }
                 }
             }
             catch (Exception ex)
@@ -169,7 +218,8 @@ namespace OpenGSServer
                 if (!success)
                     return LobbyResult<LobbyPlayerInfo>.Error("Failed to add player to lobby");
 
-                var playerInfo = _lobby.GetPlayers().FirstOrDefault(p => p.PlayerId == playerId);
+                var playerInfo = _lobby.GetPlayers().FirstOrDefault(p =>
+                    string.Equals(p.PlayerId, playerId, StringComparison.OrdinalIgnoreCase));
                 if (playerInfo == null)
                     return LobbyResult<LobbyPlayerInfo>.Error("Failed to retrieve player info");
 
@@ -275,20 +325,6 @@ namespace OpenGSServer
             }
         }
 
-        public IReadOnlyDictionary<string, LobbyPlayerInfo> GetAllConnectedPlayers()
-        {
-            _lobbyLock.EnterReadLock();
-            try
-            {
-                return new Dictionary<string, LobbyPlayerInfo>(
-                    _connectedPlayers, StringComparer.OrdinalIgnoreCase);
-            }
-            finally
-            {
-                _lobbyLock.ExitReadLock();
-            }
-        }
-
         #endregion
 
         #region ルーム管理
@@ -382,11 +418,18 @@ namespace OpenGSServer
             _lobbyLock.EnterWriteLock();
             try
             {
+                var leavingPlayer = _lobby.GetPlayers().FirstOrDefault(p =>
+                    string.Equals(p.PlayerId, playerId, StringComparison.OrdinalIgnoreCase));
+                var roomId = leavingPlayer?.CurrentRoomId;
                 var success = _lobby.LeaveRoom(playerId);
                 if (!success)
                     return LobbyResult<bool>.Error("Player not in any room");
 
                 ConsoleWrite.WriteMessage($"[LOBBY] Player {playerId} left room", ConsoleColor.Yellow);
+                if (!string.IsNullOrWhiteSpace(roomId) && _lobby.GetRoom(roomId) == null)
+                {
+                    OnRoomClosed?.Invoke(roomId);
+                }
                 return LobbyResult<bool>.Success(true);
             }
             catch (Exception ex)
@@ -469,7 +512,7 @@ namespace OpenGSServer
                 if (room == null)
                     return LobbyResult<bool>.Error("Room not found");
 
-                if (!room.Players.Contains(playerId))
+                if (!room.Players.Any(id => string.Equals(id, playerId, StringComparison.OrdinalIgnoreCase)))
                     return LobbyResult<bool>.Error("Player not in this room");
 
                 ConsoleWrite.WriteMessage($"[LOBBY] Room chat in {roomId} from {playerId}: {message}", ConsoleColor.Gray);
@@ -855,6 +898,11 @@ namespace OpenGSServer
         /// TCPポート番号を取得
         /// </summary>
         public int? TcpPort => _tcpServer?.Endpoint.Port;
+
+        public void PruneDisconnectedTcpSessions()
+        {
+            _tcpServer?.DisconnectStaleSessions();
+        }
         
         public void BroadcastToAllClients(string message)
         {
@@ -901,31 +949,135 @@ namespace OpenGSServer
             return FindSessionByPlayerId(playerId);
         }
 
+        private static int ReadInt(JToken? token)
+        {
+            return token != null && int.TryParse(token.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)
+                ? value
+                : 0;
+        }
+
+        private static bool ReadBool(JToken? token, bool fallback)
+        {
+            if (token == null)
+            {
+                return fallback;
+            }
+
+            if (bool.TryParse(token.ToString(), out var value))
+            {
+                return value;
+            }
+
+            return int.TryParse(token.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var numeric)
+                ? numeric != 0
+                : fallback;
+        }
+
         /// <summary>
         /// クライアントからのメッセージを処理（TCP専用）
         /// </summary>
         public void HandleMessage(string messageType, JObject data, ClientSession? session = null)
         {
+            if (session != null && !string.IsNullOrWhiteSpace(session.PlayerID))
+            {
+                var playerId = session.PlayerID!;
+                AccountEventHandler.RunIfOwnedSession(
+                    session, playerId, () =>
+                    {
+                        UpdatePlayerActivity(playerId);
+                        HandleMessageCore(messageType, data, session);
+                    });
+                return;
+            }
+
+            HandleMessageCore(messageType, data, session);
+        }
+
+        private void HandleMessageCore(string messageType, JObject data, ClientSession? session)
+        {
             var clientSession = session as ClientSession; // キャスト
             switch (messageType)
             {
                 case MessageType.LoginRequest:
-                    // ログイン処理（既存の OldAccountEventHandler を移行）
-                    var playerId = OldAccountEventHandler.Login(clientSession, data);
-                    if (clientSession != null && playerId != null) clientSession.SetPlayerID(playerId);
+                    if (clientSession is null)
+                    {
+                        break;
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(clientSession.PlayerID))
+                    {
+                        clientSession.SendAsyncJsonWithTimeStamp(new JObject
+                        {
+                            ["MessageType"] = MessageType.LoginResponse,
+                            ["Success"] = false,
+                            ["Message"] = "Session is already authenticated",
+                            ["Error"] = "Session is already authenticated"
+                        });
+                        break;
+                    }
+
+                    AccountEventHandler.Login(clientSession, data);
+                    break;
+                case MessageType.CreateAccountRequest:
+                    if (clientSession is not null)
+                    {
+                        AccountEventHandler.CreateNewAccount(clientSession, data);
+                    }
                     break;
                 case MessageType.LogoutRequest:
-                    OldAccountEventHandler.Logout(clientSession);
+                    if (clientSession is not null)
+                    {
+                        var loggedOutPlayerId = clientSession.PlayerID;
+                        AccountEventHandler.ReleaseOwnedSession(
+                            clientSession, loggedOutPlayerId, revokeResumeToken: true);
+                        clientSession.ClearPlayerID();
+                        clientSession.SendAsyncJsonWithTimeStamp(new JObject
+                        {
+                            ["MessageType"] = MessageType.LogoutSuccessful,
+                            ["Success"] = true,
+                            ["PlayerID"] = loggedOutPlayerId ?? string.Empty
+                        });
+                    }
                     break;
                 case MessageType.CreateRoomRequest:
-                    LobbyEventHandler.CreateNewWaitRoom(clientSession, data);
+                    if (data.ContainsKey("IsMission") || data.ContainsKey("MissionId") || data.ContainsKey("MissionID") || data.ContainsKey("MissionType"))
+                    {
+                        LobbyEventHandler.CreateNewMissionRoom(clientSession, data);
+                    }
+                    else
+                    {
+                        LobbyEventHandler.CreateNewWaitRoom(clientSession, data);
+                    }
                     break;
                 case MessageType.JoinRoomRequest:
                     LobbyEventHandler.EnterRoomRequest(clientSession, data);
                     break;
+                case MessageType.GameStartRequest:
+                    LobbyEventHandler.MatchStart(clientSession, data);
+                    break;
+                case MessageType.SceneTransitionRequest:
+                    HandleSceneTransitionRequest(clientSession, data);
+                    break;
                 case MessageType.MatchServerInfoRequest:
                     HandleMatchServerInfoRequest(clientSession, data);
                     break;
+                case GameMessageTypes.MatchStatusRequest:
+                {
+                    var authenticatedPlayerId = clientSession?.PlayerID;
+                    if (string.IsNullOrWhiteSpace(authenticatedPlayerId))
+                    {
+                        ConsoleWrite.WriteMessage("[LOBBY] Ignoring match status request from an unauthenticated session.", ConsoleColor.Yellow);
+                        break;
+                    }
+
+                    // Match status is a TCP control request. Bind the identity
+                    // to the authenticated lobby session before routing it to
+                    // the match handler, which also validates room membership.
+                    data["PlayerID"] = authenticatedPlayerId;
+                    data["PlayerId"] = authenticatedPlayerId;
+                    InGameMatchEventHandler.HandleTcpSystemEvent(data);
+                    break;
+                }
                 case MessageType.RoomListUpdateRequest:
                     LobbyEventHandler.UpdateRoom(clientSession, data);
                     break;
@@ -933,37 +1085,45 @@ namespace OpenGSServer
                     WaitRoomEventHandler.ExitRoomRequest(clientSession, data);
                     break;
                 case MessageType.WaitRoomSettingsChange:
-                    if (data.ContainsKey("RoomName") || data.ContainsKey("Capacity") || data.ContainsKey("GameMode"))
+                    // Unity's WaitroomNetworkManager wraps changed room values in a
+                    // Settings object. Flatten that envelope while retaining the
+                    // original RoomID/PlayerID fields expected by the core setting
+                    // parser.
+                    var roomSettingsData = FlattenRoomSettings(data);
+                    if (roomSettingsData.ContainsKey("RoomName") ||
+                        roomSettingsData.ContainsKey("Capacity") ||
+                        roomSettingsData.ContainsKey("GameMode") ||
+                        roomSettingsData.ContainsKey("Map") ||
+                        roomSettingsData.ContainsKey("TeamBalance") ||
+                        roomSettingsData.ContainsKey("Password"))
                     {
-                        WaitRoomEventHandler.ChangeRoomSetting(clientSession, data);
+                        WaitRoomEventHandler.ChangeRoomSetting(clientSession, roomSettingsData);
                     }
 
-                    if (data.ContainsKey("PlayerCharacter") || data.ContainsKey("EquipInstantItems"))
+                    if (roomSettingsData.ContainsKey("PlayerCharacter") || roomSettingsData.ContainsKey("EquipInstantItems"))
                     {
-                        WaitRoomEventHandler.ChangePlayerSettting(clientSession, data);
+                        WaitRoomEventHandler.ChangePlayerSettting(clientSession, roomSettingsData);
                     }
                     break;
                 case MessageType.WaitRoomPlayerReady:
                 case MessageType.WaitRoomPlayerUnready:
                     WaitRoomEventHandler.ReadyRequest(clientSession, data);
                     break;
+                case MessageType.WaitRoomKickPlayer:
+                    WaitRoomEventHandler.KickPlayerRequest(clientSession, data);
+                    break;
                 case MessageType.LoadingStarted:
                 case MessageType.ClientLoadingSceneEntered:
                     WaitRoomEventHandler.LoadingStartedRequest(clientSession, data);
                     break;
                 case MessageType.LoadingProgress:
+                    WaitRoomEventHandler.LoadingProgressRequest(clientSession, data);
                     break;
                 case MessageType.LoadingCompleted:
                     WaitRoomEventHandler.LoadingCompletedRequest(clientSession, data);
                     break;
                 case MessageType.LobbyChatRequest:
-                    // チャット処理
-                    var playerIdChat = data["PlayerId"]?.ToString() ?? data["PlayerID"]?.ToString();
-                    var message = data["Message"]?.ToString();
-                    if (!string.IsNullOrEmpty(playerIdChat) && !string.IsNullOrEmpty(message))
-                    {
-                        AddLobbyChat(playerIdChat, message);
-                    }
+                    HandleLobbyChatMessage(clientSession, data);
                     break;
                 case MessageType.ShopStateRequest:
                     HandleShopStateRequest(clientSession, data);
@@ -1007,25 +1167,20 @@ namespace OpenGSServer
                 case MessageType.GuildKickRequest:
                     HandleGuildKickRequest(clientSession, data);
                     break;
+                case MessageType.GuildRoleRequest:
+                    HandleGuildRoleRequest(clientSession, data);
+                    break;
                 case MessageType.GuildChatRequest:
                     HandleGuildChatRequest(clientSession, data);
                     break;
-                case MessageType.WaitRoomKickPlayer:
-                    HandleWaitRoomKickPlayer(clientSession, data);
+                case MessageType.DailyListRequest:
+                    HandleDailyListRequest(clientSession, data);
                     break;
-                case MessageType.WaitRoomOwnerChange:
-                    HandleWaitRoomOwnerChange(clientSession, data);
+                case MessageType.DailyProgressRequest:
+                    HandleDailyProgressRequest(clientSession, data);
                     break;
-                case MessageType.MissionStartRequest:
-                    HandleMissionStartRequest(clientSession, data);
-                    break;
-                case MessageType.MissionCompleteNotification:
-                    HandleMissionCompleteNotification(clientSession, data);
-                    break;
-                case MessageType.MissionFailedNotification:
-                    HandleMissionFailedNotification(clientSession, data);
-                    break;
-                case MessageType.Heartbeat:
+                case MessageType.DailyClaimRequest:
+                    HandleDailyClaimRequest(clientSession, data);
                     break;
                 default:
                     ConsoleWrite.WriteMessage($"[LOBBY] Unknown message type: {messageType}", ConsoleColor.Yellow);
@@ -1033,128 +1188,124 @@ namespace OpenGSServer
             }
         }
 
-
-        private void HandleWaitRoomKickPlayer(ClientSession? session, JObject data)
+        private static IDictionary<string, JToken> FlattenRoomSettings(JObject data)
         {
-            if (session == null) return;
-            var roomId = data["RoomID"]?.ToString() ?? data["RoomId"]?.ToString();
-            var targetPlayerId = data["TargetPlayerID"]?.ToString() ?? data["TargetPlayerId"]?.ToString();
-            if (string.IsNullOrWhiteSpace(roomId) || string.IsNullOrWhiteSpace(targetPlayerId)) return;
-            var waitRoom = WaitRoomManager.Instance().FindWaitRoom(roomId);
-            if (waitRoom == null) return;
-            waitRoom.RemovePlayer(targetPlayerId);
-            var notify = new JObject { ["MessageType"] = MessageType.WaitRoomKickPlayer, ["RoomID"] = roomId, ["PlayerID"] = targetPlayerId };
-            foreach (var p in waitRoom.AllPlayers())
+            if (data["Settings"] is not JObject settings)
             {
-                var ps = FindSessionByPlayerId(p.Id);
-                ps?.SendAsyncJsonWithTimeStamp(notify);
+                return data;
             }
-        }
 
-        private void HandleWaitRoomOwnerChange(ClientSession? session, JObject data)
-        {
-            if (session == null) return;
-            var roomId = data["RoomID"]?.ToString() ?? data["RoomId"]?.ToString();
-            var newOwnerId = data["NewOwnerID"]?.ToString() ?? data["NewOwnerId"]?.ToString();
-            if (string.IsNullOrWhiteSpace(roomId) || string.IsNullOrWhiteSpace(newOwnerId)) return;
-            var notify = new JObject { ["MessageType"] = MessageType.WaitRoomOwnerChange, ["RoomID"] = roomId, ["NewOwnerId"] = newOwnerId };
-            var waitRoom = WaitRoomManager.Instance().FindWaitRoom(roomId);
-            if (waitRoom != null)
+            var flattened = new JObject();
+            foreach (var property in data.Properties())
             {
-                foreach (var p in waitRoom.AllPlayers())
+                if (!string.Equals(property.Name, "Settings", StringComparison.OrdinalIgnoreCase))
                 {
-                    var ps = FindSessionByPlayerId(p.Id);
-                    ps?.SendAsyncJsonWithTimeStamp(notify);
+                    flattened[property.Name] = property.Value;
                 }
             }
+
+            foreach (var property in settings.Properties())
+            {
+                flattened[property.Name] = property.Value;
+            }
+
+            return flattened;
         }
 
-        private void HandleMissionStartRequest(ClientSession? session, JObject data)
+        private void HandleLobbyChatMessage(ClientSession? session, JObject data)
         {
-            if (session == null) return;
-            session.SendAsyncJsonWithTimeStamp(new JObject { ["MessageType"] = MessageType.MissionStartNotification, ["Success"] = true });
+            var playerId = session?.PlayerID ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(playerId))
+            {
+                return;
+            }
+
+            var message = data["Message"]?.ToString() ?? string.Empty;
+            if (!AddLobbyChat(playerId, message).IsSuccess)
+            {
+                return;
+            }
+
+            var notification = new JObject
+            {
+                ["MessageType"] = MessageType.LobbyChatNotification,
+                ["PlayerID"] = playerId,
+                ["PlayerName"] = ResolvePlayerDisplayName(playerId),
+                ["Message"] = message,
+                ["RoomID"] = data["RoomID"]?.ToString() ?? data["RoomId"]?.ToString() ?? string.Empty
+            };
+
+            var roomId = notification["RoomID"]?.ToString();
+            var waitRoom = string.IsNullOrWhiteSpace(roomId)
+                ? null
+                : WaitRoomManager.Instance().FindWaitRoom(roomId);
+            if (waitRoom != null)
+            {
+                foreach (var player in waitRoom.AllPlayers())
+                {
+                    FindSessionByPlayerId(player.Id)?.SendAsyncJsonWithTimeStamp(notification);
+                }
+                return;
+            }
+
+            foreach (var connectedPlayerId in _connectedPlayers.Keys)
+            {
+                FindSessionByPlayerId(connectedPlayerId)?.SendAsyncJsonWithTimeStamp(notification);
+            }
         }
 
-        private void HandleMissionCompleteNotification(ClientSession? session, JObject data)
+        private static void HandleSceneTransitionRequest(ClientSession? session, JObject data)
         {
-            HandleMissionOutcome(session, data, true);
-        }
+            if (session is null)
+            {
+                return;
+            }
 
-        private void HandleMissionFailedNotification(ClientSession? session, JObject data)
-        {
-            HandleMissionOutcome(session, data, false);
-        }
+            var fromScene = data["FromScene"]?.ToString() ?? string.Empty;
+            var toScene = data["ToScene"]?.ToString() ?? string.Empty;
+            var reason = data["Reason"]?.ToString() ?? string.Empty;
+            var approved = !string.IsNullOrWhiteSpace(toScene);
 
-        private void HandleMissionOutcome(ClientSession? session, JObject data, bool succeeded)
-        {
-            if (session == null || string.IsNullOrWhiteSpace(session.PlayerID)) return;
-            var requestedRoomId = data["RoomID"]?.ToString() ?? data["RoomId"]?.ToString() ?? string.Empty;
-            var matchRoom = FindActiveMissionMatch(session.PlayerID, requestedRoomId);
-            var reason = data["Reason"]?.ToString();
-            var accepted = matchRoom != null && matchRoom.TryFinishMission(succeeded, reason);
             session.SendAsyncJsonWithTimeStamp(new JObject
             {
-                ["MessageType"] = succeeded
-                    ? MessageType.MissionCompleteNotification
-                    : MessageType.MissionFailedNotification,
-                ["Success"] = accepted,
-                ["RoomID"] = matchRoom?.Id ?? requestedRoomId,
-                ["Error"] = accepted ? null : "Active mission match was not found or has already ended"
+                ["MessageType"] = MessageType.SceneTransitionResponse,
+                ["Approved"] = approved,
+                ["FromScene"] = fromScene,
+                ["ToScene"] = toScene,
+                ["Reason"] = approved
+                    ? "Approved"
+                    : $"Transition denied: destination scene is empty ({reason})"
             });
         }
 
-        private static MatchRoom? FindActiveMissionMatch(string playerId, string requestedRoomId)
-        {
-            if (string.IsNullOrWhiteSpace(playerId)) return null;
-            return MatchRoomManager.Instance.AllRooms()
-                .OfType<MatchRoom>()
-                .FirstOrDefault(room => room.Playing && !room.Finished &&
-                    room.Setting is MissionMatchSetting && room.ContainsPlayer(playerId) &&
-                    (string.IsNullOrWhiteSpace(requestedRoomId) ||
-                        string.Equals(room.Id, requestedRoomId, StringComparison.OrdinalIgnoreCase) ||
-                        string.Equals(room.WaitRoomLink?.RoomId, requestedRoomId, StringComparison.OrdinalIgnoreCase)));
-        }
         private void HandleMatchServerInfoRequest(ClientSession? session, JObject data)
         {
             if (session == null) return;
-            string playerId = session.PlayerID ?? string.Empty;
-            string requestedRoomId = data["RoomID"]?.ToString() ?? data["RoomId"]?.ToString() ?? string.Empty;
-            var matchRoom = MatchRoomManager.Instance.AllRooms()
-                .OfType<MatchRoom>()
-                .FirstOrDefault(candidate => !candidate.Finished && candidate.ContainsPlayer(playerId) &&
-                    (string.Equals(candidate.Id, requestedRoomId, StringComparison.OrdinalIgnoreCase) ||
-                     string.Equals(candidate.WaitRoomLink?.RoomId, requestedRoomId, StringComparison.OrdinalIgnoreCase)));
-            if (string.IsNullOrWhiteSpace(playerId) || matchRoom == null)
-            {
-                session.SendAsyncJsonWithTimeStamp(new JObject
-                {
-                    ["MessageType"] = "ErrorNotification",
-                    ["ErrorMessage"] = "An authenticated player in the requested match room is required"
-                });
-                return;
-            }
 
+            var infoJson = new JObject();
             var matchServer = MatchServerV2.Instance; // Instanceプロパティを使用
-            string udpToken = matchServer.GetOrCreateUdpToken(matchRoom.Id, playerId);
-            if (string.IsNullOrEmpty(udpToken))
-            {
-                session.SendAsyncJsonWithTimeStamp(new JObject
-                {
-                    ["MessageType"] = "ErrorNotification",
-                    ["ErrorMessage"] = "Match UDP server is not ready"
-                });
-                return;
-            }
 
-            var infoJson = new JObject
-            {
-                ["MessageType"] = "MatchServerInformationNotification",
-                ["UdpToken"] = udpToken,
-                ["RoomID"] = requestedRoomId
-            };
+            infoJson["MessageType"] = MessageType.MatchServerInfoResponse;
             infoJson["Port"] = matchServer.TcpPort; // TcpPortプロパティを使用
             infoJson["UdpPort"] = matchServer.UdpPort;
-            infoJson["SubPort"] = matchServer.UdpPort;
+            var roomId = data["RoomID"]?.ToString() ?? data["RoomId"]?.ToString();
+            var udpToken = string.IsNullOrWhiteSpace(roomId)
+                ? string.Empty
+                : matchServer.IssueUdpConnectionToken(session.PlayerID ?? string.Empty, roomId);
+            if (!string.IsNullOrWhiteSpace(udpToken))
+            {
+                infoJson["UdpToken"] = udpToken;
+            }
+            if (!string.IsNullOrWhiteSpace(matchServer.AdvertisedIp))
+            {
+                infoJson["IP"] = matchServer.AdvertisedIp;
+            }
+
+            if (!string.IsNullOrWhiteSpace(roomId))
+            {
+                infoJson["RoomID"] = roomId;
+                infoJson["RoomId"] = roomId;
+            }
 
             var str = infoJson.ToString(Formatting.None);
             ConsoleWrite.WriteMessage(str);
@@ -1181,7 +1332,7 @@ namespace OpenGSServer
             }
 
             var db = AccountDatabaseManager.GetInstance();
-            var account = db.GetAccount(accountId);
+            var account = db.GetAccountSnapshot(accountId);
             if (account == null)
             {
                 session.SendAsyncJsonWithTimeStamp(new JObject
@@ -1193,18 +1344,21 @@ namespace OpenGSServer
                 return;
             }
 
+            var equippedItems = db.GetEquippedItems(accountId);
+            var equippedInstantItems = db.GetEquippedInstantItems(accountId);
+
             session.SendAsyncJsonWithTimeStamp(new JObject
             {
                 ["MessageType"] = MessageType.ShopStateResponse,
                 ["Success"] = true,
                 ["Credits"] = account.Credits,
-                ["PurchasedItems"] = new JArray(db.GetPurchasedItems(accountId)),
-                ["EquippedItems"] = new JArray((account.EquippedItems ?? new List<DBEquippedItem>()).Select(item => new JObject
+                ["PurchasedItems"] = new JArray(account.PurchasedItems ?? new List<string>()),
+                ["EquippedItems"] = new JArray(equippedItems.Select(item => new JObject
                 {
                     ["Category"] = item.Category,
                     ["ItemId"] = item.ItemId
                 })),
-                ["EquippedInstantItems"] = new JArray((account.EquippedInstantItems ?? new List<DBInstantEquippedItem>()).Select(item => new JObject
+                ["EquippedInstantItems"] = new JArray(equippedInstantItems.Select(item => new JObject
                 {
                     ["Slot"] = item.Slot,
                     ["ItemId"] = item.ItemId
@@ -1221,46 +1375,32 @@ namespace OpenGSServer
 
             var accountId = ResolveGuildPlayerId(session, data, "PlayerID", "PlayerId", "AccountID", "AccountId");
             var itemId = data?["ItemId"]?.ToString() ?? string.Empty;
-            var price = GetShopPurchasePrice(itemId);
             var db = AccountDatabaseManager.GetInstance();
-            var account = db.GetAccount(accountId);
-
-            if (account == null || string.IsNullOrWhiteSpace(itemId) || price < 0)
+            var shopItem = ResolveShopItem(itemId);
+            if (shopItem == null)
             {
                 session.SendAsyncJsonWithTimeStamp(new JObject
                 {
                     ["MessageType"] = MessageType.ShopPurchaseResponse,
                     ["Success"] = false,
                     ["ItemId"] = itemId,
-                    ["Credits"] = account?.Credits ?? 0,
-                    ["ErrorMessage"] = price < 0 ? "Item is invalid" : "Account or item is invalid"
+                    ["Credits"] = db.GetCredits(accountId),
+                    ["ErrorMessage"] = "Item is invalid"
                 });
                 return;
             }
 
-            if (account.Credits < price)
-            {
-                session.SendAsyncJsonWithTimeStamp(new JObject
-                {
-                    ["MessageType"] = MessageType.ShopPurchaseResponse,
-                    ["Success"] = false,
-                    ["ItemId"] = itemId,
-                    ["Credits"] = account.Credits,
-                    ["ErrorMessage"] = "Insufficient credits"
-                });
-                return;
-            }
-
-            account.Credits -= price;
-            db.SetPurchasedItem(accountId, itemId, true);
-            db.UpdateAccountData(account);
+            var purchase = db.TryPurchaseItem(
+                accountId, shopItem.Value.ItemId, shopItem.Value.Price);
 
             session.SendAsyncJsonWithTimeStamp(new JObject
             {
                 ["MessageType"] = MessageType.ShopPurchaseResponse,
-                ["Success"] = true,
-                ["ItemId"] = itemId,
-                ["Credits"] = account.Credits
+                ["Success"] = purchase.Success,
+                ["ItemId"] = shopItem.Value.ItemId,
+                ["Credits"] = purchase.Credits,
+                ["AlreadyOwned"] = purchase.AlreadyOwned,
+                ["ErrorMessage"] = purchase.Error
             });
         }
 
@@ -1273,9 +1413,10 @@ namespace OpenGSServer
 
             var accountId = ResolveGuildPlayerId(session, data, "PlayerID", "PlayerId", "AccountID", "AccountId");
             var itemId = data?["ItemId"]?.ToString() ?? string.Empty;
-            var category = data?["Category"]?.ToString() ?? "Weapon";
-            var slot = data?["Slot"]?.ToObject<int>() ?? 0;
+            var category = (data?["Category"]?.ToString() ?? "Weapon").Trim();
+            var slot = ReadInt(data?["Slot"]);
             var db = AccountDatabaseManager.GetInstance();
+            var shopItem = ResolveShopItem(itemId);
 
             if (string.IsNullOrWhiteSpace(accountId) || string.IsNullOrWhiteSpace(itemId))
             {
@@ -1291,7 +1432,13 @@ namespace OpenGSServer
                 return;
             }
 
-            if (!db.IsPurchased(accountId, itemId))
+            var expectedCategory = shopItem == null
+                ? string.Empty
+                : ResolveShopCategory(shopItem.Value.ItemId);
+            if (shopItem == null ||
+                !category.Equals(expectedCategory, StringComparison.OrdinalIgnoreCase) ||
+                (expectedCategory.Equals("InstantItem", StringComparison.OrdinalIgnoreCase) && !IsValidInstantItemSlot(slot)) ||
+                !db.IsPurchased(accountId, shopItem.Value.ItemId))
             {
                 session.SendAsyncJsonWithTimeStamp(new JObject
                 {
@@ -1300,11 +1447,12 @@ namespace OpenGSServer
                     ["ItemId"] = itemId,
                     ["Category"] = category,
                     ["Slot"] = slot,
-                    ["ErrorMessage"] = "Item has not been purchased"
+                    ["ErrorMessage"] = "Item, category, slot, or purchase state is invalid"
                 });
                 return;
             }
 
+            itemId = shopItem.Value.ItemId;
             var success = category.Equals("InstantItem", StringComparison.OrdinalIgnoreCase)
                 ? db.SetEquippedInstantItem(accountId, slot, itemId)
                 : db.SetEquippedItem(accountId, category, itemId);
@@ -1328,8 +1476,8 @@ namespace OpenGSServer
             }
 
             var accountId = ResolveGuildPlayerId(session, data, "PlayerID", "PlayerId", "AccountID", "AccountId");
-            var category = data?["Category"]?.ToString() ?? "Weapon";
-            var slot = data?["Slot"]?.ToObject<int>() ?? 0;
+            var category = (data?["Category"]?.ToString() ?? "Weapon").Trim();
+            var slot = ReadInt(data?["Slot"]);
             var db = AccountDatabaseManager.GetInstance();
 
             if (string.IsNullOrWhiteSpace(accountId))
@@ -1341,6 +1489,20 @@ namespace OpenGSServer
                     ["Category"] = category,
                     ["Slot"] = slot,
                     ["ErrorMessage"] = "AccountID is required"
+                });
+                return;
+            }
+
+            if (!IsValidShopCategory(category) ||
+                (category.Equals("InstantItem", StringComparison.OrdinalIgnoreCase) && !IsValidInstantItemSlot(slot)))
+            {
+                session.SendAsyncJsonWithTimeStamp(new JObject
+                {
+                    ["MessageType"] = MessageType.ShopEquipResponse,
+                    ["Success"] = false,
+                    ["Category"] = category,
+                    ["Slot"] = slot,
+                    ["ErrorMessage"] = "Category or slot is invalid"
                 });
                 return;
             }
@@ -1376,6 +1538,18 @@ namespace OpenGSServer
                     ["MessageType"] = MessageType.FriendRequestResponse,
                     ["Success"] = false,
                     ["Error"] = "Invalid friend request"
+                });
+                return;
+            }
+
+            if (db.GetAccount(requesterId) == null || db.GetAccount(targetPlayerId) == null)
+            {
+                session.SendAsyncJsonWithTimeStamp(new JObject
+                {
+                    ["MessageType"] = MessageType.FriendRequestResponse,
+                    ["Success"] = false,
+                    ["Error"] = "Account not found",
+                    ["TargetPlayerID"] = targetPlayerId
                 });
                 return;
             }
@@ -1426,7 +1600,7 @@ namespace OpenGSServer
 
             var approverId = ResolveGuildPlayerId(session, data, "PlayerID", "PlayerId", "ApproverId", "ApproverID");
             var requestPlayerId = ResolveGuildPlayerId(null, data, "RequestPlayerID", "RequestPlayerId", "FromPlayerID", "FromPlayerId");
-            var approve = data?["Approve"]?.ToObject<bool>() ?? true;
+            var approve = ReadBool(data?["Approve"], true);
             var db = AccountDatabaseManager.GetInstance();
 
             if (string.IsNullOrWhiteSpace(approverId) || string.IsNullOrWhiteSpace(requestPlayerId))
@@ -1451,17 +1625,19 @@ namespace OpenGSServer
                 return;
             }
 
-            if (approve)
+            var friendshipCreated = !approve || db.AddFriend(approverId, requestPlayerId);
+            if (!friendshipCreated)
             {
-                db.AddFriend(approverId, requestPlayerId);
+                pending.TryAdd(requestPlayerId, 0);
             }
 
             session.SendAsyncJsonWithTimeStamp(new JObject
             {
                 ["MessageType"] = MessageType.FriendApproveResponse,
-                ["Success"] = true,
+                ["Success"] = friendshipCreated,
                 ["Approved"] = approve,
-                ["RequestPlayerID"] = requestPlayerId
+                ["RequestPlayerID"] = requestPlayerId,
+                ["Error"] = friendshipCreated ? string.Empty : "Failed to save friendship"
             });
         }
 
@@ -1671,7 +1847,7 @@ namespace OpenGSServer
 
             var manager = GuildManager.Instance;
             var guild = manager.FindGuild(guildName);
-            var canInvite = guild != null && manager.CanInviteGuildMember(guildName, targetPlayerId);
+            var canInvite = guild != null && manager.CanManageMembers(guildName, inviterId) && manager.CanInviteGuildMember(guildName, targetPlayerId);
             var delivered = false;
 
             if (canInvite && !string.IsNullOrWhiteSpace(targetPlayerId))
@@ -1714,7 +1890,9 @@ namespace OpenGSServer
             var memberId = ResolveGuildPlayerId(null, data, "MemberId", "MemberID", "TargetPlayerId", "TargetPlayerID");
 
             var manager = GuildManager.Instance;
-            var success = manager.KickGuildMember(guildName, memberId);
+            var success = manager.CanManageMembers(guildName, kickerId) &&
+                          !manager.IsLeader(guildName, memberId) &&
+                          manager.KickGuildMember(guildName, memberId);
             if (success && !string.IsNullOrWhiteSpace(memberId))
             {
                 SendToPlayer(memberId, new JObject
@@ -1737,6 +1915,39 @@ namespace OpenGSServer
                 ["KickerId"] = kickerId,
                 ["ErrorMessage"] = success ? string.Empty : $"Failed to kick '{memberId}' from guild '{guildName}'"
             });
+        }
+
+        private void HandleGuildRoleRequest(ClientSession? session, JObject data)
+        {
+            if (session == null) return;
+            var guildName = data?["GuildName"]?.ToString() ?? string.Empty;
+            var actorId = ResolveGuildPlayerId(session, data, "PlayerID", "PlayerId", "ActorId", "ActorID");
+            var memberId = ResolveGuildPlayerId(null, data, "MemberId", "MemberID", "TargetPlayerId", "TargetPlayerID");
+            var role = data?["Role"]?.ToString() ?? "Member";
+            var manager = GuildManager.Instance;
+            var validRole = role.Equals("Member", StringComparison.OrdinalIgnoreCase) || role.Equals("Officer", StringComparison.OrdinalIgnoreCase) || role.Equals("Leader", StringComparison.OrdinalIgnoreCase);
+            var success = validRole && manager.IsLeader(guildName, actorId) && manager.IsMember(guildName, memberId) && manager.UpdateGuildMemberRole(guildName, memberId, role);
+            session.SendAsyncJsonWithTimeStamp(new JObject
+            {
+                ["MessageType"] = MessageType.GuildRoleResponse,
+                ["Success"] = success,
+                ["GuildName"] = guildName,
+                ["MemberId"] = memberId,
+                ["Role"] = role,
+                ["ErrorMessage"] = success ? string.Empty : "Only the guild leader can change roles"
+            });
+            if (success)
+            {
+                var notice = new JObject
+                {
+                    ["MessageType"] = MessageType.GuildRoleResponse,
+                    ["Success"] = true,
+                    ["GuildName"] = guildName,
+                    ["MemberId"] = memberId,
+                    ["Role"] = role
+                };
+                SendToPlayer(memberId, notice);
+            }
         }
 
         private void HandleGuildChatRequest(ClientSession? session, JObject data)
@@ -1788,11 +1999,60 @@ namespace OpenGSServer
             manager.BroadcastGuildChat(guildName, senderId, message);
         }
 
+        private void HandleDailyListRequest(ClientSession? session, JObject data)
+        {
+            if (session == null) return;
+            var playerId = ResolveGuildPlayerId(session, data, "PlayerID", "PlayerId", "AccountID", "AccountId");
+            session.SendAsyncJsonWithTimeStamp(new JObject
+            {
+                ["MessageType"] = MessageType.DailyListResponse,
+                ["Success"] = !string.IsNullOrWhiteSpace(playerId),
+                ["PlayerID"] = playerId,
+                ["Dailies"] = _dailyService.GetPlayerDailies(playerId)
+            });
+        }
+
+        private void HandleDailyProgressRequest(ClientSession? session, JObject data)
+        {
+            if (session == null) return;
+            var playerId = ResolveGuildPlayerId(session, data, "PlayerID", "PlayerId", "AccountID", "AccountId");
+            var dailyId = data?["DailyId"]?.ToString() ?? data?["DailyID"]?.ToString() ?? string.Empty;
+            session.SendAsyncJsonWithTimeStamp(new JObject
+            {
+                ["MessageType"] = MessageType.DailyProgressResponse,
+                ["Success"] = false,
+                ["DailyId"] = dailyId,
+                ["Dailies"] = _dailyService.GetPlayerDailies(playerId),
+                ["ErrorMessage"] = "Daily progress is server-managed"
+            });
+        }
+
+        private void HandleDailyClaimRequest(ClientSession? session, JObject data)
+        {
+            if (session == null) return;
+            var playerId = ResolveGuildPlayerId(session, data, "PlayerID", "PlayerId", "AccountID", "AccountId");
+            var dailyId = data?["DailyId"]?.ToString() ?? data?["DailyID"]?.ToString() ?? string.Empty;
+            var result = _dailyService.Claim(playerId, dailyId);
+            session.SendAsyncJsonWithTimeStamp(new JObject
+            {
+                ["MessageType"] = MessageType.DailyClaimResponse,
+                ["Success"] = result.Success,
+                ["DailyId"] = dailyId,
+                ["RewardCredits"] = result.Reward,
+                ["Credits"] = AccountDatabaseManager.GetInstance().GetCredits(playerId),
+                ["ErrorMessage"] = result.Error,
+                ["Dailies"] = _dailyService.GetPlayerDailies(playerId)
+            });
+        }
+
         private static string ResolveGuildPlayerId(ClientSession? session, JObject? data, params string[] candidateKeys)
         {
-            if (session != null && !string.IsNullOrWhiteSpace(session.PlayerID))
+            // A connected TCP session is still unauthenticated until LoginRequest
+            // assigns PlayerID. Never fall back to a client-supplied account ID
+            // for account-owned operations.
+            if (session != null)
             {
-                return session.PlayerID;
+                return session.PlayerID ?? string.Empty;
             }
 
             if (data != null)
@@ -1810,31 +2070,99 @@ namespace OpenGSServer
             return string.Empty;
         }
 
-        private static long GetShopPurchasePrice(string itemId)
+        private static readonly HashSet<string> ShopCharacterItems = new(StringComparer.OrdinalIgnoreCase)
         {
-            if (string.IsNullOrWhiteSpace(itemId))
-            {
-                return 0;
-            }
+            "Ami", "Yumi", "Misty", "Jack", "Jackle", "LittleJ", "Liu", "Mary", "Seoul",
+            "Wolf", "Wyvern", "Shue", "Swaltz"
+        };
 
-            return itemId switch
-            {
-                "Glock" or "MP5" => 250,
-                "DesertEagle" or "Scorpion" or "Uzi" => 350,
-                "AK47" or "M16" or "FAMAS" or "F2000" or "SteyrAug" => 500,
-                "Scout" or "Dragunov" or "PSG1" or "AWP" => 650,
-                "MG42" or "M60" or "FNMinimiSaw" => 800,
-                "LaserGun" or "BubbleGun" or "ChristmasGun" => 900,
-                "Ami" or "Yumi" or "Misty" => 0,
-                "Jack" or "Jackle" or "LittleJ" => 250,
-                "Liu" or "Mary" or "Seoul" => 350,
-                "Wolf" or "Wyvern" or "Shue" or "Swaltz" => 500,
-                "BoostRed" or "BoostBlue" or "BoostGreen" => 400,
-                "HealthKit" => 120,
-                "FireBullet" or "PoisonBullet" => 180,
-                "PowerGrenadePack" or "ClusterGrenadePack" or "MagnetGrenadePack" or "MineGrenadePack" => 220,
-                _ => -1
-            };
+        private static readonly HashSet<string> ShopBoosterItems = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "BoostRed", "BoostBlue", "BoostGreen"
+        };
+
+        private static readonly HashSet<string> ShopInstantItems = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "HealthKit", "FireBullet", "PoisonBullet", "PowerGrenadePack", "ClusterGrenadePack",
+            "MagnetGrenadePack", "MineGrenadePack"
+        };
+
+        private static string ResolveShopCategory(string itemId)
+        {
+            if (ShopCharacterItems.Contains(itemId)) return "Character";
+            if (ShopBoosterItems.Contains(itemId)) return "Booster";
+            if (ShopInstantItems.Contains(itemId)) return "InstantItem";
+            return "Weapon";
+        }
+
+        private static bool IsValidShopCategory(string category)
+        {
+            return category.Equals("Weapon", StringComparison.OrdinalIgnoreCase) ||
+                category.Equals("Character", StringComparison.OrdinalIgnoreCase) ||
+                category.Equals("Booster", StringComparison.OrdinalIgnoreCase) ||
+                category.Equals("InstantItem", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsValidInstantItemSlot(int slot) => slot >= 0 && slot < 3;
+
+        private static readonly Dictionary<string, long> ShopPurchasePrices = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Glock"] = 250,
+            ["MP5"] = 250,
+            ["DesertEagle"] = 350,
+            ["Scorpion"] = 350,
+            ["Uzi"] = 350,
+            ["FnP90"] = 300,
+            ["AK47"] = 500,
+            ["M16"] = 500,
+            ["FAMAS"] = 500,
+            ["F2000"] = 500,
+            ["SteyrAug"] = 500,
+            ["Scout"] = 650,
+            ["Dragunov"] = 650,
+            ["PSG1"] = 650,
+            ["AWP"] = 650,
+            ["MG42"] = 800,
+            ["M60"] = 800,
+            ["FNMinimiSaw"] = 800,
+            ["LaserGun"] = 900,
+            ["BubbleGun"] = 900,
+            ["ChristmasGun"] = 900,
+            ["Ami"] = 0,
+            ["Yumi"] = 0,
+            ["Misty"] = 0,
+            ["Jack"] = 250,
+            ["Jackle"] = 250,
+            ["LittleJ"] = 250,
+            ["Liu"] = 350,
+            ["Mary"] = 350,
+            ["Seoul"] = 350,
+            ["Wolf"] = 500,
+            ["Wyvern"] = 500,
+            ["Shue"] = 500,
+            ["Swaltz"] = 500,
+            ["BoostRed"] = 400,
+            ["BoostBlue"] = 400,
+            ["BoostGreen"] = 400,
+            ["HealthKit"] = 120,
+            ["FireBullet"] = 180,
+            ["PoisonBullet"] = 180,
+            ["PowerGrenadePack"] = 220,
+            ["ClusterGrenadePack"] = 220,
+            ["MagnetGrenadePack"] = 220,
+            ["MineGrenadePack"] = 220
+        };
+
+        private static (string ItemId, long Price)? ResolveShopItem(string itemId)
+        {
+            var requestedId = itemId?.Trim();
+            if (string.IsNullOrEmpty(requestedId) ||
+                !ShopPurchasePrices.TryGetValue(requestedId, out var price))
+                return null;
+
+            var canonicalId = ShopPurchasePrices.Keys.First(key =>
+                string.Equals(key, requestedId, StringComparison.OrdinalIgnoreCase));
+            return (canonicalId, price);
         }
 
         private static JObject BuildGuildSummaryJson(DBGuild guild, IEnumerable<DBGuildMember> members)
@@ -1889,26 +2217,40 @@ namespace OpenGSServer
 
         public void Dispose()
         {
-            if (_disposed) return;
+            if (Interlocked.Exchange(ref _disposeState, 1) != 0) return;
 
             ConsoleWrite.WriteMessage("[LOBBY] Disposing lobby server manager", ConsoleColor.Yellow);
 
-            // TCPサーバー停止
-            StopTcpServer();
+            using (var idleTimerStopped = new ManualResetEvent(false))
+            {
+                _idleCheckTimer.Dispose(idleTimerStopped);
+                idleTimerStopped.WaitOne();
+            }
+            using (var connectionTimerStopped = new ManualResetEvent(false))
+            {
+                _connectionCheckTimer.Dispose(connectionTimerStopped);
+                connectionTimerStopped.WaitOne();
+            }
 
-            _cleanupTimer?.Dispose();
-            _idleCheckTimer?.Dispose();
-            _lobbyLock?.Dispose();
+            // Stop accepting requests before tearing down player state.
+            StopTcpServer();
 
             foreach (var playerId in _connectedPlayers.Keys.ToList())
             {
-                PlayerLeaveLobby(playerId);
+                if (!AccountEventHandler.KickPlayerSession(playerId))
+                {
+                    PlayerSessionCleanup.Release(playerId, revokeResumeToken: true);
+                }
             }
 
             _connectedPlayers.Clear();
             _rateLimiters.Clear();
 
-            _disposed = true;
+            _dailyService.Dispose();
+            GuildDatabaseManager.GetInstance().Disconnect();
+            ((IDisposable)AccountDatabaseManager.GetInstance()).Dispose();
+            _lobbyLock?.Dispose();
+
         }
 
         #endregion
@@ -1949,8 +2291,36 @@ namespace OpenGSServer
         {
             if (session is ClientSession clientSession)
             {
-                var ip = clientSession.Socket.RemoteEndPoint;
-                ConsoleWrite.WriteMessage($"[LOBBY] Client connected from {ip}", ConsoleColor.Cyan);
+                // A socket can already be gone by the time this runs, when the peer
+                // hangs up between the accept and the callback. Reading it then
+                // throws, and the throw happens on the accept thread where nothing
+                // catches it, so one client disconnecting took the whole server
+                // down. A log line is not worth that.
+                ConsoleWrite.WriteMessage(
+                    $"[LOBBY] Client connected from {DescribeRemoteEndPoint(clientSession)}", ConsoleColor.Cyan);
+            }
+        }
+
+        /// <summary>
+        /// The peer's address, or a note that it is no longer readable.
+        /// <para>
+        /// Disposed is the expected outcome here rather than a failure: a client
+        /// that connected and left immediately is normal traffic.
+        /// </para>
+        /// </summary>
+        private static string DescribeRemoteEndPoint(ClientSession session)
+        {
+            try
+            {
+                return session.Socket.RemoteEndPoint?.ToString() ?? "unknown";
+            }
+            catch (ObjectDisposedException)
+            {
+                return "a peer that had already disconnected";
+            }
+            catch (Exception ex)
+            {
+                return $"unreadable ({ex.GetType().Name})";
             }
         }
 
@@ -1958,6 +2328,10 @@ namespace OpenGSServer
         {
             if (session is ClientSession clientSession)
             {
+                // ClientSession.OnDisconnected owns the full, ordered teardown
+                // through PlayerSessionCleanup. Keep this server callback for
+                // transport-level logging only; repeating lobby/wait-room
+                // removal here can race the in-game cleanup.
                 ConsoleWrite.WriteMessage($"[LOBBY] Client disconnected", ConsoleColor.Yellow);
             }
         }
@@ -1979,12 +2353,32 @@ namespace OpenGSServer
         {
             foreach (var session in Sessions.Values)
             {
-                if (session is ClientSession clientSession && clientSession.PlayerID == playerId)
+                if (session is ClientSession clientSession &&
+                    string.Equals(clientSession.PlayerID, playerId, StringComparison.OrdinalIgnoreCase))
                 {
                     return clientSession;
                 }
             }
             return null;
         }
+
+        public void DisconnectStaleSessions()
+        {
+            foreach (var session in Sessions.Values.OfType<ClientSession>())
+            {
+                try
+                {
+                    if (!session.IsConnected)
+                    {
+                        session.Disconnect();
+                    }
+                }
+                catch (ObjectDisposedException)
+                {
+                    // The session is already being torn down.
+                }
+            }
+        }
+
     }
 }

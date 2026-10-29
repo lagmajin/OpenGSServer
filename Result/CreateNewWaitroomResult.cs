@@ -5,11 +5,13 @@ using System.Text;
 using System.Threading.Tasks;
 using OpenGSCore;
 
+#nullable enable
+
 namespace OpenGSServer
 {
     public class CreateNewWaitRoomResult
     {
-        public string Message { get; set; }
+        public string Message { get; set; } = string.Empty;
 
         public WaitRoom? Room { get; set; }
 

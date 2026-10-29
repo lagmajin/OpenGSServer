@@ -6,6 +6,8 @@ using System.Text;
 using OpenGSCore;
 using CoreChat = OpenGSCore.Chat;
 
+#nullable enable
+
 namespace OpenGSServer
 {
     public class ChatManager
@@ -54,7 +56,7 @@ namespace OpenGSServer
 
         public List<CoreChat> GetChatsByPlayerId(string playerId)
         {
-            return Log.Where(c => c.PlayerId == playerId).ToList();
+            return Log.Where(c => string.Equals(c.PlayerId, playerId, StringComparison.OrdinalIgnoreCase)).ToList();
         }
 
         public CoreChat? GetChatById(string chatId)

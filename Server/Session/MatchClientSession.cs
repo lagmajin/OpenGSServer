@@ -8,6 +8,8 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
+#nullable enable
+
 namespace OpenGSServer
 {
 
@@ -177,17 +179,6 @@ namespace OpenGSServer
 
             if (messageType == "PlayerWeaponChanged")
             {
-
-            }
-
-            if (messageType == "TakeFieldItem")
-            {
-
-
-                json["PlayerID"].ToString();
-                json["FieldItemType"].ToString();
-
-
 
             }
 

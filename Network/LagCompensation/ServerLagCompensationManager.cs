@@ -57,6 +57,21 @@ namespace OpenGSServer.Network
             Log.Info($"[ServerLagCompensation] Player {playerId} added to match {m_MatchId}");
         }
 
+        public void ResumePlayer(string playerId)
+        {
+            m_PlayerStateManager.ResumePlayer(playerId);
+            Log.Info($"[ServerLagCompensation] Player {playerId} resumed in match {m_MatchId}");
+        }
+
+        public bool ConfigurePlayerBooster(
+            string playerId, float maxFuelSeconds, float fuelRecoverRate,
+            float groundedRecoveryDelay, float acceleration, float maxSpeed, float gravity)
+        {
+            return m_PlayerStateManager.ConfigurePlayerBooster(
+                playerId, maxFuelSeconds, fuelRecoverRate,
+                groundedRecoveryDelay, acceleration, maxSpeed, gravity);
+        }
+
         /// <summary>
         /// プレイヤーをマッチから退出させる
         /// </summary>
@@ -66,6 +81,27 @@ namespace OpenGSServer.Network
             m_PlayerStateManager.UnregisterPlayer(playerId);
             m_StateBroadcaster.UnregisterClient(playerId);
             Log.Info($"[ServerLagCompensation] Player {playerId} removed from match {m_MatchId}");
+        }
+
+        /// <summary>
+        /// Detaches a temporarily disconnected client while retaining its last
+        /// authoritative state for a reconnect within the same match.
+        /// </summary>
+        public void SuspendPlayer(string playerId)
+        {
+            m_PlayerStateManager.SuspendPlayer(playerId);
+            m_StateBroadcaster.UnregisterClient(playerId);
+            Log.Info($"[ServerLagCompensation] Player {playerId} suspended from match {m_MatchId}");
+        }
+
+        public void SetMovementLocked(string playerId, bool locked)
+        {
+            m_PlayerStateManager.SetMovementLocked(playerId, locked);
+        }
+
+        public bool IsMovementLocked(string playerId)
+        {
+            return m_PlayerStateManager.IsMovementLocked(playerId);
         }
 
         /// <summary>
@@ -136,7 +172,7 @@ namespace OpenGSServer.Network
             if (!m_IsEnabled) return;
 
             // 入力処理
-            m_PlayerStateManager.ProcessAllInputs();
+            m_PlayerStateManager.ProcessAllInputs(deltaTime);
 
             // 状態ブロードキャスト
             m_StateBroadcaster.Update(deltaTime);
@@ -164,9 +200,9 @@ namespace OpenGSServer.Network
         /// <summary>
         /// プレイヤーの位置を直接設定する（リスポーン時など）
         /// </summary>
-        public void SetPlayerPosition(string playerId, float x, float y, float z)
+        public void SetPlayerPosition(string playerId, float x, float y, float z, bool clearPendingInputs = false)
         {
-            m_PlayerStateManager.SetPlayerPosition(playerId, x, y, z);
+            m_PlayerStateManager.SetPlayerPosition(playerId, x, y, z, clearPendingInputs);
         }
 
         /// <summary>

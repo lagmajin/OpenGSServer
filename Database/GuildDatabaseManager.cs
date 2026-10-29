@@ -4,6 +4,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
+#nullable enable
+
 namespace OpenGSServer
 {
 
@@ -11,7 +13,7 @@ namespace OpenGSServer
 
     public class GuildDatabaseManager : IAbstractDatabaseManager
     {
-        private LiteDatabase db;
+        private LiteDatabase? db;
         private readonly object _syncRoot = new();
 
         static GuildDatabaseManager instance = new GuildDatabaseManager();
@@ -36,7 +38,7 @@ namespace OpenGSServer
                 }
             }
 
-            return db;
+            return db!;
         }
         private ILiteCollection<DBGuild> GuildCollection()
         {
@@ -90,7 +92,7 @@ namespace OpenGSServer
 
         }
 
-        public bool CreateNewGuild(string guildName, string guildShortName = null)
+        public bool CreateNewGuild(string guildName, string? guildShortName = null)
         {
             if (string.IsNullOrWhiteSpace(guildName))
             {
@@ -110,7 +112,7 @@ namespace OpenGSServer
             return true;
         }
 
-        public bool CreateNewGuild(string guildName, string leaderId, string guildShortName = null)
+        public bool CreateNewGuild(string guildName, string leaderId, string? guildShortName = null)
         {
             if (string.IsNullOrWhiteSpace(guildName) || string.IsNullOrWhiteSpace(leaderId))
             {
@@ -187,7 +189,8 @@ namespace OpenGSServer
 
             var memberCollection = GuildMemberCollection();
 
-            if (memberCollection.Exists(m => m.guildId == guildData.id && m.Id == id))
+            if (memberCollection.FindAll().Any(m => m.guildId == guildData.id &&
+                                                   string.Equals(m.Id, id, StringComparison.OrdinalIgnoreCase)))
             {
                 return false;
             }
@@ -217,7 +220,8 @@ namespace OpenGSServer
             }
 
             var memberCollection = GuildMemberCollection();
-            var targetMember = memberCollection.FindOne(m => m.guildId == guildData.id && m.Id == memberId);
+            var targetMember = memberCollection.FindAll().FirstOrDefault(m => m.guildId == guildData.id &&
+                                                                               string.Equals(m.Id, memberId, StringComparison.OrdinalIgnoreCase));
             if (targetMember == null)
             {
                 return false;
@@ -225,13 +229,13 @@ namespace OpenGSServer
 
             if (string.Equals(guildData.LeaderId, memberId, StringComparison.OrdinalIgnoreCase))
             {
-                memberCollection.DeleteMany(m => m.guildId == guildData.id && m.Id == memberId);
+                memberCollection.DeleteMany(m => m.guildId == guildData.id && m.Id == targetMember.Id);
 
-                EnsureGuildLeader(guildData, memberCollection, memberId);
+                EnsureGuildLeader(guildData, memberCollection, targetMember.Id);
                 return true;
             }
 
-            return memberCollection.DeleteMany(m => m.guildId == guildData.id && m.Id == memberId) > 0;
+            return memberCollection.DeleteMany(m => m.guildId == guildData.id && m.Id == targetMember.Id) > 0;
         }
 
         public bool JoinGuild(string guildName, string memberId, string role = "Member")
@@ -258,7 +262,8 @@ namespace OpenGSServer
             }
 
             var memberCollection = GuildMemberCollection();
-            var member = memberCollection.FindOne(m => m.guildId == guildData.id && m.Id == memberId);
+            var member = memberCollection.FindAll().FirstOrDefault(m => m.guildId == guildData.id &&
+                                                                          string.Equals(m.Id, memberId, StringComparison.OrdinalIgnoreCase));
             if (member == null)
             {
                 return false;
@@ -266,7 +271,9 @@ namespace OpenGSServer
 
             if (string.Equals(role, "Leader", StringComparison.OrdinalIgnoreCase))
             {
-                var currentLeader = memberCollection.FindOne(m => m.guildId == guildData.id && m.Role == "Leader" && m.Id != memberId);
+                var currentLeader = memberCollection.FindAll().FirstOrDefault(m => m.guildId == guildData.id &&
+                                                                                    string.Equals(m.Role, "Leader", StringComparison.OrdinalIgnoreCase) &&
+                                                                                    !string.Equals(m.Id, member.Id, StringComparison.OrdinalIgnoreCase));
                 if (currentLeader != null)
                 {
                     currentLeader.Role = "Member";
@@ -274,7 +281,7 @@ namespace OpenGSServer
                     memberCollection.Update(currentLeader);
                 }
 
-                guildData.LeaderId = memberId;
+                guildData.LeaderId = member.Id;
                 GuildCollection().Update(guildData);
             }
             member.Role = role;

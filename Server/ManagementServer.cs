@@ -11,6 +11,8 @@ using System.Threading.Tasks;
 using NetCoreServer;
 using Newtonsoft.Json.Linq;
 
+#nullable enable
+
 namespace OpenGSServer
 {
     /// <summary>
@@ -82,6 +84,7 @@ namespace OpenGSServer
     public sealed class ManagementServer : AbstractServer, IManagementServer, IDisposable
     {
         private ManagementTcpServer? _tcpServer;
+        private bool _disposed;
         private CancellationTokenSource? _updateCts;
         private Task? _updateTask;
         private DateTime _lastStatsBroadcast = DateTime.MinValue;
@@ -160,11 +163,14 @@ namespace OpenGSServer
         {
             if (_tcpServer == null) return;
 
+            var uptimeSeconds = Math.Max(0, (DateTime.UtcNow - _currentProcess.StartTime.ToUniversalTime()).TotalSeconds);
             var stats = new JObject
             {
                 ["MessageType"] = NetworkingConstants.MessageType.ServerStats,
                 ["Timestamp"] = DateTime.UtcNow.ToString("O"),
                 ["ServerUptime"] = (DateTime.Now - _currentProcess.StartTime).ToString(@"dd\.hh\:mm\:ss"),
+                ["ServerUptimeSeconds"] = uptimeSeconds,
+                ["ServerStartedUtc"] = _currentProcess.StartTime.ToUniversalTime().ToString("O"),
                 ["MemoryUsageMB"] = _currentProcess.WorkingSet64 / (1024 * 1024),
                 ["CpuThreads"] = _currentProcess.Threads.Count,
                 ["ConnectedMasters"] = _tcpServer.GetConnectedSessionCount(),
@@ -201,9 +207,12 @@ namespace OpenGSServer
 
         public void Dispose()
         {
+            if (_disposed) return;
+            _disposed = true;
             Stop();
             _currentProcess.Dispose();
             _updateCts?.Dispose();
+            GC.SuppressFinalize(this);
         }
 
         ~ManagementServer() => Dispose();

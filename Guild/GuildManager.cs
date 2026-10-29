@@ -7,6 +7,8 @@ using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 using OpenGSCore;
 
+#nullable enable
+
 namespace OpenGSServer
 {
     public class GuildManager
@@ -18,10 +20,15 @@ namespace OpenGSServer
 
         public bool Exist(in string guildName)
         {
+            if (string.IsNullOrWhiteSpace(guildName))
+            {
+                return false;
+            }
+
             return _database.ExistGuild(guildName);
         }
 
-        public bool CreateNewGuild(in string guildName, string leaderId, string guildShortName = null)
+        public bool CreateNewGuild(in string guildName, string leaderId, string? guildShortName = null)
         {
             if (string.IsNullOrWhiteSpace(guildName) || string.IsNullOrWhiteSpace(leaderId))
             {
@@ -57,7 +64,7 @@ namespace OpenGSServer
 
         public bool AddGuildMember(in string memberId, in string guildName, string role = "Member")
         {
-            if (string.IsNullOrWhiteSpace(memberId))
+            if (string.IsNullOrWhiteSpace(memberId) || string.IsNullOrWhiteSpace(guildName))
             {
                 return false;
             }
@@ -80,7 +87,7 @@ namespace OpenGSServer
 
         public int AddGuildMembers(IEnumerable<string> memberIds, in string guildName)
         {
-            if (memberIds == null)
+            if (memberIds == null || string.IsNullOrWhiteSpace(guildName))
             {
                 return 0;
             }
@@ -93,12 +100,43 @@ namespace OpenGSServer
 
         public DBGuild? FindGuild(in string guildName)
         {
+            if (string.IsNullOrWhiteSpace(guildName))
+            {
+                return null;
+            }
+
             return _database.FindGuildByName(guildName);
         }
 
         public IReadOnlyList<DBGuildMember> GetGuildMembers(in string guildName)
         {
+            if (string.IsNullOrWhiteSpace(guildName))
+            {
+                return Array.Empty<DBGuildMember>();
+            }
+
             return _database.GetGuildMember(guildName);
+        }
+
+        public DBGuildMember? FindMember(string guildName, string memberId)
+        {
+            if (string.IsNullOrWhiteSpace(guildName) || string.IsNullOrWhiteSpace(memberId)) return null;
+            return GetGuildMembers(guildName).FirstOrDefault(m => string.Equals(m.Id, memberId, StringComparison.OrdinalIgnoreCase));
+        }
+
+        public bool IsMember(string guildName, string memberId) => FindMember(guildName, memberId) != null;
+
+        public bool IsLeader(string guildName, string memberId)
+        {
+            var guild = FindGuild(guildName);
+            return guild != null && string.Equals(guild.LeaderId, memberId, StringComparison.OrdinalIgnoreCase);
+        }
+
+        public bool CanManageMembers(string guildName, string memberId)
+        {
+            var member = FindMember(guildName, memberId);
+            return member != null && (string.Equals(member.Role, "Leader", StringComparison.OrdinalIgnoreCase) ||
+                                      string.Equals(member.Role, "Officer", StringComparison.OrdinalIgnoreCase));
         }
 
         public IReadOnlyList<DBGuild> GetAllGuilds()
@@ -160,6 +198,23 @@ namespace OpenGSServer
         /// </summary>
         public void BroadcastGuildChat(string guildName, string senderId, string message)
         {
+            if (string.IsNullOrWhiteSpace(guildName) ||
+                string.IsNullOrWhiteSpace(senderId) ||
+                string.IsNullOrWhiteSpace(message))
+            {
+                return;
+            }
+
+            if (!IsMember(guildName, senderId))
+            {
+                return;
+            }
+
+            if (message.Length > 2000)
+            {
+                message = message.Substring(0, 2000);
+            }
+
             var members = GetGuildMembers(guildName);
             if (members.Count == 0) return;
 
@@ -188,7 +243,7 @@ namespace OpenGSServer
         /// </summary>
         public void AddGuildExp(string guildName, long exp)
         {
-            if (exp <= 0)
+            if (string.IsNullOrWhiteSpace(guildName) || exp <= 0)
             {
                 return;
             }
@@ -201,7 +256,8 @@ namespace OpenGSServer
                 guild.Experience += exp;
                 
                 // 簡易的なレベルアップロジック (1000 * Level)
-                long nextLevelExp = guild.Level * 1000;
+                guild.Level = Math.Max(1, guild.Level);
+                long nextLevelExp = guild.Level * 1000L;
                 while (guild.Experience >= nextLevelExp)
                 {
                     guild.Experience -= nextLevelExp;

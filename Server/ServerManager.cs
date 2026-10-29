@@ -1,24 +1,19 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using Newtonsoft.Json.Linq;
 
+#nullable enable
+
 namespace OpenGSServer
 {
-    interface IServerManager
-    {
-    }
-
     sealed class ServerManager
     {
         public static ServerManager Instance { get; private set; } = new();
 
         private ServerSettings settings = new ServerSettings();
 
-        private static MatchServer matchServer_ = new MatchServer();
-        private static GeneralServer generalServer_ = new GeneralServer();
-        private static ManagementServer managementServer = new ManagementServer();
 
         // 管理者アカウントは AdminManager で管理
         private readonly AdminManager adminManager = AdminManager.CreateDefault();
@@ -78,9 +73,6 @@ namespace OpenGSServer
             return adminManager.ListAdminIds().Count > 0;
         }
 
-        public MatchServer GetMatchServer() => matchServer_;
-        public GeneralServer GetGeneralServer() => generalServer_;
-        public ManagementServer GetManagementServer() => managementServer;
 
         public void AddRegisterAdminAccount(string id, string pass)
         {
@@ -138,7 +130,9 @@ namespace OpenGSServer
             {
                 string jsonStr = File.ReadAllText(absolutePath, Encoding.UTF8);
                 var json = JObject.Parse(jsonStr);
-                settings.SetFromJson(json);
+                var loadedSettings = new ServerSettings();
+                loadedSettings.SetFromJson(json);
+                settings = loadedSettings;
                 ConsoleWrite.WriteMessage($"[SERVER] Settings loaded from {absolutePath}.", ConsoleColor.Green);
             }
             catch (Exception ex)
@@ -159,10 +153,18 @@ namespace OpenGSServer
             {
                 Directory.CreateDirectory(openGSServerDirectory);
                 string absolutePath = Path.Combine(openGSServerDirectory, "OpenGSServerSetting.json");
-
-                using (StreamWriter sw = new StreamWriter(absolutePath, false, Encoding.UTF8))
+                var temporaryPath = absolutePath + ".tmp";
+                try
                 {
-                    sw.Write(st);
+                    File.WriteAllText(temporaryPath, st, Encoding.UTF8);
+                    File.Move(temporaryPath, absolutePath, overwrite: true);
+                }
+                finally
+                {
+                    if (File.Exists(temporaryPath))
+                    {
+                        File.Delete(temporaryPath);
+                    }
                 }
             }
             catch (Exception ex)

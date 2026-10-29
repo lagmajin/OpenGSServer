@@ -38,6 +38,16 @@ namespace OpenGSServer
 
         public static bool operator ==(MatchSettings a, MatchSettings b)
         {
+            if (ReferenceEquals(a, b))
+            {
+                return true;
+            }
+
+            if (ReferenceEquals(a, null) || ReferenceEquals(b, null))
+            {
+                return false;
+            }
+
             if (a.RandomTeam != b.RandomTeam)
             {
                 return false;
@@ -48,8 +58,7 @@ namespace OpenGSServer
                 return false;
             }
 
-
-            return true;
+            return a.MatchTime == b.MatchTime;
         }
 
         public static bool operator !=(MatchSettings a, MatchSettings b)
@@ -60,18 +69,12 @@ namespace OpenGSServer
 
         public override bool Equals(object obj)
         {
-            if (ReferenceEquals(this, obj))
-            {
-                return true;
-            }
+            return this == obj as MatchSettings;
+        }
 
-            if (ReferenceEquals(obj, null))
-            {
-                return false;
-            }
-
-
-            return false;
+        public override int GetHashCode()
+        {
+            return HashCode.Combine(TimeLimit, MatchTime, RandomTeam);
 
         }
     }

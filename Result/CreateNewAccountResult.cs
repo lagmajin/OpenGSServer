@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using OpenGSCore;
 
 
 namespace OpenGSServer
@@ -22,13 +23,11 @@ namespace OpenGSServer
 
     public class CreateNewAccountResult : AbstractResult
     {
-        readonly bool successed = false;
-
         eCreateAccountResult messageType = eCreateAccountResult.Unknown;
 
         public CreateNewAccountResult(eCreateAccountResult messageType = eCreateAccountResult.Unknown)
         {
-
+            this.messageType = messageType;
         }
 
         private string MessageType()
@@ -40,14 +39,15 @@ namespace OpenGSServer
                 case eCreateAccountResult.Succeeful:
                     return "CreateNewAccountSucceeful";
                 case eCreateAccountResult.ExistAlreadySameAccount:
-                    return "";
+                    return "CreateNewAccountAlreadyExists";
+                case eCreateAccountResult.InvalidPassword:
+                    return "CreateNewAccountInvalidPassword";
                 case eCreateAccountResult.Unknown:
                     return "Unknown";
                 default:
                     return "Unknown";
             }
 
-            return "";
         }
 
         private string Message()
@@ -59,21 +59,31 @@ namespace OpenGSServer
                     return "CreateNewAccountSuccessful";
                 case eCreateAccountResult.ExistAlreadySameAccount:
                     return "ExistAlreadySameAccount";
+                case eCreateAccountResult.InvalidPassword:
+                    return "InvalidPassword";
                 case eCreateAccountResult.Unknown:
                     return "Unknown";
                 default:
                     return "Unknown";
             }
 
-            return "";
         }
 
         public JObject ToJson()
         {
-            var result = new JObject();
+            var succeeded = messageType == eCreateAccountResult.Succeeful;
+            var result = new JObject
+            {
+                ["MessageType"] = OpenGSCore.MessageType.CreateAccountResponse,
+                ["Success"] = succeeded,
+                ["Message"] = Message(),
+                ["LegacyMessageType"] = MessageType()
+            };
 
-            result["MessageType"] = MessageType();
-            result["Message"] = Message();
+            if (!succeeded)
+            {
+                result["Error"] = Message();
+            }
 
 
             return result;

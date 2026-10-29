@@ -21,6 +21,18 @@ namespace OpenGSServer.Network
         public float VelocityZ;
         public float Timestamp;
         public byte SequenceNumber;
+        public float BoosterFuelPercent;
+
+        /// <summary>
+        /// Whether the position has ever been established.
+        /// <para>
+        /// A registered player with no reported position still reads as the origin,
+        /// so a caller that trusts the coordinates alone is trusting a value the
+        /// server never received. This is the difference between a player standing
+        /// at the origin and one whose position is simply unknown.
+        /// </para>
+        /// </summary>
+        public bool HasAuthoritativePosition;
 
         public static ServerTransformState Create(
             uint networkId,
@@ -65,12 +77,32 @@ namespace OpenGSServer.Network
         public float MoveX;
         public float MoveY;
         public float MoveZ;
+        // Opts into independent horizontal and vertical movement axes.
+        // Older clients keep the legacy normalized 3D movement vector.
+        public bool IndependentVerticalInput;
+        public bool BoosterActive;
+        public bool BoosterActiveSpecified;
         public float LookX;
         public float LookY;
         public bool Jump;
         public bool Fire;
         public byte SequenceNumber;
+
+        /// <summary>
+        /// Whether the position has ever been established.
+        /// <para>
+        /// A registered player with no reported position still reads as the origin,
+        /// so a caller that trusts the coordinates alone is trusting a value the
+        /// server never received. This is the difference between a player standing
+        /// at the origin and one whose position is simply unknown.
+        /// </para>
+        /// </summary>
+        public bool HasAuthoritativePosition;
         public float Timestamp;
         public float DeltaTime;
+        public bool HasClientPosition;
+        public float ClientPosX;
+        public float ClientPosY;
+        public float ClientPosZ;
     }
 }

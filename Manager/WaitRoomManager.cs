@@ -1,9 +1,11 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using Newtonsoft.Json.Linq;
 using OpenGSCore;
+
+#nullable enable
 
 namespace OpenGSServer
 {
@@ -19,7 +21,11 @@ namespace OpenGSServer
 
         public int RoomLimit { get; private set; } = 32;
 
-        private WaitRoomManager()
+        // Public so tests can build an isolated manager. The rooms live in an
+        // instance field, so sharing the singleton would let one test see
+        // rooms another test created. Production code should still reach for
+        // Instance() rather than constructing its own.
+        public WaitRoomManager()
         {
         }
 
@@ -43,21 +49,25 @@ namespace OpenGSServer
                 setting.RoomName = Template.RandomRoomName();
             }
 
-            if (_rooms.Count >= RoomLimit)
+            WaitRoom room;
+            lock (_lockObj)
             {
-                return new CreateNewWaitRoomResult("Server RoomLimit Over", null);
+                if (_rooms.Count >= RoomLimit)
+                {
+                    return new CreateNewWaitRoomResult("Server RoomLimit Over", null);
+                }
+
+                room = new WaitRoom(setting.RoomName, setting.Capacity);
+                setting.ApplyTo(room);
+
+                if (!_rooms.TryAdd(room.RoomId, room))
+                {
+                    return new CreateNewWaitRoomResult("Fail (Duplicate ID)", null);
+                }
             }
 
-            var room = new WaitRoom(setting.RoomName, setting.Capacity);
-            setting.ApplyTo(room);
-
-            if (_rooms.TryAdd(room.RoomId, room))
-            {
-                ConsoleWrite.WriteMessage($"[WAITROOM] Created room: {room.RoomName} ({room.RoomId}) Mode: {setting.GameMode} Map: {room.Map}", ConsoleColor.Green);
-                return new CreateNewWaitRoomResult("Successful", room);
-            }
-
-            return new CreateNewWaitRoomResult("Fail (Duplicate ID)", null);
+            ConsoleWrite.WriteMessage($"[WAITROOM] Created room: {room.RoomName} ({room.RoomId}) Mode: {setting.GameMode} Map: {room.Map}", ConsoleColor.Green);
+            return new CreateNewWaitRoomResult("Successful", room);
         }
 
         public WaitRoom? FindWaitRoom(string roomId)
@@ -74,6 +84,41 @@ namespace OpenGSServer
         public List<WaitRoom> FindWaitRoomsByGameMode(EGameMode mode)
         {
             return _rooms.Values.Where(r => r != null && !r.NowPlaying && (mode == EGameMode.Unknown || r.GameMode == mode || (r.setting != null && r.setting.Mode == mode))).ToList();
+        }
+
+        /// <summary>
+        /// Puts a room this manager did not create into the list.
+        /// <para>
+        /// The room list a client browses is built from this manager, so a room
+        /// living anywhere else could be joined by id but never appeared in the
+        /// list. A mission room was one of those: it could be created, joined,
+        /// played, and was never once on offer.
+        /// </para>
+        /// </summary>
+        public bool RegisterExternalRoom(WaitRoom room)
+        {
+            if (room == null || string.IsNullOrWhiteSpace(room.RoomId))
+            {
+                return false;
+            }
+
+            lock (_lockObj)
+            {
+                if (_rooms.Count >= RoomLimit && !_rooms.ContainsKey(room.RoomId))
+                {
+                    ConsoleWrite.WriteMessage(
+                        $"[WAITROOM] Refused an external room: the limit of {RoomLimit} is reached.",
+                        ConsoleColor.Yellow);
+                    return false;
+                }
+
+                _rooms[room.RoomId] = room;
+            }
+
+            ConsoleWrite.WriteMessage(
+                $"[WAITROOM] Published an externally created room: {room.RoomName} ({room.RoomId})",
+                ConsoleColor.DarkCyan);
+            return true;
         }
 
         public bool CloseRoom(string roomId)

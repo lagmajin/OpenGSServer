@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using OpenGSCore;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -84,8 +84,7 @@ namespace OpenGSServer
 
         private HighPrecisionGameTimer timer;
         
-        private IMatchLogic logic { get; set; }
-
+        private IPlayerFinalScoreCalcurator    calcurator { get; set; }
         public DeprecatedMatchRoom(int roomNumber, in string roomName, in string roomOwnerId,AbstractMatchSetting setting, MatchRoomEventBus bus) : base(roomNumber, roomOwnerId)
         {
             
@@ -220,8 +219,6 @@ namespace OpenGSServer
 
             }
             
-            logic.StartMatch();
-
             var timer = new HighPrecisionGameTimer(100);
 
             timer.OnTick += () => GameUpdate();
@@ -240,26 +237,13 @@ namespace OpenGSServer
 
             timer.Stop();
 
-            logic.EndMatch();
-            
             eventBus.PublishGameEnd();
             
             
             
             
             Playing = false;
-
-
-            var matchResultService= new MatchResultService();
-
-
-            
-
-            
-            
-
         }
-        
         public JObject ToJson()
         {
             var json = new JObject();
