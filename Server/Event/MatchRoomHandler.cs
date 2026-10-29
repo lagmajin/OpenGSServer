@@ -2326,6 +2326,11 @@ namespace OpenGSServer
                 string.Equals(player.Id, playerId, StringComparison.OrdinalIgnoreCase))?.Team ?? ETeam.NoTeam;
         }
 
+        private static bool BlocksFriendlyDamage(MatchRoom room, string attackerId, string targetId)
+        {
+            return room.IsFriendlyDamageBlocked(attackerId, targetId);
+        }
+
         /// <summary>
         /// No per event cooldown is applied to a flag claim.
         /// <para>
@@ -3492,6 +3497,11 @@ namespace OpenGSServer
                 return;
             }
 
+            if (BlocksFriendlyDamage(room, attackerId, targetId))
+            {
+                return;
+            }
+
             var pose = room.GetPlayerPoseState(targetId);
             var outcome = ServerDamageResolver.Apply(
                 target, damage, pose, GetDefenseArmorAbsorptionMultiplier(room.Id.ToString(), targetId));
@@ -3805,6 +3815,7 @@ namespace OpenGSServer
             }
 
             if (shooter.Health <= 0 || target.Health <= 0 ||
+                BlocksFriendlyDamage(room, shooterId, targetId) ||
                 !IsServerValidatedShot(shooterId, targetId, weaponType))
             {
                 Console.WriteLine($"[Match] Ignored invalid shot {shooterId}->{targetId} in room '{room.Id}'");
