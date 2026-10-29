@@ -4421,10 +4421,29 @@ namespace OpenGSServer
             if (family == null) return null;
             if (family is "RocketLauncher" or "FlameThrower" or "GrenadeLauncher")
             {
+                // The Unity client has historically sent the canonical special
+                // weapon name in WeaponType and omitted WeaponVariant. The
+                // equipped-pickup check in HandlePlayerShot remains the authority
+                // for whether that player may fire this weapon.
+                if (string.IsNullOrWhiteSpace(variantClaim)) return family;
+
                 var variant = NormalizeWeaponType(variantClaim);
                 return variant == family ? family : null;
             }
-            if (string.IsNullOrWhiteSpace(variantClaim)) return family;
+            if (string.IsNullOrWhiteSpace(variantClaim))
+            {
+                // Unity sends the concrete weapon name in WeaponType and does
+                // not send WeaponVariant. Recover that known variant so its
+                // server-owned magazine is used instead of a family fallback.
+                var legacyVariant = familyClaim?.Trim()
+                    .Replace("(Clone)", string.Empty, StringComparison.OrdinalIgnoreCase)
+                    .Replace("_", string.Empty, StringComparison.Ordinal)
+                    .Replace("-", string.Empty, StringComparison.Ordinal)
+                    .Replace(" ", string.Empty, StringComparison.Ordinal);
+                return ServerWeaponMagazineStore.IsKnownVariant(legacyVariant, family)
+                    ? legacyVariant
+                    : family;
+            }
 
             var variant = variantClaim.Trim()
                 .Replace("(Clone)", string.Empty, StringComparison.OrdinalIgnoreCase)
