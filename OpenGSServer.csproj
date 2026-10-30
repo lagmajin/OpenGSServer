@@ -74,4 +74,7 @@
     <ProjectReference Include="..\OpenGSCore\OpenGSCore.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="Settings\DryDaysProjectileShapes.json" />
+  </ItemGroup>
 </Project>

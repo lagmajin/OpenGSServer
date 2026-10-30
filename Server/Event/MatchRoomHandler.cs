@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Numerics;
 using System.ComponentModel.Design;
 using System.Globalization;
@@ -2759,6 +2761,7 @@ namespace OpenGSServer
             }
 
             if (ServerManager.Instance.Settings.TryGetRespawnPoint(
+                    room.WaitRoomLink?.Map ?? GameMode.DefaultMapFor(room.Setting.Mode) ?? EMap.Unknown,
                     respawnedPlayer.Team,
                     (long)room.Players.IndexOf(respawnedPlayer) + Math.Max(0, respawnedPlayer.Deaths),
                     out var configuredSpawn))
@@ -2788,7 +2791,9 @@ namespace OpenGSServer
 
             // Coming back with the gun that was on its last round would make a
             // respawn a way to dodge a reload, so a respawn refills what the
-            // player is holding.
+            // player is holding. Make sure the guaranteed sidearm exists first;
+            // RefillAllMagazines is a no-op when there is no magazine state yet.
+            ServerWeaponMagazineStore.GetOrCreateStartingWeapon(playerId, "Pistol");
             ServerWeaponMagazineStore.RefillAllMagazines(playerId);
 
             var armorSnapshot = ServerDamageResolver.GetArmor(respawnedPlayer);
@@ -2980,11 +2985,11 @@ namespace OpenGSServer
                         spreadWidthDegrees * (MathF.PI / 180f);
                     var cosine = MathF.Cos(angle);
                     var sine = MathF.Sin(angle);
-                    var direction = new Vector2(
+                    var pelletDirection = new Vector2(
                         baseDirection.X * cosine - baseDirection.Y * sine,
                         baseDirection.X * sine + baseDirection.Y * cosine);
-                    pelletDirections.Add(direction);
-                    var resolved = ResolveShotTarget(room, playerId, shotData, weaponFamily, direction);
+                    pelletDirections.Add(pelletDirection);
+                    var resolved = ResolveShotTarget(room, playerId, shotData, weaponFamily, pelletDirection);
                     if (resolved != null)
                         HandleShotHit(room, playerId, resolved, weaponType);
                 }
@@ -3219,6 +3224,53 @@ namespace OpenGSServer
         /// </summary>
         private static readonly OpenGSServer.Network.ServerProjectileSimulator Projectiles =
             new();
+        private static readonly IReadOnlyList<OpenGSServer.Network.ProjectileGroundShape>
+            DryDaysProjectileGroundShapes = LoadDryDaysProjectileGroundShapes();
+
+        private static IReadOnlyList<OpenGSServer.Network.ProjectileGroundShape>
+            LoadDryDaysProjectileGroundShapes()
+        {
+            var assembly = typeof(GameEventType).Assembly;
+            var resourceName = assembly.GetManifestResourceNames().FirstOrDefault(name =>
+                name.EndsWith("DryDaysProjectileShapes.json", StringComparison.Ordinal));
+            if (resourceName == null)
+                throw new InvalidOperationException("DryDays projectile ground data is missing.");
+
+            using var stream = assembly.GetManifestResourceStream(resourceName)
+                ?? throw new InvalidOperationException("DryDays projectile ground data could not be opened.");
+            using var reader = new StreamReader(stream);
+            var shapes = Newtonsoft.Json.JsonConvert.DeserializeObject<
+                List<DryDaysProjectileGroundShapeJson>>(reader.ReadToEnd())
+                ?? throw new InvalidOperationException("DryDays projectile ground data is invalid.");
+            return shapes.Select(shape => new OpenGSServer.Network.ProjectileGroundShape
+            {
+                IsPolygon = string.Equals(shape.Type, "polygon", StringComparison.OrdinalIgnoreCase),
+                Left = shape.Left,
+                Bottom = shape.Bottom,
+                Right = shape.Right,
+                Top = shape.Top,
+                Paths = shape.Paths.Select(path =>
+                    (IReadOnlyList<OpenGSServer.Network.ProjectileGroundPoint>)path
+                        .Select(point => new OpenGSServer.Network.ProjectileGroundPoint(
+                            point.X, point.Y)).ToArray()).ToArray()
+            }).ToArray();
+        }
+
+        private sealed class DryDaysProjectileGroundShapeJson
+        {
+            public string Type { get; set; } = string.Empty;
+            public float Left { get; set; }
+            public float Bottom { get; set; }
+            public float Right { get; set; }
+            public float Top { get; set; }
+            public List<List<DryDaysProjectileGroundPointJson>> Paths { get; set; } = new();
+        }
+
+        private sealed class DryDaysProjectileGroundPointJson
+        {
+            public float X { get; set; }
+            public float Y { get; set; }
+        }
 
         /// <summary>
         /// Applies a simulation tick to every live projectile.
@@ -3244,6 +3296,15 @@ namespace OpenGSServer
             Projectiles.PlayerIds = () => GetLocatedMatchPlayerIds();
             Projectiles.PlayerRoomLookup = playerId =>
                 MatchRoomManager.Instance.SearchRoomByMemberID(playerId)?.Id.ToString();
+            Projectiles.GroundShapesLookup = roomId =>
+            {
+                var room = MatchRoomManager.Instance.GetRoomById(roomId);
+                var map = room?.WaitRoomLink?.Map ??
+                    (room == null ? EMap.Unknown : GameMode.DefaultMapFor(room.Setting.Mode) ?? EMap.Unknown);
+                return map == EMap.DryDays
+                    ? DryDaysProjectileGroundShapes
+                    : Array.Empty<OpenGSServer.Network.ProjectileGroundShape>();
+            };
             Projectiles.IsRoomActive = roomId =>
                 MatchRoomManager.Instance.GetRoomById(roomId)?.Playing == true;
             Projectiles.OnSpawn = (projectile, spawnType) => BroadcastProjectileSpawn(projectile, spawnType);
@@ -4410,8 +4471,8 @@ namespace OpenGSServer
             if (family == null) return null;
             if (family is "RocketLauncher" or "FlameThrower" or "GrenadeLauncher")
             {
-                var variant = NormalizeWeaponType(variantClaim);
-                return variant == family ? family : null;
+                var specialWeaponVariant = NormalizeWeaponType(variantClaim);
+                return specialWeaponVariant == family ? family : null;
             }
             if (string.IsNullOrWhiteSpace(variantClaim)) return family;
 

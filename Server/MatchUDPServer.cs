@@ -192,8 +192,19 @@ namespace OpenGSServer
             var matchRoom = MatchRoomManager.Instance.SearchRoomByMemberID(playerId);
             var roomPlayer = matchRoom?.Players.FirstOrDefault(player =>
                 string.Equals(player.Id, playerId, StringComparison.OrdinalIgnoreCase));
-            var greenHillBooster = string.Equals(matchRoom?.Map.ToString(),
-                "GreenHillSide1", StringComparison.OrdinalIgnoreCase);
+            if (matchRoom?.Playing == true && roomPlayer != null)
+            {
+                // The first status request may arrive after the client has
+                // already sent its first shot. Seed its guaranteed sidearm as
+                // soon as it joins the active match, so the server can validate
+                // and spend that shot instead of dropping it for missing ammo.
+                ServerWeaponMagazineStore.GetOrCreateStartingWeapon(playerId, "Pistol");
+            }
+            var matchMap = matchRoom?.WaitRoomLink?.Map ??
+                (matchRoom == null
+                    ? EMap.Unknown
+                    : GameMode.DefaultMapFor(matchRoom.Setting.Mode) ?? EMap.Unknown);
+            var greenHillBooster = matchMap == EMap.GreenHillSide1;
             lagCompensation.ConfigurePlayerBooster(playerId,
                 greenHillBooster ? 3.54f : 2f, 0.5f, 0.5f,
                 greenHillBooster ? 31.4f : 10f,
@@ -201,7 +212,7 @@ namespace OpenGSServer
                 greenHillBooster ? 2.57f : 3f);
             if (!preservePosition && matchRoom != null && roomPlayer != null &&
                 ServerManager.Instance.Settings.TryGetRespawnPoint(
-                    roomPlayer.Team,
+                    matchMap, roomPlayer.Team,
                     (long)matchRoom.Players.IndexOf(roomPlayer) + Math.Max(0, roomPlayer.Deaths),
                     out var initialSpawn))
             {
@@ -896,7 +907,7 @@ namespace OpenGSServer
             // Deliver simulation baselines only after MatchJoined so clients
             // that gate incoming match messages do not discard the snapshot.
             MissionEnemyRegistry.PublishSnapshot(room.Id.ToString(), playerId);
-            MatchRoomHandler.SendProjectileSnapshot(room.Id.ToString(), playerId);
+            InGameMatchEventHandler.SendProjectileSnapshot(room.Id.ToString(), playerId);
         }
 
         private static JObject CreateMatchJoinedMessage(MatchRoom room, string playerId)

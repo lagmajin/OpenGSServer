@@ -466,7 +466,7 @@ namespace OpenGSServer
 
             var pose = room.GetPlayerPoseState(playerId);
             var outcome = ServerDamageResolver.Apply(player, damage, pose,
-                MatchRoomHandler.GetDefenseArmorAbsorptionMultiplier(enemy.RoomId, playerId));
+                InGameMatchEventHandler.GetDefenseArmorAbsorptionMultiplier(enemy.RoomId, playerId));
             if (!outcome.HasEffect)
             {
                 return;

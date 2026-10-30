@@ -206,9 +206,14 @@ namespace OpenGSServer
                     SessionOwners.TryRemove(accountId, out _);
                     clientSession.ClearPlayerID();
                     PlayerSessionCleanup.Release(accountId);
-                    return SendLoginFailure(
-                        session,
-                        new LoginResult(accountId, eLoginResultType.Unknown));
+                    session.SendAsyncJsonWithTimeStamp(new JObject
+                    {
+                        [ServerMessageTypes.MessageType] = MessageType.LoginResponse,
+                        ["Success"] = false,
+                        ["Error"] = lobbyJoin.ErrorMessage,
+                        ["Message"] = lobbyJoin.ErrorMessage
+                    });
+                    return null;
                 }
             }
 

@@ -33,6 +33,22 @@ namespace OpenGSServer
             new ServerRespawnPoint(ETeam.Blue, 12f, 0f, 12f)
         };
 
+        // DryDays is the default map for DeathMatch and TeamDeathMatch. These
+        // points sit above the map's Platforms colliders with room for the
+        // native player's collision box. The generic points below predate the
+        // 2D map and put every TDM spawn outside its bounds.
+        private static readonly ServerRespawnPoint[] DryDaysRespawnPoints =
+        {
+            new ServerRespawnPoint(EMap.DryDays, ETeam.NoTeam, 1.9233637f, 0.215f, 0f),
+            new ServerRespawnPoint(EMap.DryDays, ETeam.NoTeam, -1.2466363f, 1.355f, 0f),
+            new ServerRespawnPoint(EMap.DryDays, ETeam.Red, 4.6f, -3.061f, 0f),
+            new ServerRespawnPoint(EMap.DryDays, ETeam.Red, 5.2f, -3.061f, 0f),
+            new ServerRespawnPoint(EMap.DryDays, ETeam.Red, 5.9f, -3.061f, 0f),
+            new ServerRespawnPoint(EMap.DryDays, ETeam.Blue, -9.4266363f, -3.469f, 0f),
+            new ServerRespawnPoint(EMap.DryDays, ETeam.Blue, -9.0f, -3.469f, 0f),
+            new ServerRespawnPoint(EMap.DryDays, ETeam.Blue, -8.5f, -3.469f, 0f)
+        };
+
         private readonly List<EGameMode> _allowGameModes = new();
         private readonly List<ServerRespawnPoint> _respawnPoints = new();
         private readonly IReadOnlyList<EGameMode> _allowGameModesView;
@@ -62,16 +78,9 @@ namespace OpenGSServer
                 EGameMode.CaptureTheFlag
             });
 
-            // A respawn that does not move the player is not a respawn.
-            //
-            // The handler falls back to the position the player died at when no
-            // table is configured, and the class default used to configure none,
-            // so on a server with no settings file everybody came back exactly
-            // where they fell: a free spawn with no risk of being shot coming out
-            // of it. These defaults are rough, symmetric and separated, so a team
-            // respawns into its own half rather than into its own grave. A settings
-            // file replaces them.
-            _respawnPoints.AddRange(DefaultRespawnPoints);
+            // Keep generic fallbacks for maps without an explicit profile and
+            // prefer map-specific spawn groups where the scene provides them.
+            AddDefaultRespawnPoints();
         }
 
         public void SetMaxRoom(int value) => MaxRoom = Math.Max(1, value);
@@ -147,9 +156,10 @@ namespace OpenGSServer
             if (json["RespawnPoints"] is JArray respawnPoints)
             {
                 _respawnPoints.Clear();
-                if (MatchesRespawnPoints(respawnPoints, LegacyDefaultRespawnPoints))
+                if (MatchesRespawnPoints(respawnPoints, LegacyDefaultRespawnPoints) ||
+                    MatchesRespawnPoints(respawnPoints, DefaultRespawnPoints))
                 {
-                    _respawnPoints.AddRange(DefaultRespawnPoints);
+                    AddDefaultRespawnPoints();
                     return;
                 }
 
@@ -163,7 +173,7 @@ namespace OpenGSServer
 
                 if (_respawnPoints.Count == 0)
                 {
-                    _respawnPoints.AddRange(DefaultRespawnPoints);
+                    AddDefaultRespawnPoints();
                 }
             }
         }
@@ -180,6 +190,7 @@ namespace OpenGSServer
             {
                 if (source[index] is not JObject json ||
                     !ServerRespawnPoint.TryParse(json, out var point, allowBelowGround: true) ||
+                    point.Map != expected[index].Map ||
                     point.Team != expected[index].Team ||
                     point.X != expected[index].X ||
                     point.Y != expected[index].Y ||
@@ -192,9 +203,24 @@ namespace OpenGSServer
             return true;
         }
 
-public bool TryGetRespawnPoint(ETeam team, long selectionIndex, out ServerRespawnPoint point)
+        public bool TryGetRespawnPoint(ETeam team, long selectionIndex, out ServerRespawnPoint point) =>
+            TryGetRespawnPoint(EMap.Unknown, team, selectionIndex, out point);
+
+        public bool TryGetRespawnPoint(
+            EMap map, ETeam team, long selectionIndex, out ServerRespawnPoint point)
         {
-            var candidates = CandidatesFor(team);
+            var mapPoints = _respawnPoints
+                .Where(candidate => candidate.Map == map)
+                .ToList();
+            var candidates = CandidatesFor(team, mapPoints);
+            if (candidates.Count == 0)
+            {
+                var fallbackPoints = _respawnPoints
+                    .Where(candidate => candidate.Map == EMap.Unknown)
+                    .ToList();
+                candidates = CandidatesFor(team, fallbackPoints);
+            }
+
             if (candidates.Count == 0)
             {
                 point = null!;
@@ -207,6 +233,12 @@ public bool TryGetRespawnPoint(ETeam team, long selectionIndex, out ServerRespaw
             return true;
         }
 
+        private void AddDefaultRespawnPoints()
+        {
+            _respawnPoints.AddRange(DefaultRespawnPoints);
+            _respawnPoints.AddRange(DryDaysRespawnPoints);
+        }
+
         /// <summary>
         /// The spawn points a player on this team may come back at.
         /// <para>
@@ -217,18 +249,19 @@ public bool TryGetRespawnPoint(ETeam team, long selectionIndex, out ServerRespaw
         /// server already had them rather than on a spawn at all.
         /// </para>
         /// </summary>
-        private List<ServerRespawnPoint> CandidatesFor(ETeam team)
+        private static List<ServerRespawnPoint> CandidatesFor(
+            ETeam team, IReadOnlyList<ServerRespawnPoint> points)
         {
-            var own = _respawnPoints.Where(candidate => candidate.Team == team).ToList();
+            var own = points.Where(candidate => candidate.Team == team).ToList();
             if (own.Count > 0)
             {
                 return own;
             }
 
-            var neutral = _respawnPoints
+            var neutral = points
                 .Where(candidate => candidate.Team == ETeam.NoTeam)
                 .ToList();
-            return neutral.Count > 0 ? neutral : _respawnPoints.ToList();
+            return neutral.Count > 0 ? neutral : points.ToList();
         }
 
         private static int ReadInt(JObject json, string propertyName, int fallback, int minimum)
@@ -326,7 +359,8 @@ public bool TryGetRespawnPoint(ETeam team, long selectionIndex, out ServerRespaw
 
             for (var index = 0; index < left.Count; index++)
             {
-                if (left[index].Team != right[index].Team ||
+                if (left[index].Map != right[index].Map ||
+                    left[index].Team != right[index].Team ||
                     left[index].X != right[index].X ||
                     left[index].Y != right[index].Y ||
                     left[index].Z != right[index].Z)
@@ -352,6 +386,7 @@ public bool TryGetRespawnPoint(ETeam team, long selectionIndex, out ServerRespaw
             }
             foreach (var point in _respawnPoints)
             {
+                hash.Add(point.Map);
                 hash.Add(point.Team);
                 hash.Add(point.X);
                 hash.Add(point.Y);
@@ -391,6 +426,7 @@ public sealed class ServerRespawnPoint
 {
     private const float MaximumCoordinateMagnitude = 100000.0f;
 
+    public EMap Map { get; init; } = EMap.Unknown;
     public ETeam Team { get; init; } = ETeam.NoTeam;
     public float X { get; init; }
     public float Y { get; init; }
@@ -408,8 +444,18 @@ public sealed class ServerRespawnPoint
         Z = z;
     }
 
+    public ServerRespawnPoint(EMap map, ETeam team, float x, float y, float z)
+    {
+        Map = map;
+        Team = team;
+        X = x;
+        Y = y;
+        Z = z;
+    }
+
     public JObject ToJson() => new()
     {
+        ["Map"] = Map.ToString(),
         ["Team"] = Team.ToString(),
         ["X"] = X,
         ["Y"] = Y,
@@ -428,6 +474,14 @@ public sealed class ServerRespawnPoint
         // settings file could only ever describe team spawns, and the neutral
         // defaults below were the only ones that could never be configured,
         // replaced, or reasoned about.
+        var map = EMap.Unknown;
+        var mapValue = json["Map"]?.ToString();
+        if (!string.IsNullOrWhiteSpace(mapValue) &&
+            (!Enum.TryParse(mapValue, true, out map) || !Enum.IsDefined(typeof(EMap), map)))
+        {
+            return false;
+        }
+
         if (!Enum.TryParse(json["Team"]?.ToString(), true, out ETeam team) ||
             !Enum.IsDefined(typeof(ETeam), team))
         {
@@ -447,7 +501,7 @@ public sealed class ServerRespawnPoint
             return false;
         }
 
-        point = new ServerRespawnPoint { Team = team, X = x, Y = y, Z = z };
+        point = new ServerRespawnPoint { Map = map, Team = team, X = x, Y = y, Z = z };
         return true;
     }
 }

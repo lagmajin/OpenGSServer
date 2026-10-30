@@ -164,7 +164,7 @@ def account(client: LobbySmokeClient, prefix: str, suffix: str) -> str:
             "MessageType": "CreateAccountRequest",
             "AccountID": account_id,
             "Password": password,
-            "DisplayName": f"{prefix} {suffix}",
+            "DisplayName": f"{prefix} {suffix[:9]}",
         }
     )
     require_success(
@@ -271,7 +271,7 @@ def run(lobby_host: str, lobby_port: int, management_port: int, timeout: float) 
         guest_id = account(guest, "MatchGuest", suffix)
 
         room_id = create_match_room(owner, owner_id, f"Match Play {suffix}")
-        join_room(guest, room_id, guest_id, f"MatchGuest {suffix}")
+        join_room(guest, room_id, guest_id, f"MatchGuest {suffix[:9]}")
 
         start_match(owner, owner_id, room_id)
         finish_loading(owner, owner_id, room_id)

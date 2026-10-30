@@ -74,6 +74,9 @@ public sealed class MatchRudpShotTests : IDisposable
         Assert.NotNull(room);
         room!.AddNewPlayer(new PlayerInfo(shooterId, "Shooter"));
         room.AddNewPlayer(new PlayerInfo(victimId, "Victim"));
+        var waitRoom = new OpenGSCore.WaitRoom("rudp-shot", capacity: 4);
+        waitRoom.ChangeGameMode(OpenGSCore.EGameMode.DeathMatch);
+        waitRoom.LinkMatchRoom(room);
 
         // The room has to be playing. The projectile simulation only resolves
         // hits against players in a live match, so without this the grenade
@@ -606,11 +609,11 @@ public sealed class MatchRudpShotTests : IDisposable
     public void AGrenadeThrownOverRealtimeReachesTheSimulation()
     {
         SetUpRoom();
-        MoveTo(shooter, shooterId, 0f, 0f);
-        // A cluster grenade has a two second fuse and travels at twelve units a
-        // second, so it bursts about twenty four units down the line. The blast
-        // radius is three, so the player stands inside that.
-        MoveTo(victim, victimId, 24f, 0f);
+        // The DM spawn near (1.92, 0.215) is beside a DryDays collider at x=2.6.
+        // A horizontal cluster throw hits that wall almost immediately; place
+        // the victim just outside its edge so the map impact detonates beside it.
+        MoveTo(shooter, shooterId, 1.9233637f, 0.215f);
+        MoveTo(victim, victimId, 3.5f, 0.215f);
 
         var before = VictimHealth();
 
@@ -637,8 +640,8 @@ public sealed class MatchRudpShotTests : IDisposable
     public void AGrenadeDoesNotHurtThePlayerWhoThrewIt()
     {
         SetUpRoom();
-        MoveTo(shooter, shooterId, 0f, 0f);
-        MoveTo(victim, victimId, 24f, 0f);
+        MoveTo(shooter, shooterId, 1.9233637f, 0.215f);
+        MoveTo(victim, victimId, 3.5f, 0.215f);
 
         var before = ShooterHealth();
 

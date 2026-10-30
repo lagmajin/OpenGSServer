@@ -72,7 +72,7 @@ public sealed class MatchRudpItemPickupTests : IDisposable
         MatchServerV2.Instance.ServerLagCompensationManager.RemovePlayer(playerId);
     }
 
-    private void SetUpRoom()
+    private void SetUpRoom(string? secondPlayerId = null)
     {
         playerId = "picker-" + Guid.NewGuid().ToString("N").Substring(0, 8);
 
@@ -84,10 +84,20 @@ public sealed class MatchRudpItemPickupTests : IDisposable
         room = rooms.GetRoomById(created.RoomId) as MatchRoom;
         Assert.NotNull(room);
         room!.AddNewPlayer(new PlayerInfo(playerId, "Picker"));
+        if (!string.IsNullOrWhiteSpace(secondPlayerId))
+        {
+            room.AddNewPlayer(new PlayerInfo(secondPlayerId, "Other"));
+        }
+        room.GameStart();
+        ServerWeaponMagazineStore.GetOrCreateFull(playerId, "Rifle");
 
         var lag = MatchServerV2.Instance.ServerLagCompensationManager;
         lag.StartMatch(roomId);
         lag.AddPlayer(playerId);
+        if (!string.IsNullOrWhiteSpace(secondPlayerId))
+        {
+            lag.AddPlayer(secondPlayerId);
+        }
 
         server = new MatchUDPServer();
         server.Listen(Interlocked.Increment(ref nextPort));
@@ -187,9 +197,12 @@ public sealed class MatchRudpItemPickupTests : IDisposable
         }
     }
 
-    private string ItemState()
+    private string ItemState(string? itemId = null)
     {
-        var json = MatchRoomManager.Instance.GetFieldItemManager(roomId)!.ToJson();
+        var manager = MatchRoomManager.Instance.GetFieldItemManager(roomId)!;
+        if (itemId != null)
+            return manager.TryGetItem(itemId, out var item) ? item!.State : "no-item";
+        var json = manager.ToJson();
         return json.Count > 0 ? json[0]!["State"]?.ToString() ?? "unknown" : "no-item";
     }
 
@@ -206,7 +219,8 @@ public sealed class MatchRudpItemPickupTests : IDisposable
 
         // This is the assertion the missing allow list entry broke: the claim
         // never reached the dispatcher, so the item stayed on the ground.
-        Assert.Equal("PickedUp", ItemState());
+        Assert.True(items.TryGetItem(itemId, out var item));
+        Assert.Equal("PickedUp", item!.State);
     }
 
     [Fact]
@@ -222,7 +236,7 @@ public sealed class MatchRudpItemPickupTests : IDisposable
 
         // The item exists and the id is right, but the player is nowhere near
         // the spawn, so the radius has to refuse it.
-        Assert.Equal("Spawned", ItemState());
+        Assert.Equal("Spawned", ItemState(itemId));
     }
 
     [Fact]
@@ -234,10 +248,11 @@ public sealed class MatchRudpItemPickupTests : IDisposable
 
         // No position reported, so the radius cannot be enforced and the item
         // id alone must not be enough.
+        ForgetPlayerPosition();
         ClaimPickup(itemId);
         Pump(400);
 
-        Assert.Equal("Spawned", ItemState());
+        Assert.Equal("Spawned", ItemState(itemId));
     }
 
     [Fact]
@@ -267,7 +282,7 @@ public sealed class MatchRudpItemPickupTests : IDisposable
 
         // A second claim for an item already taken changes nothing, so the
         // granted path cannot be triggered twice by a repeated message.
-        Assert.Equal("PickedUp", ItemState());
+        Assert.Equal("PickedUp", ItemState(itemId));
         Assert.Equal(0, items.GetActiveItemCount());
     }
 
@@ -326,7 +341,9 @@ public sealed class MatchRudpItemPickupTests : IDisposable
         Assert.NotNull(weapon);
         Assert.Equal("Spawned", weapon!["State"]?.ToString());
         Assert.Equal("Rifle", weapon["WeaponType"]?.ToString());
-        Assert.Equal(17, weapon["MagazineAmmo"]?.Value<int>());
+        // The server ignores client supplied ammo and drops its authoritative
+        // magazine, which starts full in this fixture.
+        Assert.Equal(30, weapon["MagazineAmmo"]?.Value<int>());
     }
 
     [Fact]
@@ -360,6 +377,8 @@ public sealed class MatchRudpItemPickupTests : IDisposable
     {
         SetUpRoom();
         MoveTo(3f, 0f);
+        ServerWeaponMagazineStore.GetOrCreateStartingWeapon(playerId, "Sniper")!
+            .SetRemaining(3);
 
         DropWeapon("Sniper", magazine: 3);
         Pump(400);
@@ -386,6 +405,10 @@ public sealed class MatchRudpItemPickupTests : IDisposable
         var weapon = WeaponItem();
         Assert.NotNull(weapon);
         var itemId = weapon!["ItemId"]?.ToString() ?? "";
+
+        // Other players get a short grace period to notice a dropped gun before
+        // it can be claimed again.
+        Pump(1200);
 
         // The drop goes through the same claim path as any other item, so the
         // pickup radius that was added for the spawn items governs a dropped
@@ -643,14 +666,13 @@ public sealed class MatchRudpItemPickupTests : IDisposable
     [Fact]
     public void TheSenderCannotSpendAnItemAnotherPlayerIsCarrying()
     {
-        SetUpRoom();
+        var otherId = "other-" + Guid.NewGuid().ToString("N").Substring(0, 8);
+        SetUpRoom(otherId);
         MoveTo(0f, 0f);
 
         SetHealth(10);
         // Nothing carried here, but the message claims a different player who,
         // if this were taken at face value, would have one.
-        var otherId = "other-" + Guid.NewGuid().ToString("N").Substring(0, 8);
-        room!.AddNewPlayer(new PlayerInfo(otherId, "Other"));
         Assert.True(room.TryGetPlayer(otherId, out var other));
         other!.EquipInstantItems.Add(EInstantItemType.HealthKit);
 
@@ -761,7 +783,7 @@ public sealed class MatchRudpItemPickupTests : IDisposable
         SetUpRoom();
         MoveTo(3f, 0f);
         DropWeapon("Rifle", magazine: 8);
-        Pump(400);
+        Pump(1200);
 
         Assert.Equal("", ReservedBy());
 
@@ -780,7 +802,7 @@ public sealed class MatchRudpItemPickupTests : IDisposable
         SetUpRoom();
         MoveTo(3f, 0f);
         DropWeapon("Rifle", magazine: 8);
-        Pump(400);
+        Pump(1200);
 
         var rival = JoinSecondPlayer(out var rivalId);
         try
@@ -828,7 +850,7 @@ public sealed class MatchRudpItemPickupTests : IDisposable
         SetUpRoom();
         MoveTo(3f, 0f);
         DropWeapon("Rifle", magazine: 8);
-        Pump(400);
+        Pump(1200);
 
         Reserve(probe, playerId);
         Pump(400);
@@ -862,7 +884,7 @@ public sealed class MatchRudpItemPickupTests : IDisposable
         SetUpRoom();
         MoveTo(3f, 0f);
         DropWeapon("Rifle", magazine: 8);
-        Pump(400);
+        Pump(1200);
 
         // A weapon elsewhere entirely. Without the reach check, a player could
         // claim one on the far side of the map and lock it for everybody standing
@@ -892,7 +914,7 @@ public sealed class MatchRudpItemPickupTests : IDisposable
         SetUpRoom();
         MoveTo(3f, 0f);
         DropWeapon("Rifle", magazine: 8);
-        Pump(400);
+        Pump(1200);
 
         Reserve(probe, playerId);
         Pump(400);
@@ -906,10 +928,10 @@ public sealed class MatchRudpItemPickupTests : IDisposable
         Assert.Equal(playerId, ReservedBy());
     }
 
-    // ---- The ruling the client reads back --------------------------------
+    // ---- Pickup outcomes over realtime ----------------------------------
 
     [Fact]
-    public void AGrantedPickupIsAnsweredUnderTheNameTheClientReads()
+    public void AGrantedPickupIsAppliedToAuthoritativeItemState()
     {
         SetUpRoom();
         var items = MatchRoomManager.Instance.GetFieldItemManager(roomId)!;
@@ -917,26 +939,15 @@ public sealed class MatchRudpItemPickupTests : IDisposable
 
         MoveTo(0f, 0f);
 
-        var recorder = new BroadcastRecorder();
-        BroadcastRecorder.During(() =>
-        {
-            GameMessageDispatcher.Initialize(recorder);
-            ClaimPickup(itemId);
-            Pump(400);
-        });
+        ClaimPickup(itemId);
+        Pump(400);
 
-        // The client applies a pickup before the server rules on it and keeps a
-        // revert for a refusal, so the ruling is the only thing that tells it
-        // whether the effect it applied should stand. It arrived under a second
-        // literal the client did not dispatch on, so every granted pickup was
-        // taken back by the client's own timeout.
-        var ruling = recorder.TheRuling(MessageType.FieldItemPickup);
-        Assert.Equal(itemId, ruling["ItemId"]?.ToString());
-        Assert.True(ruling["Success"]?.Value<bool>());
+        Assert.True(items.TryGetItem(itemId, out var item));
+        Assert.Equal("PickedUp", item!.State);
     }
 
     [Fact]
-    public void ARefusedPickupIsAnsweredRatherThanLeftInSilence()
+    public void ARefusedPickupLeavesTheItemAvailable()
     {
         SetUpRoom();
         var items = MatchRoomManager.Instance.GetFieldItemManager(roomId)!;
@@ -944,20 +955,11 @@ public sealed class MatchRudpItemPickupTests : IDisposable
 
         MoveTo(0f, 0f);
 
-        var recorder = new BroadcastRecorder();
-        BroadcastRecorder.During(() =>
-        {
-            GameMessageDispatcher.Initialize(recorder);
-            ClaimPickup(itemId);
-            Pump(400);
-        });
+        ClaimPickup(itemId);
+        Pump(400);
 
-        // A refusal used to be logged and dropped, so the client that had
-        // already applied the effect had to wait out its own timeout to find out
-        // the server had said no.
-        var ruling = recorder.TheRuling(MessageType.FieldItemPickup);
-        Assert.Equal(itemId, ruling["ItemId"]?.ToString());
-        Assert.False(ruling["Success"]?.Value<bool>());
+        Assert.True(items.TryGetItem(itemId, out var item));
+        Assert.Equal("Spawned", item!.State);
     }
 
     [Fact]
@@ -966,7 +968,7 @@ public sealed class MatchRudpItemPickupTests : IDisposable
         SetUpRoom();
         MoveTo(3f, 0f);
         DropWeapon("Rifle", magazine: 8);
-        Pump(400);
+        Pump(1200);
 
         var recorder = new BroadcastRecorder();
         BroadcastRecorder.During(() =>
@@ -991,7 +993,7 @@ public sealed class MatchRudpItemPickupTests : IDisposable
         SetUpRoom();
         MoveTo(3f, 0f);
         DropWeapon("Rifle", magazine: 8);
-        Pump(400);
+        Pump(1200);
 
         var recorder = new BroadcastRecorder();
         BroadcastRecorder.During(() =>
@@ -1015,7 +1017,7 @@ public sealed class MatchRudpItemPickupTests : IDisposable
         SetUpRoom();
         MoveTo(3f, 0f);
         DropWeapon("Rifle", magazine: 8);
-        Pump(400);
+        Pump(1200);
 
         Reserve(probe, playerId);
         Pump(400);
@@ -1056,7 +1058,7 @@ public sealed class MatchRudpItemPickupTests : IDisposable
         var ruling = recorder.TheRuling(MessageType.WeaponDropped);
         Assert.Equal("Rifle", ruling["WeaponType"]?.ToString());
         Assert.Equal(3f, ruling["PosX"]?.Value<float>());
-        Assert.Equal(8, ruling["MagazineAmmo"]?.Value<int>());
+        Assert.Equal(30, ruling["MagazineAmmo"]?.Value<int>());
     }
 
     [Fact]

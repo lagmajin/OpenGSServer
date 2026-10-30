@@ -1,4 +1,9 @@
+using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Reflection;
+using Newtonsoft.Json;
 using System.Numerics;
 using OpenGSServer.Network;
 using Xunit;
@@ -16,6 +21,45 @@ namespace OpenGSServer.Tests;
 /// </summary>
 public sealed class ServerProjectileSimulatorTests
 {
+    private static readonly IReadOnlyList<ProjectileGroundShape> DryDaysShapes = LoadDryDaysShapes();
+
+    private static IReadOnlyList<ProjectileGroundShape> LoadDryDaysShapes()
+    {
+        var assembly = typeof(ServerProjectileSimulator).Assembly;
+        var resourceName = Assert.Single(assembly.GetManifestResourceNames(), name =>
+            name.EndsWith("DryDaysProjectileShapes.json", StringComparison.Ordinal));
+        using var stream = assembly.GetManifestResourceStream(resourceName)!;
+        using var reader = new StreamReader(stream);
+        var json = JsonConvert.DeserializeObject<List<GroundShapeJson>>(reader.ReadToEnd())!;
+        return json.Select(shape => new ProjectileGroundShape
+        {
+            IsPolygon = string.Equals(shape.Type, "polygon", StringComparison.OrdinalIgnoreCase),
+            Left = shape.Left,
+            Bottom = shape.Bottom,
+            Right = shape.Right,
+            Top = shape.Top,
+            Paths = shape.Paths.Select(path =>
+                (IReadOnlyList<ProjectileGroundPoint>)path.Select(point =>
+                    new ProjectileGroundPoint(point.X, point.Y)).ToArray()).ToArray()
+        }).ToArray();
+    }
+
+    private sealed class GroundShapeJson
+    {
+        public string Type { get; set; } = string.Empty;
+        public float Left { get; set; }
+        public float Bottom { get; set; }
+        public float Right { get; set; }
+        public float Top { get; set; }
+        public List<List<GroundPointJson>> Paths { get; set; } = new();
+    }
+
+    private sealed class GroundPointJson
+    {
+        public float X { get; set; }
+        public float Y { get; set; }
+    }
+
     private sealed class World
     {
         public readonly Dictionary<string, Vector2> Positions = new();
@@ -102,6 +146,48 @@ public sealed class ServerProjectileSimulatorTests
         Assert.Equal(1, simulator.ActiveCount);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void GrenadeDetonatesAtRectangleOrPolygonGround(bool polygon)
+    {
+        var world = new World();
+        var simulator = world.Build();
+        simulator.GroundShapesLookup = _ => new[]
+        {
+            new ProjectileGroundShape
+            {
+                IsPolygon = polygon,
+                Left = 4f,
+                Bottom = -10f,
+                Right = 5f,
+                Top = 10f,
+                Paths = polygon
+                    ? new IReadOnlyList<ProjectileGroundPoint>[]
+                    {
+                        new[]
+                        {
+                            new ProjectileGroundPoint(4f, -10f),
+                            new ProjectileGroundPoint(5f, -10f),
+                            new ProjectileGroundPoint(5f, 10f),
+                            new ProjectileGroundPoint(4f, 10f)
+                        }
+                    }
+                    : Array.Empty<IReadOnlyList<ProjectileGroundPoint>>()
+            }
+        };
+        Vector2? explodedAt = null;
+        simulator.OnExpire = projectile => explodedAt = projectile.Position;
+
+        simulator.CreateGrenade("room-1", "thrower", Vector2.Zero, Vector2.UnitX, "Normal");
+        simulator.Update(0.5f);
+
+        Assert.NotNull(explodedAt);
+        Assert.InRange(explodedAt.Value.X, 3.64f, 3.66f);
+        Assert.InRange(explodedAt.Value.Y, -3f, 0f);
+        Assert.Equal(0, simulator.ActiveCount);
+    }
+
     // ---- Blast ----------------------------------------------------------
 
     [Fact]
@@ -114,7 +200,7 @@ public sealed class ServerProjectileSimulatorTests
         // The tick lands within a step of the burst point rather than exactly on
         // it, so the damage is near full but not quite; the point is that the
         // blast reaches a player standing where it goes off.
-        world.Positions["victim"] = new Vector2(36f, 0f);
+        world.Positions["victim"] = new Vector2(12f, -4f);
         var simulator = world.Build();
 
         var hits = new List<(string Target, int Damage)>();
@@ -180,8 +266,8 @@ public sealed class ServerProjectileSimulatorTests
 
         // Placed either side of the burst point, which sits about 36 units out
         // for a normal grenade: three seconds of fuse at twelve units a second.
-        world.Positions["near"] = new Vector2(36f, 0f);
-        world.Positions["far"] = new Vector2(38.6f, 0f);
+        world.Positions["near"] = new Vector2(12f, -4f);
+        world.Positions["far"] = new Vector2(14.6f, -4f);
 
         simulator.CreateGrenade("room-1", "thrower", Vector2.Zero, Vector2.UnitX, "Normal");
         for (var i = 0; i < 80; i++)

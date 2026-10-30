@@ -36,6 +36,19 @@ namespace OpenGSServer.Network
         public float Gravity { get; set; }
     }
 
+    public readonly record struct ProjectileGroundPoint(float X, float Y);
+
+    public sealed class ProjectileGroundShape
+    {
+        public bool IsPolygon { get; init; }
+        public float Left { get; init; }
+        public float Bottom { get; init; }
+        public float Right { get; init; }
+        public float Top { get; init; }
+        public IReadOnlyList<IReadOnlyList<ProjectileGroundPoint>> Paths { get; init; } =
+            Array.Empty<IReadOnlyList<ProjectileGroundPoint>>();
+    }
+
     /// <summary>
     /// Server side flight of bullets and grenades.
     /// <para>
@@ -82,6 +95,9 @@ namespace OpenGSServer.Network
 
         /// <summary>Whether a projectile's match is still accepting combat.</summary>
         public Func<string, bool>? IsRoomActive { get; set; }
+
+        /// <summary>Map geometry used to stop grenades at solid ground.</summary>
+        public Func<string, IReadOnlyList<ProjectileGroundShape>>? GroundShapesLookup { get; set; }
 
         /// <summary>
         /// Called when a projectile enters play, so the room can be told.
@@ -381,11 +397,33 @@ namespace OpenGSServer.Network
                     {
                         // Check the whole traveled segment so a fast launcher
                         // round cannot cross a player between server ticks.
-                        if (projectile.ElapsedFuse >= GrenadeArmingSeconds &&
-                            TryResolveGrenadePlayerHit(
-                                projectile, collisionSegmentStart, out var impactPosition))
+                        var impactPosition = projectile.Position;
+                        var groundImpact = projectile.Position;
+                        var armed = projectile.ElapsedFuse >= GrenadeArmingSeconds;
+                        var hitPlayer = armed && TryResolveGrenadePlayerHit(
+                            projectile, collisionSegmentStart, out impactPosition);
+                        var hitGround = armed && TryResolveGrenadeGroundHit(
+                            projectile, collisionSegmentStart, out groundImpact);
+                        var playerImpactDistance = hitPlayer
+                            ? Vector2.DistanceSquared(collisionSegmentStart, impactPosition)
+                            : float.PositiveInfinity;
+                        var groundImpactDistance = hitGround
+                            ? Vector2.DistanceSquared(collisionSegmentStart, groundImpact)
+                            : float.PositiveInfinity;
+
+                        if (hitPlayer && playerImpactDistance <= groundImpactDistance)
                         {
                             projectile.Position = impactPosition;
+                            CollectClusterChildren(projectile, spawned);
+                            CollectGrenadeHits(projectile, hits);
+                            detonated.Add(projectile);
+                            Retire(projectile, expired);
+                            continue;
+                        }
+
+                        if (hitGround)
+                        {
+                            projectile.Position = groundImpact;
                             CollectClusterChildren(projectile, spawned);
                             CollectGrenadeHits(projectile, hits);
                             detonated.Add(projectile);
@@ -641,6 +679,166 @@ namespace OpenGSServer.Network
             if (float.IsPositiveInfinity(firstImpactAlong)) return false;
             impactPosition = firstImpactPosition;
             return true;
+        }
+
+        private bool TryResolveGrenadeGroundHit(
+            ServerProjectileState grenade, Vector2 segmentStart, out Vector2 impactPosition)
+        {
+            impactPosition = grenade.Position;
+            var shapes = GroundShapesLookup?.Invoke(grenade.RoomId);
+            if (shapes == null || shapes.Count == 0)
+                return false;
+
+            var segment = grenade.Position - segmentStart;
+            var nearestAlong = float.PositiveInfinity;
+            foreach (var shape in shapes)
+            {
+                if (!shape.IsPolygon)
+                {
+                    if (!float.IsFinite(shape.Left) || !float.IsFinite(shape.Bottom) ||
+                        !float.IsFinite(shape.Right) || !float.IsFinite(shape.Top) ||
+                        shape.Left > shape.Right || shape.Bottom > shape.Top)
+                        continue;
+
+                    // Sweep the grenade centre against the collider expanded by
+                    // its radius, preserving thin walls and platform edges.
+                    var boxNear = RayBoxEntry(segmentStart, segment,
+                        shape.Left - grenade.Radius, shape.Bottom - grenade.Radius,
+                        shape.Right + grenade.Radius, shape.Top + grenade.Radius);
+                    nearestAlong = Math.Min(nearestAlong, boxNear);
+                    continue;
+                }
+
+                foreach (var path in shape.Paths)
+                {
+                    if (path.Count < 3)
+                        continue;
+                    if (PointInGroundPolygon(segmentStart, path))
+                    {
+                        nearestAlong = 0f;
+                        break;
+                    }
+                    for (var index = 0; index < path.Count; index++)
+                    {
+                        var a = path[index];
+                        var b = path[(index + 1) % path.Count];
+                        if (!float.IsFinite(a.X) || !float.IsFinite(a.Y) ||
+                            !float.IsFinite(b.X) || !float.IsFinite(b.Y))
+                            continue;
+                        nearestAlong = Math.Min(nearestAlong, SegmentCapsuleEntry(
+                            segmentStart, segment, new Vector2(a.X, a.Y),
+                            new Vector2(b.X, b.Y), grenade.Radius));
+                    }
+                }
+            }
+
+            if (float.IsPositiveInfinity(nearestAlong))
+                return false;
+            impactPosition = segmentStart + segment * nearestAlong;
+            return true;
+        }
+
+        private static bool ClipProjectileAxis(
+            float origin, float direction, float minimum, float maximum,
+            ref float nearT, ref float farT)
+        {
+            if (MathF.Abs(direction) <= 1e-7f)
+                return origin >= minimum && origin <= maximum;
+            var first = (minimum - origin) / direction;
+            var second = (maximum - origin) / direction;
+            if (first > second) (first, second) = (second, first);
+            nearT = Math.Max(nearT, first);
+            farT = Math.Min(farT, second);
+            return nearT <= farT;
+        }
+
+        private static float RayBoxEntry(
+            Vector2 origin, Vector2 direction,
+            float left, float bottom, float right, float top)
+        {
+            if (origin.X >= left && origin.X <= right &&
+                origin.Y >= bottom && origin.Y <= top)
+                return 0f;
+            var nearT = 0f;
+            var farT = 1f;
+            if (!ClipProjectileAxis(origin.X, direction.X, left, right,
+                    ref nearT, ref farT) ||
+                !ClipProjectileAxis(origin.Y, direction.Y, bottom, top,
+                    ref nearT, ref farT) || nearT < 0f || nearT > 1f)
+                return float.PositiveInfinity;
+            return nearT;
+        }
+
+        private static bool PointInGroundPolygon(
+            Vector2 point, IReadOnlyList<ProjectileGroundPoint> path)
+        {
+            var inside = false;
+            for (var index = 0; index < path.Count; index++)
+            {
+                var a = path[index];
+                var b = path[(index + 1) % path.Count];
+                if ((a.Y > point.Y) != (b.Y > point.Y) &&
+                    point.X < (b.X - a.X) * (point.Y - a.Y) /
+                        (b.Y - a.Y) + a.X)
+                    inside = !inside;
+            }
+            return inside;
+        }
+
+        private static float SegmentCapsuleEntry(
+            Vector2 start, Vector2 segment,
+            Vector2 edgeStart, Vector2 edgeEnd, float radius)
+        {
+            var segmentLengthSquared = segment.LengthSquared();
+            var edge = edgeEnd - edgeStart;
+            var edgeLengthSquared = edge.LengthSquared();
+            if (segmentLengthSquared <= 1e-12f)
+                return DistanceToSegmentSquared(start, edgeStart, edgeEnd) <= radius * radius
+                    ? 0f : float.PositiveInfinity;
+
+            // Distance from the moving centre to the finite collider edge is
+            // convex in time; ternary search locates its minimum robustly even
+            // for nearly parallel or very short map edges.
+            var low = 0f;
+            var high = 1f;
+            for (var iteration = 0; iteration < 28; iteration++)
+            {
+                var first = (2f * low + high) / 3f;
+                var second = (low + 2f * high) / 3f;
+                var firstDistance = DistanceToSegmentSquared(
+                    start + segment * first, edgeStart, edgeEnd);
+                var secondDistance = DistanceToSegmentSquared(
+                    start + segment * second, edgeStart, edgeEnd);
+                if (firstDistance <= secondDistance) high = second;
+                else low = first;
+            }
+            var minimumT = (low + high) * 0.5f;
+            if (DistanceToSegmentSquared(start + segment * minimumT,
+                    edgeStart, edgeEnd) > radius * radius)
+                return float.PositiveInfinity;
+
+            low = 0f;
+            high = minimumT;
+            for (var iteration = 0; iteration < 28; iteration++)
+            {
+                var middle = (low + high) * 0.5f;
+                if (DistanceToSegmentSquared(start + segment * middle,
+                        edgeStart, edgeEnd) <= radius * radius)
+                    high = middle;
+                else low = middle;
+            }
+            return high;
+        }
+
+        private static float DistanceToSegmentSquared(
+            Vector2 point, Vector2 start, Vector2 end)
+        {
+            var edge = end - start;
+            var lengthSquared = edge.LengthSquared();
+            var along = lengthSquared > 1e-12f
+                ? Math.Clamp(Vector2.Dot(point - start, edge) / lengthSquared, 0f, 1f)
+                : 0f;
+            return Vector2.DistanceSquared(point, start + edge * along);
         }
 
         private bool IsPlayerInRoom(string playerId, string roomId)
