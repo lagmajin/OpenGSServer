@@ -60,7 +60,7 @@ public sealed class MatchRudpShotTests : IDisposable
         });
     }
 
-    private void SetUpRoom()
+    private void SetUpRoom(EGameMode gameMode = EGameMode.DeathMatch)
     {
         // The realtime parser resolves the room through MatchRoomManager.Instance,
         // so a standalone manager would build a room nothing can find.
@@ -68,14 +68,22 @@ public sealed class MatchRudpShotTests : IDisposable
         shooterId = "shooter-" + Guid.NewGuid().ToString("N").Substring(0, 8);
         victimId = "victim-" + Guid.NewGuid().ToString("N").Substring(0, 8);
 
-        var created = rooms.CreateNewDeathMatchRoom("rudp-shot", shooterId, capacity: 4);
+        var created = gameMode == EGameMode.TeamDeathMatch
+            ? rooms.CreateNewTeamDeathMatchRoom("rudp-shot", shooterId, capacity: 4)
+            : rooms.CreateNewDeathMatchRoom("rudp-shot", shooterId, capacity: 4);
         roomId = created.RoomId;
         room = rooms.GetRoomById(created.RoomId) as MatchRoom;
         Assert.NotNull(room);
-        room!.AddNewPlayer(new PlayerInfo(shooterId, "Shooter"));
-        room.AddNewPlayer(new PlayerInfo(victimId, "Victim"));
+        room!.AddNewPlayer(new PlayerInfo(shooterId, "Shooter")
+        {
+            Team = gameMode == EGameMode.TeamDeathMatch ? ETeam.Red : ETeam.NoTeam
+        });
+        room.AddNewPlayer(new PlayerInfo(victimId, "Victim")
+        {
+            Team = gameMode == EGameMode.TeamDeathMatch ? ETeam.Blue : ETeam.NoTeam
+        });
         var waitRoom = new OpenGSCore.WaitRoom("rudp-shot", capacity: 4);
-        waitRoom.ChangeGameMode(OpenGSCore.EGameMode.DeathMatch);
+        waitRoom.ChangeGameMode(gameMode);
         waitRoom.LinkMatchRoom(room);
 
         // The room has to be playing. The projectile simulation only resolves
@@ -421,6 +429,29 @@ public sealed class MatchRudpShotTests : IDisposable
         // The kill is credited from the health change, not from a client claiming
         // one, so a shot that really landed is what puts the tally up.
         Assert.True(ShooterKills() >= 1, "the shot that landed did not raise a kill");
+    }
+
+    [Fact]
+    public void ATeamDeathMatchKillOverRealtimeCreditsTheKillingTeam()
+    {
+        SetUpRoom(EGameMode.TeamDeathMatch);
+        MoveTo(shooter, shooterId, 0f, 0f);
+        MoveTo(victim, victimId, 3f, 0f);
+
+        var guard = 0;
+        while (VictimHealth() > 0 && guard++ < 12)
+        {
+            Fire("Pistol", dirX: 1f);
+            Pump(300);
+        }
+
+        Assert.Equal(0, VictimHealth());
+        Assert.True(room.TryGetPlayer(shooterId, out var shooterInfo));
+        Assert.True(room.TryGetPlayer(victimId, out var victimInfo));
+        Assert.Equal(1, victimInfo!.Deaths);
+        Assert.True(shooterInfo!.Kills >= 1);
+        Assert.Equal(1, room.TeamKillCount(ETeam.Red));
+        Assert.Equal(0, room.TeamKillCount(ETeam.Blue));
     }
 
     /// <summary>

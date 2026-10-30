@@ -83,6 +83,16 @@ public sealed class MatchRudpDamageTests : IDisposable
         }
     }
 
+    private void DrainRoomSnapshots()
+    {
+        PumpBoth(200);
+        while (shooter.TryTake(message =>
+            string.Equals(message["MessageType"]?.ToString(), MessageType.Snapshot,
+                StringComparison.Ordinal), out _))
+        {
+        }
+    }
+
     private static void PumpOnly(Action pump, int milliseconds)
     {
         var deadline = Environment.TickCount64 + milliseconds;
@@ -197,7 +207,7 @@ public sealed class MatchRudpDamageTests : IDisposable
     }
 
     [Fact]
-    public void DamageClaimedThroughTheHandlerReducesHealthAndRaisesAKill()
+    public void LethalDamageThroughTheResolverDownsAnArmoredPlayer()
     {
         SetUpRoom();
 
@@ -205,10 +215,10 @@ public sealed class MatchRudpDamageTests : IDisposable
         var before = beforeInfo!.Health;
         Assert.True(before > 0);
 
-        // A hit that takes the player out in one go, applied through the same
-        // entry point the realtime path uses.
+        // Starting players can have armor, so the requested hit must exceed both
+        // the health and the maximum amount armor can absorb.
         var outcome = ServerDamageResolver.Apply(
-            beforeInfo, before, EPlayerPoseState.Stand);
+            beforeInfo, before + 1000, EPlayerPoseState.Stand);
 
         Assert.True(outcome.IsNowDown);
         Assert.Equal(0, beforeInfo.Health);
@@ -258,6 +268,7 @@ public sealed class MatchRudpDamageTests : IDisposable
     public void TheRoomStateIsSentSoAClientCanTellWhetherTheRoomIsPlaying()
     {
         SetUpRoom();
+        DrainRoomSnapshots();
         room.GameStart();
 
         // The room state a client reads to learn IsPlaying was never sent: the
@@ -284,6 +295,7 @@ public sealed class MatchRudpDamageTests : IDisposable
     public void AnUnchangedRoomIsNotSentAgain()
     {
         SetUpRoom();
+        DrainRoomSnapshots();
         room.GameStart();
 
         server.BroadcastRoomStateOnce();
@@ -493,6 +505,7 @@ public sealed class MatchRudpDamageTests : IDisposable
     public void AStatusQuestionIsAnsweredToThePlayerThatAsked()
     {
         SetUpRoom();
+        room.GameStart();
 
         var recorder = new BroadcastRecorder();
         BroadcastRecorder.During(() =>

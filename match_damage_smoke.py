@@ -1,24 +1,9 @@
-"""Play a match far enough to prove the server owns damage and health.
+"""Play a match far enough to inspect live health and reject an invalid shot.
 
-The other smokes stop at the lobby handshake: a room is created, loading
-finishes, the match is ended by the admin command. None of them fires a shot,
-so nothing has ever checked that a hit changes a player's health, that the
-damage numbers are what the server decided, or that reaching zero health is what
-produces a kill. The damage used to be broadcast and never applied at all.
-
-This drives the damage path instead. Two players enter the same match and shots
-are claimed through the lobby stream, the way a client reports firing. The test
-watches the room for the damage broadcast and checks that the reported damage,
-the remaining health, and the kill line agree with each other.
-
-What this covers: the damage broadcast, the health the server keeps, and the
-kill detection that follows from it.
-
-What this does not cover: the realtime transport. Player position and shot
-claims travel over RUDP, not the lobby stream, and reaching that needs a
-connection token; MatchRudpProbeTests and ServerProjectileSimulatorTests cover
-that side. This suite deliberately stays on the transport it can drive, so a
-failure here points at the damage rules rather than at the socket.
+Both players stay connected for the full check because leaving a live match
+destroys its room. This smoke confirms the server reports live health and that
+an invalid target does not damage the victim. Positive hit and kill resolution
+is exercised over RUDP by MatchRudpShotTests.
 """
 
 from __future__ import annotations
@@ -101,22 +86,19 @@ def run(lobby_host: str, lobby_port: int, management_port: int, timeout: float) 
         finish_loading(victim, victim_id, room_id)
         wait_allow_enter_map([shooter, victim])
 
-    with ManagementClient(lobby_host, management_port, timeout) as admin:
-        admin.login()
+        with ManagementClient(lobby_host, management_port, timeout) as admin:
+            admin.login()
 
-        # Both players start alive, and the server has to be the thing that says
-        # so. Nothing here reads a client side value.
-        before = parse_player_status(admin.run(f"roomstatus {room_id}"), victim_id)
-        if before.get("health", 0) <= 0:
-            raise SmokeFailure(f"victim did not start alive: {before}")
-        starting_health = before["health"]
+            # Both players start alive, and the server has to be the thing that says
+            # so. Nothing here reads a client side value.
+            before = parse_player_status(admin.run(f"roomstatus {room_id}"), victim_id)
+            if before.get("health", 0) <= 0:
+                raise SmokeFailure(f"victim did not start alive: {before}")
+            starting_health = before["health"]
 
-        # A shot with no valid target must not change anyone's health. The
-        # server validates the claim, so a shot aimed at nothing is inert.
-        # An invalid shot must not change anyone's health. The server validates
-        # the claim, so a shot aimed at nobody is inert.
-        with LobbySmokeClient(lobby_host, lobby_port, timeout) as shooter_client:
-            shooter_client.send(
+            # The lobby protocol cannot choose a damage target. A forged shot
+            # from this transport must leave the authoritative health unchanged.
+            shooter.send(
                 {
                     "MessageType": "ShootRequest",
                     "PlayerID": shooter_id,
@@ -130,20 +112,20 @@ def run(lobby_host: str, lobby_port: int, management_port: int, timeout: float) 
                 }
             )
 
-        after_miss = parse_player_status(admin.run(f"roomstatus {room_id}"), victim_id)
-        if after_miss.get("health") != starting_health:
-            raise SmokeFailure(
-                f"an invalid shot changed the victim's health: "
-                f"{starting_health} -> {after_miss.get('health')}"
+            after_miss = parse_player_status(admin.run(f"roomstatus {room_id}"), victim_id)
+            if after_miss.get("health") != starting_health:
+                raise SmokeFailure(
+                    f"an invalid shot changed the victim's health: "
+                    f"{starting_health} -> {after_miss.get('health')}"
+                )
+            final = parse_player_status(admin.run(f"roomstatus {room_id}"), victim_id)
+
+            print(
+                f"Damage smoke passed: room {room_id}, victim health {starting_health} "
+                f"-> {final.get('health')}, kills={final.get('kills')} deaths={final.get('deaths')}"
             )
-        final = parse_player_status(admin.run(f"roomstatus {room_id}"), victim_id)
 
-        print(
-            f"Damage smoke passed: room {room_id}, victim health {starting_health} "
-            f"-> {final.get('health')}, kills={final.get('kills')} deaths={final.get('deaths')}"
-        )
-
-        admin.run(f"endmatch {room_id}")
+            admin.run(f"endmatch {room_id}")
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="OpenGS match damage smoke client")
