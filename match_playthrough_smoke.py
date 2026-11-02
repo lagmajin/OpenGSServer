@@ -179,7 +179,9 @@ def account(client: LobbySmokeClient, prefix: str, suffix: str) -> str:
     return login.get("PlayerID") or login.get("GlobalUserId") or account_id
 
 
-def create_match_room(client: LobbySmokeClient, player_id: str, name: str) -> str:
+def create_match_room(
+    client: LobbySmokeClient, player_id: str, name: str, game_mode: str = "DeathMatch"
+) -> str:
     client.send(
         {
             "MessageType": "CreateRoomRequest",
@@ -188,6 +190,7 @@ def create_match_room(client: LobbySmokeClient, player_id: str, name: str) -> st
             "RoomName": name,
             "Capacity": 2,
             "TeamBalance": False,
+            "GameMode": game_mode,
         }
     )
     created = require_success(
@@ -197,6 +200,12 @@ def create_match_room(client: LobbySmokeClient, player_id: str, name: str) -> st
     room_id = created.get("RoomID") or created.get("RoomId") or ""
     if not room_id:
         raise SmokeFailure("match room response did not include RoomID")
+    room_info = created.get("RoomInfo") or {}
+    returned_mode = created.get("GameMode") or room_info.get("GameMode")
+    if returned_mode != game_mode:
+        raise SmokeFailure(
+            f"match room response returned GameMode={returned_mode!r}, expected {game_mode!r}"
+        )
     return room_id
 
 
@@ -261,6 +270,26 @@ def wait_allow_enter_map(clients) -> None:
     raise SmokeFailure("AllowEnterMap was not broadcast after every player reported loading")
 
 
+def take_match_end(client: LobbySmokeClient) -> dict[str, Any] | None:
+    for index, message in enumerate(client.pending):
+        if message.get("MessageType") == "MatchEndNotification":
+            return client.pending.pop(index)
+
+    original_timeout = client.timeout
+    client.timeout = 2.0
+    try:
+        for _ in range(10):
+            try:
+                message = client.receive()
+            except SmokeFailure:
+                return None
+            if message.get("MessageType") == "MatchEndNotification":
+                return message
+    finally:
+        client.timeout = original_timeout
+    return None
+
+
 def run(lobby_host: str, lobby_port: int, management_port: int, timeout: float) -> None:
     suffix = uuid.uuid4().hex[:10]
 
@@ -270,7 +299,9 @@ def run(lobby_host: str, lobby_port: int, management_port: int, timeout: float) 
         owner_id = account(owner, "MatchOwner", suffix)
         guest_id = account(guest, "MatchGuest", suffix)
 
-        room_id = create_match_room(owner, owner_id, f"Match Play {suffix}")
+        room_id = create_match_room(
+            owner, owner_id, f"Match Play {suffix}", game_mode="TeamDeathMatch"
+        )
         join_room(guest, room_id, guest_id, f"MatchGuest {suffix[:9]}")
 
         start_match(owner, owner_id, room_id)
@@ -290,19 +321,7 @@ def run(lobby_host: str, lobby_port: int, management_port: int, timeout: float) 
         # must carry the end-of-match result.
         seen = None
         for client in (owner, guest):
-            original_timeout = client.timeout
-            client.timeout = 2.0
-            try:
-                for _ in range(10):
-                    try:
-                        message = client.receive()
-                    except SmokeFailure:
-                        break
-                    if message.get("MessageType") == "MatchEndNotification":
-                        seen = message
-                        break
-            finally:
-                client.timeout = original_timeout
+            seen = take_match_end(client)
             if seen is not None:
                 break
 
@@ -311,6 +330,13 @@ def run(lobby_host: str, lobby_port: int, management_port: int, timeout: float) 
 
         if not seen.get("RoomId") and not seen.get("RoomID"):
             raise SmokeFailure(f"match result did not identify the room: {seen}")
+        if seen.get("WinningTeam") != "Draw":
+            raise SmokeFailure(f"an unscored TDM should end in a draw: {seen}")
+        if seen.get("RedScore") != 0 or seen.get("BlueScore") != 0:
+            raise SmokeFailure(f"an unscored TDM should report zero team scores: {seen}")
+        teams = {player.get("Team") for player in seen.get("Players", [])}
+        if teams != {"Red", "Blue"}:
+            raise SmokeFailure(f"TDM players were not assigned to opposing teams: {seen}")
 
     print(f"Match playthrough smoke passed: room {room_id}")
 

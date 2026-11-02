@@ -452,6 +452,12 @@ public sealed class MatchRudpShotTests : IDisposable
         Assert.True(shooterInfo!.Kills >= 1);
         Assert.Equal(1, room.TeamKillCount(ETeam.Red));
         Assert.Equal(0, room.TeamKillCount(ETeam.Blue));
+
+        var result = new TeamDeathMatchResultEvaluator().Evaluate(
+            room.CurrentSituation!, room.Players);
+        Assert.Equal("Red", result["WinningTeam"]?.ToString());
+        Assert.Equal(1, result["RedScore"]?.Value<int>());
+        Assert.Equal(0, result["BlueScore"]?.Value<int>());
     }
 
     /// <summary>

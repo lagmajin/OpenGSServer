@@ -58,6 +58,15 @@ namespace OpenGSServer
                 }
 
                 room = new WaitRoom(setting.RoomName, setting.Capacity);
+                // WaitRoom itself starts as Unknown. A newly created setting
+                // defaults to DeathMatch, but ApplyTo intentionally ignores an
+                // omitted GameMode for partial updates. Choose the creation
+                // default here so clients that only send a room name still get
+                // a playable room and its mode's default map.
+                var initialMode = setting.GameMode == EGameMode.Unknown
+                    ? EGameMode.DeathMatch
+                    : setting.GameMode;
+                room.ChangeGameMode(initialMode);
                 setting.ApplyTo(room);
 
                 if (!_rooms.TryAdd(room.RoomId, room))

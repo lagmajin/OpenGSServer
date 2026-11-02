@@ -23,18 +23,23 @@ Run only the named smoke client. Defaults to all of them.
 [CmdletBinding()]
 param(
     [string] $Configuration = 'Debug',
-    [string[]] $Only = @()
+    [string[]] $Only = @(),
+    [int] $LobbyPort = 64010,
+    [int] $MatchTcpPort = 64011,
+    [int] $MatchUdpPort = 64012,
+    [int] $ManagementPort = 64013
 )
 
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $solution = Join-Path $repoRoot 'OpenGSServer.sln'
 
-# Disposable ports so a developer can keep a real server running.
-$lobbyPort = 64010
-$matchTcpPort = 64011
-$matchUdpPort = 64012
-$managementPort = 64013
+# Disposable ports so a developer can keep a real server running. They can be
+# overridden when the defaults are already owned by another local application.
+$lobbyPort = $LobbyPort
+$matchTcpPort = $MatchTcpPort
+$matchUdpPort = $MatchUdpPort
+$managementPort = $ManagementPort
 $logFile = Join-Path $repoRoot ('smoke_server_{0}.log' -f (Get-Date -Format 'yyyyMMdd_HHmmss'))
 
 $smokes = @(
@@ -131,7 +136,11 @@ try {
         $script = Join-Path $repoRoot $smoke.Script
         Write-Host ''
         Write-Host ("=== {0} ===" -f $smoke.Name)
-        & python $script --host 127.0.0.1 --port $lobbyPort
+        $arguments = @('--host', '127.0.0.1', '--port', $lobbyPort)
+        if ($smoke.Name -in @('match_playthrough', 'match_damage')) {
+            $arguments += @('--management-port', $managementPort)
+        }
+        & python $script @arguments
         $results += [pscustomobject]@{ Name = $smoke.Name; ExitCode = $LASTEXITCODE }
         if ($LASTEXITCODE -ne 0) {
             $exitCode = 1

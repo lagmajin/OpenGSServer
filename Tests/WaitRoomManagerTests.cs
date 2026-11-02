@@ -50,6 +50,19 @@ public sealed class WaitRoomManagerTests
     }
 
     [Fact]
+    public void CreateWaitRoomWithoutAGameModeDefaultsToDeathMatchAndItsMap()
+    {
+        var manager = NewManager();
+        var setting = new WaitRoomSetting { RoomName = "native-default" };
+
+        var result = manager.CreateWaitRoom(setting);
+
+        Assert.NotNull(result.Room);
+        Assert.Equal(EGameMode.DeathMatch, result.Room!.GameMode);
+        Assert.Equal(GameMode.DefaultMapFor(EGameMode.DeathMatch), result.Room.Map);
+    }
+
+    [Fact]
     public void CreateWaitRoomGeneratesANameWhenTheRequestedOneIsBlank()
     {
         var manager = NewManager();

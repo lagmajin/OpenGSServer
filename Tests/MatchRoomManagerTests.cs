@@ -594,5 +594,31 @@ public sealed class MatchRoomManagerTests
         Assert.Null(manager.CreateMatchRoomByWaitRoom(null!));
     }
 
+    [Fact]
+    public void TeamDeathMatchAssignsTeamsToPlayersWithoutALobbyTeam()
+    {
+        var manager = MatchRoomManager.Instance;
+        var waitRoom = new WaitRoom("tdm-team-assignment-" + Guid.NewGuid().ToString("N"), capacity: 4);
+        waitRoom.ChangeGameMode(EGameMode.TeamDeathMatch);
+        waitRoom.AddPlayer(new PlayerInfo("red-" + Guid.NewGuid().ToString("N"), "Red"));
+        waitRoom.AddPlayer(new PlayerInfo("blue-" + Guid.NewGuid().ToString("N"), "Blue"));
+
+        MatchRoom? matchRoom = null;
+        try
+        {
+            matchRoom = manager.CreateMatchRoomByWaitRoom(waitRoom);
+
+            Assert.NotNull(matchRoom);
+            Assert.Equal(1, matchRoom!.Players.Count(player => player.Team == ETeam.Red));
+            Assert.Equal(1, matchRoom.Players.Count(player => player.Team == ETeam.Blue));
+            Assert.DoesNotContain(matchRoom.Players, player => player.Team == ETeam.NoTeam);
+        }
+        finally
+        {
+            if (matchRoom != null)
+                manager.RemoveRoom(matchRoom.Id, forceShutdownNowPlayingRooms: true);
+        }
+    }
+
 
 }

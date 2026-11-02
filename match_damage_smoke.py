@@ -69,6 +69,28 @@ def parse_player_status(output: str, player_id: str) -> dict[str, int]:
     raise SmokeFailure(f"roomstatus did not report on {player_id}: {output!r}")
 
 
+def wait_player_status(
+    admin: ManagementClient, room_id: str, player_id: str, timeout: float
+) -> dict[str, int]:
+    deadline = time.monotonic() + timeout
+    last_status: dict[str, int] = {}
+    last_output = ""
+    while time.monotonic() < deadline:
+        last_output = admin.run(f"roomstatus {room_id}")
+        try:
+            last_status = parse_player_status(last_output, player_id)
+        except SmokeFailure:
+            time.sleep(0.2)
+            continue
+        if "health" in last_status:
+            return last_status
+        time.sleep(0.2)
+
+    raise SmokeFailure(
+        f"roomstatus did not report health for {player_id}: {last_status or last_output!r}"
+    )
+
+
 def run(lobby_host: str, lobby_port: int, management_port: int, timeout: float) -> None:
     suffix = uuid.uuid4().hex[:10]
 
@@ -91,7 +113,7 @@ def run(lobby_host: str, lobby_port: int, management_port: int, timeout: float) 
 
             # Both players start alive, and the server has to be the thing that says
             # so. Nothing here reads a client side value.
-            before = parse_player_status(admin.run(f"roomstatus {room_id}"), victim_id)
+            before = wait_player_status(admin, room_id, victim_id, timeout)
             if before.get("health", 0) <= 0:
                 raise SmokeFailure(f"victim did not start alive: {before}")
             starting_health = before["health"]
@@ -112,13 +134,13 @@ def run(lobby_host: str, lobby_port: int, management_port: int, timeout: float) 
                 }
             )
 
-            after_miss = parse_player_status(admin.run(f"roomstatus {room_id}"), victim_id)
+            after_miss = wait_player_status(admin, room_id, victim_id, timeout)
             if after_miss.get("health") != starting_health:
                 raise SmokeFailure(
                     f"an invalid shot changed the victim's health: "
                     f"{starting_health} -> {after_miss.get('health')}"
                 )
-            final = parse_player_status(admin.run(f"roomstatus {room_id}"), victim_id)
+            final = wait_player_status(admin, room_id, victim_id, timeout)
 
             print(
                 f"Damage smoke passed: room {room_id}, victim health {starting_health} "

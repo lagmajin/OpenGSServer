@@ -1139,6 +1139,37 @@ namespace OpenGSServer
                 result.Add(PreparePlayerForMatch(player, healthMultiplier));
             }
 
+            // Team modes cannot run with NoTeam players: shots still work, but
+            // scoring and the result evaluator have no side to credit. Lobby
+            // players commonly arrive without a team, so fill missing teams
+            // before publishing the match room. Keep explicit Red/Blue choices
+            // and put unassigned players on the currently smaller side.
+            if (setting is AbstractTeamMatchSetting teamSetting)
+            {
+                var redCount = result.Count(player => player.Team == ETeam.Red);
+                var blueCount = result.Count(player => player.Team == ETeam.Blue);
+                var preferRedOnTie = !teamSetting.RandomTeam || Random.Shared.Next(2) == 0;
+
+                foreach (var player in result.Where(player =>
+                    player.Team != ETeam.Red && player.Team != ETeam.Blue))
+                {
+                    if (redCount < blueCount ||
+                        (redCount == blueCount && preferRedOnTie))
+                    {
+                        player.Team = ETeam.Red;
+                        redCount++;
+                    }
+                    else
+                    {
+                        player.Team = ETeam.Blue;
+                        blueCount++;
+                    }
+
+                    if (redCount == blueCount && teamSetting.RandomTeam)
+                        preferRedOnTie = !preferRedOnTie;
+                }
+            }
+
             return result;
         }
 
