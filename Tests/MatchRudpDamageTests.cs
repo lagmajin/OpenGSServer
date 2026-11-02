@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading;
 using LiteNetLib;
 using Newtonsoft.Json.Linq;
@@ -107,18 +108,26 @@ public sealed class MatchRudpDamageTests : IDisposable
     /// Brings up a real server, a real room with two players, and two realtime
     /// clients that have completed the token handshake.
     /// </summary>
-    private void SetUpRoom()
+    private void SetUpRoom(EGameMode mode = EGameMode.DeathMatch)
     {
         var matchRoomManager = new MatchRoomManager();
         shooterId = "shooter-" + Guid.NewGuid().ToString("N").Substring(0, 8);
         victimId = "victim-" + Guid.NewGuid().ToString("N").Substring(0, 8);
 
-        var created = matchRoomManager.CreateNewDeathMatchRoom("rudp-damage", shooterId, capacity: 4);
+        var created = mode == EGameMode.TeamDeathMatch
+            ? matchRoomManager.CreateNewTeamDeathMatchRoom("rudp-damage", shooterId, capacity: 4)
+            : matchRoomManager.CreateNewDeathMatchRoom("rudp-damage", shooterId, capacity: 4);
         room = matchRoomManager.GetRoomById(created.RoomId) as MatchRoom;
         Assert.NotNull(room);
         roomId = room.Id;
-        room.AddNewPlayer(new PlayerInfo(shooterId, "Shooter"));
-        room.AddNewPlayer(new PlayerInfo(victimId, "Victim"));
+        room.AddNewPlayer(new PlayerInfo(shooterId, "Shooter")
+        {
+            Team = mode == EGameMode.TeamDeathMatch ? ETeam.Red : ETeam.NoTeam
+        });
+        room.AddNewPlayer(new PlayerInfo(victimId, "Victim")
+        {
+            Team = mode == EGameMode.TeamDeathMatch ? ETeam.Blue : ETeam.NoTeam
+        });
 
         // The realtime listener finds a room through the shared manager, so a room
         // built on a manager of its own is one the server cannot see. Registering
@@ -238,6 +247,122 @@ public sealed class MatchRudpDamageTests : IDisposable
         Assert.False(outcome.IsNowDown);
         Assert.True(room.TryGetPlayer(victimId, out var afterInfo));
         Assert.Equal(before - 1, afterInfo!.Health);
+    }
+
+    [Fact]
+    public void DeathmatchRespawnReturnsAtConfiguredSpawnAndBroadcastsAuthoritativeState()
+    {
+        SetUpRoom();
+        PumpBoth(250);
+        DrainRoomSnapshots();
+        room.GameStart();
+        Assert.True(room.TryGetPlayer(victimId, out var victimInfo));
+        Assert.True(ServerDamageResolver.Apply(
+            victimInfo, victimInfo!.MaxHealth + 1000, EPlayerPoseState.Stand).IsNowDown);
+
+        var respawnPoints = ServerManager.Instance.Settings.RespawnPoints;
+        var oldDelay = ServerManager.Instance.Settings.RespawnDelaySeconds;
+        var originalPoints = respawnPoints.ToArray();
+        using var recorder = new BroadcastRecorder();
+        GameMessageDispatcher.Initialize(recorder);
+        ServerManager.Instance.Settings.SetRespawnDelaySeconds(0f);
+        try
+        {
+            // Force this test to a known, map-valid point and prove that the
+            // position comes from server configuration, not the request.
+            var settings = ServerManager.Instance.Settings;
+            settings.SetFromJson(new JObject
+            {
+                ["RespawnPoints"] = new JArray
+                {
+                    new JObject { ["Team"] = "NoTeam", ["Map"] = "DryDays", ["X"] = -2f, ["Y"] = 1f, ["Z"] = 0f }
+                }
+            });
+
+            BroadcastRecorder.During(() =>
+            {
+                GameMessageDispatcher.Initialize(recorder);
+                victim.Send(victimId, roomId, new JObject
+                {
+                    ["MessageType"] = "PlayerRespawn",
+                    ["X"] = 9999f,
+                    ["Y"] = 9999f,
+                    ["Z"] = 9999f
+                });
+                PumpBoth(350);
+            });
+
+            var ruling = recorder.TheRuling("PlayerRespawn");
+            Assert.Equal(victimId, ruling["PlayerID"]?.ToString());
+            Assert.Equal(-2f, ruling["PosX"]?.Value<float>());
+            Assert.Equal(1f, ruling["PosY"]?.Value<float>());
+            Assert.Equal(victimInfo.MaxHealth, ruling["CurrentHealth"]?.Value<int>());
+            Assert.True(room.TryGetPlayer(victimId, out var after));
+            Assert.Equal(victimInfo.MaxHealth, after!.Health);
+
+            var lagState = MatchServerV2.Instance.ServerLagCompensationManager.GetPlayerState(victimId);
+            Assert.Equal(-2f, lagState.PositionX);
+            Assert.Equal(1f, lagState.PositionY);
+            Assert.False(MatchServerV2.Instance.ServerLagCompensationManager.IsMovementLocked(victimId));
+        }
+        finally
+        {
+            GameMessageDispatcher.Initialize(MatchServerV2.Instance);
+            ServerManager.Instance.Settings.SetRespawnDelaySeconds(oldDelay);
+            ServerManager.Instance.Settings.SetFromJson(new JObject
+            {
+                ["RespawnPoints"] = new JArray(originalPoints.Select(point => point.ToJson()))
+            });
+        }
+    }
+
+    [Fact]
+    public void TeamDeathmatchRespawnUsesThePlayersTeamSpawnPoint()
+    {
+        SetUpRoom(EGameMode.TeamDeathMatch);
+        PumpBoth(250);
+        DrainRoomSnapshots();
+        room.GameStart();
+        Assert.True(room.TryGetPlayer(victimId, out var victimInfo));
+        Assert.Equal(ETeam.Blue, victimInfo!.Team);
+        Assert.True(ServerDamageResolver.Apply(
+            victimInfo, victimInfo.MaxHealth + 1000, EPlayerPoseState.Stand).IsNowDown);
+
+        var originalPoints = ServerManager.Instance.Settings.RespawnPoints.ToArray();
+        var oldDelay = ServerManager.Instance.Settings.RespawnDelaySeconds;
+        using var recorder = new BroadcastRecorder();
+        ServerManager.Instance.Settings.SetRespawnDelaySeconds(0f);
+        try
+        {
+            ServerManager.Instance.Settings.SetFromJson(new JObject
+            {
+                ["RespawnPoints"] = new JArray
+                {
+                    new JObject { ["Team"] = "Red", ["Map"] = "DryDays", ["X"] = 4f, ["Y"] = -2f, ["Z"] = 0f },
+                    new JObject { ["Team"] = "Blue", ["Map"] = "DryDays", ["X"] = -8f, ["Y"] = 3f, ["Z"] = 0f }
+                }
+            });
+
+            BroadcastRecorder.During(() =>
+            {
+                GameMessageDispatcher.Initialize(recorder);
+                victim.Send(victimId, roomId, new JObject { ["MessageType"] = "PlayerRespawn" });
+                PumpBoth(350);
+            });
+
+            var ruling = recorder.TheRuling("PlayerRespawn");
+            Assert.Equal(-8f, ruling["PosX"]?.Value<float>());
+            Assert.Equal(3f, ruling["PosY"]?.Value<float>());
+        }
+        finally
+        {
+            GameMessageDispatcher.Initialize(MatchServerV2.Instance);
+            ServerManager.Instance.Settings.SetRespawnDelaySeconds(oldDelay);
+            ServerManager.Instance.Settings.SetFromJson(new JObject
+            {
+                ["RespawnPoints"] = new JArray(originalPoints.Select(point => point.ToJson()))
+            });
+        }
     }
 
     // ---- The room state a client reads ------------------------------------
