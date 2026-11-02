@@ -2795,6 +2795,15 @@ namespace OpenGSServer
             // RefillAllMagazines is a no-op when there is no magazine state yet.
             ServerWeaponMagazineStore.GetOrCreateStartingWeapon(playerId, "Pistol");
             ServerWeaponMagazineStore.RefillAllMagazines(playerId);
+            // Health and position are broadcast by PlayerRespawn, but the client
+            // keeps ammo as separate state. Publish each refilled magazine so
+            // the HUD and its local shot guard agree with the server immediately.
+            foreach (var magazine in ServerWeaponMagazineStore.ForPlayer(playerId))
+            {
+                GameMessageDispatcher.SendAmmoUpdate(
+                    room.Id.ToString(), playerId, magazine.WeaponType,
+                    magazine.ReadRemaining(), magazine.Capacity, magazine.ReadReserve());
+            }
 
             var armorSnapshot = ServerDamageResolver.GetArmor(respawnedPlayer);
             GameMessageDispatcher.SendPlayerRespawn(

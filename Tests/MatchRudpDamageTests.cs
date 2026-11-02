@@ -257,6 +257,12 @@ public sealed class MatchRudpDamageTests : IDisposable
         DrainRoomSnapshots();
         room.GameStart();
         Assert.True(room.TryGetPlayer(victimId, out var victimInfo));
+        var pistol = ServerWeaponMagazineStore.GetOrCreateStartingWeapon(victimId, "Pistol");
+        Assert.NotNull(pistol);
+        pistol!.SetRemaining(0);
+        var rifle = ServerWeaponMagazineStore.GetOrCreateStartingWeapon(victimId, "Rifle");
+        Assert.NotNull(rifle);
+        rifle!.SetRemaining(0);
         Assert.True(ServerDamageResolver.Apply(
             victimInfo, victimInfo!.MaxHealth + 1000, EPlayerPoseState.Stand).IsNowDown);
 
@@ -299,6 +305,11 @@ public sealed class MatchRudpDamageTests : IDisposable
             Assert.Equal(victimInfo.MaxHealth, ruling["CurrentHealth"]?.Value<int>());
             Assert.True(room.TryGetPlayer(victimId, out var after));
             Assert.Equal(victimInfo.MaxHealth, after!.Health);
+            var ammoUpdates = recorder.RulingsOfType("AmmoUpdate")
+                .Where(message => message["PlayerID"]?.ToString() == victimId)
+                .ToDictionary(message => message["WeaponType"]!.ToString(), StringComparer.OrdinalIgnoreCase);
+            Assert.Equal(pistol.Capacity, ammoUpdates["Pistol"]["CurrentAmmo"]?.Value<int>());
+            Assert.Equal(rifle.Capacity, ammoUpdates["Rifle"]["CurrentAmmo"]?.Value<int>());
 
             var lagState = MatchServerV2.Instance.ServerLagCompensationManager.GetPlayerState(victimId);
             Assert.Equal(-2f, lagState.PositionX);
