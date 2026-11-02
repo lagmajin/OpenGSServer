@@ -3568,9 +3568,12 @@ namespace OpenGSServer
             var outcome = ServerDamageResolver.Apply(
                 target, damage, pose, GetDefenseArmorAbsorptionMultiplier(room.Id.ToString(), targetId));
 
-            if (outcome.WasAlreadyDown)
+            if (outcome.WasAlreadyDown || !outcome.HasEffect)
             {
-                // A hit on someone who is already out is not news.
+                // A hit on someone who is already out, or is protected by their
+                // spawn shield, is not a damage ruling. In particular, publishing
+                // a zero-damage hit would disagree with the client's visible
+                // spawn protection feedback.
                 return;
             }
 
