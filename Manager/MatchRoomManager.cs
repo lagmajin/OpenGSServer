@@ -412,6 +412,8 @@ namespace OpenGSServer
                 OpenGSServer.Network.ServerWeaponMagazineStore.GetOrCreateStartingWeapon(
                     player.Id, "Pistol");
                 OpenGSServer.Network.ServerWeaponMagazineStore.RefillAllMagazines(player.Id);
+                if (player.Health > 0)
+                    OpenGSServer.Network.ServerDamageResolver.Revive(player);
             }
 
             if (!matchRoom.GameStart())

@@ -1745,6 +1745,8 @@ namespace OpenGSServer
         {
             ClearPlayerCombatEffects(room.Id.ToString(), killedPlayerId);
             ReleaseWeaponReservations(room, killedPlayerId);
+            if (room.TryGetPlayer(killedPlayerId, out var killedPlayer) && killedPlayer != null)
+                ServerDamageResolver.ClearSpawnProtection(killedPlayer);
             Console.WriteLine($"Player {killedPlayerId} was killed by {killerId}");
             var killerKills = room.TryGetPlayer(killerId, out var killer) && killer != null
                 ? killer.Kills

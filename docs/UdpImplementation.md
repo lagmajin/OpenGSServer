@@ -41,6 +41,10 @@ The server settings file can provide team-owned spawn points and an authoritativ
 respawn delay (default 5 seconds, configurable from 0 to 60). The server records
 the down time and refuses early requests; the delay is included in `MatchStatus`
 so clients can show the same countdown. Coordinates from the client are ignored.
+The initial match spawn and each accepted respawn also receive two seconds of
+server-enforced spawn protection, matching the native client's visible blink.
+Hits during that interval do not reduce health or armor; the protection ends when
+the interval expires or the player is eliminated.
 Spawn points use X/Y for the movement plane and Z for vertical height; the default
 points are on the ground plane at Z=0. A settings file containing the exact prior
 built-in spawn list is migrated to the new ground-plane layout when loaded; custom

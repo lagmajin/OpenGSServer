@@ -58,11 +58,13 @@ namespace OpenGSServer.Network
     /// </summary>
     public static class ServerDamageResolver
     {
+        public const float SpawnInvulnerabilitySeconds = 2f;
         private static readonly ConditionalWeakTable<PlayerInfo, object> PlayerHealthLocks = new();
         private sealed class PlayerArmorState
         {
             public float Current = 100f;
             public long DownedAtTimestamp;
+            public long SpawnProtectionStartedAtTimestamp;
             public const float Maximum = 100f;
         }
         private static readonly ConditionalWeakTable<PlayerInfo, PlayerArmorState> PlayerArmor = new();
@@ -128,6 +130,12 @@ namespace OpenGSServer.Network
                         remainingArmor: armor.Current);
                 }
 
+                if (IsSpawnProtected(armor))
+                {
+                    return new DamageOutcome(requested, 0, player.Health, false, false,
+                        remainingArmor: armor.Current);
+                }
+
                 var scaled = (int)MathF.Round(requested * PoseMultiplier(pose));
                 var safeArmorMultiplier = float.IsFinite(armorAbsorptionMultiplier)
                     ? Math.Max(0f, armorAbsorptionMultiplier)
@@ -171,6 +179,7 @@ namespace OpenGSServer.Network
                 var armor = ArmorState(player);
                 armor.DownedAtTimestamp = 0;
                 armor.Current = PlayerArmorState.Maximum;
+                armor.SpawnProtectionStartedAtTimestamp = Stopwatch.GetTimestamp();
             }
         }
 
@@ -193,9 +202,23 @@ namespace OpenGSServer.Network
                 var armor = ArmorState(player);
                 armor.DownedAtTimestamp = 0;
                 armor.Current = PlayerArmorState.Maximum;
+                armor.SpawnProtectionStartedAtTimestamp = Stopwatch.GetTimestamp();
                 return true;
             }
         }
+
+        /// <summary>Removes spawn protection, for death and explicit lifecycle resets.</summary>
+        public static void ClearSpawnProtection(PlayerInfo? player)
+        {
+            if (player == null) return;
+            lock (HealthLock(player))
+                ArmorState(player).SpawnProtectionStartedAtTimestamp = 0;
+        }
+
+        private static bool IsSpawnProtected(PlayerArmorState armor) =>
+            armor.SpawnProtectionStartedAtTimestamp != 0 &&
+            Stopwatch.GetElapsedTime(armor.SpawnProtectionStartedAtTimestamp).TotalSeconds <
+                SpawnInvulnerabilitySeconds;
 
         public static bool IsRespawnDelayElapsed(PlayerInfo? player, float delaySeconds)
         {
