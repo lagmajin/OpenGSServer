@@ -450,6 +450,21 @@ def run_smoke(host: str, port: int, timeout: float) -> None:
 
         client.send(
             {
+                "MessageType": "GameStartRequest",
+                "PlayerAccountID": player_id,
+                "RoomID": room_id,
+            }
+        )
+        require_success(
+            client.wait_for(lambda message: message.get("MessageType") == "LoadingStartedNotification"),
+            "match start",
+        )
+
+        # The UDP token is scoped to the active MatchRoom. Request it after
+        # GameStart has promoted the lobby room, matching the native client's
+        # LoadingStarted callback rather than asking for it from a wait room.
+        client.send(
+            {
                 "MessageType": "MatchServerInfoRequest",
                 "RoomID": room_id,
             }
@@ -466,18 +481,6 @@ def run_smoke(host: str, port: int, timeout: float) -> None:
             raise SmokeFailure("MatchServerInfoResponse did not include a UDP authorization token")
         if match_info.get("RoomID") != room_id and match_info.get("RoomId") != room_id:
             raise SmokeFailure("MatchServerInfoResponse did not preserve RoomID")
-
-        client.send(
-            {
-                "MessageType": "GameStartRequest",
-                "PlayerAccountID": player_id,
-                "RoomID": room_id,
-            }
-        )
-        require_success(
-            client.wait_for(lambda message: message.get("MessageType") == "LoadingStartedNotification"),
-            "match start",
-        )
 
         client.send(
             {

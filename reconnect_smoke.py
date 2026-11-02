@@ -39,6 +39,18 @@ def create_and_login(
     return login.get("PlayerID") or login.get("GlobalUserId") or account_id
 
 
+def login_existing(
+    client: LobbySmokeClient, account_id: str, password: str
+) -> str:
+    client.wait_for(lambda message: message.get("MessageType") == "ConnectServerSuccessful")
+    client.send({"MessageType": "LoginRequest", "id": account_id, "pass": password})
+    login = require_success(
+        client.wait_for(lambda message: message.get("MessageType") == "LoginResponse"),
+        "reconnect login",
+    )
+    return login.get("PlayerID") or login.get("GlobalUserId") or account_id
+
+
 def rooms(client: LobbySmokeClient) -> list[dict]:
     client.send({"MessageType": "RoomListUpdateRequest"})
     return require_success(
@@ -48,10 +60,10 @@ def rooms(client: LobbySmokeClient) -> list[dict]:
 
 
 def run(host: str, port: int, timeout: float) -> None:
-    suffix = uuid.uuid4().hex[:10]
+    suffix = uuid.uuid4().hex[:12]
     account_id = f"reconnect_{suffix}"
     password = f"Reconnect-{suffix}!"
-    display_name = f"Reconnect {suffix}"
+    display_name = f"Reconnect {suffix[-9:]}"
     room_name = f"Reconnect Room {suffix}"
 
     # First session: log in, create a room, then drop the socket without logout.
@@ -88,7 +100,7 @@ def run(host: str, port: int, timeout: float) -> None:
     # Second session: the same account must be able to log in again, and the
     # room the dropped session created must no longer be held by it.
     with LobbySmokeClient(host, port, timeout) as second:
-        reconnected_id = create_and_login(second, account_id, password, display_name)
+        reconnected_id = login_existing(second, account_id, password)
         if reconnected_id != player_id:
             raise SmokeFailure(
                 f"reconnect changed the player id: {player_id} -> {reconnected_id}"

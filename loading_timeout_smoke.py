@@ -27,7 +27,7 @@ def account(client: LobbySmokeClient, suffix: str) -> str:
             "MessageType": "CreateAccountRequest",
             "AccountID": account_id,
             "Password": password,
-            "DisplayName": f"LoadTimeout {suffix}",
+            "DisplayName": f"Timeout {suffix[-10:]}",
         }
     )
     require_success(
@@ -53,7 +53,7 @@ def run(host: str, port: int, timeout: float) -> None:
             {
                 "MessageType": "CreateRoomRequest",
                 "PlayerID": owner_id,
-                "PlayerName": f"LoadTimeout {suffix}",
+                "PlayerName": f"Timeout {suffix[-10:]}",
                 "RoomName": room_name,
                 "Capacity": 2,
             }

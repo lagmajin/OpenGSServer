@@ -446,6 +446,14 @@ namespace OpenGSServer
 
             foreach (var waitRoom in WaitRoomManager.Instance().GetAllRooms())
             {
+                // Mission rooms share this registry for discovery, but their
+                // player membership and lifetime are owned by the mission
+                // manager and handled in the loop below.
+                if (MissionWaitRoomManager.Instance.FindMissionRoom(waitRoom.RoomId) != null)
+                {
+                    continue;
+                }
+
                 var previousOwnerId = waitRoom.GetFirstPlayerId();
                 if (!waitRoom.TryRemovePlayer(playerId, out _))
                 {
@@ -907,17 +915,17 @@ namespace OpenGSServer
 
             var roomId = dic.GetStringOrNull("RoomId") ?? dic.GetStringOrNull("RoomID");
 
+            // Mission rooms are also registered with WaitRoomManager so they
+            // can be browsed alongside regular rooms. Resolve the authoritative
+            // mission entry first; otherwise leaving closes only the published
+            // alias and leaves an empty mission room behind in the lobby list.
             var waitRoom = string.IsNullOrWhiteSpace(roomId)
+                ? FindMissionRoomByPlayerId(playerId)
+                : MissionWaitRoomManager.Instance.FindMissionRoom(roomId);
+            var isMissionRoom = waitRoom != null;
+            waitRoom ??= string.IsNullOrWhiteSpace(roomId)
                 ? FindWaitRoomByPlayerId(playerId)
                 : WaitRoomManager.Instance().FindWaitRoom(roomId);
-            var isMissionRoom = false;
-            if (waitRoom == null)
-            {
-                waitRoom = string.IsNullOrWhiteSpace(roomId)
-                    ? FindMissionRoomByPlayerId(playerId)
-                    : MissionWaitRoomManager.Instance.FindMissionRoom(roomId);
-                isMissionRoom = waitRoom != null;
-            }
             if (waitRoom == null)
             {
                 session.SendAsyncJsonWithTimeStamp(CreateRoomError(MessageType.RoomNotFound, roomId));

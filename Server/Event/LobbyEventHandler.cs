@@ -360,6 +360,14 @@ namespace OpenGSServer
             var roomArray = new JArray();
             foreach (var room in WaitRoomManager.Instance().GetAllRooms())
             {
+                // Mission rooms are published here for cross-mode room
+                // discovery, and are also serialized with mission metadata
+                // below. Keep the regular projection from duplicating them.
+                if (MissionWaitRoomManager.Instance.FindMissionRoom(room.RoomId) != null)
+                {
+                    continue;
+                }
+
                 var json = new RoomListEntry
                 {
                     RoomId = room.RoomId,

@@ -15,7 +15,7 @@ def login(client: LobbySmokeClient, account_id: str, password: str) -> None:
         "MessageType": "CreateAccountRequest",
         "AccountID": account_id,
         "Password": password,
-        "DisplayName": account_id,
+        "DisplayName": f"Mission {account_id[-10:]}",
     })
     client.wait_for(lambda m: m.get("MessageType") == "CreateAccountResponse")
     client.send({"MessageType": "LoginRequest", "id": account_id, "pass": password})
@@ -45,6 +45,7 @@ def run(host: str, port: int, timeout: float) -> None:
             "MessageType": "CreateRoomRequest",
             "IsMission": True,
             "MissionId": "SmokeMission",
+            "PlayerName": f"Mission {suffix}",
             "RoomName": room_name,
             "Capacity": 2,
         })
@@ -71,6 +72,7 @@ def run(host: str, port: int, timeout: float) -> None:
             "MessageType": "CreateRoomRequest",
             "IsMission": True,
             "MissionId": "SmokeMissionDisconnect",
+            "PlayerName": f"Mission {suffix}",
             "RoomName": f"{room_name} Disconnect",
             "Capacity": 2,
         })
@@ -87,7 +89,8 @@ def run(host: str, port: int, timeout: float) -> None:
         login(observer, observer_account, password)
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
-            if not any((r.get("RoomID") or r.get("RoomId")) == disconnected_id for r in rooms(observer)):
+            current_rooms = rooms(observer)
+            if not any((r.get("RoomID") or r.get("RoomId")) == disconnected_id for r in current_rooms):
                 break
             time.sleep(0.1)
         else:

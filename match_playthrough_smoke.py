@@ -276,9 +276,10 @@ def take_match_end(client: LobbySmokeClient) -> dict[str, Any] | None:
             return client.pending.pop(index)
 
     original_timeout = client.timeout
-    client.timeout = 2.0
+    deadline = time.monotonic() + 3.0
     try:
-        for _ in range(10):
+        while time.monotonic() < deadline:
+            client.timeout = min(original_timeout, deadline - time.monotonic())
             try:
                 message = client.receive()
             except SmokeFailure:

@@ -17,7 +17,7 @@ def account(client: LobbySmokeClient, suffix: str) -> str:
             "MessageType": "CreateAccountRequest",
             "AccountID": account_id,
             "Password": password,
-            "DisplayName": f"Smoke2 {suffix}",
+            "DisplayName": f"Smoke2 {suffix[-10:]}",
         }
     )
     require_success(
