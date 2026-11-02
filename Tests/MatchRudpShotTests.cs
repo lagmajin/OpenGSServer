@@ -332,6 +332,103 @@ public sealed class MatchRudpShotTests : IDisposable
         return InGameMatchEventHandler.LiveProjectileCount();
     }
 
+    /// <summary>
+    /// Finishes one complete DM/TDM combat cycle over the same realtime
+    /// transport used by clients: shoot to kill, request the server ruled
+    /// respawn, then prove the revived player can be hit again.
+    /// </summary>
+    private void AssertKillRespawnAndReengage(EGameMode mode)
+    {
+        SetUpRoom(mode);
+        MoveTo(shooter, shooterId, 0f, 0f);
+        MoveTo(victim, victimId, 3f, 0f);
+
+        using var recorder = new BroadcastRecorder();
+        var oldDelay = ServerManager.Instance.Settings.RespawnDelaySeconds;
+        ServerManager.Instance.Settings.SetRespawnDelaySeconds(0f);
+        try
+        {
+            BroadcastRecorder.During(() =>
+            {
+                GameMessageDispatcher.Initialize(recorder);
+                var guard = 0;
+                while (VictimHealth() > 0 && guard++ < 12)
+                {
+                    Fire("Pistol", dirX: 1f);
+                    Pump(300);
+                }
+            });
+
+            Assert.Equal(0, VictimHealth());
+            Assert.True(room.TryGetPlayer(victimId, out var downed));
+            Assert.Equal(1, downed!.Deaths);
+            Assert.NotEmpty(recorder.RulingsOfType(MessageType.PlayerKilled));
+            Assert.NotEmpty(recorder.RulingsOfType("PlayerScoreState"));
+            Assert.True(ShooterKills() >= 1);
+            if (mode == EGameMode.TeamDeathMatch)
+            {
+                Assert.Equal(1, room.TeamKillCount(ETeam.Red));
+                Assert.Equal(0, room.TeamKillCount(ETeam.Blue));
+            }
+
+            // The production route is a TCP system event. Coordinates supplied
+            // by the client are deliberately bogus: spawn position is server owned.
+            BroadcastRecorder.During(() =>
+            {
+                GameMessageDispatcher.Initialize(recorder);
+                InGameMatchEventHandler.HandleTcpSystemEvent(new JObject
+                {
+                    ["MessageType"] = GameMessageTypes.PlayerRespawn,
+                    ["PlayerID"] = victimId,
+                    ["PlayerId"] = victimId,
+                    ["RoomID"] = roomId,
+                    ["RoomId"] = roomId,
+                    ["X"] = 9999f,
+                    ["Y"] = 9999f,
+                    ["Z"] = 9999f
+                });
+            });
+
+            Assert.True(room.TryGetPlayer(victimId, out var revived));
+            Assert.Equal(revived!.MaxHealth, revived.Health);
+            Assert.Equal(1, revived.Deaths);
+            var respawn = Assert.Single(recorder.RulingsOfType("PlayerRespawn"));
+            Assert.Equal(victimId, respawn["PlayerID"]?.ToString());
+            Assert.NotEqual(9999f, respawn["PosX"]?.Value<float>());
+
+            // Spawn protection is a deliberate part of respawn; let it expire
+            // before checking that the revived server state participates in
+            // combat again.
+            Thread.Sleep((int)Math.Ceiling(ServerDamageResolver.SpawnInvulnerabilitySeconds * 1000f) + 50);
+            var respawnX = respawn["PosX"]!.Value<float>();
+            var respawnY = respawn["PosY"]!.Value<float>();
+            MoveTo(shooter, shooterId, respawnX - 3f, respawnY);
+            var healthAfterRespawn = VictimHealth();
+            BroadcastRecorder.During(() =>
+            {
+                GameMessageDispatcher.Initialize(recorder);
+                Fire("Pistol", dirX: 1f);
+                Pump(400);
+            });
+            Assert.True(VictimHealth() < healthAfterRespawn,
+                $"the revived player could not be hit again in {mode}");
+            Assert.NotEmpty(recorder.RulingsOfType(MessageType.PlayerDamaged));
+        }
+        finally
+        {
+            GameMessageDispatcher.Initialize(MatchServerV2.Instance);
+            ServerManager.Instance.Settings.SetRespawnDelaySeconds(oldDelay);
+        }
+    }
+
+    [Fact]
+    public void DeathmatchKillRespawnAndReengageWorkOverRealtime() =>
+        AssertKillRespawnAndReengage(EGameMode.DeathMatch);
+
+    [Fact]
+    public void TeamDeathmatchKillRespawnAndReengageWorkOverRealtime() =>
+        AssertKillRespawnAndReengage(EGameMode.TeamDeathMatch);
+
     [Fact]
     public void AShotAtAPlayerInFrontReducesTheHealthTheServerHolds()
     {
