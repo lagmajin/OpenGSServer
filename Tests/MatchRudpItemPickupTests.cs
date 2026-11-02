@@ -30,8 +30,6 @@ namespace OpenGSServer.Tests;
 [Collection("RealtimeSocket")]
 public sealed class MatchRudpItemPickupTests : IDisposable
 {
-    private static int nextPort = 65250;
-
     private MatchUDPServer server = null!;
     private MatchRudpProbe probe = null!;
     private MatchRoom room = null!;
@@ -100,7 +98,7 @@ public sealed class MatchRudpItemPickupTests : IDisposable
         }
 
         server = new MatchUDPServer();
-        server.Listen(Interlocked.Increment(ref nextPort));
+        server.Listen(MatchTestPort.GetAvailableUdpPort());
         Pump(200);
 
         var token = server.IssueConnectionToken(playerId);

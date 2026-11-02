@@ -22,8 +22,6 @@ namespace OpenGSServer.Tests;
 [Collection("RealtimeSocket")]
 public sealed class MatchRudpProbeTests : IDisposable
 {
-    private static int nextPort = 64980;
-
     private MatchUDPServer server = null!;
     private MatchRudpProbe probe = null!;
     private string playerId = string.Empty;
@@ -56,7 +54,7 @@ public sealed class MatchRudpProbeTests : IDisposable
 
         server = new MatchUDPServer();
         // Each test binds a real UDP socket, so they must not share a port.
-        server.Listen(Interlocked.Increment(ref nextPort));
+        server.Listen(MatchTestPort.GetAvailableUdpPort());
 
         var token = server.IssueConnectionToken(playerId);
         Assert.False(string.IsNullOrWhiteSpace(token), "the server did not issue a UDP token");

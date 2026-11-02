@@ -31,8 +31,6 @@ namespace OpenGSServer.Tests;
 [Collection("RealtimeSocket")]
 public sealed class MatchRudpGameplayInputTests : IDisposable
 {
-    private static int nextPort = 65450;
-
     // The loop runs at 25Hz. A test that drives the server has to use the same
     // step the loop does, because the tick is what applies the queued input.
     private const float TickSeconds = 0.04f;
@@ -108,7 +106,7 @@ public sealed class MatchRudpGameplayInputTests : IDisposable
         MatchServerV2.Instance.ServerLagCompensationManager.AddPlayer(playerId);
 
         server = new MatchUDPServer();
-        server.Listen(Interlocked.Increment(ref nextPort));
+        server.Listen(MatchTestPort.GetAvailableUdpPort());
 
         var token = server.IssueConnectionToken(playerId);
         Assert.False(string.IsNullOrWhiteSpace(token), "no realtime token was issued");

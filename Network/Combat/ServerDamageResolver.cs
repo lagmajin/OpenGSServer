@@ -136,7 +136,11 @@ namespace OpenGSServer.Network
                         remainingArmor: armor.Current);
                 }
 
-                var scaled = (int)MathF.Round(requested * PoseMultiplier(pose));
+                // Pose scaling can round a positive half-point hit to zero (for
+                // example one damage while sitting). Keep every positive hit at
+                // least one point before armor so low-damage weapons cannot turn
+                // a defensive pose into complete immunity.
+                var scaled = Math.Max(1, (int)MathF.Round(requested * PoseMultiplier(pose)));
                 var safeArmorMultiplier = float.IsFinite(armorAbsorptionMultiplier)
                     ? Math.Max(0f, armorAbsorptionMultiplier)
                     : 1f;

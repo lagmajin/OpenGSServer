@@ -1,3 +1,5 @@
+using System;
+using System.Threading;
 using OpenGSCore;
 using OpenGSServer.Network;
 using Xunit;
@@ -26,8 +28,9 @@ public sealed class ServerDamageResolverTests
 
         var outcome = ServerDamageResolver.Apply(player, 40, EPlayerPoseState.Stand);
 
-        Assert.Equal(40, outcome.Applied);
-        Assert.Equal(60, outcome.RemainingHealth);
+        Assert.Equal(36, outcome.Applied);
+        Assert.Equal(4f, outcome.ArmorAbsorbed);
+        Assert.Equal(64, outcome.RemainingHealth);
     }
 
     [Fact]
@@ -37,7 +40,8 @@ public sealed class ServerDamageResolverTests
 
         var outcome = ServerDamageResolver.Apply(player, 40, EPlayerPoseState.Sit);
 
-        Assert.Equal(20, outcome.Applied);
+        Assert.Equal(18, outcome.Applied);
+        Assert.Equal(2f, outcome.ArmorAbsorbed);
     }
 
     [Fact]
@@ -47,7 +51,8 @@ public sealed class ServerDamageResolverTests
 
         var outcome = ServerDamageResolver.Apply(player, 40, EPlayerPoseState.LieDown);
 
-        Assert.Equal(30, outcome.Applied);
+        Assert.Equal(27, outcome.Applied);
+        Assert.Equal(3f, outcome.ArmorAbsorbed);
     }
 
     // ---- Health ---------------------------------------------------------
@@ -119,6 +124,41 @@ public sealed class ServerDamageResolverTests
 
         Assert.Equal(player.MaxHealth, player.Health);
         Assert.False(ServerDamageResolver.IsDown(player));
+    }
+
+    [Fact]
+    public void ReviveProtectsHealthAndArmorUntilTheSpawnWindowExpires()
+    {
+        var player = NewPlayer(0);
+        player.MaxHealth = 100;
+        ServerDamageResolver.Revive(player);
+
+        var protectedHit = ServerDamageResolver.Apply(player, 40, EPlayerPoseState.Stand);
+
+        Assert.False(protectedHit.HasEffect);
+        Assert.Equal(player.MaxHealth, player.Health);
+        Assert.Equal(100f, ServerDamageResolver.GetArmor(player).Current);
+
+        Thread.Sleep((int)Math.Ceiling(ServerDamageResolver.SpawnInvulnerabilitySeconds * 1000f) + 50);
+        var unprotectedHit = ServerDamageResolver.Apply(player, 40, EPlayerPoseState.Stand);
+
+        Assert.True(unprotectedHit.HasEffect);
+        Assert.Equal(40, unprotectedHit.Applied + (int)Math.Round(unprotectedHit.ArmorAbsorbed));
+        Assert.True(player.Health < player.MaxHealth);
+    }
+
+    [Fact]
+    public void ClearingSpawnProtectionMakesThePlayerVulnerableImmediately()
+    {
+        var player = NewPlayer(0);
+        player.MaxHealth = 100;
+        ServerDamageResolver.Revive(player);
+
+        ServerDamageResolver.ClearSpawnProtection(player);
+        var outcome = ServerDamageResolver.Apply(player, 40, EPlayerPoseState.Stand);
+
+        Assert.True(outcome.HasEffect);
+        Assert.True(player.Health < player.MaxHealth);
     }
 
     [Fact]

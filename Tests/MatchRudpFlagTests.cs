@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using Newtonsoft.Json.Linq;
 using OpenGSCore;
+using OpenGSServer.Network;
 using Xunit;
 
 namespace OpenGSServer.Tests;
@@ -476,7 +477,10 @@ public sealed class MatchRudpFlagTests : IDisposable
         SetUpRoom();
 
         Assert.True(room!.TryGetPlayer(RedPlayerId, out var red));
-        red!.Health = 0;
+        var oldRespawnDelay = ServerManager.Instance.Settings.RespawnDelaySeconds;
+        ServerManager.Instance.Settings.SetRespawnDelaySeconds(0f);
+        Assert.True(ServerDamageResolver.Apply(
+            red, red!.MaxHealth + 1000, EPlayerPoseState.Stand).IsNowDown);
 
         var lag = MatchServerV2.Instance.ServerLagCompensationManager;
         lag.AddPlayer(RedPlayerId);
@@ -485,26 +489,34 @@ public sealed class MatchRudpFlagTests : IDisposable
         // routed the way the realtime listener routes it. A test that took the
         // other path would never reach the handler and would pass for the wrong
         // reason, which is how the original gap stayed invisible.
-        BroadcastRecorder.During(() =>
+        try
         {
-            GameMessageDispatcher.Initialize(new BroadcastRecorder());
-            InGameMatchEventHandler.HandleTcpSystemEvent(new JObject
+            BroadcastRecorder.During(() =>
             {
-                ["MessageType"] = GameMessageTypes.PlayerRespawn,
-                ["PlayerID"] = RedPlayerId,
-                ["PlayerId"] = RedPlayerId,
-                ["RoomID"] = roomId,
-                ["RoomId"] = roomId
+                GameMessageDispatcher.Initialize(new BroadcastRecorder());
+                InGameMatchEventHandler.HandleTcpSystemEvent(new JObject
+                {
+                    ["MessageType"] = GameMessageTypes.PlayerRespawn,
+                    ["PlayerID"] = RedPlayerId,
+                    ["PlayerId"] = RedPlayerId,
+                    ["RoomID"] = roomId,
+                    ["RoomId"] = roomId
+                });
             });
-        });
 
-        // A respawn used to be entirely local: the client rebuilt its player and
-        // the server kept the health it had already been reduced to, which is
-        // zero. The hit path refuses a target whose health is not above zero, so
-        // from then on nobody could shoot this player at all and they were
-        // untouchable for the rest of the match while walking around the map.
-        Assert.True(room.TryGetPlayer(RedPlayerId, out var after));
-        Assert.True(after!.Health > 0, "a respawned player is still at no health and cannot be hit");
+            // A respawn used to be entirely local: the client rebuilt its player and
+            // the server kept the health it had already been reduced to, which is
+            // zero. The hit path refuses a target whose health is not above zero, so
+            // from then on nobody could shoot this player at all and they were
+            // untouchable for the rest of the match while walking around the map.
+            Assert.True(room.TryGetPlayer(RedPlayerId, out var after));
+            Assert.True(after!.Health > 0, "a respawned player is still at no health and cannot be hit");
+        }
+        finally
+        {
+            ServerManager.Instance.Settings.SetRespawnDelaySeconds(oldRespawnDelay);
+        }
+
     }
 
     [Fact]

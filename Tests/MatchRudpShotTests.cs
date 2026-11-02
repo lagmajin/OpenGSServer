@@ -28,8 +28,6 @@ namespace OpenGSServer.Tests;
 [Collection("RealtimeSocket")]
 public sealed class MatchRudpShotTests : IDisposable
 {
-    private static int nextPort = 65350;
-
     private MatchUDPServer server = null!;
     private MatchRudpProbe shooter = null!;
     private MatchRudpProbe victim = null!;
@@ -101,7 +99,7 @@ public sealed class MatchRudpShotTests : IDisposable
         lag.AddPlayer(victimId);
 
         server = new MatchUDPServer();
-        server.Listen(Interlocked.Increment(ref nextPort));
+        server.Listen(MatchTestPort.GetAvailableUdpPort());
         Pump(200);
 
         shooter = Connect(shooterId);
