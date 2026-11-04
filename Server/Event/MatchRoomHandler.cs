@@ -2599,6 +2599,60 @@ namespace OpenGSServer
                 TryResolveCtfFallDeath(room, player.Id);
         }
 
+        public static void UpdateCtfFlagInteractions(MatchRoom room)
+        {
+            if (room == null || !room.Playing || room.Finished ||
+                room.Setting.Mode != EGameMode.CaptureTheFlag)
+                return;
+
+            foreach (var player in room.Players.ToArray())
+            {
+                if (player == null || player.Health <= 0 ||
+                    MatchServerV2.Instance?.IsPlayerConnected(player.Id) == false)
+                    continue;
+
+                var playerTeam = ResolvePlayerTeam(room, player.Id);
+                if (playerTeam is not (ETeam.Red or ETeam.Blue))
+                    continue;
+
+                var enemyTeam = CaptureTheFlagRules.OpposingTeam(playerTeam);
+                var flagSnapshot = FlagStateFor(room).WithFlags(flags =>
+                (
+                    OwnFlagAtHome: flags[playerTeam].IsAtBase,
+                    OwnFlagOnGround: flags[playerTeam].State == EFlagState.FlagOnGround,
+                    EnemyFlagAvailable: !flags[enemyTeam].IsCarried,
+                    EnemyFlagCarriedByPlayer: flags[enemyTeam].IsCarried &&
+                        string.Equals(flags[enemyTeam].CarrierId, player.Id,
+                            StringComparison.OrdinalIgnoreCase)
+                ));
+
+                if (flagSnapshot.OwnFlagOnGround && IsStandingAtAFlag(room, player.Id, playerTeam))
+                {
+                    HandleFlagReturn(room, player.Id, new JObject
+                    {
+                        ["FlagTeam"] = playerTeam.ToString(),
+                        ["ReturnReason"] = EFlagReturnReason.FriendlyRecovered.ToString()
+                    });
+                    continue;
+                }
+
+                if (flagSnapshot.EnemyFlagCarriedByPlayer)
+                {
+                    if (flagSnapshot.OwnFlagAtHome && IsStandingAtAFlag(room, player.Id, playerTeam))
+                        HandleFlagCaptured(room, player.Id, new JObject());
+                    continue;
+                }
+
+                if (flagSnapshot.EnemyFlagAvailable && IsStandingAtAFlag(room, player.Id, enemyTeam))
+                {
+                    HandleFlagPickup(room, player.Id, new JObject
+                    {
+                        ["FlagTeam"] = enemyTeam.ToString()
+                    });
+                }
+            }
+        }
+
         private static bool TryResolveCtfFallDeath(MatchRoom room, string playerId)
         {
             var transform = MatchServerV2.Instance?.ServerLagCompensationManager.GetPlayerState(playerId);

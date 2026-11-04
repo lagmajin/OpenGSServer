@@ -250,6 +250,7 @@ namespace OpenGSServer
                 }
 
                 InGameMatchEventHandler.UpdateCtfFallDeaths(room);
+                InGameMatchEventHandler.UpdateCtfFlagInteractions(room);
             }
         }
 
