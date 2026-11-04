@@ -13,6 +13,33 @@ public sealed class CtfMapLayoutTests
         new object[] { EMap.SkyHighCTF, 6f, 12.5f, -4.655f, 10.315f }
     };
 
+    public static IEnumerable<object[]> MapsWithRecoveredBounds => new[]
+    {
+        new object[] { EMap.ArchLoadOfGunster, -7.3421549f, -6.9800004f, 7.2278451f, 10.9799993f },
+        new object[] { EMap.BattlePort1, -9.44f, -6.94f, 8.04f, 8.0949485f },
+        new object[] { EMap.BattlePortCTF, -16f, -5f, 16f, 5f },
+        new object[] { EMap.BluffStructure1, -6f, -12.5f, 6f, 12.5f },
+        new object[] { EMap.BluffStructure2, -6f, -12.5f, 6f, 12.5f },
+        new object[] { EMap.Christmas, -10.4429551f, -7.5207486f, 11.6149997f, 6.0648394f },
+        new object[] { EMap.CityOfDarkness1, -10f, -5f, 10f, 5f },
+        new object[] { EMap.CityOfDarkness2, -10f, -5f, 10f, 5f },
+        new object[] { EMap.DesertedJungleSide1, -16.925f, -7.805f, 18.325f, 3.115f },
+        new object[] { EMap.DryDays, -13.5f, -7f, 13.5f, 4f },
+        new object[] { EMap.FullHouse, -7.5494452f, -9.2774458f, 5.6391058f, 1.4925756f },
+        new object[] { EMap.GhostHouse, -3.6199998f, -5.4650001f, 2.6630752f, 2.043577f },
+        new object[] { EMap.GreenHillSide1, -25.3955728f, -3.3120005f, 25.130336f, 12.9577184f },
+        new object[] { EMap.GreenHillSide2, -47.975f, -5.97f, 2.26047f, 3.4473468f },
+        new object[] { EMap.IceValley, -21.445f, -14.195f, 19.285f, 2.901f },
+        new object[] { EMap.Nocturne, -19.435f, -17.14f, 23.61f, 6.2399998f },
+        new object[] { EMap.RedStorm1, -10f, -5f, 10f, 5f },
+        new object[] { EMap.RobotFactory, -8f, -6.0409155f, 11.7093969f, 7.56f },
+        new object[] { EMap.RuinOfWarSide1, -9.85f, -7.10499997f, 19.27f, -1.753817f },
+        new object[] { EMap.SkyHighCTF, -6f, -12.5f, 6f, 12.5f },
+        new object[] { EMap.ThePark, -8.8f, -8.4499999f, 13.7500002f, 6.20999996f },
+        new object[] { EMap.TheParkCTF, -15f, -7.5f, 15f, 7.5f },
+        new object[] { EMap.Waterfall, -11.5f, -5.25f, 11.5f, 5.25f }
+    };
+
     [Theory]
     [MemberData(nameof(SupportedMaps))]
     public void SpawnsAndFlagStandsStayInsideTheirRecoveredMap(
@@ -70,5 +97,45 @@ public sealed class CtfMapLayoutTests
         Assert.False(CtfMapLayout.IsInsideMapBounds(map, mapRight, 0f));
         Assert.True(CtfMapLayout.IsInsideMapBounds(map, minimumX, 0f));
         Assert.True(CtfMapLayout.IsInsideMapBounds(map, maximumX, 0f));
+    }
+
+    [Theory]
+    [MemberData(nameof(MapsWithRecoveredBounds))]
+    public void RecoveredOnlineMapsHaveServerSideWallsAndFallDeath(
+        EMap map, float mapLeft, float mapBottom, float mapRight, float mapTop)
+    {
+        Assert.True(CtfMapLayout.TryGetHorizontalMovementBounds(
+            map, out var minimumX, out var maximumX));
+        Assert.Equal(mapLeft + 0.42f, minimumX, 3);
+        Assert.Equal(mapRight - 0.42f, maximumX, 3);
+
+        Assert.False(CtfMapLayout.IsBelowMapFallDeathBoundary(map, mapBottom - 4f));
+        Assert.True(CtfMapLayout.IsBelowMapFallDeathBoundary(map, mapBottom - 4.01f));
+        Assert.False(CtfMapLayout.IsBelowMapFallDeathBoundary(map, float.NaN));
+        Assert.True(CtfMapLayout.IsBelowMapBottom(map, mapBottom - 0.01f));
+        Assert.False(CtfMapLayout.IsBelowMapBottom(map, mapBottom));
+        Assert.True(mapTop > mapBottom);
+    }
+
+    [Fact]
+    public void EveryMapOfferedByOnlineModesHasMovementWallsAndFallDeathBounds()
+    {
+        foreach (var mode in new[]
+        {
+            EGameMode.CaptureTheFlag,
+            EGameMode.DeathMatch,
+            EGameMode.Survival,
+            EGameMode.TeamDeathMatch,
+            EGameMode.TeamSurvival
+        })
+        {
+            foreach (var map in GameMode.MapsFor(mode))
+            {
+                Assert.True(CtfMapLayout.TryGetHorizontalMovementBounds(map, out _, out _),
+                    $"{mode} map {map} has no horizontal wall bounds.");
+                Assert.True(CtfMapLayout.IsBelowMapFallDeathBoundary(map, -1000f),
+                    $"{mode} map {map} has no fall-death boundary.");
+            }
+        }
     }
 }
