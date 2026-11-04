@@ -66,6 +66,11 @@ namespace OpenGSServer
             return float.IsFinite(y) && float.IsFinite(bottom) && y < bottom - 4f;
         }
 
+        public static bool IsBelowMapBottom(EMap map, float y)
+        {
+            return TryGetBounds(map, out var bounds) && float.IsFinite(y) && y < bounds.Bottom;
+        }
+
         private static bool TryGetBounds(
             EMap map, out (float Left, float Bottom, float Right, float Top) bounds)
         {

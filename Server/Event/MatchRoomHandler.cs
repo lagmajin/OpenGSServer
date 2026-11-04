@@ -1956,15 +1956,15 @@ namespace OpenGSServer
         {
             var now = ServerNowSeconds();
             var hasPosition = TryGetAuthoritativePosition(playerId, out var x, out var y, out var z);
-            var returnedByFall = hasPosition && room.Setting.Mode == EGameMode.CaptureTheFlag &&
-                CtfMapLayout.IsBelowFallDeathBoundary(room.Map, y);
+            var returnedOutsideMap = hasPosition && room.Setting.Mode == EGameMode.CaptureTheFlag &&
+                CtfMapLayout.IsBelowMapBottom(room.Map, y);
             var dropped = FlagStateFor(room).WithFlags(flags =>
             {
                 foreach (var flag in flags.Values)
                 {
                     if (flag.IsCarried &&
                         string.Equals(flag.CarrierId, playerId, StringComparison.OrdinalIgnoreCase) &&
-                        (returnedByFall
+                        (returnedOutsideMap
                             ? flag.Return(EFlagReturnReason.AutoReturn)
                             : flag.Drop(now)))
                     {
@@ -1980,11 +1980,11 @@ namespace OpenGSServer
                 return;
             }
 
-            if (returnedByFall)
+            if (returnedOutsideMap)
             {
                 ForgetFlagPosition(room, dropped);
                 Console.WriteLine(
-                    $"[Match] The {dropped} flag returned after {playerId} fell out of the map");
+                    $"[Match] The {dropped} flag returned after {playerId} died below the map");
                 GameMessageDispatcher.SendFlagReturned(
                     room.Id.ToString(),
                     dropped.ToString(),
