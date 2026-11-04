@@ -1881,7 +1881,7 @@ namespace OpenGSServer
             var refusal = EFlagRefusal.None;
             var notCarrier = false;
             var notAtBase = false;
-            var captured = flagState.WithFlags(flags =>
+            var captured = flagState.WithFlagsAndPositions((flags, positions) =>
             {
                 refusal = CaptureTheFlagRules.RefusalFor(scoringTeam, flags);
                 if (refusal != EFlagRefusal.None)
@@ -1904,7 +1904,12 @@ namespace OpenGSServer
                     return false;
                 }
 
-                return enemyFlag.Return(EFlagReturnReason.CapturedAtBase);
+                if (!enemyFlag.Return(EFlagReturnReason.CapturedAtBase))
+                    return false;
+
+                CaptureTheFlagRules.ResetAll(flags);
+                positions.Clear();
+                return true;
             });
 
             if (!captured)
@@ -1955,7 +1960,7 @@ namespace OpenGSServer
             // The rule resets the flag state when a team scores, so both flags go
             // back to their stands. Without this the captured flag is still gone
             // and the next delivery has nothing to carry.
-            FlagStateReset(room);
+            BroadcastFlagStateReset(room);
 
             GameMessageDispatcher.SendFlagScoreUpdate(
                 room.Id.ToString(),
@@ -1964,19 +1969,10 @@ namespace OpenGSServer
         }
 
         /// <summary>
-        /// Puts both flags back on their stands and tells the room, because a
-        /// flag that is home again is something every player can see.
+        /// Tells the room both flags are home after an atomic score reset.
         /// </summary>
-        private static void FlagStateReset(MatchRoom room)
+        private static void BroadcastFlagStateReset(MatchRoom room)
         {
-            var flagState = FlagStateFor(room);
-            flagState.WithFlagsAndPositions((flags, positions) =>
-            {
-                CaptureTheFlagRules.ResetAll(flags);
-                positions.Clear();
-                return true;
-            });
-
             foreach (var team in new[] { ETeam.Red, ETeam.Blue })
             {
                 GameMessageDispatcher.SendFlagReturned(
