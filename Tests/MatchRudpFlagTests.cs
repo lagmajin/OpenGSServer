@@ -240,6 +240,42 @@ public sealed class MatchRudpFlagTests : IDisposable
     }
 
     [Fact]
+    public void AStatusRefreshRestoresTheDroppedFlagAndCtfScoreState()
+    {
+        SetUpRoom();
+        var lag = MatchServerV2.Instance.ServerLagCompensationManager;
+        lag.SetPlayerPosition(RedPlayerId, 4.25f, 2.5f, 0f);
+        using var recorder = new BroadcastRecorder();
+
+        BroadcastRecorder.During(() =>
+        {
+            GameMessageDispatcher.Initialize(recorder);
+            Claim(RedPlayerId, roomId, GameMessageTypes.FlagPickup, ETeam.Blue);
+            Claim(RedPlayerId, roomId, GameMessageTypes.FlagLost, ETeam.Blue);
+
+            InGameMatchEventHandler.HandleTcpSystemEvent(new JObject
+            {
+                ["MessageType"] = GameMessageTypes.MatchStatusRequest,
+                ["PlayerID"] = RedPlayerId,
+                ["RoomID"] = roomId
+            });
+
+            var snapshot = recorder.TheAnswerTo(RedPlayerId, MessageType.MatchStatus);
+            Assert.Equal("Red", snapshot["PlayerTeam"]?.ToString());
+            Assert.Equal(nameof(EFlagState.FlagOnStand), snapshot["RedFlagState"]?.ToString());
+            Assert.Equal(nameof(EFlagState.FlagOnGround), snapshot["BlueFlagState"]?.ToString());
+            Assert.Equal(string.Empty, snapshot["RedFlagCarrierID"]?.ToString());
+            Assert.Equal(string.Empty, snapshot["BlueFlagCarrierID"]?.ToString());
+            Assert.Equal(0, snapshot["RedFlagScore"]?.Value<int>());
+            Assert.Equal(0, snapshot["BlueFlagScore"]?.Value<int>());
+            Assert.Equal(3, snapshot["WinConditionPoint"]?.Value<int>());
+            Assert.Equal(4.25f, snapshot["BlueFlagPosX"]?.Value<float>());
+            Assert.Equal(2.5f, snapshot["BlueFlagPosY"]?.Value<float>());
+            Assert.Equal(0f, snapshot["BlueFlagPosZ"]?.Value<float>());
+        });
+    }
+
+    [Fact]
     public void FallingOutOfTheMapEliminatesACarrierAndReturnsTheFlagHome()
     {
         SetUpRoom();
