@@ -4,9 +4,9 @@ using OpenGSCore;
 namespace OpenGSServer
 {
     /// <summary>
-    /// Map-authored CTF positions recovered from the original MPF files.
-    /// The source spawn is the Blue-side spawn used by the native offline
-    /// client; Red starts at its horizontal mirror on these symmetric maps.
+    /// CTF positions recovered from the original MPF files and packaged native
+    /// map data. Red starts at the horizontal mirror of the Blue-side spawn on
+    /// these symmetric maps.
     /// </summary>
     internal static class CtfMapLayout
     {
@@ -32,7 +32,7 @@ namespace OpenGSServer
             {
                 EMap.BattlePortCTF => new Vector3(-12.37f, -2.71f, 0f),
                 EMap.TheParkCTF => new Vector3(-12.64f, -4.63f, 0f),
-                EMap.SkyHighCTF => new Vector3(-4.655f, 10.52f, 0f),
+                EMap.SkyHighCTF => new Vector3(-4.655f, 10.535f, 0f),
                 _ => default
             };
             if (map is not (EMap.BattlePortCTF or EMap.TheParkCTF or EMap.SkyHighCTF) ||
