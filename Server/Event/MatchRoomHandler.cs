@@ -577,12 +577,13 @@ namespace OpenGSServer
             if ((eventType == GameMessageTypes.FlagCaptured ||
                  eventType == GameMessageTypes.FlagLost ||
                  eventType == GameMessageTypes.FlagPickup ||
-                 eventType == GameMessageTypes.FlagReturn) &&
+                 eventType == GameMessageTypes.FlagReturn ||
+                 eventType == GameMessageTypes.FlagScoreUpdate) &&
                 (room.Setting?.Mode != EGameMode.CaptureTheFlag ||
                  !TryGetActiveCombatant(room, playerId, out _)))
             {
                 Console.WriteLine(
-                    $"[Match] Ignored flag action from '{playerId}' outside an active CTF match or while downed");
+                    $"[Match] Ignored flag event from '{playerId}' outside an active CTF match or while downed");
                 return;
             }
 
