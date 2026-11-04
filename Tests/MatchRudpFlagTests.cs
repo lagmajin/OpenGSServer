@@ -1102,6 +1102,46 @@ public sealed class MatchRudpFlagTests : IDisposable
         Assert.Equal(EFlagReturnReason.AutoReturn.ToString(), returned["ReturnReason"]?.ToString());
     }
 
+    [Theory]
+    [InlineData(EMap.BattlePortCTF)]
+    [InlineData(EMap.TheParkCTF)]
+    [InlineData(EMap.SkyHighCTF)]
+    public void AFlagDroppedAtARecoveredMapStandReturnsThroughTheMatchTick(EMap map)
+    {
+        SetUpRoom();
+        room!.WaitRoomLink = new WaitRoom("ctf-timed-return") { Map = map };
+        Assert.True(CtfMapLayout.TryGetFlagStand(map, ETeam.Blue, out var blueStand));
+        MatchServerV2.Instance.ServerLagCompensationManager.SetPlayerPosition(
+            RedPlayerId, blueStand.X, blueStand.Y, blueStand.Z);
+
+        BroadcastRecorder.During(() =>
+        {
+            GameMessageDispatcher.Initialize(new BroadcastRecorder());
+            Claim(RedPlayerId, roomId, GameMessageTypes.FlagPickup, ETeam.Blue);
+            Claim(RedPlayerId, roomId, GameMessageTypes.FlagLost, ETeam.Blue);
+        });
+
+        var blue = InGameMatchEventHandler.GetFlagStates(roomId)[ETeam.Blue];
+        Assert.Equal(EFlagState.FlagOnGround, blue.State);
+        blue.AutoReturnSeconds = 0.1f;
+
+        System.Threading.Thread.Sleep(200);
+        var recorder = new BroadcastRecorder();
+        BroadcastRecorder.During(() =>
+        {
+            GameMessageDispatcher.Initialize(recorder);
+            MatchServerV2.Instance.UpdateServerOwnedSystems(MatchRoomManager.Instance);
+        });
+
+        Assert.Equal(EFlagState.FlagOnStand, blue.State);
+        Assert.Null(blue.CarrierId);
+        var returned = Assert.Single(recorder.RulingsOfType(GameMessageTypes.FlagReturn));
+        Assert.Equal(ETeam.Blue.ToString(), returned["Team"]?.ToString());
+        Assert.Equal(EFlagReturnReason.AutoReturn.ToString(), returned["ReturnReason"]?.ToString());
+        Assert.Equal(0, room.GetFlagScore(ETeam.Red));
+        Assert.Equal(0, room.GetFlagScore(ETeam.Blue));
+    }
+
     [Fact]
     public void AFlagPickedUpBeforeItsDeadlineKeepsIt()
     {
