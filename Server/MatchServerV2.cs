@@ -248,6 +248,8 @@ namespace OpenGSServer
                         _serverLagCompensationManager.ClearPlayerMapMovementBounds(player.Id);
                     }
                 }
+
+                InGameMatchEventHandler.UpdateCtfFallDeaths(room);
             }
         }
 

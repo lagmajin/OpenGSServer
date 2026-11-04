@@ -2564,14 +2564,30 @@ namespace OpenGSServer
 
         private static void HandlePlayerEliminated(MatchRoom room, string playerId)
         {
+            if (!TryResolveCtfFallDeath(room, playerId))
+                Console.WriteLine($"Ignored unverified elimination claim from {playerId}");
+        }
+
+        public static void UpdateCtfFallDeaths(MatchRoom room)
+        {
+            if (room == null || !room.Playing || room.Finished ||
+                room.Setting.Mode != EGameMode.CaptureTheFlag)
+                return;
+
+            foreach (var player in room.Players)
+                TryResolveCtfFallDeath(room, player.Id);
+        }
+
+        private static bool TryResolveCtfFallDeath(MatchRoom room, string playerId)
+        {
             var transform = MatchServerV2.Instance?.ServerLagCompensationManager.GetPlayerState(playerId);
-            if (room.Setting.Mode != EGameMode.CaptureTheFlag || transform == null ||
+            if (!room.Playing || room.Finished ||
+                room.Setting.Mode != EGameMode.CaptureTheFlag || transform == null ||
                 !transform.Value.HasAuthoritativePosition ||
                 !CtfMapLayout.IsBelowFallDeathBoundary(room.Map, transform.Value.PositionY) ||
                 !room.TryGetPlayer(playerId, out var player) || player == null || player.Health <= 0)
             {
-                Console.WriteLine($"Ignored unverified elimination claim from {playerId}");
-                return;
+                return false;
             }
 
             ReleaseWeaponReservations(room, playerId);
@@ -2579,6 +2595,7 @@ namespace OpenGSServer
             HandleProjectileDamage(room.Id.ToString(), playerId, playerId,
                 int.MaxValue / 4,
                 new Vector2(transform.Value.PositionX, transform.Value.PositionY));
+            return true;
         }
 
         /// <summary>
