@@ -2349,12 +2349,12 @@ namespace OpenGSServer
                     return false;
                 }
 
-                // A team recovering its own flag is a return. A player of the
-                // other side returning it is not: that flag is theirs to carry
-                // and theirs to deliver, and a return would hand it back home for
-                // free.
+                // Only a player on the flag's owning team can recover it.
+                // Treat NoTeam and any mismatched flag explicitly as invalid;
+                // the inverse-team check alone lets an unassigned player return
+                // either flag.
                 var carrierTeam = ResolvePlayerTeam(room, playerId);
-                if (CaptureTheFlagRules.OpposingTeam(carrierTeam) == flagTeam)
+                if (carrierTeam is not (ETeam.Red or ETeam.Blue) || carrierTeam != flagTeam)
                 {
                     return false;
                 }
