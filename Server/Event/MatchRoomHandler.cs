@@ -1836,6 +1836,21 @@ namespace OpenGSServer
             return carrierTeam == ETeam.NoTeam ? ETeam.NoTeam : CaptureTheFlagRules.OpposingTeam(carrierTeam);
         }
 
+        private static ETeam ResolveFlagReturnTeam(MatchRoom room, string playerId, JObject json)
+        {
+            var named = ReadString(json, "FlagTeam", "FlagOwnerTeam", "FlagOwner");
+            if (!string.IsNullOrWhiteSpace(named) && Enum.TryParse(named, ignoreCase: true, out ETeam namedTeam) &&
+                (namedTeam == ETeam.Red || namedTeam == ETeam.Blue))
+            {
+                return namedTeam;
+            }
+
+            // A player can only return the flag their own team lost. Unlike a
+            // pickup or drop claim, omitting the flag team therefore falls back
+            // to the player's team, not the opposing team.
+            return ResolvePlayerTeam(room, playerId);
+        }
+
         private static void HandleFlagCaptured(MatchRoom room, string playerId, JObject json)
         {
             var scoringTeam = ResolvePlayerTeam(room, playerId);
@@ -2345,7 +2360,7 @@ namespace OpenGSServer
                 return;
             }
 
-            var flagTeam = ResolveFlagTeam(json, playerId);
+            var flagTeam = ResolveFlagReturnTeam(room, playerId, json);
             if (flagTeam == ETeam.NoTeam)
             {
                 return;
