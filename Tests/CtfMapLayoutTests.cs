@@ -8,9 +8,24 @@ public sealed class CtfMapLayoutTests
 {
     public static IEnumerable<object[]> SupportedMaps => new[]
     {
-        new object[] { EMap.BattlePortCTF, 16f, 5f, -12.37f, -3.435f },
-        new object[] { EMap.TheParkCTF, 15f, 7.5f, -12.64f, -5.285f },
-        new object[] { EMap.SkyHighCTF, 6f, 12.5f, -4.655f, 10.315f }
+        new object[]
+        {
+            EMap.BattlePortCTF, 16f, 5f,
+            -12.37f, -3.435f, 12.37f, -3.435f,
+            -13.435f, 0.865f, 13.115f, 0.945f
+        },
+        new object[]
+        {
+            EMap.TheParkCTF, 15f, 7.5f,
+            -12.64f, -5.285f, 12.64f, -5.285f,
+            -9.725f, -1.365f, 9.185f, -1.405f
+        },
+        new object[]
+        {
+            EMap.SkyHighCTF, 6f, 12.5f,
+            -4.655f, 10.315f, 4.655f, 10.235f,
+            -2.755f, -4.245f, 2.795f, -4.235f
+        }
     };
 
     public static IEnumerable<object[]> MapsWithRecoveredBounds => new[]
@@ -43,7 +58,9 @@ public sealed class CtfMapLayoutTests
     [Theory]
     [MemberData(nameof(SupportedMaps))]
     public void SpawnsAndFlagStandsStayInsideTheirRecoveredMap(
-        EMap map, float halfWidth, float halfHeight, float redX, float redY)
+        EMap map, float halfWidth, float halfHeight,
+        float redSpawnX, float redSpawnY, float blueSpawnX, float blueSpawnY,
+        float redFlagX, float redFlagY, float blueFlagX, float blueFlagY)
     {
         Assert.True(CtfMapLayout.TryGetMovementBounds(
             map, out var minimumX, out var maximumX, out var maximumY));
@@ -58,13 +75,19 @@ public sealed class CtfMapLayoutTests
 
         Assert.True(CtfMapLayout.TryGetTeamSpawn(map, ETeam.Red, out var redSpawn));
         Assert.True(CtfMapLayout.TryGetTeamSpawn(map, ETeam.Blue, out var blueSpawn));
-        Assert.Equal(redX, redSpawn.X, 3);
-        Assert.Equal(redY, redSpawn.Y, 3);
+        Assert.Equal(redSpawnX, redSpawn.X, 3);
+        Assert.Equal(redSpawnY, redSpawn.Y, 3);
+        Assert.Equal(blueSpawnX, blueSpawn.X, 3);
+        Assert.Equal(blueSpawnY, blueSpawn.Y, 3);
         Assert.True(CtfMapLayout.IsInsideMapBounds(map, redSpawn.X, redSpawn.Y));
         Assert.True(CtfMapLayout.IsInsideMapBounds(map, blueSpawn.X, blueSpawn.Y));
 
         Assert.True(CtfMapLayout.TryGetFlagStand(map, ETeam.Red, out var redFlag));
         Assert.True(CtfMapLayout.TryGetFlagStand(map, ETeam.Blue, out var blueFlag));
+        Assert.Equal(redFlagX, redFlag.X, 3);
+        Assert.Equal(redFlagY, redFlag.Y, 3);
+        Assert.Equal(blueFlagX, blueFlag.X, 3);
+        Assert.Equal(blueFlagY, blueFlag.Y, 3);
         Assert.True(CtfMapLayout.IsInsideMapBounds(map, redFlag.X, redFlag.Y));
         Assert.True(CtfMapLayout.IsInsideMapBounds(map, blueFlag.X, blueFlag.Y));
     }
