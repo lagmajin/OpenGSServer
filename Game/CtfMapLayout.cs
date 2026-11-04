@@ -5,8 +5,8 @@ namespace OpenGSServer
 {
     /// <summary>
     /// CTF positions recovered from the original MPF files and packaged native
-    /// map data. Red starts at the horizontal mirror of the Blue-side spawn on
-    /// these symmetric maps.
+    /// map data. Team spawns follow the playable solid-mask surface, including
+    /// the small vertical offset between SkyHighCTF's two starting platforms.
     /// </summary>
     internal static class CtfMapLayout
     {
@@ -45,9 +45,15 @@ namespace OpenGSServer
             // The recovered flag sheets identify the left stand as Red and the
             // right stand as Blue. Keep each team on its own side: the source
             // spawn is on the left, so Red uses it and Blue uses its mirror.
+            // SkyHighCTF's mirrored platform is 0.08 units lower in the native
+            // solid mask, so its Blue spawn must sit lower to preserve the same
+            // 0.06-unit ground clearance as Red.
+            var blueSpawnY = map == EMap.SkyHighCTF
+                ? sourceSpawn.Y - 0.08f
+                : sourceSpawn.Y;
             position = team == ETeam.Red
                 ? sourceSpawn
-                : new Vector3(-sourceSpawn.X, sourceSpawn.Y, sourceSpawn.Z);
+                : new Vector3(-sourceSpawn.X, blueSpawnY, sourceSpawn.Z);
             return true;
         }
 
