@@ -426,10 +426,11 @@ public sealed class MatchRudpGameplayInputTests : IDisposable
     }
 
     [Theory]
-    [InlineData(EMap.BattlePortCTF, 15.58f)]
-    [InlineData(EMap.TheParkCTF, 14.58f)]
-    [InlineData(EMap.SkyHighCTF, 5.58f)]
-    public void CtfHorizontalWallsClampMovementReceivedOverUdp(EMap map, float maximumX)
+    [InlineData(EMap.BattlePortCTF, -15.58f, 15.58f)]
+    [InlineData(EMap.TheParkCTF, -14.58f, 14.58f)]
+    [InlineData(EMap.SkyHighCTF, -5.58f, 5.58f)]
+    public void CtfHorizontalWallsClampMovementReceivedOverUdp(
+        EMap map, float minimumX, float maximumX)
     {
         SetUpRoom(map);
 
@@ -450,5 +451,16 @@ public sealed class MatchRudpGameplayInputTests : IDisposable
 
         state = MatchServerV2.Instance.ServerLagCompensationManager.GetPlayerState(playerId);
         Assert.InRange(state.PositionX, maximumX - 0.1f, maximumX + 0.001f);
+
+        SendFor(milliseconds: 5000, moveX: -1f);
+        state = MatchServerV2.Instance.ServerLagCompensationManager.GetPlayerState(playerId);
+        Assert.InRange(state.PositionX, minimumX - 0.001f, minimumX + 0.1f);
+
+        probe.SendPosition(playerId, roomId, minimumX - 0.05f,
+            state.PositionY, state.PositionZ, 0f, TickSeconds, sequence++);
+        Pump(150);
+
+        state = MatchServerV2.Instance.ServerLagCompensationManager.GetPlayerState(playerId);
+        Assert.InRange(state.PositionX, minimumX - 0.001f, minimumX + 0.1f);
     }
 }
