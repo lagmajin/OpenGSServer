@@ -239,6 +239,42 @@ public sealed class MatchRudpFlagTests : IDisposable
     }
 
     [Fact]
+    public void FallingOutOfTheMapEliminatesACarrierAndReturnsTheFlagHome()
+    {
+        SetUpRoom();
+        room!.WaitRoomLink = new WaitRoom("ctf-fall") { Map = EMap.BattlePortCTF };
+        var lag = MatchServerV2.Instance.ServerLagCompensationManager;
+        lag.SetPlayerPosition(RedPlayerId, 13.115f, 0.945f, 0f);
+
+        var recorder = new BroadcastRecorder();
+        BroadcastRecorder.During(() =>
+        {
+            GameMessageDispatcher.Initialize(recorder);
+            Claim(RedPlayerId, roomId, GameMessageTypes.FlagPickup, ETeam.Blue);
+            Assert.Equal(EFlagState.FlagCapturedPlayer, Flags()[ETeam.Blue].State);
+
+            // The fall is resolved from the server's authoritative transform.
+            // Below-map carriers return their flag to its stand instead of
+            // dropping an unreachable flag beyond the playable world.
+            lag.SetPlayerPosition(RedPlayerId, 13.115f, -9.1f, 0f);
+            InGameMatchEventHandler.UpdateMapFallDeaths(room);
+        });
+
+        Assert.True(room.TryGetPlayer(RedPlayerId, out var red));
+        Assert.Equal(0, red!.Health);
+        Assert.Equal(EFlagState.FlagOnStand, Flags()[ETeam.Blue].State);
+        Assert.Null(Flags()[ETeam.Blue].CarrierId);
+        Assert.Equal(0, room.GetFlagScore(ETeam.Red));
+
+        var damage = recorder.TheRuling(GameMessageTypes.PlayerDamaged);
+        Assert.Equal(RedPlayerId, damage["DamagedPlayerID"]?.ToString());
+        Assert.Equal(RedPlayerId, damage["AttackerID"]?.ToString());
+        Assert.True(bool.Parse(damage["IsDown"]!.ToString()));
+        var returned = recorder.TheRuling(GameMessageTypes.FlagReturn);
+        Assert.Equal(nameof(EFlagReturnReason.AutoReturn), returned["ReturnReason"]?.ToString());
+    }
+
+    [Fact]
     public void APlayerHoldingNothingCannotClaimToHaveDroppedAFlag()
     {
         SetUpRoom();
