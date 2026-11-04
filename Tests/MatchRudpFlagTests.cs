@@ -275,13 +275,18 @@ public sealed class MatchRudpFlagTests : IDisposable
         });
     }
 
-    [Fact]
-    public void FallingOutOfTheMapEliminatesACarrierAndReturnsTheFlagHome()
+    [Theory]
+    [InlineData(EMap.BattlePortCTF, -5f)]
+    [InlineData(EMap.TheParkCTF, -7.5f)]
+    [InlineData(EMap.SkyHighCTF, -12.5f)]
+    public void FallingOutOfTheMapEliminatesACarrierAndReturnsTheFlagHome(
+        EMap map, float mapBottom)
     {
         SetUpRoom();
-        room!.WaitRoomLink = new WaitRoom("ctf-fall") { Map = EMap.BattlePortCTF };
+        room!.WaitRoomLink = new WaitRoom("ctf-fall") { Map = map };
         var lag = MatchServerV2.Instance.ServerLagCompensationManager;
-        lag.SetPlayerPosition(RedPlayerId, 13.115f, 0.945f, 0f);
+        Assert.True(CtfMapLayout.TryGetFlagStand(map, ETeam.Blue, out var blueStand));
+        lag.SetPlayerPosition(RedPlayerId, blueStand.X, blueStand.Y, blueStand.Z);
 
         var recorder = new BroadcastRecorder();
         BroadcastRecorder.During(() =>
@@ -293,7 +298,7 @@ public sealed class MatchRudpFlagTests : IDisposable
             // The fall is resolved from the server's authoritative transform.
             // Below-map carriers return their flag to its stand instead of
             // dropping an unreachable flag beyond the playable world.
-            lag.SetPlayerPosition(RedPlayerId, 13.115f, -9.1f, 0f);
+            lag.SetPlayerPosition(RedPlayerId, blueStand.X, mapBottom - 4.1f, blueStand.Z);
             InGameMatchEventHandler.UpdateMapFallDeaths(room);
         });
 
