@@ -279,11 +279,12 @@ public sealed class MatchRudpFlagTests : IDisposable
     [InlineData(EMap.BattlePortCTF)]
     [InlineData(EMap.TheParkCTF)]
     [InlineData(EMap.SkyHighCTF)]
-    public void ServerPicksUpTheEnemyFlagAtItsRecoveredStand(EMap map)
+    public void ServerCapturesTheEnemyFlagBetweenRecoveredStands(EMap map)
     {
         SetUpRoom();
         room!.WaitRoomLink = new WaitRoom("ctf-auto-pickup") { Map = map };
         Assert.True(CtfMapLayout.TryGetFlagStand(map, ETeam.Blue, out var blueStand));
+        Assert.True(CtfMapLayout.TryGetFlagStand(map, ETeam.Red, out var redStand));
         MatchServerV2.Instance.ServerLagCompensationManager.SetPlayerPosition(
             RedPlayerId, blueStand.X, blueStand.Y, blueStand.Z);
 
@@ -299,6 +300,24 @@ public sealed class MatchRudpFlagTests : IDisposable
         var ruling = recorder.TheRuling(GameMessageTypes.FlagPickup);
         Assert.Equal(nameof(ETeam.Red), ruling["Team"]?.ToString());
         Assert.Equal(RedPlayerId, ruling["PlayerID"]?.ToString());
+
+        // Carrying the flag back to the player's own recovered stand must
+        // complete the score without a separate client capture claim.
+        MatchServerV2.Instance.ServerLagCompensationManager.SetPlayerPosition(
+            RedPlayerId, redStand.X, redStand.Y, redStand.Z);
+        BroadcastRecorder.During(() =>
+        {
+            GameMessageDispatcher.Initialize(recorder);
+            InGameMatchEventHandler.UpdateCtfFlagInteractions(room);
+        });
+
+        Assert.Equal(1, room.GetFlagScore(ETeam.Red));
+        Assert.Equal(0, room.GetFlagScore(ETeam.Blue));
+        Assert.Equal(EFlagState.FlagOnStand, Flags()[ETeam.Blue].State);
+        Assert.Equal(EFlagState.FlagOnStand, Flags()[ETeam.Red].State);
+        Assert.Equal(nameof(ETeam.Red),
+            recorder.TheRuling(GameMessageTypes.FlagCaptured)["CapturingTeam"]?.ToString());
+        Assert.Equal(1, recorder.TheRuling(GameMessageTypes.FlagScoreUpdate)["RedTeamScore"]?.Value<int>());
     }
 
     [Theory]
