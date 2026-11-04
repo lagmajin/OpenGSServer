@@ -104,10 +104,16 @@ namespace OpenGSServer
             return true;
         }
 
-        public static bool IsBelowFallDeathBoundary(EMap map, float y)
+        public static bool IsBelowMapFallDeathBoundary(EMap map, float y)
         {
             var bottom = map switch
             {
+                EMap.DryDays => -7f,
+                EMap.GreenHillSide1 => -3.3120005f,
+                EMap.GreenHillSide2 => -5.97f,
+                EMap.CityOfDarkness1 or EMap.CityOfDarkness2 => -5f,
+                EMap.Nocturne => -17.14f,
+                EMap.GhostHouse => -5.4650001f,
                 EMap.BattlePortCTF => -5f,
                 EMap.TheParkCTF => -7.5f,
                 EMap.SkyHighCTF => -12.5f,

@@ -2621,18 +2621,17 @@ namespace OpenGSServer
 
         private static void HandlePlayerEliminated(MatchRoom room, string playerId)
         {
-            if (!TryResolveCtfFallDeath(room, playerId))
+            if (!TryResolveMapFallDeath(room, playerId))
                 Console.WriteLine($"Ignored unverified elimination claim from {playerId}");
         }
 
-        public static void UpdateCtfFallDeaths(MatchRoom room)
+        public static void UpdateMapFallDeaths(MatchRoom room)
         {
-            if (room == null || !room.Playing || room.Finished ||
-                room.Setting.Mode != EGameMode.CaptureTheFlag)
+            if (room == null || !room.Playing || room.Finished)
                 return;
 
             foreach (var player in room.Players)
-                TryResolveCtfFallDeath(room, player.Id);
+                TryResolveMapFallDeath(room, player.Id);
         }
 
         public static void UpdateCtfFlagInteractions(MatchRoom room)
@@ -2689,20 +2688,19 @@ namespace OpenGSServer
             }
         }
 
-        private static bool TryResolveCtfFallDeath(MatchRoom room, string playerId)
+        private static bool TryResolveMapFallDeath(MatchRoom room, string playerId)
         {
             var transform = MatchServerV2.Instance?.ServerLagCompensationManager.GetPlayerState(playerId);
             if (!room.Playing || room.Finished ||
-                room.Setting.Mode != EGameMode.CaptureTheFlag || transform == null ||
-                !transform.Value.HasAuthoritativePosition ||
-                !CtfMapLayout.IsBelowFallDeathBoundary(room.Map, transform.Value.PositionY) ||
+                transform == null || !transform.Value.HasAuthoritativePosition ||
+                !CtfMapLayout.IsBelowMapFallDeathBoundary(room.Map, transform.Value.PositionY) ||
                 !room.TryGetPlayer(playerId, out var player) || player == null || player.Health <= 0)
             {
                 return false;
             }
 
             ReleaseWeaponReservations(room, playerId);
-            Console.WriteLine($"Player {playerId} fell out of the CTF map");
+            Console.WriteLine($"Player {playerId} fell out of the map");
             HandleProjectileDamage(room.Id.ToString(), playerId, playerId,
                 int.MaxValue / 4,
                 new Vector2(transform.Value.PositionX, transform.Value.PositionY));

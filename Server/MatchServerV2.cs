@@ -256,7 +256,7 @@ namespace OpenGSServer
                     }
                 }
 
-                InGameMatchEventHandler.UpdateCtfFallDeaths(room);
+                InGameMatchEventHandler.UpdateMapFallDeaths(room);
                 InGameMatchEventHandler.UpdateCtfFlagInteractions(room);
             }
         }
