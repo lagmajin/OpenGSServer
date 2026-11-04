@@ -321,6 +321,41 @@ public sealed class MatchRudpFlagTests : IDisposable
     }
 
     [Theory]
+    [InlineData(EMap.BattlePortCTF)]
+    [InlineData(EMap.TheParkCTF)]
+    [InlineData(EMap.SkyHighCTF)]
+    public void ServerReturnsDroppedOwnFlagWhenDefenderReachesItsRecoveredStand(EMap map)
+    {
+        SetUpRoom();
+        room!.WaitRoomLink = new WaitRoom("ctf-auto-return") { Map = map };
+        Assert.True(CtfMapLayout.TryGetFlagStand(map, ETeam.Blue, out var blueStand));
+        var lag = MatchServerV2.Instance.ServerLagCompensationManager;
+        lag.SetPlayerPosition(RedPlayerId, blueStand.X, blueStand.Y, blueStand.Z);
+
+        var recorder = new BroadcastRecorder();
+        BroadcastRecorder.During(() =>
+        {
+            GameMessageDispatcher.Initialize(recorder);
+            Claim(RedPlayerId, roomId, GameMessageTypes.FlagPickup, ETeam.Blue);
+            Claim(RedPlayerId, roomId, GameMessageTypes.FlagLost, ETeam.Blue);
+
+            // Leave the stand so the former carrier does not immediately
+            // reclaim the dropped enemy flag on this same interaction tick.
+            lag.SetPlayerPosition(RedPlayerId, 0f, 0f, 0f);
+            lag.SetPlayerPosition(BluePlayerId, blueStand.X, blueStand.Y, blueStand.Z);
+            InGameMatchEventHandler.UpdateCtfFlagInteractions(room);
+        });
+
+        Assert.Equal(EFlagState.FlagOnStand, Flags()[ETeam.Blue].State);
+        Assert.Null(Flags()[ETeam.Blue].CarrierId);
+        Assert.Equal(0, room.GetFlagScore(ETeam.Red));
+        Assert.Equal(0, room.GetFlagScore(ETeam.Blue));
+        var returned = recorder.TheRuling(GameMessageTypes.FlagReturn);
+        Assert.Equal(nameof(ETeam.Blue), returned["Team"]?.ToString());
+        Assert.Equal(nameof(EFlagReturnReason.FriendlyRecovered), returned["ReturnReason"]?.ToString());
+    }
+
+    [Theory]
     [InlineData(EMap.BattlePortCTF, -5f)]
     [InlineData(EMap.TheParkCTF, -7.5f)]
     [InlineData(EMap.SkyHighCTF, -12.5f)]
