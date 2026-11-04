@@ -428,6 +428,38 @@ public sealed class MatchRudpFlagTests : IDisposable
     }
 
     [Fact]
+    public void AStatusRefreshRestoresTheCurrentCarrierAndPriorCaptureScore()
+    {
+        SetUpRoom();
+        using var recorder = new BroadcastRecorder();
+
+        BroadcastRecorder.During(() =>
+        {
+            GameMessageDispatcher.Initialize(recorder);
+            Claim(RedPlayerId, roomId, GameMessageTypes.FlagPickup, ETeam.Blue);
+            Claim(RedPlayerId, roomId, GameMessageTypes.FlagCaptured, ETeam.Blue);
+            Claim(RedPlayerId, roomId, GameMessageTypes.FlagPickup, ETeam.Blue);
+
+            InGameMatchEventHandler.HandleTcpSystemEvent(new JObject
+            {
+                ["MessageType"] = GameMessageTypes.MatchStatusRequest,
+                ["PlayerID"] = BluePlayerId,
+                ["RoomID"] = roomId
+            });
+
+            var snapshot = recorder.TheAnswerTo(BluePlayerId, MessageType.MatchStatus);
+            Assert.Equal("Blue", snapshot["PlayerTeam"]?.ToString());
+            Assert.Equal(nameof(EFlagState.FlagOnStand), snapshot["RedFlagState"]?.ToString());
+            Assert.Equal(nameof(EFlagState.FlagCapturedPlayer), snapshot["BlueFlagState"]?.ToString());
+            Assert.Equal(RedPlayerId, snapshot["BlueFlagCarrierID"]?.ToString());
+            Assert.Equal(nameof(ETeam.Red), snapshot["BlueFlagCarrierTeam"]?.ToString());
+            Assert.Equal(1, snapshot["RedFlagScore"]?.Value<int>());
+            Assert.Equal(0, snapshot["BlueFlagScore"]?.Value<int>());
+            Assert.Equal(3, snapshot["WinConditionPoint"]?.Value<int>());
+        });
+    }
+
+    [Fact]
     public void ThirdValidatedCaptureEndsTheMatchAndEvaluatesRedAsTheWinner()
     {
         var waitRoom = WaitRoomManager.Instance().CreateNewWaitRoom(
