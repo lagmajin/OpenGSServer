@@ -1954,13 +1954,18 @@ namespace OpenGSServer
         public static void DropFlagCarriedBy(MatchRoom room, string playerId)
         {
             var now = ServerNowSeconds();
+            var hasPosition = TryGetAuthoritativePosition(playerId, out var x, out var y, out var z);
+            var returnedByFall = hasPosition && room.Setting.Mode == EGameMode.CaptureTheFlag &&
+                CtfMapLayout.IsBelowFallDeathBoundary(room.Map, y);
             var dropped = FlagStateFor(room).WithFlags(flags =>
             {
                 foreach (var flag in flags.Values)
                 {
                     if (flag.IsCarried &&
                         string.Equals(flag.CarrierId, playerId, StringComparison.OrdinalIgnoreCase) &&
-                        flag.Drop(now))
+                        (returnedByFall
+                            ? flag.Return(EFlagReturnReason.AutoReturn)
+                            : flag.Drop(now)))
                     {
                         return flag.Team;
                     }
@@ -1974,12 +1979,25 @@ namespace OpenGSServer
                 return;
             }
 
+            if (returnedByFall)
+            {
+                ForgetFlagPosition(room, dropped);
+                Console.WriteLine(
+                    $"[Match] The {dropped} flag returned after {playerId} fell out of the map");
+                GameMessageDispatcher.SendFlagReturned(
+                    room.Id.ToString(),
+                    dropped.ToString(),
+                    playerId,
+                    EFlagReturnReason.AutoReturn.ToString());
+                return;
+            }
+
             // A carrier who went down is where the flag lands, so the position
             // comes from the place the server already holds for them rather than
             // from anything the client said.
-            System.Numerics.Vector3? groundPosition = null;
             ForgetFlagPosition(room, dropped);
-            if (TryGetAuthoritativePosition(playerId, out var x, out var y, out var z))
+            System.Numerics.Vector3? groundPosition = null;
+            if (hasPosition)
             {
                 NoteFlagPosition(room, dropped, x, y, z);
                 groundPosition = new System.Numerics.Vector3(x, y, z);
