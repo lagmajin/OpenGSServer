@@ -526,6 +526,26 @@ public sealed class MatchRoomManagerTests
     }
 
     [Fact]
+    public void GameStartNotificationCarriesTheTeamsAssignedToMatchPlayers()
+    {
+        var manager = NewManager();
+        var roomId = manager.CreateNewCTFMatchRoom("ctf-start", "red-id", capacity: 4).RoomId;
+        var room = Assert.IsType<MatchRoom>(manager.GetRoomById(roomId));
+        room.AddNewPlayer(new PlayerInfo("red-id", "Red") { Team = ETeam.Red });
+        room.AddNewPlayer(new PlayerInfo("blue-id", "Blue") { Team = ETeam.Blue });
+
+        var notification = MatchRoomManager.BuildGameStartNotification(room);
+        var roster = Assert.IsType<Newtonsoft.Json.Linq.JArray>(notification["RoomInfo"]!["Players"]);
+
+        Assert.Equal("GameStartNotification", notification["MessageType"]?.ToString());
+        Assert.Equal(2, roster.Count);
+        Assert.Equal("red-id", roster[0]?["Id"]?.ToString());
+        Assert.Equal("Red", roster[0]?["Team"]?.ToString());
+        Assert.Equal("blue-id", roster[1]?["Id"]?.ToString());
+        Assert.Equal("Blue", roster[1]?["Team"]?.ToString());
+    }
+
+    [Fact]
     public void AddRoomKeepsAnExistingEventBusSoSubscriptionsSurvive()
     {
         var manager = NewManager();

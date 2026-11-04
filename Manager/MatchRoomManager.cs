@@ -166,22 +166,7 @@ namespace OpenGSServer
 
                 bus.OnGameStarted += () =>
                 {
-                    var roomInfo = matchRoom.ToJSon();
-                    // CTF teams are assigned to the match-room copies, while
-                    // the wait-room roster retains its pre-match NoTeam values.
-                    // Send the authoritative match roster with the start event
-                    // so clients can choose the matching team spawn immediately.
-                    roomInfo["Players"] = new JArray(matchRoom.Players.Select(p => new JObject
-                    {
-                        ["Id"] = p.Id,
-                        ["Name"] = p.Name,
-                        ["Team"] = p.Team.ToString()
-                    }));
-                    var gameStartJson = new JObject
-                    {
-                        ["MessageType"] = MessageType.GameStartNotification,
-                        ["RoomInfo"] = roomInfo
-                    };
+                    var gameStartJson = BuildGameStartNotification(matchRoom);
 
                     foreach (var p in matchRoom.Players)
                     {
@@ -293,6 +278,25 @@ namespace OpenGSServer
                 IncreaseRoomCounter();
                 return matchRoom;
             }
+        }
+
+        internal static JObject BuildGameStartNotification(MatchRoom matchRoom)
+        {
+            var roomInfo = matchRoom.ToJSon();
+            // CTF teams are assigned to the match-room copies, while the
+            // wait-room roster retains its pre-match NoTeam values. Send the
+            // authoritative match roster so clients choose the matching spawn.
+            roomInfo["Players"] = new JArray(matchRoom.Players.Select(p => new JObject
+            {
+                ["Id"] = p.Id,
+                ["Name"] = p.Name,
+                ["Team"] = p.Team.ToString()
+            }));
+            return new JObject
+            {
+                ["MessageType"] = MessageType.GameStartNotification,
+                ["RoomInfo"] = roomInfo
+            };
         }
 
         /// <summary>
