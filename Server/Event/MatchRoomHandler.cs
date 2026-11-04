@@ -1860,53 +1860,70 @@ namespace OpenGSServer
             }
 
             var flagState = FlagStateFor(room);
-
-            // The claim is judged against the flags the server holds, not against
-            // anything the message says. The own flag has to be home, which is
-            // the half of the rule that was missing, and the enemy flag has to be
-            // in the claimant's hands rather than merely somewhere in the room.
-            var refusal = flagState.WithFlags(flags => CaptureTheFlagRules.RefusalFor(scoringTeam, flags));
-            if (refusal != EFlagRefusal.None)
+            // Validate and consume the carried flag in one critical section.
+            // If two capture reports race, only the first can move the flag home;
+            // the next report then sees the home flag and cannot award a second
+            // point for the same carry.
+            var refusal = EFlagRefusal.None;
+            var notCarrier = false;
+            var notAtBase = false;
+            var captured = flagState.WithFlags(flags =>
             {
-                Console.WriteLine(
-                    $"[Match] Refused a capture by {scoringTeam} in room {room.Id}: {refusal}");
-                GameMessageDispatcher.SendFlagCaptureRefused(
-                    playerId,
-                    room.Id.ToString(),
-                    scoringTeam.ToString(),
-                    refusal.ToString());
+                refusal = CaptureTheFlagRules.RefusalFor(scoringTeam, flags);
+                if (refusal != EFlagRefusal.None)
+                    return false;
+
+                var enemyFlag = CaptureTheFlagRules.OpposingFlag(scoringTeam, flags);
+                if (enemyFlag == null || !enemyFlag.IsCarried ||
+                    !string.Equals(enemyFlag.CarrierId, playerId, StringComparison.OrdinalIgnoreCase))
+                {
+                    notCarrier = true;
+                    return false;
+                }
+
+                // Carrying the other flag is only half of a capture. The scoring
+                // player must also reach their own stand; otherwise a stale or
+                // forged client event can score anywhere on the map.
+                if (!IsStandingAtAFlag(room, playerId, scoringTeam))
+                {
+                    notAtBase = true;
+                    return false;
+                }
+
+                return enemyFlag.Return(EFlagReturnReason.CapturedAtBase);
+            });
+
+            if (!captured)
+            {
+                if (refusal != EFlagRefusal.None)
+                {
+                    Console.WriteLine(
+                        $"[Match] Refused a capture by {scoringTeam} in room {room.Id}: {refusal}");
+                    GameMessageDispatcher.SendFlagCaptureRefused(
+                        playerId,
+                        room.Id.ToString(),
+                        scoringTeam.ToString(),
+                        refusal.ToString());
+                }
+                else if (notAtBase)
+                {
+                    Console.WriteLine(
+                        $"[Match] Refused a capture by '{playerId}': they are not at the {scoringTeam} flag stand");
+                    GameMessageDispatcher.SendFlagCaptureRefused(
+                        playerId,
+                        room.Id.ToString(),
+                        scoringTeam.ToString(),
+                        "NotAtBase");
+                }
+                else if (notCarrier)
+                {
+                    // A delivery is a statement about who is holding the flag.
+                    // The message speaker must be the server-known carrier.
+                    Console.WriteLine(
+                        $"[Match] Ignored a capture claim from '{playerId}', who is not carrying the flag");
+                }
                 return;
             }
-
-            var enemyFlag = flagState.WithFlags(flags => CaptureTheFlagRules.OpposingFlag(scoringTeam, flags));
-            if (enemyFlag == null || !enemyFlag.IsCarried ||
-                !string.Equals(enemyFlag.CarrierId, playerId, StringComparison.OrdinalIgnoreCase))
-            {
-                // The flag exists and is carried, but not by this player. A
-                // delivery is a statement about who is holding it, and a message
-                // from somebody who is not holding it is not that statement.
-                Console.WriteLine(
-                    $"[Match] Ignored a capture claim from '{playerId}', who is not carrying the flag");
-                return;
-            }
-
-            // Carrying the other flag is only half of a capture. The scoring
-            // player must also reach their own stand; otherwise a stale or
-            // forged client event can score anywhere on the map.
-            if (!IsStandingAtAFlag(room, playerId, scoringTeam))
-            {
-                Console.WriteLine(
-                    $"[Match] Refused a capture by '{playerId}': they are not at the {scoringTeam} flag stand");
-                GameMessageDispatcher.SendFlagCaptureRefused(
-                    playerId,
-                    room.Id.ToString(),
-                    scoringTeam.ToString(),
-                    "NotAtBase");
-                return;
-            }
-
-            flagState.WithFlags(flags => flags[CaptureTheFlagRules.OpposingTeam(scoringTeam)].Return(
-                EFlagReturnReason.CapturedAtBase));
 
             Console.WriteLine($"Team {scoringTeam} captured the flag");
             room.AddFlagCapture(scoringTeam, playerId);
