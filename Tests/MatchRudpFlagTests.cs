@@ -276,6 +276,32 @@ public sealed class MatchRudpFlagTests : IDisposable
     }
 
     [Theory]
+    [InlineData(EMap.BattlePortCTF)]
+    [InlineData(EMap.TheParkCTF)]
+    [InlineData(EMap.SkyHighCTF)]
+    public void ServerPicksUpTheEnemyFlagAtItsRecoveredStand(EMap map)
+    {
+        SetUpRoom();
+        room!.WaitRoomLink = new WaitRoom("ctf-auto-pickup") { Map = map };
+        Assert.True(CtfMapLayout.TryGetFlagStand(map, ETeam.Blue, out var blueStand));
+        MatchServerV2.Instance.ServerLagCompensationManager.SetPlayerPosition(
+            RedPlayerId, blueStand.X, blueStand.Y, blueStand.Z);
+
+        var recorder = new BroadcastRecorder();
+        BroadcastRecorder.During(() =>
+        {
+            GameMessageDispatcher.Initialize(recorder);
+            InGameMatchEventHandler.UpdateCtfFlagInteractions(room);
+        });
+
+        Assert.Equal(EFlagState.FlagCapturedPlayer, Flags()[ETeam.Blue].State);
+        Assert.Equal(RedPlayerId, Flags()[ETeam.Blue].CarrierId);
+        var ruling = recorder.TheRuling(GameMessageTypes.FlagPickup);
+        Assert.Equal(nameof(ETeam.Red), ruling["Team"]?.ToString());
+        Assert.Equal(RedPlayerId, ruling["PlayerID"]?.ToString());
+    }
+
+    [Theory]
     [InlineData(EMap.BattlePortCTF, -5f)]
     [InlineData(EMap.TheParkCTF, -7.5f)]
     [InlineData(EMap.SkyHighCTF, -12.5f)]
