@@ -2227,7 +2227,7 @@ namespace OpenGSServer
 
             if (isOnItsStand)
             {
-                if (!TryGetCtfFlagStandPosition(room, flagTeam, out var basePosition))
+                if (!CtfMapLayout.TryGetFlagStand(room.Map, flagTeam, out var basePosition))
                 {
                     // Preserve legacy rooms whose map has no recovered stand
                     // coordinates. Known online CTF maps always take the
@@ -2270,38 +2270,6 @@ namespace OpenGSServer
             }
 
             return true;
-        }
-
-        /// <summary>
-        /// Returns the recovered MPF flag-stand centers used by the three CTF
-        /// map IDs advertised by OpenGSCore. The server uses these positions to
-        /// validate home-flag pickup and capture proximity against its own
-        /// player transform instead of trusting a client-side trigger.
-        /// </summary>
-        private static bool TryGetCtfFlagStandPosition(
-            MatchRoom room, ETeam flagTeam, out System.Numerics.Vector3 position)
-        {
-            var map = room.Map.ToString();
-            position = map switch
-            {
-                "BattlePortCTF" when flagTeam == ETeam.Red =>
-                    new System.Numerics.Vector3(-13.435f, 0.865f, 0f),
-                "BattlePortCTF" when flagTeam == ETeam.Blue =>
-                    new System.Numerics.Vector3(13.115f, 0.945f, 0f),
-                "TheParkCTF" when flagTeam == ETeam.Red =>
-                    new System.Numerics.Vector3(-9.725f, -1.365f, 0f),
-                "TheParkCTF" when flagTeam == ETeam.Blue =>
-                    new System.Numerics.Vector3(9.185f, -1.405f, 0f),
-                "SkyHighCTF" when flagTeam == ETeam.Red =>
-                    new System.Numerics.Vector3(-2.755f, -4.245f, 0f),
-                "SkyHighCTF" when flagTeam == ETeam.Blue =>
-                    new System.Numerics.Vector3(2.795f, -4.235f, 0f),
-                _ => default
-            };
-            return (string.Equals(map, "BattlePortCTF", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(map, "TheParkCTF", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(map, "SkyHighCTF", StringComparison.OrdinalIgnoreCase)) &&
-                (flagTeam == ETeam.Red || flagTeam == ETeam.Blue);
         }
 
         /// <summary>

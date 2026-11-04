@@ -10,6 +10,22 @@ namespace OpenGSServer
     /// </summary>
     internal static class CtfMapLayout
     {
+        public static bool TryGetFlagStand(EMap map, ETeam team, out Vector3 position)
+        {
+            position = (map, team) switch
+            {
+                (EMap.BattlePortCTF, ETeam.Red) => new Vector3(-13.435f, 0.865f, 0f),
+                (EMap.BattlePortCTF, ETeam.Blue) => new Vector3(13.115f, 0.945f, 0f),
+                (EMap.TheParkCTF, ETeam.Red) => new Vector3(-9.725f, -1.365f, 0f),
+                (EMap.TheParkCTF, ETeam.Blue) => new Vector3(9.185f, -1.405f, 0f),
+                (EMap.SkyHighCTF, ETeam.Red) => new Vector3(-2.755f, -4.245f, 0f),
+                (EMap.SkyHighCTF, ETeam.Blue) => new Vector3(2.795f, -4.235f, 0f),
+                _ => default
+            };
+            return (map is EMap.BattlePortCTF or EMap.TheParkCTF or EMap.SkyHighCTF) &&
+                (team is ETeam.Red or ETeam.Blue);
+        }
+
         public static bool TryGetTeamSpawn(EMap map, ETeam team, out Vector3 position)
         {
             var blueSpawn = map switch
