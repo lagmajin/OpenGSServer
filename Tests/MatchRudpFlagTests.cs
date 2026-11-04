@@ -368,6 +368,37 @@ public sealed class MatchRudpFlagTests : IDisposable
     }
 
     [Fact]
+    public void AFriendlyRecoveryRequiresBeingNextToTheDroppedFlag()
+    {
+        SetUpRoom();
+        var lag = MatchServerV2.Instance.ServerLagCompensationManager;
+        var recorder = new BroadcastRecorder();
+
+        BroadcastRecorder.During(() =>
+        {
+            GameMessageDispatcher.Initialize(recorder);
+            Claim(RedPlayerId, roomId, GameMessageTypes.FlagPickup, ETeam.Blue);
+            Claim(RedPlayerId, roomId, GameMessageTypes.FlagLost, ETeam.Blue);
+
+            // The blue player is on the other side of the map from the dropped
+            // flag. A return request alone must not move the flag home.
+            lag.SetPlayerPosition(BluePlayerId, 10f, 0f, 0f);
+            Claim(BluePlayerId, roomId, GameMessageTypes.FlagReturn, ETeam.Blue);
+            Assert.Equal(EFlagState.FlagOnGround, Flags()[ETeam.Blue].State);
+            Assert.Empty(recorder.RulingsOfType(GameMessageTypes.FlagReturn));
+
+            // Reaching the server-recorded drop position makes the recovery
+            // valid and emits the state change for the room.
+            lag.SetPlayerPosition(BluePlayerId, 0f, 0f, 0f);
+            Claim(BluePlayerId, roomId, GameMessageTypes.FlagReturn, ETeam.Blue);
+        });
+
+        Assert.Equal(EFlagState.FlagOnStand, Flags()[ETeam.Blue].State);
+        var ruling = Assert.Single(recorder.RulingsOfType(GameMessageTypes.FlagReturn));
+        Assert.Equal(EFlagReturnReason.FriendlyRecovered.ToString(), ruling["ReturnReason"]?.ToString());
+    }
+
+    [Fact]
     public void AReturnSaysWhySoAFlagThatCameBackByItselfIsNotMistakenForARecovery()
     {
         SetUpRoom();
