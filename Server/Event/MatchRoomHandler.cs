@@ -2158,6 +2158,8 @@ namespace OpenGSServer
                 return;
             }
 
+            ForgetFlagPosition(room, flagTeam);
+
             Console.WriteLine($"{playerId} picked up the {flagTeam} flag");
             GameMessageDispatcher.SendFlagPickup(room.Id.ToString(), carrierTeam.ToString(), playerId);
         }
@@ -2344,7 +2346,8 @@ namespace OpenGSServer
             var flagState = FlagStateFor(room);
             var returned = flagState.WithFlags(flags =>
             {
-                if (!flags.TryGetValue(flagTeam, out var flag))
+                if (!flags.TryGetValue(flagTeam, out var flag) ||
+                    flag.State != EFlagState.FlagOnGround)
                 {
                     return false;
                 }
