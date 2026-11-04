@@ -830,6 +830,36 @@ public sealed class MatchRudpFlagTests : IDisposable
     }
 
     [Fact]
+    public void AnExpiredDroppedFlagReturnsBeforeALatePickupClaim()
+    {
+        SetUpRoom();
+
+        BroadcastRecorder.During(() =>
+        {
+            GameMessageDispatcher.Initialize(new BroadcastRecorder());
+            Claim(RedPlayerId, roomId, GameMessageTypes.FlagPickup, ETeam.Blue);
+            Claim(RedPlayerId, roomId, GameMessageTypes.FlagLost, ETeam.Blue);
+        });
+
+        var blue = InGameMatchEventHandler.GetFlagStates(roomId)[ETeam.Blue];
+        blue.AutoReturnSeconds = 0.1f;
+        System.Threading.Thread.Sleep(200);
+
+        var recorder = new BroadcastRecorder();
+        BroadcastRecorder.During(() =>
+        {
+            GameMessageDispatcher.Initialize(recorder);
+            Claim(RedPlayerId, roomId, GameMessageTypes.FlagPickup, ETeam.Blue);
+        });
+
+        Assert.Equal(EFlagState.FlagOnStand, Flags()[ETeam.Blue].State);
+        Assert.Empty(recorder.RulingsOfType(GameMessageTypes.FlagPickup));
+        var returned = Assert.Single(recorder.RulingsOfType(GameMessageTypes.FlagReturn));
+        Assert.Equal(ETeam.Blue.ToString(), returned["Team"]?.ToString());
+        Assert.Equal(EFlagReturnReason.AutoReturn.ToString(), returned["ReturnReason"]?.ToString());
+    }
+
+    [Fact]
     public void AFlagOnTheGroundCannotBeTakenFromAcrossTheMap()
     {
         SetUpRoom();

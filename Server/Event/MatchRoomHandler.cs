@@ -2173,10 +2173,25 @@ namespace OpenGSServer
 
             var flagState = FlagStateFor(room);
             var notStandingAtFlag = false;
+            var returnedExpiredFlag = false;
+            var now = ServerNowSeconds();
             var picked = flagState.WithFlagsAndPositions((flags, positions) =>
             {
                 if (!flags.TryGetValue(flagTeam, out var flag) || flag.IsCarried)
                     return false;
+
+                // A pickup packet can arrive after its deadline but before the
+                // next room tick. Expire it here under the same lock so that a
+                // late claim cannot beat the authoritative timer update.
+                if (flag.HasTimedOutOnGround(now))
+                {
+                    if (flag.Return(EFlagReturnReason.AutoReturn))
+                    {
+                        positions.Remove(flagTeam);
+                        returnedExpiredFlag = true;
+                    }
+                    return false;
+                }
 
                 // Check the authoritative position while the flag state is
                 // locked too. A timeout return or another interaction cannot
@@ -2193,6 +2208,16 @@ namespace OpenGSServer
                 positions.Remove(flagTeam);
                 return true;
             });
+
+            if (returnedExpiredFlag)
+            {
+                GameMessageDispatcher.SendFlagReturned(
+                    room.Id.ToString(),
+                    flagTeam.ToString(),
+                    string.Empty,
+                    EFlagReturnReason.AutoReturn.ToString());
+                return;
+            }
 
             if (!picked && notStandingAtFlag)
                 return;
