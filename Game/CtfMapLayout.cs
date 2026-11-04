@@ -46,5 +46,17 @@ namespace OpenGSServer
                 x >= bounds.Item1 + 0.42f && x <= bounds.Item3 - 0.42f &&
                 y >= bounds.Item2 + 0.42f && y <= bounds.Item4 - 0.42f;
         }
+
+        public static bool IsBelowFallDeathBoundary(EMap map, float y)
+        {
+            var bottom = map switch
+            {
+                EMap.BattlePortCTF => -5f,
+                EMap.TheParkCTF => -7.5f,
+                EMap.SkyHighCTF => -12.5f,
+                _ => float.NaN
+            };
+            return float.IsFinite(y) && float.IsFinite(bottom) && y < bottom - 4f;
+        }
     }
 }

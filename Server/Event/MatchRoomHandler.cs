@@ -2564,8 +2564,21 @@ namespace OpenGSServer
 
         private static void HandlePlayerEliminated(MatchRoom room, string playerId)
         {
+            var transform = MatchServerV2.Instance?.ServerLagCompensationManager.GetPlayerState(playerId);
+            if (room.Setting.Mode != EGameMode.CaptureTheFlag || transform == null ||
+                !transform.Value.HasAuthoritativePosition ||
+                !CtfMapLayout.IsBelowFallDeathBoundary(room.Map, transform.Value.PositionY) ||
+                !room.TryGetPlayer(playerId, out var player) || player == null || player.Health <= 0)
+            {
+                Console.WriteLine($"Ignored unverified elimination claim from {playerId}");
+                return;
+            }
+
             ReleaseWeaponReservations(room, playerId);
-            Console.WriteLine($"Player {playerId} was eliminated");
+            Console.WriteLine($"Player {playerId} fell out of the CTF map");
+            HandleProjectileDamage(room.Id.ToString(), playerId, playerId,
+                int.MaxValue / 4,
+                new Vector2(transform.Value.PositionX, transform.Value.PositionY));
         }
 
         /// <summary>
