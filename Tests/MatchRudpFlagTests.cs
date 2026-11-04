@@ -519,6 +519,24 @@ public sealed class MatchRudpFlagTests : IDisposable
         Assert.NotNull(result);
         Assert.Equal("Red", result["WinningTeam"]?.ToString());
         Assert.Equal(3, result["RedTeamScore"]?.Value<int>());
+
+        using var reconnectRecorder = new BroadcastRecorder();
+        BroadcastRecorder.During(() =>
+        {
+            GameMessageDispatcher.Initialize(reconnectRecorder);
+            InGameMatchEventHandler.ClearPlayerShotCooldowns(RedPlayerId);
+            InGameMatchEventHandler.HandleTcpSystemEvent(new JObject
+            {
+                ["MessageType"] = GameMessageTypes.MatchStatusRequest,
+                ["PlayerID"] = RedPlayerId,
+                ["RoomID"] = roomId
+            });
+        });
+
+        Assert.Empty(reconnectRecorder.SentTo(RedPlayerId, MessageType.MatchStatus));
+        var finalResult = reconnectRecorder.TheAnswerTo(RedPlayerId, MessageType.MatchEndNotification);
+        Assert.Equal("Red", finalResult["WinningTeam"]?.ToString());
+        Assert.Equal(3, finalResult["RedTeamScore"]?.Value<int>());
     }
 
     [Fact]
