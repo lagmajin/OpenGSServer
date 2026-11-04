@@ -607,6 +607,22 @@ namespace OpenGSServer.Network
                     return false;
                 }
 
+                // PlayerPositionUpdate is a separate path from simulated
+                // movement. Keep its claims inside the same map walls, or a
+                // client can walk up to a wall and then step through it with
+                // small, individually plausible position corrections.
+                if (state.HasMapHorizontalBounds &&
+                    (clientX < state.MapMinX || clientX > state.MapMaxX))
+                {
+                    RecordViolation(state, "Position crossed a horizontal map boundary");
+                    return false;
+                }
+                if (state.HasMapMovementBounds && clientY > state.MapMaxY)
+                {
+                    RecordViolation(state, "Position crossed the upper map boundary");
+                    return false;
+                }
+
                 float dx = state.PosX - clientX;
                 float dy = state.PosY - clientY;
                 float dz = state.PosZ - clientZ;

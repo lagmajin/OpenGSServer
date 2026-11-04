@@ -440,5 +440,15 @@ public sealed class MatchRudpGameplayInputTests : IDisposable
 
         var state = MatchServerV2.Instance.ServerLagCompensationManager.GetPlayerState(playerId);
         Assert.InRange(state.PositionX, maximumX - 0.1f, maximumX + 0.001f);
+
+        // A small position correction is individually plausible to the
+        // distance validator, but it must not bypass the wall enforced for
+        // ordinary movement packets.
+        probe.SendPosition(playerId, roomId, maximumX + 0.05f,
+            state.PositionY, state.PositionZ, 0f, TickSeconds, sequence++);
+        Pump(150);
+
+        state = MatchServerV2.Instance.ServerLagCompensationManager.GetPlayerState(playerId);
+        Assert.InRange(state.PositionX, maximumX - 0.1f, maximumX + 0.001f);
     }
 }
