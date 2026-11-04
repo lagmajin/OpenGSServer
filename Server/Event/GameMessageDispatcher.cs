@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Numerics;
 using Newtonsoft.Json.Linq;
 using OpenGSCore;
 
@@ -178,7 +179,8 @@ namespace OpenGSServer
             BroadcastToRoom(roomId, message);
         }
 
-        public static void SendFlagLost(string roomId, string team, string? playerId = null)
+        public static void SendFlagLost(string roomId, string team, string? playerId = null,
+            Vector3? groundPosition = null)
         {
             var message = new JObject
             {
@@ -190,6 +192,13 @@ namespace OpenGSServer
                 ["PlayerId"] = playerId,
                 ["Timestamp"] = DateTime.UtcNow.ToString("o")
             };
+            if (groundPosition is { } position && float.IsFinite(position.X) &&
+                float.IsFinite(position.Y) && float.IsFinite(position.Z))
+            {
+                message["PosX"] = position.X;
+                message["PosY"] = position.Y;
+                message["PosZ"] = position.Z;
+            }
 
             BroadcastToRoom(roomId, message);
         }

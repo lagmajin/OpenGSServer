@@ -1915,6 +1915,7 @@ namespace OpenGSServer
 
             foreach (var team in new[] { ETeam.Red, ETeam.Blue })
             {
+                ForgetFlagPosition(room, team);
                 GameMessageDispatcher.SendFlagReturned(
                     room.Id.ToString(),
                     team.ToString(),
@@ -1960,13 +1961,17 @@ namespace OpenGSServer
             // A carrier who went down is where the flag lands, so the position
             // comes from the place the server already holds for them rather than
             // from anything the client said.
+            System.Numerics.Vector3? groundPosition = null;
+            ForgetFlagPosition(room, dropped);
             if (TryGetAuthoritativePosition(playerId, out var x, out var y, out var z))
             {
                 NoteFlagPosition(room, dropped, x, y, z);
+                groundPosition = new System.Numerics.Vector3(x, y, z);
             }
 
             Console.WriteLine($"[Match] {playerId} went down carrying the {dropped} flag");
-            GameMessageDispatcher.SendFlagLost(room.Id.ToString(), dropped.ToString(), playerId);
+            GameMessageDispatcher.SendFlagLost(
+                room.Id.ToString(), dropped.ToString(), playerId, groundPosition);
         }
 
         /// <summary>
@@ -2051,7 +2056,8 @@ namespace OpenGSServer
             NoteFlagPosition(room, flagTeam, dropX, dropY, dropZ);
 
             Console.WriteLine($"The {flagTeam} flag was dropped by {playerId}");
-            GameMessageDispatcher.SendFlagLost(room.Id.ToString(), flagTeam.ToString(), playerId);
+            GameMessageDispatcher.SendFlagLost(room.Id.ToString(), flagTeam.ToString(), playerId,
+                new System.Numerics.Vector3(dropX, dropY, dropZ));
         }
 
         private static void HandleFlagPickup(MatchRoom room, string playerId, JObject json)
@@ -2543,6 +2549,12 @@ namespace OpenGSServer
                     BlueCarrierId = flags[ETeam.Blue].IsCarried
                         ? flags[ETeam.Blue].CarrierId ?? string.Empty : string.Empty
                 });
+                var redGroundPosition = default(System.Numerics.Vector3);
+                var blueGroundPosition = default(System.Numerics.Vector3);
+                var hasRedGroundPosition = flagSnapshot.RedState == EFlagState.FlagOnGround.ToString() &&
+                    FlagPositions.TryGetValue(FlagPositionKey(room, ETeam.Red), out redGroundPosition);
+                var hasBlueGroundPosition = flagSnapshot.BlueState == EFlagState.FlagOnGround.ToString() &&
+                    FlagPositions.TryGetValue(FlagPositionKey(room, ETeam.Blue), out blueGroundPosition);
                 var redCarrierId = flagSnapshot.RedCarrierId;
                 var blueCarrierId = flagSnapshot.BlueCarrierId;
                 ctfState = new JObject
@@ -2557,8 +2569,22 @@ namespace OpenGSServer
                     ["BlueFlagCarrierTeam"] = blueCarrierId.Length == 0
                         ? ETeam.NoTeam.ToString() : ResolvePlayerTeam(room, blueCarrierId).ToString(),
                     ["RedFlagScore"] = room.GetFlagScore(ETeam.Red),
-                    ["BlueFlagScore"] = room.GetFlagScore(ETeam.Blue)
+                    ["BlueFlagScore"] = room.GetFlagScore(ETeam.Blue),
+                    ["WinConditionPoint"] = room.Rule is CaptureTheFlagMatchRule ctfRule
+                        ? ctfRule.FlagLimit : 3
                 };
+                if (hasRedGroundPosition)
+                {
+                    ctfState["RedFlagPosX"] = redGroundPosition.X;
+                    ctfState["RedFlagPosY"] = redGroundPosition.Y;
+                    ctfState["RedFlagPosZ"] = redGroundPosition.Z;
+                }
+                if (hasBlueGroundPosition)
+                {
+                    ctfState["BlueFlagPosX"] = blueGroundPosition.X;
+                    ctfState["BlueFlagPosY"] = blueGroundPosition.Y;
+                    ctfState["BlueFlagPosZ"] = blueGroundPosition.Z;
+                }
             }
 
             GameMessageDispatcher.SendMatchStatus(
@@ -3183,13 +3209,16 @@ namespace OpenGSServer
                 return;
 
             LastMatchTimeBroadcasts[roomId] = now;
-            UdpBroadcastToRoom(roomId, new JObject
+            var timeSync = new JObject
             {
                 ["MessageType"] = "MatchTimeSync",
                 ["RoomID"] = roomId,
                 ["RemainingSeconds"] = Math.Max(0f, room.RemainingTimeSeconds),
                 ["Timestamp"] = now.ToString("o")
-            });
+            };
+            if (room.Rule is CaptureTheFlagMatchRule ctfRule)
+                timeSync["WinConditionPoint"] = ctfRule.FlagLimit;
+            UdpBroadcastToRoom(roomId, timeSync);
         }
 
         /// <summary>
