@@ -704,6 +704,20 @@ public sealed class MatchRudpFlagTests : IDisposable
     }
 
     [Fact]
+    public void AOnePlayerCtfWaitRoomCannotStartUntilTheOpposingTeamCanExist()
+    {
+        var waitRoom = WaitRoomManager.Instance().CreateNewWaitRoom(
+            new WaitRoomSetting("ctf-minimum-players", 4, EGameMode.CaptureTheFlag)).Room!;
+        roomId = waitRoom.RoomId;
+        waitRoom.AddPlayer(new PlayerInfo("ctf-solo-" + Guid.NewGuid().ToString("N"), "Solo"));
+
+        Assert.False(waitRoom.CanStartMatch());
+
+        waitRoom.AddPlayer(new PlayerInfo("ctf-rival-" + Guid.NewGuid().ToString("N"), "Rival"));
+        Assert.True(waitRoom.CanStartMatch());
+    }
+
+    [Fact]
     public void ARespawnedPlayerCanBeHitAgain()
     {
         SetUpRoom();
