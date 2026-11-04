@@ -5,7 +5,7 @@ namespace OpenGSServer
 {
     /// <summary>
     /// CTF positions and recovered world bounds used by online movement and
-    /// fall-death checks. Team spawns follow the playable solid-mask surface,
+    /// fall-death checks. Team spawns follow the source MPF start positions,
     /// including SkyHighCTF's small vertical platform offset.
     /// </summary>
     internal static class CtfMapLayout
@@ -33,9 +33,9 @@ namespace OpenGSServer
         {
             var sourceSpawn = map switch
             {
-                EMap.BattlePortCTF => new Vector3(-12.37f, -3.435f, 0f),
-                EMap.TheParkCTF => new Vector3(-12.64f, -5.285f, 0f),
-                EMap.SkyHighCTF => new Vector3(-4.655f, 10.315f, 0f),
+                EMap.BattlePortCTF => new Vector3(-12.37f, -2.71f, 0f),
+                EMap.TheParkCTF => new Vector3(-12.64f, -4.63f, 0f),
+                EMap.SkyHighCTF => new Vector3(-4.655f, 10.535f, 0f),
                 _ => default
             };
             if (map is not (EMap.BattlePortCTF or EMap.TheParkCTF or EMap.SkyHighCTF) ||
@@ -48,9 +48,9 @@ namespace OpenGSServer
             // The recovered flag sheets identify the left stand as Red and the
             // right stand as Blue. Keep each team on its own side: the source
             // spawn is on the left, so Red uses it and Blue uses its mirror.
-            // SkyHighCTF's mirrored platform is 0.08 units lower in the native
-            // solid mask, so its Blue spawn must sit lower to preserve the same
-            // 0.06-unit ground clearance as Red.
+            // SkyHighCTF's mirrored MPF platform is 0.08 units lower, so its
+            // Blue start follows that platform while the other maps use the
+            // exact mirrored MPF start height.
             var blueSpawnY = map == EMap.SkyHighCTF
                 ? sourceSpawn.Y - 0.08f
                 : sourceSpawn.Y;

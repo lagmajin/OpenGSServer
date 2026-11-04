@@ -11,19 +11,19 @@ public sealed class CtfMapLayoutTests
         new object[]
         {
             EMap.BattlePortCTF, 16f, 5f,
-            -12.37f, -3.435f, 12.37f, -3.435f,
+            -12.37f, -2.71f, 12.37f, -2.71f,
             -13.435f, 0.865f, 13.115f, 0.945f
         },
         new object[]
         {
             EMap.TheParkCTF, 15f, 7.5f,
-            -12.64f, -5.285f, 12.64f, -5.285f,
+            -12.64f, -4.63f, 12.64f, -4.63f,
             -9.725f, -1.365f, 9.185f, -1.405f
         },
         new object[]
         {
             EMap.SkyHighCTF, 6f, 12.5f,
-            -4.655f, 10.315f, 4.655f, 10.235f,
+            -4.655f, 10.535f, 4.655f, 10.455f,
             -2.755f, -4.245f, 2.795f, -4.235f
         }
     };
