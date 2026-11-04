@@ -783,14 +783,13 @@ public sealed class MatchRudpFlagTests : IDisposable
         var flags = InGameMatchEventHandler.GetFlagStates(roomId);
         var blue = flags[ETeam.Blue];
         blue.AutoReturnSeconds = 0.1f;
-        room!.WaitRoomLink = new WaitRoom(roomId) { Map = EMap.BattlePortCTF };
 
         System.Threading.Thread.Sleep(200);
         var recorder = new BroadcastRecorder();
         BroadcastRecorder.During(() =>
         {
             GameMessageDispatcher.Initialize(recorder);
-            MatchServerV2.Instance.UpdateMatchRoom(room!);
+            MatchServerV2.Instance.UpdateServerOwnedSystems(MatchRoomManager.Instance);
         });
 
         Assert.Equal(EFlagState.FlagOnStand, Flags()[ETeam.Blue].State);
@@ -813,7 +812,6 @@ public sealed class MatchRudpFlagTests : IDisposable
 
         var flags = InGameMatchEventHandler.GetFlagStates(roomId);
         flags[ETeam.Blue].AutoReturnSeconds = 0.1f;
-        room!.WaitRoomLink = new WaitRoom(roomId) { Map = EMap.BattlePortCTF };
 
         BroadcastRecorder.During(() =>
         {
@@ -822,7 +820,7 @@ public sealed class MatchRudpFlagTests : IDisposable
         });
 
         System.Threading.Thread.Sleep(200);
-        MatchServerV2.Instance.UpdateMatchRoom(room!);
+        MatchServerV2.Instance.UpdateServerOwnedSystems(MatchRoomManager.Instance);
 
         // The clock stops when the flag is taken again, so a carrier who gets to
         // it in time keeps it rather than losing it to a timer that never noticed

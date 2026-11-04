@@ -223,7 +223,7 @@ namespace OpenGSServer
         /// <summary>
         /// MatchRoomの更新処理
         /// </summary>
-        internal void UpdateMatchRoom(MatchRoom room)
+        private void UpdateMatchRoom(MatchRoom room)
         {
             InGameMatchEventHandler.UpdateMatchTime(room);
             if (room.Playing && !room.Finished)
@@ -257,7 +257,6 @@ namespace OpenGSServer
                 }
 
                 InGameMatchEventHandler.UpdateMapFallDeaths(room);
-                InGameMatchEventHandler.ReturnTimedOutFlags(room);
                 InGameMatchEventHandler.UpdateCtfFlagInteractions(room);
             }
         }
@@ -428,7 +427,7 @@ namespace OpenGSServer
         /// loop modes use this sequence so parallel room updates cannot disable
         /// combat, reloads, items, or timed flags.
         /// </summary>
-        private void UpdateServerOwnedSystems(MatchRoomManager roomManager)
+        internal void UpdateServerOwnedSystems(MatchRoomManager roomManager)
         {
             var tickSeconds = (_gameLoopTimer?.IntervalMs ?? 40) / 1000.0f;
             _udpServer?.Tick(tickSeconds);
