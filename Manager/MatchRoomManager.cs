@@ -1138,6 +1138,33 @@ namespace OpenGSServer
                 result.Add(PreparePlayerForMatch(player, healthMultiplier));
             }
 
+            if (setting.Mode == EGameMode.CaptureTheFlag)
+            {
+                // Lobby joins do not select a team, so their PlayerInfo team is
+                // normally NoTeam. Carrying that through made every real CTF
+                // player fail the authoritative team check for flag actions.
+                // Preserve any explicit Red/Blue assignments and put each
+                // unassigned player on the currently smaller side.
+                var redCount = result.Count(player => player.Team == ETeam.Red);
+                var blueCount = result.Count(player => player.Team == ETeam.Blue);
+                foreach (var player in result)
+                {
+                    if (player.Team is ETeam.Red or ETeam.Blue)
+                        continue;
+
+                    if (redCount <= blueCount)
+                    {
+                        player.Team = ETeam.Red;
+                        redCount++;
+                    }
+                    else
+                    {
+                        player.Team = ETeam.Blue;
+                        blueCount++;
+                    }
+                }
+            }
+
             return result;
         }
 

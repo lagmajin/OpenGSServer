@@ -659,6 +659,51 @@ public sealed class MatchRudpFlagTests : IDisposable
     }
 
     [Fact]
+    public void ARealCtfWaitRoomAssignsUnassignedPlayersToBalancedTeams()
+    {
+        var players = Enumerable.Range(0, 3)
+            .Select(index => new PlayerInfo(
+                "ctf-team-" + Guid.NewGuid().ToString("N"), "Player " + index))
+            .ToArray();
+        var waitRoom = WaitRoomManager.Instance().CreateNewWaitRoom(
+            new WaitRoomSetting("ctf-teams", 4, EGameMode.CaptureTheFlag)).Room!;
+        foreach (var player in players)
+            waitRoom.AddPlayer(player);
+
+        roomId = waitRoom.RoomId;
+        room = MatchRoomManager.Instance.StartMatchFromWaitRoom(waitRoom)!;
+        Assert.NotNull(room);
+
+        var redCount = room!.Players.Count(player => player.Team == ETeam.Red);
+        var blueCount = room.Players.Count(player => player.Team == ETeam.Blue);
+        Assert.Equal(players.Length, redCount + blueCount);
+        Assert.Equal(2, redCount);
+        Assert.Equal(1, blueCount);
+        Assert.All(room.Players, player => Assert.NotEqual(ETeam.NoTeam, player.Team));
+
+        room.GameStart();
+        var lag = MatchServerV2.Instance.ServerLagCompensationManager;
+        lag.StartMatch(roomId);
+        foreach (var player in room.Players)
+            lag.AddPlayer(player.Id);
+        Assert.True(CtfMapLayout.TryGetFlagStand(
+            CtfMapLayout.GetMap(room), ETeam.Blue, out var blueStand));
+        var redPlayer = room.Players.First(player => player.Team == ETeam.Red);
+        lag.SetPlayerPosition(redPlayer.Id, blueStand.X, blueStand.Y, blueStand.Z);
+
+        using var recorder = new BroadcastRecorder();
+        BroadcastRecorder.During(() =>
+        {
+            GameMessageDispatcher.Initialize(recorder);
+            Claim(redPlayer.Id, roomId, GameMessageTypes.FlagPickup, ETeam.Blue);
+        });
+
+        Assert.Equal(EFlagState.FlagCapturedPlayer, Flags()[ETeam.Blue].State);
+        Assert.Equal(redPlayer.Id, Flags()[ETeam.Blue].CarrierId);
+        Assert.Single(recorder.RulingsOfType(GameMessageTypes.FlagPickup));
+    }
+
+    [Fact]
     public void ARespawnedPlayerCanBeHitAgain()
     {
         SetUpRoom();
