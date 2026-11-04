@@ -84,12 +84,15 @@ namespace OpenGSServer
                     EMap.GreenHillSide1 =>
                         (-25.395573f, -3.3120005f, 25.130336f, 12.957719f),
                     EMap.GreenHillSide2 => (-47.975f, -5.97f, 2.26047f, 3.447347f),
+                    // Both recovered 013-NightCity MPFs identify City of Darkness
+                    // and use a 2000-pixel map width (20 world units at 0.01 per pixel).
+                    EMap.CityOfDarkness1 or EMap.CityOfDarkness2 => (-10f, 0f, 10f, 0f),
                     EMap.Nocturne => (-19.435f, -17.14f, 23.61f, 6.2399998f),
                     EMap.GhostHouse => (-3.6199998f, -5.4650001f, 2.6630752f, 2.043577f),
                     _ => default
                 };
                 if (map is not (EMap.DryDays or EMap.GreenHillSide1 or EMap.GreenHillSide2 or
-                    EMap.Nocturne or EMap.GhostHouse))
+                    EMap.CityOfDarkness1 or EMap.CityOfDarkness2 or EMap.Nocturne or EMap.GhostHouse))
                 {
                     minX = maxX = 0f;
                     return false;
