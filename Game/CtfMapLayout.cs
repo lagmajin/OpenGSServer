@@ -128,11 +128,13 @@ namespace OpenGSServer
                 EMap.GreenHillSide2 => (-47.975f, -5.97f, 2.26047f, 3.4473468f),
                 EMap.IceValley => (-21.445f, -14.195f, 19.285f, 2.901f),
                 EMap.Nocturne => (-19.435f, -17.14f, 23.61f, 6.2399998f),
+                EMap.OnStudio => (-12.8462972f, -7.384382f, 5.095f, 11.78f),
                 EMap.RedStorm1 => (-10f, -5f, 10f, 5f),
                 EMap.RobotFactory => (-8f, -6.0409155f, 11.7093969f, 7.56f),
                 EMap.RuinOfWarSide1 => (-9.85f, -7.10499997f, 19.27f, -1.753817f),
                 EMap.BluffStructure1 or EMap.BluffStructure2 => (-6f, -12.5f, 6f, 12.5f),
                 EMap.SkyHighCTF => (-6f, -12.5f, 6f, 12.5f),
+                EMap.SeaSideBase => (-10.95f, -5f, 10.95f, 5f),
                 EMap.ThePark => (-8.8f, -8.4499999f, 13.7500002f, 6.20999996f),
                 EMap.TheParkCTF => (-15f, -7.5f, 15f, 7.5f),
                 EMap.Waterfall => (-11.5f, -5.25f, 11.5f, 5.25f),
@@ -143,8 +145,9 @@ namespace OpenGSServer
                 EMap.CityOfDarkness1 or EMap.CityOfDarkness2 or
                 EMap.DesertedJungleSide1 or EMap.DryDays or EMap.FullHouse or EMap.GhostHouse or
                 EMap.GreenHillSide1 or EMap.GreenHillSide2 or EMap.IceValley or EMap.Nocturne or
-                EMap.RedStorm1 or EMap.RobotFactory or EMap.RuinOfWarSide1 or EMap.SkyHighCTF or
-                EMap.ThePark or EMap.TheParkCTF or EMap.Waterfall;
+                EMap.OnStudio or EMap.RedStorm1 or EMap.RobotFactory or EMap.RuinOfWarSide1 or
+                EMap.SeaSideBase or EMap.SkyHighCTF or EMap.ThePark or EMap.TheParkCTF or
+                EMap.Waterfall;
         }
     }
 }
