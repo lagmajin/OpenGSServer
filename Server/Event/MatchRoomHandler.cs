@@ -2511,6 +2511,7 @@ namespace OpenGSServer
 
                     if (released != ETeam.NoTeam)
                     {
+                        ForgetFlagPosition(room, released);
                         GameMessageDispatcher.SendFlagReturned(
                             room.Id.ToString(),
                             released.ToString(),
