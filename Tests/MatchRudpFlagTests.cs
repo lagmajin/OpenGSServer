@@ -522,6 +522,32 @@ public sealed class MatchRudpFlagTests : IDisposable
         Assert.Null(Flags()[ETeam.Blue].CarrierId);
     }
 
+    [Fact]
+    public void DisconnectCleanupReturnsTheFlagCarriedByTheLeavingPlayer()
+    {
+        SetUpRoom();
+
+        BroadcastRecorder.During(() =>
+        {
+            GameMessageDispatcher.Initialize(new BroadcastRecorder());
+            Claim(RedPlayerId, roomId, GameMessageTypes.FlagPickup, ETeam.Blue);
+        });
+
+        var recorder = new BroadcastRecorder();
+        BroadcastRecorder.During(() =>
+        {
+            GameMessageDispatcher.Initialize(recorder);
+            PlayerSessionCleanup.ReleaseMatchState(RedPlayerId);
+        });
+
+        Assert.Equal(EFlagState.FlagOnStand, Flags()[ETeam.Blue].State);
+        Assert.Null(Flags()[ETeam.Blue].CarrierId);
+        Assert.DoesNotContain(room!.Players, player => player.Id == RedPlayerId);
+        var returned = Assert.Single(recorder.RulingsOfType(GameMessageTypes.FlagReturn));
+        Assert.Equal(ETeam.Blue.ToString(), returned["Team"]?.ToString());
+        Assert.Equal(EFlagReturnReason.AutoReturn.ToString(), returned["ReturnReason"]?.ToString());
+    }
+
     // ---- The capture rule ------------------------------------------------
 
     [Fact]
