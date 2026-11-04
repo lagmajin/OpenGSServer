@@ -726,6 +726,27 @@ public sealed class MatchRudpFlagTests : IDisposable
     }
 
     [Fact]
+    public void AFlagScoreTieIsADrawEvenWhenOneTeamHasMoreKills()
+    {
+        var situation = new CaptureTheFlagMatchSituation
+        {
+            RedTeamFlagCaptures = 2,
+            BlueTeamFlagCaptures = 2,
+            RedTeamKill = 5,
+            BlueTeamKill = 1
+        };
+
+        var result = new CaptureTheFlagResultEvaluator().Evaluate(
+            situation, new List<PlayerInfo>());
+
+        Assert.Equal("Draw", result["WinningTeam"]?.ToString());
+        Assert.Equal(2, result["RedTeamScore"]?.Value<int>());
+        Assert.Equal(2, result["BlueTeamScore"]?.Value<int>());
+        Assert.Equal(5, result["RedTeamKills"]?.Value<int>());
+        Assert.Equal(1, result["BlueTeamKills"]?.Value<int>());
+    }
+
+    [Fact]
     public void AOnePlayerCtfWaitRoomCannotStartUntilTheOpposingTeamCanExist()
     {
         var waitRoom = WaitRoomManager.Instance().CreateNewWaitRoom(
