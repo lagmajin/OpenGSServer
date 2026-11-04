@@ -40,6 +40,7 @@ namespace OpenGSServer.Network
             public byte LastAcceptedSequence;
             public bool HasAcceptedSequence;
             public bool HasAuthoritativePosition;
+            public bool HasMapHorizontalBounds;
             public bool HasMapMovementBounds;
             public float MapMinX;
             public float MapMaxX;
@@ -511,7 +512,7 @@ namespace OpenGSServer.Network
             state.PosX += state.VelX * dt;
             state.PosY += state.VelY * dt;
             state.PosZ += state.VelZ * dt;
-            if (state.HasMapMovementBounds)
+            if (state.HasMapHorizontalBounds)
             {
                 if (state.PosX < state.MapMinX)
                 {
@@ -523,12 +524,12 @@ namespace OpenGSServer.Network
                     state.PosX = state.MapMaxX;
                     if (state.VelX > 0f) state.VelX = 0f;
                 }
+            }
 
-                if (state.PosY > state.MapMaxY)
-                {
-                    state.PosY = state.MapMaxY;
-                    if (state.VelY > 0f) state.VelY = 0f;
-                }
+            if (state.HasMapMovementBounds && state.PosY > state.MapMaxY)
+            {
+                state.PosY = state.MapMaxY;
+                if (state.VelY > 0f) state.VelY = 0f;
             }
             state.HasAuthoritativePosition = true;
 
@@ -700,7 +701,27 @@ namespace OpenGSServer.Network
                     state.MapMinX = minX;
                     state.MapMaxX = maxX;
                     state.MapMaxY = maxY;
+                    state.HasMapHorizontalBounds = true;
                     state.HasMapMovementBounds = true;
+                }
+            }
+        }
+
+        public void SetPlayerHorizontalMovementBounds(
+            string playerId, float minX, float maxX)
+        {
+            if (string.IsNullOrWhiteSpace(playerId) ||
+                !IsFinite(minX) || !IsFinite(maxX) || minX >= maxX)
+                return;
+
+            if (m_PlayerStates.TryGetValue(playerId, out var state))
+            {
+                lock (state.SyncRoot)
+                {
+                    state.MapMinX = minX;
+                    state.MapMaxX = maxX;
+                    state.HasMapHorizontalBounds = true;
+                    state.HasMapMovementBounds = false;
                 }
             }
         }
@@ -712,6 +733,7 @@ namespace OpenGSServer.Network
 
             lock (state.SyncRoot)
             {
+                state.HasMapHorizontalBounds = false;
                 state.HasMapMovementBounds = false;
             }
         }

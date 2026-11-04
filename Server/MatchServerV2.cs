@@ -235,6 +235,8 @@ namespace OpenGSServer
                 // UDP session is suspended.
                 var hasCtfMovementBounds = CtfMapLayout.TryGetMovementBounds(
                     room.Map, out var minimumX, out var maximumX, out var maximumY);
+                var hasHorizontalMovementBounds = CtfMapLayout.TryGetHorizontalMovementBounds(
+                    room.Map, out var horizontalMinimumX, out var horizontalMaximumX);
                 foreach (var player in room.Players)
                 {
                     _serverLagCompensationManager.AddPlayer(player.Id);
@@ -242,6 +244,11 @@ namespace OpenGSServer
                     {
                         _serverLagCompensationManager.SetPlayerMapMovementBounds(
                             player.Id, minimumX, maximumX, maximumY);
+                    }
+                    else if (hasHorizontalMovementBounds)
+                    {
+                        _serverLagCompensationManager.SetPlayerHorizontalMovementBounds(
+                            player.Id, horizontalMinimumX, horizontalMaximumX);
                     }
                     else
                     {

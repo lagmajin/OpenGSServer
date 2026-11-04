@@ -211,6 +211,12 @@ namespace OpenGSServer.Network
             m_PlayerStateManager.SetPlayerMapMovementBounds(playerId, minX, maxX, maxY);
         }
 
+        public void SetPlayerHorizontalMovementBounds(
+            string playerId, float minX, float maxX)
+        {
+            m_PlayerStateManager.SetPlayerHorizontalMovementBounds(playerId, minX, maxX);
+        }
+
         public void ClearPlayerMapMovementBounds(string playerId)
         {
             m_PlayerStateManager.ClearPlayerMapMovementBounds(playerId);

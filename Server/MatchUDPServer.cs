@@ -202,6 +202,10 @@ namespace OpenGSServer
             if (matchRoom != null && CtfMapLayout.TryGetMovementBounds(
                 matchRoom.Map, out var minimumX, out var maximumX, out var maximumY))
                 lagCompensation.SetPlayerMapMovementBounds(playerId, minimumX, maximumX, maximumY);
+            else if (matchRoom != null && CtfMapLayout.TryGetHorizontalMovementBounds(
+                matchRoom.Map, out var horizontalMinimumX, out var horizontalMaximumX))
+                lagCompensation.SetPlayerHorizontalMovementBounds(
+                    playerId, horizontalMinimumX, horizontalMaximumX);
             else
                 lagCompensation.ClearPlayerMapMovementBounds(playerId);
             if (!preservePosition && matchRoom != null && roomPlayer != null)

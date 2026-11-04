@@ -73,6 +73,34 @@ namespace OpenGSServer
             return true;
         }
 
+        public static bool TryGetHorizontalMovementBounds(
+            EMap map, out float minX, out float maxX)
+        {
+            if (!TryGetBounds(map, out var bounds))
+            {
+                bounds = map switch
+                {
+                    EMap.DryDays => (-13.5f, -7f, 13.5f, 4f),
+                    EMap.GreenHillSide1 =>
+                        (-25.395573f, -3.3120005f, 25.130336f, 12.957719f),
+                    EMap.GreenHillSide2 => (-47.975f, -5.97f, 2.26047f, 3.447347f),
+                    EMap.Nocturne => (-19.435f, -17.14f, 23.61f, 6.2399998f),
+                    EMap.GhostHouse => (-3.6199998f, -5.4650001f, 2.6630752f, 2.043577f),
+                    _ => default
+                };
+                if (map is not (EMap.DryDays or EMap.GreenHillSide1 or EMap.GreenHillSide2 or
+                    EMap.Nocturne or EMap.GhostHouse))
+                {
+                    minX = maxX = 0f;
+                    return false;
+                }
+            }
+
+            minX = bounds.Item1 + 0.42f;
+            maxX = bounds.Item3 - 0.42f;
+            return true;
+        }
+
         public static bool IsBelowFallDeathBoundary(EMap map, float y)
         {
             var bottom = map switch
