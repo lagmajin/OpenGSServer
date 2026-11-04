@@ -2850,14 +2850,26 @@ namespace OpenGSServer
                 return;
             }
 
-            if (ServerManager.Instance.Settings.TryGetRespawnPoint(
-                    respawnedPlayer.Team,
-                    (long)room.Players.IndexOf(respawnedPlayer) + Math.Max(0, respawnedPlayer.Deaths),
-                    out var configuredSpawn))
+            var hasMapSpawn = CtfMapLayout.TryGetTeamSpawn(
+                room.Map, respawnedPlayer.Team, out var mapSpawn);
+            var hasConfiguredSpawn = ServerManager.Instance.Settings.TryGetRespawnPoint(
+                respawnedPlayer.Team,
+                (long)room.Players.IndexOf(respawnedPlayer) + Math.Max(0, respawnedPlayer.Deaths),
+                out var configuredSpawn);
+            var useConfiguredSpawn = hasConfiguredSpawn &&
+                (!hasMapSpawn || CtfMapLayout.IsInsideMapBounds(
+                    room.Map, configuredSpawn.X, configuredSpawn.Y));
+            if (useConfiguredSpawn)
             {
                 spawnX = configuredSpawn.X;
                 spawnY = configuredSpawn.Y;
                 spawnZ = configuredSpawn.Z;
+            }
+            else if (hasMapSpawn)
+            {
+                spawnX = mapSpawn.X;
+                spawnY = mapSpawn.Y;
+                spawnZ = mapSpawn.Z;
             }
 
             var spawnPosition = new JObject

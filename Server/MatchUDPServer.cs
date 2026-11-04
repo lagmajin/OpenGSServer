@@ -199,14 +199,27 @@ namespace OpenGSServer
                 greenHillBooster ? 31.4f : 10f,
                 greenHillBooster ? 35.9f : 5f,
                 greenHillBooster ? 2.57f : 3f);
-            if (!preservePosition && matchRoom != null && roomPlayer != null &&
-                ServerManager.Instance.Settings.TryGetRespawnPoint(
+            if (!preservePosition && matchRoom != null && roomPlayer != null)
+            {
+                var hasMapSpawn = CtfMapLayout.TryGetTeamSpawn(
+                    matchRoom.Map, roomPlayer.Team, out var mapSpawn);
+                var hasConfiguredSpawn = ServerManager.Instance.Settings.TryGetRespawnPoint(
                     roomPlayer.Team,
                     (long)matchRoom.Players.IndexOf(roomPlayer) + Math.Max(0, roomPlayer.Deaths),
-                    out var initialSpawn))
-            {
-                lagCompensation.SetPlayerPosition(playerId,
-                    initialSpawn.X, initialSpawn.Y, initialSpawn.Z);
+                    out var configuredSpawn);
+                var useConfiguredSpawn = hasConfiguredSpawn &&
+                    (!hasMapSpawn || CtfMapLayout.IsInsideMapBounds(
+                        matchRoom.Map, configuredSpawn.X, configuredSpawn.Y));
+                if (useConfiguredSpawn)
+                {
+                    lagCompensation.SetPlayerPosition(playerId,
+                        configuredSpawn.X, configuredSpawn.Y, configuredSpawn.Z);
+                }
+                else if (hasMapSpawn)
+                {
+                    lagCompensation.SetPlayerPosition(playerId,
+                        mapSpawn.X, mapSpawn.Y, mapSpawn.Z);
+                }
             }
             if (matchRoom != null && peer.ConnectionState == ConnectionState.Connected)
                 NotifyPeerJoined(peer, playerId);
