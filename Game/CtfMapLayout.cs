@@ -28,7 +28,7 @@ namespace OpenGSServer
 
         public static bool TryGetTeamSpawn(EMap map, ETeam team, out Vector3 position)
         {
-            var blueSpawn = map switch
+            var sourceSpawn = map switch
             {
                 EMap.BattlePortCTF => new Vector3(-12.37f, -2.71f, 0f),
                 EMap.TheParkCTF => new Vector3(-12.64f, -4.63f, 0f),
@@ -42,9 +42,12 @@ namespace OpenGSServer
                 return false;
             }
 
-            position = team == ETeam.Blue
-                ? blueSpawn
-                : new Vector3(-blueSpawn.X, blueSpawn.Y, blueSpawn.Z);
+            // The recovered flag sheets identify the left stand as Red and the
+            // right stand as Blue. Keep each team on its own side: the source
+            // spawn is on the left, so Red uses it and Blue uses its mirror.
+            position = team == ETeam.Red
+                ? sourceSpawn
+                : new Vector3(-sourceSpawn.X, sourceSpawn.Y, sourceSpawn.Z);
             return true;
         }
 
