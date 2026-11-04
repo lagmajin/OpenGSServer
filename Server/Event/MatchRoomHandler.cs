@@ -1960,10 +1960,10 @@ namespace OpenGSServer
                 room.Id.ToString(),
                 CaptureTheFlagRules.OpposingTeam(scoringTeam).ToString());
 
-            // The rule resets the flag state when a team scores, so both flags go
-            // back to their stands. Without this the captured flag is still gone
-            // and the next delivery has nothing to carry.
-            BroadcastFlagStateReset(room);
+            // The rule resets both flags when a team scores. The own flag has
+            // already been validated at its stand; the captured enemy flag is
+            // returned below so the next delivery can begin.
+            BroadcastFlagStateReset(room, scoringTeam);
 
             GameMessageDispatcher.SendFlagScoreUpdate(
                 room.Id.ToString(),
@@ -1972,18 +1972,19 @@ namespace OpenGSServer
         }
 
         /// <summary>
-        /// Tells the room both flags are home after an atomic score reset.
+        /// Tells the room the captured enemy flag returned after a score.
         /// </summary>
-        private static void BroadcastFlagStateReset(MatchRoom room)
+        private static void BroadcastFlagStateReset(MatchRoom room, ETeam scoringTeam)
         {
-            foreach (var team in new[] { ETeam.Red, ETeam.Blue })
-            {
-                GameMessageDispatcher.SendFlagReturned(
-                    room.Id.ToString(),
-                    team.ToString(),
-                    string.Empty,
-                    EFlagReturnReason.AutoReturn.ToString());
-            }
+            // A valid capture requires the scoring team's own flag to already
+            // be home. Only the carried enemy flag changes state, and it returns
+            // because it was captured at the base, not because its timer expired.
+            var capturedFlagTeam = CaptureTheFlagRules.OpposingTeam(scoringTeam);
+            GameMessageDispatcher.SendFlagReturned(
+                room.Id.ToString(),
+                capturedFlagTeam.ToString(),
+                string.Empty,
+                EFlagReturnReason.CapturedAtBase.ToString());
         }
 
         /// <summary>

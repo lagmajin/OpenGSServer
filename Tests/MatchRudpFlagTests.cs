@@ -437,6 +437,15 @@ public sealed class MatchRudpFlagTests : IDisposable
 
         Assert.True(room.Finished);
         Assert.Equal(3, recorder.RulingsOfType(GameMessageTypes.FlagCaptured).Count);
+        var captureReturns = recorder.RulingsOfType(GameMessageTypes.FlagReturn);
+        Assert.Equal(3, captureReturns.Count);
+        Assert.All(captureReturns, returned =>
+        {
+            Assert.Equal(ETeam.Blue.ToString(), returned["Team"]?.ToString());
+            Assert.Equal(
+                EFlagReturnReason.CapturedAtBase.ToString(),
+                returned["ReturnReason"]?.ToString());
+        });
         Assert.True(room.TryGetPlayer(RedPlayerId, out var red));
         var result = MatchRoomManager.Instance.GetLastMatchResultEnvelope(room, red!);
         Assert.NotNull(result);
