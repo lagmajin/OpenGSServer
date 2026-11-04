@@ -2004,7 +2004,7 @@ namespace OpenGSServer
             var hasPosition = TryGetAuthoritativePosition(playerId, out var x, out var y, out var z);
             var returnedOutsideMap = hasPosition && room.Setting.Mode == EGameMode.CaptureTheFlag &&
                 CtfMapLayout.IsBelowMapBottom(room.Map, y);
-            var dropped = FlagStateFor(room).WithFlags(flags =>
+            var dropped = FlagStateFor(room).WithFlagsAndPositions((flags, positions) =>
             {
                 foreach (var flag in flags.Values)
                 {
@@ -2366,14 +2366,8 @@ namespace OpenGSServer
                 return;
             }
 
-            if (!IsStandingAtAFlag(room, playerId, flagTeam))
-            {
-                Console.WriteLine(
-                    $"[Match] Refused a return of the {flagTeam} flag by '{playerId}': they are not next to it");
-                return;
-            }
-
             var flagState = FlagStateFor(room);
+            var notStandingAtFlag = false;
             var returned = flagState.WithFlagsAndPositions((flags, positions) =>
             {
                 if (!flags.TryGetValue(flagTeam, out var flag) ||
