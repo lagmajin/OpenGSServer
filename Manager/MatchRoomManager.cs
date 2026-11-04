@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using Newtonsoft.Json.Linq;
 using OpenGSCore;
+using OpenGSServer.Network;
 
 
 #nullable enable
@@ -219,16 +220,16 @@ namespace OpenGSServer
                     itemManager.EndMatch();
                     // Do not leave live weapons in the reconnect snapshot until
                     // the next projectile tick notices that the room stopped.
-                    OpenGSServer.Network.InGameMatchEventHandler.ClearRoomProjectiles(
+                    InGameMatchEventHandler.ClearRoomProjectiles(
                         matchRoom.Id.ToString());
-                    OpenGSServer.Network.InGameMatchEventHandler.ClearRoomCombatEffects(
+                    InGameMatchEventHandler.ClearRoomCombatEffects(
                         matchRoom.Id.ToString());
-                    OpenGSServer.Network.InGameMatchEventHandler.ClearRoomFlagState(
+                    InGameMatchEventHandler.ClearRoomFlagState(
                         matchRoom.Id.ToString());
                     InGameMatchEventHandler.ClearRoomMatchTimeState(matchRoom.Id.ToString());
                     foreach (var player in matchRoom.Players)
                     {
-                        OpenGSServer.Network.ServerWeaponMagazineStore.ResetPlayer(player.Id);
+                        ServerWeaponMagazineStore.ResetPlayer(player.Id);
                         InGameMatchEventHandler.ClearPlayerShotCooldowns(player.Id);
                     }
                     // UDPで全プレイヤーに正規のマッチ終了通知を送る
@@ -427,9 +428,9 @@ namespace OpenGSServer
                 // Individual spawn events keep clients responsive, while this
                 // room snapshot gives every current player one authoritative
                 // baseline after the initial wave has been created.
-                OpenGSServer.Network.MissionEnemyRegistry.PublishSnapshot(
+                MissionEnemyRegistry.PublishSnapshot(
                     matchRoom.Id.ToString());
-                OpenGSServer.Network.MissionEnemyRegistry.PublishObjectiveProgress(
+                MissionEnemyRegistry.PublishObjectiveProgress(
                     matchRoom.Id.ToString());
             }
 
@@ -791,7 +792,7 @@ namespace OpenGSServer
         return true;
     }
 
-    private static void CleanupDetachedRoom(
+    private void CleanupDetachedRoom(
         string roomId,
         OpenGSCore.MatchRoom room,
         OpenGSServer.Network.ServerFieldItemManager? itemManager)

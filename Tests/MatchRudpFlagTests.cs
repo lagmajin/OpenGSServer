@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using Newtonsoft.Json.Linq;
 using OpenGSCore;
+using OpenGSServer.Network;
 using Xunit;
 
 namespace OpenGSServer.Tests;
@@ -281,6 +282,7 @@ public sealed class MatchRudpFlagTests : IDisposable
         {
             GameMessageDispatcher.Initialize(new BroadcastRecorder());
             Claim(RedPlayerId, roomId, GameMessageTypes.FlagPickup, ETeam.Blue);
+            Claim(RedPlayerId, roomId, GameMessageTypes.FlagLost, ETeam.Blue);
             Claim(BluePlayerId, roomId, GameMessageTypes.FlagReturn, ETeam.Blue);
         });
 
@@ -302,6 +304,7 @@ public sealed class MatchRudpFlagTests : IDisposable
         {
             GameMessageDispatcher.Initialize(recorder);
             Claim(RedPlayerId, roomId, GameMessageTypes.FlagPickup, ETeam.Blue);
+            Claim(RedPlayerId, roomId, GameMessageTypes.FlagLost, ETeam.Blue);
             Claim(BluePlayerId, roomId, GameMessageTypes.FlagReturn, ETeam.Blue);
         });
 
@@ -476,27 +479,40 @@ public sealed class MatchRudpFlagTests : IDisposable
         SetUpRoom();
 
         Assert.True(room!.TryGetPlayer(RedPlayerId, out var red));
-        red!.Health = 0;
+        red!.Health = red.MaxHealth;
+        var lethalDamage = ServerDamageResolver.Apply(
+            red, int.MaxValue, EPlayerPoseState.Stand);
+        Assert.True(lethalDamage.IsNowDown);
 
         var lag = MatchServerV2.Instance.ServerLagCompensationManager;
         lag.AddPlayer(RedPlayerId);
+        var settings = ServerManager.Instance.Settings;
+        var previousRespawnDelay = settings.RespawnDelaySeconds;
+        settings.SetRespawnDelaySeconds(0f);
 
         // A respawn is a system event rather than a realtime one, so it is
         // routed the way the realtime listener routes it. A test that took the
         // other path would never reach the handler and would pass for the wrong
         // reason, which is how the original gap stayed invisible.
-        BroadcastRecorder.During(() =>
+        try
         {
-            GameMessageDispatcher.Initialize(new BroadcastRecorder());
-            InGameMatchEventHandler.HandleTcpSystemEvent(new JObject
+            BroadcastRecorder.During(() =>
             {
-                ["MessageType"] = GameMessageTypes.PlayerRespawn,
-                ["PlayerID"] = RedPlayerId,
-                ["PlayerId"] = RedPlayerId,
-                ["RoomID"] = roomId,
-                ["RoomId"] = roomId
+                GameMessageDispatcher.Initialize(new BroadcastRecorder());
+                InGameMatchEventHandler.HandleTcpSystemEvent(new JObject
+                {
+                    ["MessageType"] = GameMessageTypes.PlayerRespawn,
+                    ["PlayerID"] = RedPlayerId,
+                    ["PlayerId"] = RedPlayerId,
+                    ["RoomID"] = roomId,
+                    ["RoomId"] = roomId
+                });
             });
-        });
+        }
+        finally
+        {
+            settings.SetRespawnDelaySeconds(previousRespawnDelay);
+        }
 
         // A respawn used to be entirely local: the client rebuilt its player and
         // the server kept the health it had already been reduced to, which is

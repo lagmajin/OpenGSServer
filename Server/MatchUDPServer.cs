@@ -192,7 +192,7 @@ namespace OpenGSServer
             var matchRoom = MatchRoomManager.Instance.SearchRoomByMemberID(playerId);
             var roomPlayer = matchRoom?.Players.FirstOrDefault(player =>
                 string.Equals(player.Id, playerId, StringComparison.OrdinalIgnoreCase));
-            var greenHillBooster = string.Equals(matchRoom?.Map.ToString(),
+            var greenHillBooster = string.Equals(CtfMapLayout.GetMap(matchRoom!).ToString(),
                 "GreenHillSide1", StringComparison.OrdinalIgnoreCase);
             lagCompensation.ConfigurePlayerBooster(playerId,
                 greenHillBooster ? 3.54f : 2f, 0.5f, 0.5f,
@@ -200,10 +200,10 @@ namespace OpenGSServer
                 greenHillBooster ? 35.9f : 5f,
                 greenHillBooster ? 2.57f : 3f);
             if (matchRoom != null && CtfMapLayout.TryGetMovementBounds(
-                matchRoom.Map, out var minimumX, out var maximumX, out var maximumY))
+                CtfMapLayout.GetMap(matchRoom), out var minimumX, out var maximumX, out var maximumY))
                 lagCompensation.SetPlayerMapMovementBounds(playerId, minimumX, maximumX, maximumY);
             else if (matchRoom != null && CtfMapLayout.TryGetHorizontalMovementBounds(
-                matchRoom.Map, out var horizontalMinimumX, out var horizontalMaximumX))
+                CtfMapLayout.GetMap(matchRoom), out var horizontalMinimumX, out var horizontalMaximumX))
                 lagCompensation.SetPlayerHorizontalMovementBounds(
                     playerId, horizontalMinimumX, horizontalMaximumX);
             else
@@ -211,14 +211,14 @@ namespace OpenGSServer
             if (!preservePosition && matchRoom != null && roomPlayer != null)
             {
                 var hasMapSpawn = CtfMapLayout.TryGetTeamSpawn(
-                    matchRoom.Map, roomPlayer.Team, out var mapSpawn);
+                    CtfMapLayout.GetMap(matchRoom), roomPlayer.Team, out var mapSpawn);
                 var hasConfiguredSpawn = ServerManager.Instance.Settings.TryGetRespawnPoint(
                     roomPlayer.Team,
                     (long)matchRoom.Players.IndexOf(roomPlayer) + Math.Max(0, roomPlayer.Deaths),
                     out var configuredSpawn);
                 var useConfiguredSpawn = hasConfiguredSpawn &&
                     (!hasMapSpawn || CtfMapLayout.IsInsideMapBounds(
-                        matchRoom.Map, configuredSpawn.X, configuredSpawn.Y));
+                        CtfMapLayout.GetMap(matchRoom), configuredSpawn.X, configuredSpawn.Y));
                 if (useConfiguredSpawn)
                 {
                     lagCompensation.SetPlayerPosition(playerId,
@@ -918,7 +918,7 @@ namespace OpenGSServer
             // Deliver simulation baselines only after MatchJoined so clients
             // that gate incoming match messages do not discard the snapshot.
             MissionEnemyRegistry.PublishSnapshot(room.Id.ToString(), playerId);
-            MatchRoomHandler.SendProjectileSnapshot(room.Id.ToString(), playerId);
+            InGameMatchEventHandler.SendProjectileSnapshot(room.Id.ToString(), playerId);
         }
 
         private static JObject CreateMatchJoinedMessage(MatchRoom room, string playerId)

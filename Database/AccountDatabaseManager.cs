@@ -149,16 +149,17 @@ namespace OpenGSServer
                     return null;
                 }
 
-                var current = Math.Max(0, account.CtfFlagReturn);
+                account.LifeTimeScore ??= new PlayerLifeTimeScore();
+                var current = Math.Max(0, account.LifeTimeScore.CtfFlagReturn);
                 if (current == int.MaxValue)
                 {
                     return current;
                 }
 
-                account.CtfFlagReturn = current + 1;
+                account.LifeTimeScore.CtfFlagReturn = current + 1;
                 account.LastUpdatedUtc = DateTime.UtcNow.ToString("O");
                 return EnsureDatabase().GetCollection<DBAccount>(accountTableName).Update(account)
-                    ? account.CtfFlagReturn
+                    ? account.LifeTimeScore.CtfFlagReturn
                     : null;
             }
         }

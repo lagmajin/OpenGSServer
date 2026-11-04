@@ -10,6 +10,9 @@ namespace OpenGSServer
     /// </summary>
     internal static class CtfMapLayout
     {
+        public static EMap GetMap(OpenGSCore.MatchRoom room) =>
+            room?.WaitRoomLink?.Map ?? EMap.Unknown;
+
         public static bool TryGetFlagStand(EMap map, ETeam team, out Vector3 position)
         {
             position = (map, team) switch

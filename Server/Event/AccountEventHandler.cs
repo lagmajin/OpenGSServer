@@ -179,7 +179,10 @@ namespace OpenGSServer
                     DisplayName = account.DisplayName,
                     HashedPassword = account.HashedPassword,
                     Salt = account.Salt,
-                    CtfFlagReturn = account.CtfFlagReturn
+                    LifeTimeScore = new PlayerLifeTimeScore
+                    {
+                        CtfFlagReturn = account.LifeTimeScore?.CtfFlagReturn ?? 0
+                    }
                 }))
                 {
                     return SendLoginFailure(

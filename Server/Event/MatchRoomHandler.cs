@@ -2002,7 +2002,7 @@ namespace OpenGSServer
             var now = ServerNowSeconds();
             var hasPosition = TryGetAuthoritativePosition(playerId, out var x, out var y, out var z);
             var returnedOutsideMap = hasPosition && room.Setting.Mode == EGameMode.CaptureTheFlag &&
-                CtfMapLayout.IsBelowMapBottom(room.Map, y);
+                CtfMapLayout.IsBelowMapBottom(CtfMapLayout.GetMap(room), y);
             var dropped = FlagStateFor(room).WithFlagsAndPositions((flags, positions) =>
             {
                 foreach (var flag in flags.Values)
@@ -2257,7 +2257,8 @@ namespace OpenGSServer
                 var isOnItsStand = !flags.TryGetValue(flagTeam, out var flag) || flag.IsAtBase;
                 if (isOnItsStand)
                 {
-                    if (!CtfMapLayout.TryGetFlagStand(room.Map, flagTeam, out var basePosition))
+                    if (!CtfMapLayout.TryGetFlagStand(
+                            CtfMapLayout.GetMap(room), flagTeam, out var basePosition))
                     {
                         // Preserve legacy rooms whose map has no recovered stand
                         // coordinates. Known online CTF maps always take the
@@ -2693,7 +2694,8 @@ namespace OpenGSServer
             var transform = MatchServerV2.Instance?.ServerLagCompensationManager.GetPlayerState(playerId);
             if (!room.Playing || room.Finished ||
                 transform == null || !transform.Value.HasAuthoritativePosition ||
-                !CtfMapLayout.IsBelowMapFallDeathBoundary(room.Map, transform.Value.PositionY) ||
+                !CtfMapLayout.IsBelowMapFallDeathBoundary(
+                    CtfMapLayout.GetMap(room), transform.Value.PositionY) ||
                 !room.TryGetPlayer(playerId, out var player) || player == null || player.Health <= 0)
             {
                 return false;
@@ -2997,14 +2999,14 @@ namespace OpenGSServer
             }
 
             var hasMapSpawn = CtfMapLayout.TryGetTeamSpawn(
-                room.Map, respawnedPlayer.Team, out var mapSpawn);
+                CtfMapLayout.GetMap(room), respawnedPlayer.Team, out var mapSpawn);
             var hasConfiguredSpawn = ServerManager.Instance.Settings.TryGetRespawnPoint(
                 respawnedPlayer.Team,
                 (long)room.Players.IndexOf(respawnedPlayer) + Math.Max(0, respawnedPlayer.Deaths),
                 out var configuredSpawn);
             var useConfiguredSpawn = hasConfiguredSpawn &&
                 (!hasMapSpawn || CtfMapLayout.IsInsideMapBounds(
-                    room.Map, configuredSpawn.X, configuredSpawn.Y));
+                    CtfMapLayout.GetMap(room), configuredSpawn.X, configuredSpawn.Y));
             if (useConfiguredSpawn)
             {
                 spawnX = configuredSpawn.X;

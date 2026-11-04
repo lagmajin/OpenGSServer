@@ -84,7 +84,7 @@ namespace OpenGSServer
             // PlayerAccountとPlayerServerInformationを一括作成
             var account = new PlayerAccount(db.AccountId, db.DisplayName, db.Password)
             {
-                FlagReturn = Math.Max(0, db.CtfFlagReturn)
+                FlagReturn = Math.Max(0, db.LifeTimeScore?.CtfFlagReturn ?? 0)
             };
             var info = new PlayerServerInformation(EPlayerPlayingStatus.Unknown, EPlayerLocation.Lobby);
 

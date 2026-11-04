@@ -234,9 +234,9 @@ namespace OpenGSServer
                 // Ensure room members have state, without resuming peers whose
                 // UDP session is suspended.
                 var hasCtfMovementBounds = CtfMapLayout.TryGetMovementBounds(
-                    room.Map, out var minimumX, out var maximumX, out var maximumY);
+                    CtfMapLayout.GetMap(room), out var minimumX, out var maximumX, out var maximumY);
                 var hasHorizontalMovementBounds = CtfMapLayout.TryGetHorizontalMovementBounds(
-                    room.Map, out var horizontalMinimumX, out var horizontalMaximumX);
+                    CtfMapLayout.GetMap(room), out var horizontalMinimumX, out var horizontalMaximumX);
                 foreach (var player in room.Players)
                 {
                     _serverLagCompensationManager.AddPlayer(player.Id);
