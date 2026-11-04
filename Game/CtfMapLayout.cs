@@ -30,9 +30,9 @@ namespace OpenGSServer
         {
             var sourceSpawn = map switch
             {
-                EMap.BattlePortCTF => new Vector3(-12.37f, -2.71f, 0f),
-                EMap.TheParkCTF => new Vector3(-12.64f, -4.63f, 0f),
-                EMap.SkyHighCTF => new Vector3(-4.655f, 10.535f, 0f),
+                EMap.BattlePortCTF => new Vector3(-12.37f, -3.435f, 0f),
+                EMap.TheParkCTF => new Vector3(-12.64f, -5.285f, 0f),
+                EMap.SkyHighCTF => new Vector3(-4.655f, 10.315f, 0f),
                 _ => default
             };
             if (map is not (EMap.BattlePortCTF or EMap.TheParkCTF or EMap.SkyHighCTF) ||
