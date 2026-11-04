@@ -133,6 +133,7 @@ namespace OpenGSServer
                 return;
             }
 
+            ForgetFlagPosition(room, team);
             Console.WriteLine($"[Match] The {team} flag had been on the ground long enough to go home");
             GameMessageDispatcher.SendFlagReturned(
                 room.Id.ToString(),
