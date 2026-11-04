@@ -578,9 +578,11 @@ namespace OpenGSServer
                  eventType == GameMessageTypes.FlagLost ||
                  eventType == GameMessageTypes.FlagPickup ||
                  eventType == GameMessageTypes.FlagReturn) &&
-                !TryGetActiveCombatant(room, playerId, out _))
+                (room.Setting?.Mode != EGameMode.CaptureTheFlag ||
+                 !TryGetActiveCombatant(room, playerId, out _)))
             {
-                Console.WriteLine($"[Match] Ignored flag action from inactive or downed player '{playerId}'");
+                Console.WriteLine(
+                    $"[Match] Ignored flag action from '{playerId}' outside an active CTF match or while downed");
                 return;
             }
 
