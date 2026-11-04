@@ -38,6 +38,7 @@ public sealed class MatchRudpFlagTests : IDisposable
         {
             InGameMatchEventHandler.ClearRoomFlagState(roomId);
             MatchRoomManager.Instance.RemoveRoom(roomId, forceShutdownNowPlayingRooms: true);
+            WaitRoomManager.Instance().CloseRoom(roomId);
         }
     }
 
@@ -393,9 +394,23 @@ public sealed class MatchRudpFlagTests : IDisposable
     [Fact]
     public void ThirdValidatedCaptureEndsTheMatchAndEvaluatesRedAsTheWinner()
     {
-        SetUpRoom();
-        room!.WaitRoomLink = new WaitRoom("ctf-win") { Map = EMap.BattlePortCTF };
+        var waitRoom = WaitRoomManager.Instance().CreateNewWaitRoom(
+            new WaitRoomSetting("ctf-win", 4, EGameMode.CaptureTheFlag)).Room!;
+        waitRoom.AddPlayer(new PlayerInfo(RedPlayerId, "Red") { Team = ETeam.Red });
+        waitRoom.AddPlayer(new PlayerInfo(BluePlayerId, "Blue") { Team = ETeam.Blue });
+        roomId = waitRoom.RoomId;
+        room = MatchRoomManager.Instance.StartMatchFromWaitRoom(waitRoom);
+        Assert.NotNull(room);
+        Assert.Equal(EMap.BattlePortCTF, CtfMapLayout.GetMap(room));
+
+        room!.SetPlayerReady(RedPlayerId);
+        room.SetPlayerReady(BluePlayerId);
+        Assert.True(room.Playing);
+
         var lag = MatchServerV2.Instance.ServerLagCompensationManager;
+        lag.StartMatch(roomId);
+        lag.AddPlayer(RedPlayerId);
+        lag.AddPlayer(BluePlayerId);
         var recorder = new BroadcastRecorder();
 
         BroadcastRecorder.During(() =>
@@ -422,8 +437,9 @@ public sealed class MatchRudpFlagTests : IDisposable
 
         Assert.True(room.Finished);
         Assert.Equal(3, recorder.RulingsOfType(GameMessageTypes.FlagCaptured).Count);
-        var result = new CaptureTheFlagResultEvaluator().Evaluate(
-            room.CurrentSituation!, room.Players);
+        Assert.True(room.TryGetPlayer(RedPlayerId, out var red));
+        var result = MatchRoomManager.Instance.GetLastMatchResultEnvelope(room, red!);
+        Assert.NotNull(result);
         Assert.Equal("Red", result["WinningTeam"]?.ToString());
         Assert.Equal(3, result["RedTeamScore"]?.Value<int>());
     }
