@@ -119,7 +119,8 @@ namespace OpenGSServer
         /// </summary>
         public static void ReturnTimedOutFlags(MatchRoom room)
         {
-            if (room == null)
+            if (room == null || !room.Playing || room.Finished ||
+                room.Setting.Mode != EGameMode.CaptureTheFlag)
             {
                 return;
             }
