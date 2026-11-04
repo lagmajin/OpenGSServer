@@ -223,7 +223,7 @@ namespace OpenGSServer
         /// <summary>
         /// MatchRoomの更新処理
         /// </summary>
-        private void UpdateMatchRoom(MatchRoom room)
+        internal void UpdateMatchRoom(MatchRoom room)
         {
             InGameMatchEventHandler.UpdateMatchTime(room);
             if (room.Playing && !room.Finished)
@@ -257,6 +257,7 @@ namespace OpenGSServer
                 }
 
                 InGameMatchEventHandler.UpdateMapFallDeaths(room);
+                InGameMatchEventHandler.ReturnTimedOutFlags(room);
                 InGameMatchEventHandler.UpdateCtfFlagInteractions(room);
             }
         }

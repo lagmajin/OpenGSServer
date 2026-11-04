@@ -783,11 +783,20 @@ public sealed class MatchRudpFlagTests : IDisposable
         var flags = InGameMatchEventHandler.GetFlagStates(roomId);
         var blue = flags[ETeam.Blue];
         blue.AutoReturnSeconds = 0.1f;
+        room!.WaitRoomLink = new WaitRoom(roomId) { Map = EMap.BattlePortCTF };
 
         System.Threading.Thread.Sleep(200);
-        InGameMatchEventHandler.ReturnTimedOutFlags(room!);
+        var recorder = new BroadcastRecorder();
+        BroadcastRecorder.During(() =>
+        {
+            GameMessageDispatcher.Initialize(recorder);
+            MatchServerV2.Instance.UpdateMatchRoom(room!);
+        });
 
         Assert.Equal(EFlagState.FlagOnStand, Flags()[ETeam.Blue].State);
+        var returned = Assert.Single(recorder.RulingsOfType(GameMessageTypes.FlagReturn));
+        Assert.Equal(ETeam.Blue.ToString(), returned["Team"]?.ToString());
+        Assert.Equal(EFlagReturnReason.AutoReturn.ToString(), returned["ReturnReason"]?.ToString());
     }
 
     [Fact]
@@ -804,6 +813,7 @@ public sealed class MatchRudpFlagTests : IDisposable
 
         var flags = InGameMatchEventHandler.GetFlagStates(roomId);
         flags[ETeam.Blue].AutoReturnSeconds = 0.1f;
+        room!.WaitRoomLink = new WaitRoom(roomId) { Map = EMap.BattlePortCTF };
 
         BroadcastRecorder.During(() =>
         {
@@ -812,7 +822,7 @@ public sealed class MatchRudpFlagTests : IDisposable
         });
 
         System.Threading.Thread.Sleep(200);
-        InGameMatchEventHandler.ReturnTimedOutFlags(room!);
+        MatchServerV2.Instance.UpdateMatchRoom(room!);
 
         // The clock stops when the flag is taken again, so a carrier who gets to
         // it in time keeps it rather than losing it to a timer that never noticed
