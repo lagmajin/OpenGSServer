@@ -134,6 +134,35 @@ namespace OpenGSServer
             return FindAccountRecord(col, accountId);
         }
 
+        public int? RecordCtfFlagReturn(string accountId)
+        {
+            if (string.IsNullOrWhiteSpace(accountId))
+            {
+                return null;
+            }
+
+            lock (_accountMutationLock)
+            {
+                var account = GetAccount(accountId);
+                if (account == null)
+                {
+                    return null;
+                }
+
+                var current = Math.Max(0, account.CtfFlagReturn);
+                if (current == int.MaxValue)
+                {
+                    return current;
+                }
+
+                account.CtfFlagReturn = current + 1;
+                account.LastUpdatedUtc = DateTime.UtcNow.ToString("O");
+                return EnsureDatabase().GetCollection<DBAccount>(accountTableName).Update(account)
+                    ? account.CtfFlagReturn
+                    : null;
+            }
+        }
+
         public DBAccount? GetAccountSnapshot(string accountId)
         {
             if (string.IsNullOrWhiteSpace(accountId))

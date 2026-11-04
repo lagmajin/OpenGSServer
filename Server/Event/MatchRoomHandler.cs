@@ -2372,6 +2372,23 @@ namespace OpenGSServer
                 return;
             }
 
+            if (reason == EFlagReturnReason.FriendlyRecovered)
+            {
+                try
+                {
+                    if (!AccountManager.GetInstance().RecordCtfFlagReturn(playerId))
+                    {
+                        Console.WriteLine(
+                            $"[Match] Could not record a CTF flag return for '{playerId}'");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine(
+                        $"[Match] Could not record a CTF flag return for '{playerId}': {ex.Message}");
+                }
+            }
+
             Console.WriteLine($"The {flagTeam} flag was returned by {playerId} ({reason})");
 
             // A return restores state and is not a score, which is what the mode

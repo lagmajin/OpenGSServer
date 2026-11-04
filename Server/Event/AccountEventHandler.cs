@@ -178,7 +178,8 @@ namespace OpenGSServer
                     AccountId = accountId,
                     DisplayName = account.DisplayName,
                     HashedPassword = account.HashedPassword,
-                    Salt = account.Salt
+                    Salt = account.Salt,
+                    CtfFlagReturn = account.CtfFlagReturn
                 }))
                 {
                     return SendLoginFailure(

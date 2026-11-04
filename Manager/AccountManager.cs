@@ -82,7 +82,10 @@ namespace OpenGSServer
         public bool AddNewLogonUser(in DBAccount db)
         {
             // PlayerAccountとPlayerServerInformationを一括作成
-            var account = new PlayerAccount(db.AccountId, db.DisplayName, db.Password);
+            var account = new PlayerAccount(db.AccountId, db.DisplayName, db.Password)
+            {
+                FlagReturn = Math.Max(0, db.CtfFlagReturn)
+            };
             var info = new PlayerServerInformation(EPlayerPlayingStatus.Unknown, EPlayerLocation.Lobby);
 
             // ConcurrentDictionaryを使用することで、ロックなしにスレッドセーフに追加
@@ -354,6 +357,25 @@ namespace OpenGSServer
 
             _logonUsers.TryGetValue(id, out var account);
             return account;
+        }
+
+        public bool RecordCtfFlagReturn(string id)
+        {
+            var recordedCount = AccountDatabaseManager.GetInstance().RecordCtfFlagReturn(id);
+            if (!recordedCount.HasValue)
+            {
+                return false;
+            }
+
+            if (_logonUsers.TryGetValue(id, out var account) && account != null)
+            {
+                lock (account)
+                {
+                    account.FlagReturn = Math.Max(account.FlagReturn, recordedCount.Value);
+                }
+            }
+
+            return true;
         }
 
     }

@@ -54,6 +54,7 @@ namespace OpenGSServer
             json["wins"] = Wins;
             json["kill"] = Kill;
             json["death"] = Death;
+            json["flagReturn"] = FlagReturn;
             return json;
         }
 
