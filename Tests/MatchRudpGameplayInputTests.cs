@@ -85,7 +85,7 @@ public sealed class MatchRudpGameplayInputTests : IDisposable
         });
     }
 
-    private void SetUpRoom()
+    private void SetUpRoom(EMap map = EMap.Unknown)
     {
         playerId = "mover-" + Guid.NewGuid().ToString("N").Substring(0, 8);
 
@@ -96,6 +96,8 @@ public sealed class MatchRudpGameplayInputTests : IDisposable
         roomId = created.RoomId;
         room = rooms.GetRoomById(created.RoomId) as MatchRoom;
         Assert.NotNull(room);
+        if (map != EMap.Unknown)
+            room!.WaitRoomLink = new WaitRoom("rudp-move-map") { Map = map };
         room!.AddNewPlayer(new PlayerInfo(playerId, "Mover"));
         room.GameStart();
 
@@ -421,5 +423,22 @@ public sealed class MatchRudpGameplayInputTests : IDisposable
         Assert.True(
             MathF.Abs(after.X - before.X) < 20f,
             $"the player left the walk the server allows: {before.X} -> {after.X}");
+    }
+
+    [Theory]
+    [InlineData(EMap.BattlePortCTF, 15.58f)]
+    [InlineData(EMap.TheParkCTF, 14.58f)]
+    [InlineData(EMap.SkyHighCTF, 5.58f)]
+    public void CtfHorizontalWallsClampMovementReceivedOverUdp(EMap map, float maximumX)
+    {
+        SetUpRoom(map);
+
+        // The handshake reads the selected map and installs its movement
+        // bounds. Sustained ordinary input then reaches the wall through the
+        // same queue and fixed-tick simulation used by a live client.
+        SendFor(milliseconds: 5000, moveX: 1f);
+
+        var state = MatchServerV2.Instance.ServerLagCompensationManager.GetPlayerState(playerId);
+        Assert.InRange(state.PositionX, maximumX - 0.1f, maximumX + 0.001f);
     }
 }
