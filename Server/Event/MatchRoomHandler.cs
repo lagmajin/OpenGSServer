@@ -68,6 +68,7 @@ namespace OpenGSServer
                 [ETeam.Red] = new TeamFlag(ETeam.Red),
                 [ETeam.Blue] = new TeamFlag(ETeam.Blue)
             };
+            private readonly Dictionary<ETeam, System.Numerics.Vector3> groundPositions = new();
 
             /// <summary>
             /// Hands out a snapshot, so a caller reads a consistent set of flags
@@ -86,6 +87,15 @@ namespace OpenGSServer
                 lock (sync)
                 {
                     return action(flags);
+                }
+            }
+
+            public T WithFlagsAndPositions<T>(Func<Dictionary<ETeam, TeamFlag>,
+                Dictionary<ETeam, System.Numerics.Vector3>, T> action)
+            {
+                lock (sync)
+                {
+                    return action(flags, groundPositions);
                 }
             }
         }
@@ -126,15 +136,19 @@ namespace OpenGSServer
             }
 
             var now = ServerNowSeconds();
-            var team = FlagStateFor(room).WithFlags(flags =>
-                CaptureTheFlagRules.ReturnTimedOutFlags(flags, now));
+            var team = FlagStateFor(room).WithFlagsAndPositions((flags, positions) =>
+            {
+                var returned = CaptureTheFlagRules.ReturnTimedOutFlags(flags, now);
+                if (returned != ETeam.NoTeam)
+                    positions.Remove(returned);
+                return returned;
+            });
 
             if (team == ETeam.NoTeam)
             {
                 return;
             }
 
-            ForgetFlagPosition(room, team);
             Console.WriteLine($"[Match] The {team} flag had been on the ground long enough to go home");
             GameMessageDispatcher.SendFlagReturned(
                 room.Id.ToString(),
@@ -1956,15 +1970,15 @@ namespace OpenGSServer
         private static void FlagStateReset(MatchRoom room)
         {
             var flagState = FlagStateFor(room);
-            flagState.WithFlags(flags =>
+            flagState.WithFlagsAndPositions((flags, positions) =>
             {
                 CaptureTheFlagRules.ResetAll(flags);
+                positions.Clear();
                 return true;
             });
 
             foreach (var team in new[] { ETeam.Red, ETeam.Blue })
             {
-                ForgetFlagPosition(room, team);
                 GameMessageDispatcher.SendFlagReturned(
                     room.Id.ToString(),
                     team.ToString(),
@@ -2000,6 +2014,10 @@ namespace OpenGSServer
                             ? flag.Return(EFlagReturnReason.AutoReturn)
                             : flag.Drop(now)))
                     {
+                        if (returnedOutsideMap || !hasPosition)
+                            positions.Remove(flag.Team);
+                        else
+                            positions[flag.Team] = new System.Numerics.Vector3(x, y, z);
                         return flag.Team;
                     }
                 }
@@ -2014,7 +2032,6 @@ namespace OpenGSServer
 
             if (returnedOutsideMap)
             {
-                ForgetFlagPosition(room, dropped);
                 Console.WriteLine(
                     $"[Match] The {dropped} flag returned after {playerId} died below the map");
                 GameMessageDispatcher.SendFlagReturned(
@@ -2028,11 +2045,9 @@ namespace OpenGSServer
             // A carrier who went down is where the flag lands, so the position
             // comes from the place the server already holds for them rather than
             // from anything the client said.
-            ForgetFlagPosition(room, dropped);
             System.Numerics.Vector3? groundPosition = null;
             if (hasPosition)
             {
-                NoteFlagPosition(room, dropped, x, y, z);
                 groundPosition = new System.Numerics.Vector3(x, y, z);
             }
 
@@ -2108,10 +2123,16 @@ namespace OpenGSServer
             // it rules the carrier down, so a report that arrives after that is
             // refused here rather than counting the drop twice.
             var now = ServerNowSeconds();
-            var dropped = flagState.WithFlags(flags =>
-                flags.TryGetValue(flagTeam, out var flag) && flag.IsCarried &&
-                string.Equals(flag.CarrierId, playerId, StringComparison.OrdinalIgnoreCase) &&
-                flag.Drop(now));
+            var dropped = flagState.WithFlagsAndPositions((flags, positions) =>
+            {
+                if (!flags.TryGetValue(flagTeam, out var flag) || !flag.IsCarried ||
+                    !string.Equals(flag.CarrierId, playerId, StringComparison.OrdinalIgnoreCase) ||
+                    !flag.Drop(now))
+                    return false;
+
+                positions[flagTeam] = new System.Numerics.Vector3(dropX, dropY, dropZ);
+                return true;
+            });
 
             if (!dropped)
             {
@@ -2119,8 +2140,6 @@ namespace OpenGSServer
                     $"[Match] Ignored a lost claim from '{playerId}', who is not carrying the {flagTeam} flag");
                 return;
             }
-
-            NoteFlagPosition(room, flagTeam, dropX, dropY, dropZ);
 
             Console.WriteLine($"The {flagTeam} flag was dropped by {playerId}");
             GameMessageDispatcher.SendFlagLost(room.Id.ToString(), flagTeam.ToString(), playerId,
@@ -2154,7 +2173,7 @@ namespace OpenGSServer
 
             var flagState = FlagStateFor(room);
             var notStandingAtFlag = false;
-            var picked = flagState.WithFlags(flags =>
+            var picked = flagState.WithFlagsAndPositions((flags, positions) =>
             {
                 if (!flags.TryGetValue(flagTeam, out var flag) || flag.IsCarried)
                     return false;
@@ -2168,7 +2187,11 @@ namespace OpenGSServer
                     return false;
                 }
 
-                return flag.PickUp(playerId);
+                if (!flag.PickUp(playerId))
+                    return false;
+
+                positions.Remove(flagTeam);
+                return true;
             });
 
             if (!picked && notStandingAtFlag)
@@ -2183,26 +2206,9 @@ namespace OpenGSServer
                 return;
             }
 
-            ForgetFlagPosition(room, flagTeam);
-
             Console.WriteLine($"{playerId} picked up the {flagTeam} flag");
             GameMessageDispatcher.SendFlagPickup(room.Id.ToString(), carrierTeam.ToString(), playerId);
         }
-
-        /// <summary>
-        /// Where each team's flag is when it is on the ground or being carried.
-        /// <para>
-        /// A flag on its own stand is not placed here: the stand is a thing in the
-        /// scene, and a room with no flag stand registered has no known position
-        /// for a flag to be on. That is a real state for a headless room, so a
-        /// claim in one is judged on the carrier check alone rather than refused
-        /// for want of a position nobody has.
-        /// </para>
-        /// </summary>
-        private static readonly ConcurrentDictionary<string, System.Numerics.Vector3> FlagPositions =
-            new();
-
-        private static string FlagPositionKey(MatchRoom room, ETeam team) => $"{room.Id}:{team}";
 
         /// <summary>
         /// Records where a team's flag is, from a report that a flag is on the
@@ -2222,12 +2228,11 @@ namespace OpenGSServer
                 return;
             }
 
-            FlagPositions[FlagPositionKey(room, team)] = new System.Numerics.Vector3(x, y, z);
-        }
-
-        private static void ForgetFlagPosition(MatchRoom room, ETeam team)
-        {
-            FlagPositions.TryRemove(FlagPositionKey(room, team), out _);
+            FlagStateFor(room).WithFlagsAndPositions((_, positions) =>
+            {
+                positions[team] = new System.Numerics.Vector3(x, y, z);
+                return true;
+            });
         }
 
         /// <summary>
@@ -2248,55 +2253,55 @@ namespace OpenGSServer
                 return false;
             }
 
-            var flagState = FlagStateFor(room);
-            var isOnItsStand = flagState.WithFlags(flags =>
-                !flags.TryGetValue(flagTeam, out var flag) || flag.IsAtBase);
-
-            if (isOnItsStand)
+            var atFlag = FlagStateFor(room).WithFlagsAndPositions((flags, positions) =>
             {
-                if (!CtfMapLayout.TryGetFlagStand(room.Map, flagTeam, out var basePosition))
+                var isOnItsStand = !flags.TryGetValue(flagTeam, out var flag) || flag.IsAtBase;
+                if (isOnItsStand)
                 {
-                    // Preserve legacy rooms whose map has no recovered stand
-                    // coordinates. Known online CTF maps always take the
-                    // distance-checked path below.
+                    if (!CtfMapLayout.TryGetFlagStand(room.Map, flagTeam, out var basePosition))
+                    {
+                        // Preserve legacy rooms whose map has no recovered stand
+                        // coordinates. Known online CTF maps always take the
+                        // distance-checked path below.
+                        return true;
+                    }
+
+                    var baseDx = basePosition.X - px;
+                    var baseDy = basePosition.Y - py;
+                    var baseDz = basePosition.Z - pz;
+                    if ((baseDx * baseDx) + (baseDy * baseDy) + (baseDz * baseDz) >
+                        FlagPickupReach * FlagPickupReach)
+                    {
+                        Console.WriteLine(
+                            $"[Match] Refused a {flagTeam} flag claim by '{playerId}': they are not at its stand");
+                        return false;
+                    }
+
                     return true;
                 }
 
-                var baseDx = basePosition.X - px;
-                var baseDy = basePosition.Y - py;
-                var baseDz = basePosition.Z - pz;
-                if ((baseDx * baseDx) + (baseDy * baseDy) + (baseDz * baseDz) >
-                    FlagPickupReach * FlagPickupReach)
+                if (!positions.TryGetValue(flagTeam, out var position))
                 {
                     Console.WriteLine(
-                        $"[Match] Refused a {flagTeam} flag claim by '{playerId}': they are not at its stand");
+                        $"[Match] Refused a {flagTeam} flag pickup by '{playerId}': its position is unavailable");
+                    return false;
+                }
+
+                // Every server-side drop records a position. Refuse a pickup
+                // rather than treating an unknown location as permission.
+                var dx = position.X - px;
+                var dy = position.Y - py;
+                var dz = position.Z - pz;
+                if ((dx * dx) + (dy * dy) + (dz * dz) > FlagPickupReach * FlagPickupReach)
+                {
+                    Console.WriteLine(
+                        $"[Match] Refused a {flagTeam} flag pickup by '{playerId}': they are not next to it");
                     return false;
                 }
 
                 return true;
-            }
-
-            if (!FlagPositions.TryGetValue(FlagPositionKey(room, flagTeam), out var position))
-            {
-                // Every server-side drop records a position. If that invariant
-                // is ever broken, refuse the pickup rather than treating an
-                // unknown location as permission to take the flag from anywhere.
-                Console.WriteLine(
-                    $"[Match] Refused a {flagTeam} flag pickup by '{playerId}': its position is unavailable");
-                return false;
-            }
-
-            var dx = position.X - px;
-            var dy = position.Y - py;
-            var dz = position.Z - pz;
-            if ((dx * dx) + (dy * dy) + (dz * dz) > FlagPickupReach * FlagPickupReach)
-            {
-                Console.WriteLine(
-                    $"[Match] Refused a {flagTeam} flag pickup by '{playerId}': they are not next to it");
-                return false;
-            }
-
-            return true;
+            });
+            return atFlag;
         }
 
         /// <summary>
@@ -2369,7 +2374,7 @@ namespace OpenGSServer
             }
 
             var flagState = FlagStateFor(room);
-            var returned = flagState.WithFlags(flags =>
+            var returned = flagState.WithFlagsAndPositions((flags, positions) =>
             {
                 if (!flags.TryGetValue(flagTeam, out var flag) ||
                     flag.State != EFlagState.FlagOnGround)
@@ -2387,11 +2392,28 @@ namespace OpenGSServer
                     return false;
                 }
 
-                return flag.Return(reason);
+                if (!IsStandingAtAFlag(room, playerId, flagTeam))
+                {
+                    notStandingAtFlag = true;
+                    return false;
+                }
+
+                if (!flag.Return(reason))
+                    return false;
+
+                positions.Remove(flagTeam);
+                return true;
             });
 
             if (!returned)
             {
+                if (notStandingAtFlag)
+                {
+                    Console.WriteLine(
+                        $"[Match] Refused a return of the {flagTeam} flag by '{playerId}': they are not next to it");
+                    return;
+                }
+
                 // A flag that is already home is not put back, a flag in no state
                 // this player can return is not put back, and the other side's flag
                 // is not the returning player's to put back.
@@ -2488,13 +2510,6 @@ namespace OpenGSServer
                 LastFlagEvents.TryRemove(key, out _);
             }
 
-            var flagPositionPrefix = roomId + ":";
-            foreach (var key in FlagPositions.Keys.Where(key =>
-                key.StartsWith(flagPositionPrefix, StringComparison.OrdinalIgnoreCase)).ToList())
-            {
-                FlagPositions.TryRemove(key, out _);
-            }
-
             foreach (var key in EquippedSpecialWeapons.Keys
                 .Where(key => key.StartsWith(roomId + "\n", StringComparison.OrdinalIgnoreCase))
                 .ToList())
@@ -2541,7 +2556,7 @@ namespace OpenGSServer
                         continue;
                     }
 
-                    var released = entry.Value.WithFlags(flags =>
+                    var released = entry.Value.WithFlagsAndPositions((flags, positions) =>
                     {
                         foreach (var flag in flags.Values)
                         {
@@ -2549,6 +2564,7 @@ namespace OpenGSServer
                                 string.Equals(flag.CarrierId, playerId, StringComparison.OrdinalIgnoreCase) &&
                                 flag.Return(EFlagReturnReason.AutoReturn))
                             {
+                                positions.Remove(flag.Team);
                                 return flag.Team;
                             }
                         }
@@ -2558,7 +2574,6 @@ namespace OpenGSServer
 
                     if (released != ETeam.NoTeam)
                     {
-                        ForgetFlagPosition(room, released);
                         GameMessageDispatcher.SendFlagReturned(
                             room.Id.ToString(),
                             released.ToString(),
@@ -2739,21 +2754,28 @@ namespace OpenGSServer
             var armorSnapshot = ServerDamageResolver.GetArmor(player);
             if (room.Setting.Mode == EGameMode.CaptureTheFlag)
             {
-                var flagSnapshot = FlagStateFor(room).WithFlags(flags => new
+                var flagSnapshot = FlagStateFor(room).WithFlagsAndPositions((flags, positions) =>
                 {
-                    RedState = flags[ETeam.Red].State.ToString(),
-                    BlueState = flags[ETeam.Blue].State.ToString(),
-                    RedCarrierId = flags[ETeam.Red].IsCarried
-                        ? flags[ETeam.Red].CarrierId ?? string.Empty : string.Empty,
-                    BlueCarrierId = flags[ETeam.Blue].IsCarried
-                        ? flags[ETeam.Blue].CarrierId ?? string.Empty : string.Empty
+                    var redGroundPosition = default(System.Numerics.Vector3);
+                    var blueGroundPosition = default(System.Numerics.Vector3);
+                    var hasRedGroundPosition = flags[ETeam.Red].State == EFlagState.FlagOnGround &&
+                        positions.TryGetValue(ETeam.Red, out redGroundPosition);
+                    var hasBlueGroundPosition = flags[ETeam.Blue].State == EFlagState.FlagOnGround &&
+                        positions.TryGetValue(ETeam.Blue, out blueGroundPosition);
+                    return new
+                    {
+                        RedState = flags[ETeam.Red].State.ToString(),
+                        BlueState = flags[ETeam.Blue].State.ToString(),
+                        RedCarrierId = flags[ETeam.Red].IsCarried
+                            ? flags[ETeam.Red].CarrierId ?? string.Empty : string.Empty,
+                        BlueCarrierId = flags[ETeam.Blue].IsCarried
+                            ? flags[ETeam.Blue].CarrierId ?? string.Empty : string.Empty,
+                        HasRedGroundPosition = hasRedGroundPosition,
+                        HasBlueGroundPosition = hasBlueGroundPosition,
+                        RedGroundPosition = redGroundPosition,
+                        BlueGroundPosition = blueGroundPosition
+                    };
                 });
-                var redGroundPosition = default(System.Numerics.Vector3);
-                var blueGroundPosition = default(System.Numerics.Vector3);
-                var hasRedGroundPosition = flagSnapshot.RedState == EFlagState.FlagOnGround.ToString() &&
-                    FlagPositions.TryGetValue(FlagPositionKey(room, ETeam.Red), out redGroundPosition);
-                var hasBlueGroundPosition = flagSnapshot.BlueState == EFlagState.FlagOnGround.ToString() &&
-                    FlagPositions.TryGetValue(FlagPositionKey(room, ETeam.Blue), out blueGroundPosition);
                 var redCarrierId = flagSnapshot.RedCarrierId;
                 var blueCarrierId = flagSnapshot.BlueCarrierId;
                 ctfState = new JObject
@@ -2772,17 +2794,17 @@ namespace OpenGSServer
                     ["WinConditionPoint"] = room.Rule is CaptureTheFlagMatchRule ctfRule
                         ? ctfRule.FlagLimit : 3
                 };
-                if (hasRedGroundPosition)
+                if (flagSnapshot.HasRedGroundPosition)
                 {
-                    ctfState["RedFlagPosX"] = redGroundPosition.X;
-                    ctfState["RedFlagPosY"] = redGroundPosition.Y;
-                    ctfState["RedFlagPosZ"] = redGroundPosition.Z;
+                    ctfState["RedFlagPosX"] = flagSnapshot.RedGroundPosition.X;
+                    ctfState["RedFlagPosY"] = flagSnapshot.RedGroundPosition.Y;
+                    ctfState["RedFlagPosZ"] = flagSnapshot.RedGroundPosition.Z;
                 }
-                if (hasBlueGroundPosition)
+                if (flagSnapshot.HasBlueGroundPosition)
                 {
-                    ctfState["BlueFlagPosX"] = blueGroundPosition.X;
-                    ctfState["BlueFlagPosY"] = blueGroundPosition.Y;
-                    ctfState["BlueFlagPosZ"] = blueGroundPosition.Z;
+                    ctfState["BlueFlagPosX"] = flagSnapshot.BlueGroundPosition.X;
+                    ctfState["BlueFlagPosY"] = flagSnapshot.BlueGroundPosition.Y;
+                    ctfState["BlueFlagPosZ"] = flagSnapshot.BlueGroundPosition.Z;
                 }
             }
 
