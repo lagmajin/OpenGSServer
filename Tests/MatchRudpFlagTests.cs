@@ -704,6 +704,28 @@ public sealed class MatchRudpFlagTests : IDisposable
     }
 
     [Fact]
+    public void ARealCtfWaitRoomMovesOverrepresentedPlayersToTheOtherTeam()
+    {
+        var waitRoom = WaitRoomManager.Instance().CreateNewWaitRoom(
+            new WaitRoomSetting("ctf-explicit-team-balance", 4, EGameMode.CaptureTheFlag)).Room!;
+        waitRoom.AddPlayer(new PlayerInfo("ctf-red-one-" + Guid.NewGuid().ToString("N"), "Red One")
+        {
+            Team = ETeam.Red
+        });
+        waitRoom.AddPlayer(new PlayerInfo("ctf-red-two-" + Guid.NewGuid().ToString("N"), "Red Two")
+        {
+            Team = ETeam.Red
+        });
+
+        roomId = waitRoom.RoomId;
+        room = MatchRoomManager.Instance.StartMatchFromWaitRoom(waitRoom)!;
+
+        Assert.NotNull(room);
+        Assert.Equal(1, room!.Players.Count(player => player.Team == ETeam.Red));
+        Assert.Equal(1, room.Players.Count(player => player.Team == ETeam.Blue));
+    }
+
+    [Fact]
     public void AOnePlayerCtfWaitRoomCannotStartUntilTheOpposingTeamCanExist()
     {
         var waitRoom = WaitRoomManager.Instance().CreateNewWaitRoom(

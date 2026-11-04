@@ -1143,23 +1143,28 @@ namespace OpenGSServer
                 // Lobby joins do not select a team, so their PlayerInfo team is
                 // normally NoTeam. Carrying that through made every real CTF
                 // player fail the authoritative team check for flag actions.
-                // Preserve any explicit Red/Blue assignments and put each
-                // unassigned player on the currently smaller side.
-                var redCount = result.Count(player => player.Team == ETeam.Red);
-                var blueCount = result.Count(player => player.Team == ETeam.Blue);
+                // Honor explicit Red/Blue choices while they keep the sides
+                // balanced, and put unassigned or overrepresented players on
+                // the currently smaller side. CTF needs both teams to exist.
+                var redCount = 0;
+                var blueCount = 0;
                 foreach (var player in result)
                 {
-                    if (player.Team is ETeam.Red or ETeam.Blue)
-                        continue;
-
-                    if (redCount <= blueCount)
+                    var desiredTeam = player.Team;
+                    if (desiredTeam is not (ETeam.Red or ETeam.Blue) ||
+                        (desiredTeam == ETeam.Red && redCount > blueCount) ||
+                        (desiredTeam == ETeam.Blue && blueCount > redCount))
                     {
-                        player.Team = ETeam.Red;
+                        desiredTeam = redCount <= blueCount ? ETeam.Red : ETeam.Blue;
+                    }
+
+                    player.Team = desiredTeam;
+                    if (desiredTeam == ETeam.Red)
+                    {
                         redCount++;
                     }
                     else
                     {
-                        player.Team = ETeam.Blue;
                         blueCount++;
                     }
                 }
