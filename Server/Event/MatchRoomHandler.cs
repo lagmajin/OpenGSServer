@@ -2152,19 +2152,27 @@ namespace OpenGSServer
                 return;
             }
 
-            // A flag sitting on its own stand is the one thing a player must be
-            // standing next to in order to take. The other two claims are checked
-            // against state the server already holds, and this one was the only
-            // flag message that was not, so a client could assert that it had
-            // picked up a flag it had never walked to.
-            if (!IsStandingAtAFlag(room, playerId, flagTeam))
-            {
-                return;
-            }
-
             var flagState = FlagStateFor(room);
+            var notStandingAtFlag = false;
             var picked = flagState.WithFlags(flags =>
-                flags.TryGetValue(flagTeam, out var flag) && flag.PickUp(playerId));
+            {
+                if (!flags.TryGetValue(flagTeam, out var flag) || flag.IsCarried)
+                    return false;
+
+                // Check the authoritative position while the flag state is
+                // locked too. A timeout return or another interaction cannot
+                // move the flag between the distance check and the pickup.
+                if (!IsStandingAtAFlag(room, playerId, flagTeam))
+                {
+                    notStandingAtFlag = true;
+                    return false;
+                }
+
+                return flag.PickUp(playerId);
+            });
+
+            if (!picked && notStandingAtFlag)
+                return;
 
             if (!picked)
             {
