@@ -199,6 +199,11 @@ namespace OpenGSServer
                 greenHillBooster ? 31.4f : 10f,
                 greenHillBooster ? 35.9f : 5f,
                 greenHillBooster ? 2.57f : 3f);
+            if (matchRoom != null && CtfMapLayout.TryGetMovementBounds(
+                matchRoom.Map, out var minimumX, out var maximumX, out var maximumY))
+                lagCompensation.SetPlayerMapMovementBounds(playerId, minimumX, maximumX, maximumY);
+            else
+                lagCompensation.ClearPlayerMapMovementBounds(playerId);
             if (!preservePosition && matchRoom != null && roomPlayer != null)
             {
                 var hasMapSpawn = CtfMapLayout.TryGetTeamSpawn(

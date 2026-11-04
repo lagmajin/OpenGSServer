@@ -205,6 +205,17 @@ namespace OpenGSServer.Network
             m_PlayerStateManager.SetPlayerPosition(playerId, x, y, z, clearPendingInputs);
         }
 
+        public void SetPlayerMapMovementBounds(
+            string playerId, float minX, float maxX, float maxY)
+        {
+            m_PlayerStateManager.SetPlayerMapMovementBounds(playerId, minX, maxX, maxY);
+        }
+
+        public void ClearPlayerMapMovementBounds(string playerId)
+        {
+            m_PlayerStateManager.ClearPlayerMapMovementBounds(playerId);
+        }
+
         /// <summary>
         /// プレイヤーの現在状態を取得する
         /// </summary>

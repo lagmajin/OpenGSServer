@@ -34,17 +34,24 @@ namespace OpenGSServer
 
         public static bool IsInsideMapBounds(EMap map, float x, float y)
         {
-            var bounds = map switch
-            {
-                EMap.BattlePortCTF => (-16f, -5f, 16f, 5f),
-                EMap.TheParkCTF => (-15f, -7.5f, 15f, 7.5f),
-                EMap.SkyHighCTF => (-6f, -12.5f, 6f, 12.5f),
-                _ => default
-            };
-            return map is (EMap.BattlePortCTF or EMap.TheParkCTF or EMap.SkyHighCTF) &&
-                float.IsFinite(x) && float.IsFinite(y) &&
+            return TryGetBounds(map, out var bounds) && float.IsFinite(x) && float.IsFinite(y) &&
                 x >= bounds.Item1 + 0.42f && x <= bounds.Item3 - 0.42f &&
                 y >= bounds.Item2 + 0.42f && y <= bounds.Item4 - 0.42f;
+        }
+
+        public static bool TryGetMovementBounds(
+            EMap map, out float minX, out float maxX, out float maxY)
+        {
+            if (!TryGetBounds(map, out var bounds))
+            {
+                minX = maxX = maxY = 0f;
+                return false;
+            }
+
+            minX = bounds.Item1 + 0.42f;
+            maxX = bounds.Item3 - 0.42f;
+            maxY = bounds.Item4 - 0.42f;
+            return true;
         }
 
         public static bool IsBelowFallDeathBoundary(EMap map, float y)
@@ -57,6 +64,19 @@ namespace OpenGSServer
                 _ => float.NaN
             };
             return float.IsFinite(y) && float.IsFinite(bottom) && y < bottom - 4f;
+        }
+
+        private static bool TryGetBounds(
+            EMap map, out (float Left, float Bottom, float Right, float Top) bounds)
+        {
+            bounds = map switch
+            {
+                EMap.BattlePortCTF => (-16f, -5f, 16f, 5f),
+                EMap.TheParkCTF => (-15f, -7.5f, 15f, 7.5f),
+                EMap.SkyHighCTF => (-6f, -12.5f, 6f, 12.5f),
+                _ => default
+            };
+            return map is EMap.BattlePortCTF or EMap.TheParkCTF or EMap.SkyHighCTF;
         }
     }
 }

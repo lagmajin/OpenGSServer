@@ -40,6 +40,10 @@ namespace OpenGSServer.Network
             public byte LastAcceptedSequence;
             public bool HasAcceptedSequence;
             public bool HasAuthoritativePosition;
+            public bool HasMapMovementBounds;
+            public float MapMinX;
+            public float MapMaxX;
+            public float MapMaxY;
             public bool IsSuspended;
             public bool IsMovementLocked;
             public Queue<ClientInputData> InputQueue = new Queue<ClientInputData>();
@@ -507,6 +511,25 @@ namespace OpenGSServer.Network
             state.PosX += state.VelX * dt;
             state.PosY += state.VelY * dt;
             state.PosZ += state.VelZ * dt;
+            if (state.HasMapMovementBounds)
+            {
+                if (state.PosX < state.MapMinX)
+                {
+                    state.PosX = state.MapMinX;
+                    if (state.VelX < 0f) state.VelX = 0f;
+                }
+                else if (state.PosX > state.MapMaxX)
+                {
+                    state.PosX = state.MapMaxX;
+                    if (state.VelX > 0f) state.VelX = 0f;
+                }
+
+                if (state.PosY > state.MapMaxY)
+                {
+                    state.PosY = state.MapMaxY;
+                    if (state.VelY > 0f) state.VelY = 0f;
+                }
+            }
             state.HasAuthoritativePosition = true;
 
             if (state.PosZ <= GroundHeight)
@@ -660,6 +683,36 @@ namespace OpenGSServer.Network
                     // be treated as a position to measure a pickup against.
                     state.HasAuthoritativePosition = true;
                 }
+            }
+        }
+
+        public void SetPlayerMapMovementBounds(
+            string playerId, float minX, float maxX, float maxY)
+        {
+            if (string.IsNullOrWhiteSpace(playerId) ||
+                !IsFinite(minX) || !IsFinite(maxX) || !IsFinite(maxY) || minX >= maxX)
+                return;
+
+            if (m_PlayerStates.TryGetValue(playerId, out var state))
+            {
+                lock (state.SyncRoot)
+                {
+                    state.MapMinX = minX;
+                    state.MapMaxX = maxX;
+                    state.MapMaxY = maxY;
+                    state.HasMapMovementBounds = true;
+                }
+            }
+        }
+
+        public void ClearPlayerMapMovementBounds(string playerId)
+        {
+            if (string.IsNullOrWhiteSpace(playerId) || !m_PlayerStates.TryGetValue(playerId, out var state))
+                return;
+
+            lock (state.SyncRoot)
+            {
+                state.HasMapMovementBounds = false;
             }
         }
 
