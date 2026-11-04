@@ -1873,6 +1873,21 @@ namespace OpenGSServer
                 return;
             }
 
+            // Carrying the other flag is only half of a capture. The scoring
+            // player must also reach their own stand; otherwise a stale or
+            // forged client event can score anywhere on the map.
+            if (!IsStandingAtAFlag(room, playerId, scoringTeam))
+            {
+                Console.WriteLine(
+                    $"[Match] Refused a capture by '{playerId}': they are not at the {scoringTeam} flag stand");
+                GameMessageDispatcher.SendFlagCaptureRefused(
+                    playerId,
+                    room.Id.ToString(),
+                    scoringTeam.ToString(),
+                    "NotAtBase");
+                return;
+            }
+
             flagState.WithFlags(flags => flags[CaptureTheFlagRules.OpposingTeam(scoringTeam)].Return(
                 EFlagReturnReason.CapturedAtBase));
 
@@ -2177,6 +2192,25 @@ namespace OpenGSServer
 
             if (isOnItsStand)
             {
+                if (!TryGetCtfFlagStandPosition(room, flagTeam, out var basePosition))
+                {
+                    // Preserve legacy rooms whose map has no recovered stand
+                    // coordinates. Known online CTF maps always take the
+                    // distance-checked path below.
+                    return true;
+                }
+
+                var baseDx = basePosition.X - px;
+                var baseDy = basePosition.Y - py;
+                var baseDz = basePosition.Z - pz;
+                if ((baseDx * baseDx) + (baseDy * baseDy) + (baseDz * baseDz) >
+                    FlagPickupReach * FlagPickupReach)
+                {
+                    Console.WriteLine(
+                        $"[Match] Refused a {flagTeam} flag claim by '{playerId}': they are not at its stand");
+                    return false;
+                }
+
                 return true;
             }
 
@@ -2201,6 +2235,38 @@ namespace OpenGSServer
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// Returns the recovered MPF flag-stand centers used by the three CTF
+        /// map IDs advertised by OpenGSCore. The server uses these positions to
+        /// validate home-flag pickup and capture proximity against its own
+        /// player transform instead of trusting a client-side trigger.
+        /// </summary>
+        private static bool TryGetCtfFlagStandPosition(
+            MatchRoom room, ETeam flagTeam, out System.Numerics.Vector3 position)
+        {
+            var map = room.Map.ToString();
+            position = map switch
+            {
+                "BattlePortCTF" when flagTeam == ETeam.Red =>
+                    new System.Numerics.Vector3(-13.435f, 0.865f, 0f),
+                "BattlePortCTF" when flagTeam == ETeam.Blue =>
+                    new System.Numerics.Vector3(13.115f, 0.945f, 0f),
+                "TheParkCTF" when flagTeam == ETeam.Red =>
+                    new System.Numerics.Vector3(-9.725f, -1.365f, 0f),
+                "TheParkCTF" when flagTeam == ETeam.Blue =>
+                    new System.Numerics.Vector3(9.185f, -1.405f, 0f),
+                "SkyHighCTF" when flagTeam == ETeam.Red =>
+                    new System.Numerics.Vector3(-2.755f, -4.245f, 0f),
+                "SkyHighCTF" when flagTeam == ETeam.Blue =>
+                    new System.Numerics.Vector3(2.795f, -4.235f, 0f),
+                _ => default
+            };
+            return (string.Equals(map, "BattlePortCTF", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(map, "TheParkCTF", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(map, "SkyHighCTF", StringComparison.OrdinalIgnoreCase)) &&
+                (flagTeam == ETeam.Red || flagTeam == ETeam.Blue);
         }
 
         /// <summary>
