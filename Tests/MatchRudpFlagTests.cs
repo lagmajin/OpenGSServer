@@ -391,6 +391,44 @@ public sealed class MatchRudpFlagTests : IDisposable
     }
 
     [Fact]
+    public void ThirdValidatedCaptureEndsTheMatchAndEvaluatesRedAsTheWinner()
+    {
+        SetUpRoom();
+        room!.WaitRoomLink = new WaitRoom("ctf-win") { Map = EMap.BattlePortCTF };
+        var lag = MatchServerV2.Instance.ServerLagCompensationManager;
+        var recorder = new BroadcastRecorder();
+
+        BroadcastRecorder.During(() =>
+        {
+            GameMessageDispatcher.Initialize(recorder);
+            for (var capture = 0; capture < 3; capture++)
+            {
+                lag.SetPlayerPosition(RedPlayerId, 13.115f, 0.945f, 0f);
+                Claim(RedPlayerId, roomId, GameMessageTypes.FlagPickup, ETeam.Blue);
+                Assert.Equal(EFlagState.FlagCapturedPlayer, Flags()[ETeam.Blue].State);
+
+                lag.SetPlayerPosition(RedPlayerId, -13.435f, 0.865f, 0f);
+                Claim(RedPlayerId, roomId, GameMessageTypes.FlagCaptured, ETeam.Blue);
+            }
+        });
+
+        Assert.Equal(3, room.GetFlagScore(ETeam.Red));
+        Assert.True(room.IsMatchFinished());
+
+        // The realtime server advances the match rule after processing the
+        // capture event; the ordinary room tick must then publish the final
+        // result and stop the match.
+        room.GameUpdate();
+
+        Assert.True(room.Finished);
+        Assert.Equal(3, recorder.RulingsOfType(GameMessageTypes.FlagCaptured).Count);
+        var result = new CaptureTheFlagResultEvaluator().Evaluate(
+            room.CurrentSituation!, room.Players);
+        Assert.Equal("Red", result["WinningTeam"]?.ToString());
+        Assert.Equal(3, result["RedTeamScore"]?.Value<int>());
+    }
+
+    [Fact]
     public void ADeliveryDoesNotScoreWhileTheCarriersOwnFlagIsInEnemyHands()
     {
         SetUpRoom();
